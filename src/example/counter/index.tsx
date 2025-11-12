@@ -1,12 +1,11 @@
-import useActions from "./actions.ts";
-import { Model, Actions } from "./types.ts";
-import { UseActions } from "../../library/index.ts";
+import { useCounterActions } from "./actions.ts";
+import { Actions } from "./types.ts";
 import * as styles from "./styles.ts";
 import * as React from "react";
 import FlipNumbers from "react-flip-numbers";
 
 export default function Counter(): React.ReactElement {
-  const [model, actions] = useActions() as UseActions<Model, typeof Actions>;
+  const [model, actions] = useCounterActions();
 
   return (
     <section className={styles.container}>
@@ -32,6 +31,11 @@ export default function Counter(): React.ReactElement {
               play
               numbers={String(model.count)}
             />
+            {actions.inspect.count.pending() && (
+              <div className={styles.loading}>
+                <div className={styles.spinner} />
+              </div>
+            )}
           </div>
 
           <button

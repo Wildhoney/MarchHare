@@ -44,9 +44,9 @@ export class Actions {
 }
 
 export default function useNameActions() {
-  return useActions(
+  return useActions<Model, typeof Actions>(
     model,
-    <Actions<Model, typeof Actions>>class {
+    class {
       [Actions.Name] = utils.set("name");
     },
   );
@@ -95,9 +95,9 @@ export default function useNameActions() {
     },
   );
 
-  return useActions(
+  return useActions<Model, typeof Actions>(
     model,
-    <Actions<Model, typeof Actions>>class {
+    class {
       [Actions.Name] = nameAction;
     },
   );
@@ -145,10 +145,10 @@ context.actions.produce((model) => {
 });
 
 // Check pending state
-actions.validate.name.pending(); // true
+actions.inspect.name.pending(); // true
 
 // Check specific operation
-actions.validate.name.is(Operation.Update); // true
+actions.inspect.name.is(Operation.Update); // true
 ```
 
 <!-- However in the above example where the name is fetched asynchronously, there is no feedback to the user &ndash; we can improve that significantly by using the `module.actions.annotate` and `module.validate` helpers:

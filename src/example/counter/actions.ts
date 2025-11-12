@@ -6,7 +6,7 @@ const model: Model = {
   count: 1,
 };
 
-export default function useCounterActions() {
+export function useCounterActions() {
   const resetAction = useAction<Model, typeof Actions, "Reset">(
     (context, payload) => {
       context.actions.produce((model) => {
@@ -40,7 +40,7 @@ export default function useCounterActions() {
     },
   );
 
-  return useActions(
+  return useActions<Model, typeof Actions>(
     model,
     class {
       [Actions.Reset] = resetAction;

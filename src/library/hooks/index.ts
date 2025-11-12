@@ -12,6 +12,7 @@ import {
   Actions,
   Process,
   Action,
+  UseActions,
 } from "../types/index.ts";
 import EventEmitter from "eventemitter3";
 import { useBroadcast } from "../broadcast/index.tsx";
@@ -71,16 +72,55 @@ export function useAction<
 /**
  * A hook for managing state with actions.
  *
- * @template M The type of the model.
- * @template A The type of the actions.
- * @param {M} model The initial model.
- * @param {ActionClass<M, A>} ActionClass The class defining the actions.
- * @returns {UseActions<M, A>} A tuple containing the state and action handlers.
+ * Pass type parameters explicitly to get proper type inference for the returned tuple:
+ * `useActions<Model, typeof Actions>(initialModel, actionClass)`
+ *
+ * The hook returns a tuple containing:
+ * 1. The current model state
+ * 2. An actions object with `dispatch` and `inspect` properties
+ *
+ * The `inspect` property provides access to Immeration's annotation system,
+ * allowing you to check for pending operations on model properties using
+ * methods like `actions.inspect.count.pending()`.
+ *
+ * @template M The type of the model state.
+ * @template AC The type of the actions class (should be `typeof YourActionsClass`).
+ * @param {M} initialModel The initial model state.
+ * @param {Actions<M, AC> | (new () => unknown)} ActionClass The class defining the actions.
+ * @returns {UseActions<M, AC>} A tuple `[model, actions]` where `actions` includes `dispatch` and `inspect`.
+ *
+ * @example
+ * ```typescript
+ * // In your actions file
+ * export default function useCounterActions() {
+ *   return useActions<Model, typeof Actions>(
+ *     { count: 0 },
+ *     class {
+ *       [Actions.Increment] = incrementAction;
+ *       [Actions.Decrement] = decrementAction;
+ *     }
+ *   );
+ * }
+ *
+ * // In your component
+ * function Counter() {
+ *   const [model, actions] = useActions();
+ *   const isPending = actions.inspect.count.pending();
+ *
+ *   return (
+ *     <div>
+ *       <p>Count: {model.count}</p>
+ *       {isPending && <Spinner />}
+ *       <button onClick={() => actions.dispatch(Actions.Increment)}>+</button>
+ *     </div>
+ *   );
+ * }
+ * ```
  */
-export function useActions<M extends Model, AC extends Actions<M, AC>>(
+export function useActions<M extends Model, AC extends ActionsClass<any>>(
   initialModel: M,
-  ActionClass: AC,
-) {
+  ActionClass: Actions<M, AC> | (new () => unknown),
+): UseActions<M, AC> {
   const broadcast = useBroadcast();
   const [model, setModel] = React.useState<M>(initialModel);
 
@@ -118,7 +158,7 @@ export function useActions<M extends Model, AC extends Actions<M, AC>>(
   );
 
   React.useLayoutEffect(() => {
-    const actions = new ActionClass();
+    const actions = new (ActionClass as Actions<M, AC>)();
 
     Object.getOwnPropertySymbols(actions).forEach((action) => {
       const key = action as keyof typeof actions;
