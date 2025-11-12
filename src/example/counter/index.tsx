@@ -12,6 +12,11 @@ export default function Counter(): React.ReactElement {
       <div className={styles.card}>
         <div className={styles.header}>
           <h1 className={styles.title}>Counter</h1>
+          {actions.inspect.count.pending() && (
+            <div className={styles.loading}>
+              <div className={styles.spinner} />
+            </div>
+          )}
         </div>
 
         <div className={styles.group}>
@@ -31,11 +36,6 @@ export default function Counter(): React.ReactElement {
               play
               numbers={String(model.count)}
             />
-            {actions.inspect.count.pending() && (
-              <div className={styles.loading}>
-                <div className={styles.spinner} />
-              </div>
-            )}
           </div>
 
           <button
