@@ -7,9 +7,6 @@ import FlipNumbers from "react-flip-numbers";
 export default function Counter(): React.ReactElement {
   const [model, actions] = useCounterActions();
 
-  // TODO: Replace with actual remaining() function from immertation library
-  const remaining = () => 0;
-
   return (
     <section className={styles.container}>
       <div className={styles.card}>
@@ -54,7 +51,9 @@ export default function Counter(): React.ReactElement {
           }}
         >
           <div className={styles.spinner} />
-          <span className={styles.remaining}>Remaining: {remaining()}</span>
+          <span className={styles.remaining}>
+            Remaining: {actions.inspect.count.remaining()}
+          </span>
         </div>
       </div>
     </section>

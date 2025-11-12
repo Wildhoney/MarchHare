@@ -18,7 +18,7 @@ import EventEmitter from "eventemitter3";
 import { useBroadcast } from "../broadcast/index.tsx";
 import { isDistributedAction } from "../action/index.ts";
 import { useActionError } from "../error/index.tsx";
-import { State } from "immeration";
+import { State } from "immertation";
 
 /**
  * Memoizes an action handler for performance optimization.
@@ -79,9 +79,9 @@ export function useAction<
  * 1. The current model state
  * 2. An actions object with `dispatch` and `inspect` properties
  *
- * The `inspect` property provides access to Immeration's annotation system,
+ * The `inspect` property provides access to Immertation's annotation system,
  * allowing you to check for pending operations on model properties using
- * methods like `actions.inspect.count.pending()`.
+ * methods like `actions.inspect.count.pending()` and `actions.inspect.count.remaining()`.
  *
  * @template M The type of the model state.
  * @template AC The type of the actions class (should be `typeof YourActionsClass`).
@@ -105,12 +105,14 @@ export function useAction<
  * // In your component
  * function Counter() {
  *   const [model, actions] = useActions();
- *   const isPending = actions.inspect.count.pending();
  *
  *   return (
  *     <div>
  *       <p>Count: {model.count}</p>
- *       {isPending && <Spinner />}
+ *       {actions.inspect.count.pending() && <Spinner />}
+ *       {actions.inspect.count.pending() && (
+ *         <p>Remaining: {actions.inspect.count.remaining()}</p>
+ *       )}
  *       <button onClick={() => actions.dispatch(Actions.Increment)}>+</button>
  *     </div>
  *   );

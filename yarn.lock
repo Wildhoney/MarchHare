@@ -4426,10 +4426,10 @@ immer@^10.2.0:
   resolved "https://registry.yarnpkg.com/immer/-/immer-10.2.0.tgz#88a4ce06a1af64172d254b70f7cb04df51c871b1"
   integrity sha512-d/+XTN3zfODyjr89gM3mPq1WNX2B8pYsu7eORitdwyA2sBubnTl3laYlBk4sXY5FUa5qTZGBDPJICVbvqzjlbw==
 
-immeration@^0.1.3:
-  version "0.1.3"
-  resolved "https://registry.yarnpkg.com/immeration/-/immeration-0.1.3.tgz#344978b416291f853340c20559b9f4cf24aad3d3"
-  integrity sha512-po08MEFAqrs5yH56cymosk4sZldHhMg4RGsw5VadX8CZ/bAxHj2KYpGymXq6Qp2izGKfaGzOMl2WGM3QODThvA==
+immertation@^0.1.7:
+  version "0.1.7"
+  resolved "https://registry.yarnpkg.com/immertation/-/immertation-0.1.7.tgz#24f9da8df4a1104348ebad66a25745150806fbef"
+  integrity sha512-VjRlYT236yegFLbPkl+B0/W5iwwi1AObzzDutFjyhUn58lf71lAITqwgojBqrFdJoJVATyPzim1RMVwCyeI2PA==
 
 import-fresh@^3.2.1:
   version "3.3.1"

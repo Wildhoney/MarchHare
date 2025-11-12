@@ -147,6 +147,9 @@ context.actions.produce((model) => {
 // Check pending state
 actions.inspect.name.pending(); // true
 
+// Get remaining count of pending operations
+actions.inspect.name.remaining(); // 1
+
 // Check specific operation
 actions.inspect.name.is(Operation.Update); // true
 ```

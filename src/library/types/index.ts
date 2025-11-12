@@ -1,4 +1,4 @@
-import type { Decorate } from "immeration";
+import type { Decorate } from "immertation";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export class Draft<T> {
