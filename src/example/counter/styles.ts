@@ -46,6 +46,12 @@ export const title = css`
 export const loading = css`
   display: flex;
   align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 20px;
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
 `;
 
 export const spinner = css`
@@ -55,6 +61,11 @@ export const spinner = css`
   border-top-color: #333;
   border-radius: 50%;
   animation: ${spin} 0.8s linear infinite;
+`;
+
+export const remaining = css`
+  font-size: 12px;
+  color: #666;
 `;
 
 export const display = css`
