@@ -1,6 +1,7 @@
 node_modules/
 test-results/
 dist/
+dist-example/
 .DS_Store
 
 stats.html
