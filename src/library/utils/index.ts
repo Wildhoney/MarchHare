@@ -37,7 +37,7 @@ export function set<M extends Model, AC extends ActionsClass<any>>(
 ) {
   return (context: Context<M, AC>, payload: Payload): void => {
     context.actions.produce((draft: M) => {
-      (draft as Record<string, Payload>)[property] = payload;
+      (<Record<string, Payload>>draft)[property] = payload;
     });
   };
 }

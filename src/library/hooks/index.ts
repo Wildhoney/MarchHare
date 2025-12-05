@@ -62,7 +62,7 @@ export function useAction<
         }
       } catch (error) {
         console.error("Chizu\n\n", error);
-        handleError?.(error as Error);
+        handleError?.(<Error>error);
       }
     },
     [handler, handleError],
@@ -137,11 +137,13 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
         signal: controller.signal,
         actions: {
           produce(f) {
+            if (controller.signal.aborted) return;
             const process = state.current.mutate((draft) => f(draft));
             setModel(state.current.model);
             result.processes.add(process);
           },
           dispatch(...[action, payload]: [action: any, payload?: any]) {
+            if (controller.signal.aborted) return;
             if (isDistributedAction(action))
               broadcast.instance.emit(action, payload);
             else unicast.emit(action, payload);
@@ -156,16 +158,16 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
   );
 
   React.useLayoutEffect(() => {
-    const actions = new (ActionClass as Actions<M, AC>)();
+    const actions = new (<Actions<M, AC>>ActionClass)();
 
     Object.getOwnPropertySymbols(actions).forEach((action) => {
-      const key = action as keyof typeof actions;
+      const key = <keyof typeof actions>action;
 
       if (isDistributedAction(action)) {
         return void broadcast.instance.on(action, async (payload) => {
           const result = <Result>{ processes: new Set<Process>() };
           const task = Promise.withResolvers<void>();
-          await (actions[key] as Function)(getContext(result), payload);
+          await (<Function>actions[key])(getContext(result), payload);
           result.processes.forEach((process) => state.current.prune(process));
           task.resolve();
         });
@@ -174,7 +176,7 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
       unicast.on(action, async (payload) => {
         const result = <Result>{ processes: new Set<Process>() };
         const task = Promise.withResolvers<void>();
-        await (actions[key] as Function)(getContext(result), payload);
+        await (<Function>actions[key])(getContext(result), payload);
         result.processes.forEach((process) => state.current.prune(process));
         task.resolve();
       });

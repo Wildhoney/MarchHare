@@ -10,7 +10,7 @@ import { Action, Payload } from "../types";
 export function createAction<T = never>(
   name: string = "anonymous",
 ): Payload<T> {
-  return Symbol(`chizu.action/${name}`) as unknown as Payload<T>;
+  return <Payload<T>>Symbol(`chizu.action/${name}`);
 }
 
 /**
@@ -24,7 +24,7 @@ export function createAction<T = never>(
 export function createDistributedAction<T = never>(
   name: string = "anonymous",
 ): Payload<T> {
-  return Symbol(`chizu.action/distributed/${name}`) as unknown as Payload<T>;
+  return <Payload<T>>Symbol(`chizu.action/distributed/${name}`);
 }
 
 export function isDistributedAction(action: Action): boolean {

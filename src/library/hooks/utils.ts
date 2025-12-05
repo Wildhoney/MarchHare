@@ -35,6 +35,6 @@ export function isGenerator(
 ): result is Generator | AsyncGenerator {
   if (!result) return false;
   if (typeof result !== "object" || result === null) return false;
-  const name = (result as object).constructor.name;
+  const name = (<object>result).constructor.name;
   return name === "Generator" || name === "AsyncGenerator";
 }

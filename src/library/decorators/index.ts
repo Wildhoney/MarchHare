@@ -9,7 +9,7 @@ export function Distributed() {
     }
 
     return function (initialValue: any): any {
-      const symbol = initialValue as unknown as symbol;
+      const symbol = <symbol>initialValue;
       const name = symbol.description?.replace("chizu.action/", "");
       return Symbol(`chizu.action/distributed/${name}`);
     };

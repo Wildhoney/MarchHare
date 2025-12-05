@@ -23,7 +23,7 @@ describe("Pk", () => {
 
 describe("Payload", () => {
   it("should be a symbol", () => {
-    const payload = Symbol("test") as Payload<unknown>;
+    const payload = <Payload<unknown>>Symbol("test");
     expect(typeof payload).toBe("symbol");
   });
 });
