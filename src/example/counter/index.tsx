@@ -52,7 +52,8 @@ export default function Counter(): React.ReactElement {
         >
           <div className={styles.spinner} />
           <span className={styles.remaining}>
-            Remaining: {actions.inspect.count.remaining()}
+            Remaining: {actions.inspect.count.remaining()} (next:{" "}
+            {actions.inspect.count.draft()})
           </span>
         </div>
       </div>

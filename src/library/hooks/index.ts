@@ -10,15 +10,15 @@ import {
   Props,
   ActionsClass,
   Actions,
-  Process,
   Action,
   UseActions,
+  Result,
 } from "../types/index.ts";
 import EventEmitter from "eventemitter3";
 import { useBroadcast } from "../broadcast/index.tsx";
 import { isDistributedAction } from "../action/index.ts";
 import { useActionError } from "../error/index.tsx";
-import { State } from "immertation";
+import { State, Operation, Process } from "immertation";
 
 /**
  * Memoizes an action handler for performance optimization.
@@ -125,33 +125,29 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
 ): UseActions<M, AC> {
   const broadcast = useBroadcast();
   const [model, setModel] = React.useState<M>(initialModel);
-
-  const store = React.useRef<State<M>>(new State<M>(initialModel));
-
+  const state = React.useRef<State<M>>(new State<M>(initialModel));
   const snapshot = useSnapshot({ model });
   const unicast = React.useMemo(() => new EventEmitter(), []);
 
   const getContext = React.useCallback(
-    (process: Process) => {
+    (result: Result) => {
       const controller = new AbortController();
 
       return <Context<M, AC>>{
         signal: controller.signal,
         actions: {
           produce(f) {
-            store.current.mutate((draft) => f(draft));
-            setModel(store.current.model);
+            const process = state.current.mutate((draft) => f(draft));
+            setModel(state.current.model);
+            result.processes.add(process);
           },
           dispatch(...[action, payload]: [action: any, payload?: any]) {
             if (isDistributedAction(action))
               broadcast.instance.emit(action, payload);
             else unicast.emit(action, payload);
           },
-          annotate<T>(
-            operation: <V>(value: V, process: Process) => V,
-            value: T,
-          ): T {
-            return operation(value, process);
+          annotate<T>(operation: Operation, value: T): T {
+            return state.current.annotate(operation, value);
           },
         },
       };
@@ -167,20 +163,19 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
 
       if (isDistributedAction(action)) {
         return void broadcast.instance.on(action, async (payload) => {
+          const result = <Result>{ processes: new Set<Process>() };
           const task = Promise.withResolvers<void>();
-          const process = Symbol("chizu/process");
-
-          await (actions[key] as Function)(getContext(process), payload);
-          store.current.prune(process);
+          await (actions[key] as Function)(getContext(result), payload);
+          result.processes.forEach((process) => state.current.prune(process));
           task.resolve();
         });
       }
 
       unicast.on(action, async (payload) => {
+        const result = <Result>{ processes: new Set<Process>() };
         const task = Promise.withResolvers<void>();
-        const process = Symbol("chizu/process");
-        await (actions[key] as Function)(getContext(process), payload);
-        store.current.prune(process);
+        await (actions[key] as Function)(getContext(result), payload);
+        result.processes.forEach((process) => state.current.prune(process));
         task.resolve();
       });
     });
@@ -202,7 +197,7 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
         },
         consume() {},
         get inspect() {
-          return store.current.inspect;
+          return state.current.inspect;
         },
       },
     ],

@@ -1,24 +1,6 @@
-import type { Decorate } from "immertation";
-
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export class Draft<T> {
-  constructor(public value: T) {}
-}
-
-export class State {
-  static Operation = {
-    Adding: 1,
-    Removing: 2,
-    Updating: 4,
-    Moving: 8,
-    Replacing: 16,
-    Sorting: 32,
-  };
-
-  static Draft<T>(value: T): Draft<T> {
-    return new Draft(value);
-  }
-}
+import { Operation } from "immertation";
+import { Process, Inspect } from "immertation";
 
 export class Lifecycle {
   static Mount = Symbol("lifecycle/mount");
@@ -31,12 +13,6 @@ export class Lifecycle {
 export type Pk<T> = undefined | symbol | T;
 
 export type Task = PromiseWithResolvers<void>;
-
-export type Process = symbol;
-
-export type Operation = number;
-
-export type Operations<T> = (Operation | Draft<T>)[];
 
 export type Model<M = Record<string, unknown>> = M;
 
@@ -80,6 +56,10 @@ export type ActionInstance<
     : never
 >;
 
+export type Result = {
+  processes: Set<Process>;
+};
+
 export type OperationFunction = <T>(value: T, process: Process) => T;
 
 export type Context<M extends Model, AC extends ActionsClass<any>> = {
@@ -90,7 +70,7 @@ export type Context<M extends Model, AC extends ActionsClass<any>> = {
     dispatch<A extends AC[keyof AC] & Payload<any>>(
       ...args: [PayloadType<A>] extends [never] ? [A] : [A, PayloadType<A>]
     ): void;
-    annotate<T>(operation: <V>(value: V, process: Process) => V, value: T): T;
+    annotate<T>(operation: Operation, value: T): T;
   };
 };
 
@@ -105,6 +85,6 @@ export type UseActions<M extends Model, AC extends ActionsClass<any>> = [
     dispatch<A extends AC[keyof AC] & Payload<any>>(
       ...args: [PayloadType<A>] extends [never] ? [A] : [A, PayloadType<A>]
     ): void;
-    inspect: Decorate<M>;
+    inspect: Inspect<M>;
   },
 ];

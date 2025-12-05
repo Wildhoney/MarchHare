@@ -137,21 +137,21 @@ const App = () => (
 ## Handling states
 
 ```ts
-import { Operation } from "chizu";
+import { Op } from "chizu";
 
 // Mark a value as pending with an operation
 context.actions.produce((model) => {
-  model.name = context.actions.annotate(Operation.Update, "New Name");
+  model.name = context.actions.annotate(Op.Update, "New Name");
 });
 
 // Check pending state
 actions.inspect.name.pending(); // true
 
 // Get remaining count of pending operations
-actions.inspect.name.remaining(); // 1
+actions.inspect.name.remaining(); // 1 (next: actions.inspect.name.draft())
 
 // Check specific operation
-actions.inspect.name.is(Operation.Update); // true
+actions.inspect.name.is(Op.Update); // true
 ```
 
 <!-- However in the above example where the name is fetched asynchronously, there is no feedback to the user &ndash; we can improve that significantly by using the `module.actions.annotate` and `module.validate` helpers:

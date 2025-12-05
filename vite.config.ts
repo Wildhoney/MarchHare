@@ -2,14 +2,31 @@ import { resolve } from "node:path";
 import { visualizer } from "rollup-plugin-visualizer";
 import { defineConfig } from "vite";
 import dts from "vite-plugin-dts";
+import react from "@vitejs/plugin-react";
 
 export default defineConfig(({ mode }) => {
   const isExample = mode === "example";
 
   return {
     plugins: isExample
-      ? [visualizer()]
+      ? [
+          react({
+            babel: {
+              plugins: [
+                ["@babel/plugin-proposal-decorators", { version: "2023-11" }],
+              ],
+            },
+          }),
+          visualizer(),
+        ]
       : [
+          react({
+            babel: {
+              plugins: [
+                ["@babel/plugin-proposal-decorators", { version: "2023-11" }],
+              ],
+            },
+          }),
           visualizer(),
           dts({
             include: ["src/library"],
