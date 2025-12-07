@@ -69,7 +69,7 @@ export default function Profile(props: Props): React.ReactElement {
 }
 ```
 
-You can perform asynchronous operations in the action which will cause the associated view to render a second time &ndash; as we're starting to require more control in our actions we&apos;ll move to our own fine-tuned action:
+You can perform asynchronous operations in the action which will cause the associated view to render a second time &ndash; as we're starting to require more control in our actions we&apos;ll move to our own fine-tuned action instead of `utils.set`:
 
 ```tsx
 const model: Model = {
@@ -81,19 +81,17 @@ export class Actions {
 }
 
 export default function useNameActions() {
-  const nameAction = useAction<Model, typeof Actions, "Name">(
-    async (context) => {
-      context.actions.produce((draft) => {
-        draft.name = null;
-      });
+  const nameAction = useAction<Model, typeof Actions.Name>(async (context) => {
+    context.actions.produce((draft) => {
+      draft.name = null;
+    });
 
-      const name = await fetch(/* ... */);
+    const name = await fetch(/* ... */);
 
-      context.actions.produce((draft) => {
-        draft.name = name;
-      });
-    },
-  );
+    context.actions.produce((draft) => {
+      draft.name = name;
+    });
+  });
 
   return useActions<Model, typeof Actions>(
     model,

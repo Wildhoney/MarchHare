@@ -2,12 +2,12 @@ import { useAction, useActions, Operation } from "../../library/index.ts";
 import { sleep } from "../../library/utils/index.ts";
 import { Model, Actions } from "./types.ts";
 
-const model: Model = {
+const model = <Model>{
   count: 1,
 };
 
 export function useCounterActions() {
-  const resetAction = useAction<Model, typeof Actions, "Reset">(
+  const resetAction = useAction<Model, typeof Actions.Reset>(
     (context, payload) => {
       context.actions.produce((model) => {
         model.count = payload;
@@ -15,7 +15,7 @@ export function useCounterActions() {
     },
   );
 
-  const incrementAction = useAction<Model, typeof Actions, "Increment">(
+  const incrementAction = useAction<Model, typeof Actions.Increment>(
     async (context) => {
       context.actions.produce((model) => {
         model.count = context.actions.annotate(
@@ -32,7 +32,7 @@ export function useCounterActions() {
     },
   );
 
-  const decrementAction = useAction<Model, typeof Actions, "Decrement">(
+  const decrementAction = useAction<Model, typeof Actions.Decrement>(
     (context) => {
       context.actions.produce((model) => {
         model.count -= 1;

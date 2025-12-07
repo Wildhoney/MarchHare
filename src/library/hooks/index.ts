@@ -31,12 +31,11 @@ import { State, Operation, Process } from "immertation";
  */
 export function useAction<
   M extends Model,
-  AC extends ActionsClass<any>,
-  K extends never | Exclude<keyof AC, "prototype"> = never,
+  AC extends ActionsClass<any> = never,
 >(
   handler: (
     context: Context<M, AC>,
-    payload: AC[K] extends Payload<infer P> ? P : never,
+    payload: AC extends Payload<infer P> ? P : never,
   ) => void | Promise<void> | AsyncGenerator | Generator,
 ) {
   const handleError = useActionError();
@@ -44,7 +43,7 @@ export function useAction<
   return React.useCallback(
     async (
       context: Context<M, AC>,
-      payload: AC[K] extends Payload<infer P> ? P : never,
+      payload: AC extends Payload<infer P> ? P : never,
     ) => {
       try {
         const isGenerator =

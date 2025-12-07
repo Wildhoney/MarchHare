@@ -21,6 +21,9 @@ export function pk<T>(id?: Pk<T>): boolean | symbol {
   return Symbol(`pk.${Date.now()}.${crypto.randomUUID()}`);
 }
 
+/** Shorthand alias for {@link pk}. */
+export const κ = pk;
+
 /**
  * Creates a generic "setter" action that updates a specific property in the state.
  * This is a higher-order function that takes a property name and returns an action function.
@@ -41,3 +44,6 @@ export function set<M extends Model, AC extends ActionsClass<any>>(
     });
   };
 }
+
+/** Shorthand alias for {@link set}. */
+export const λ = set;
