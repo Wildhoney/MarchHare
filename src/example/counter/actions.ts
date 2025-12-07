@@ -1,4 +1,5 @@
 import { useAction, useActions, Operation } from "../../library/index.ts";
+import { use } from "../../library/use/index.ts";
 import { sleep } from "../../library/utils/index.ts";
 import { Model, Actions } from "./types.ts";
 
@@ -44,6 +45,8 @@ export function useCounterActions() {
     model,
     class {
       [Actions.Reset] = resetAction;
+
+      @use.serial()
       [Actions.Increment] = incrementAction;
       [Actions.Decrement] = decrementAction;
     },

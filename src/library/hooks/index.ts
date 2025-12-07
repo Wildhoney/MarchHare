@@ -19,6 +19,7 @@ import { useBroadcast } from "../broadcast/index.tsx";
 import { isDistributedAction } from "../action/index.ts";
 import { useActionError } from "../error/index.tsx";
 import { State, Operation, Process } from "immertation";
+import { context } from "../use/index.ts";
 
 /**
  * Memoizes an action handler for performance optimization.
@@ -150,6 +151,9 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
           annotate<T>(operation: Operation, value: T): T {
             return state.current.annotate(operation, value);
           },
+        },
+        [context]: {
+          controller,
         },
       };
     },

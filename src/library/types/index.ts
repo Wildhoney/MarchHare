@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Operation } from "immertation";
 import { Process, Inspect } from "immertation";
+import { context } from "../use";
 
 export class Lifecycle {
   static Mount = Symbol("lifecycle/mount");
@@ -71,6 +72,9 @@ export type Context<M extends Model, AC extends ActionsClass<any>> = {
       ...args: [PayloadType<A>] extends [never] ? [A] : [A, PayloadType<A>]
     ): void;
     annotate<T>(operation: Operation, value: T): T;
+  };
+  [context]: {
+    controller: AbortController;
   };
 };
 
