@@ -4,29 +4,27 @@ All notable changes to this project will be documented in this file. See [commit
 
 ## [0.2.28](https://github.com/Wildhoney/Chizu/compare/v0.2.27...v0.2.28) (2025-12-09)
 
-
 ### Features
 
-* added error handling context ([01c1510](https://github.com/Wildhoney/Chizu/commit/01c15105f0755be06b954405d8c86e9542c68473))
-* added initial decorator example ([197889d](https://github.com/Wildhoney/Chizu/commit/197889df420d96eef5afc753a5287ebd6f949d5f))
-* added integration test for the counter example ([56e557b](https://github.com/Wildhoney/Chizu/commit/56e557b3bc046a736f35d849e4e9bea0f426e5db))
-* improved the appearance of the example ([1206d16](https://github.com/Wildhoney/Chizu/commit/1206d165c8c432a8b5d95ce1de5caa600b655ec1))
-* improved typings around the actions ([2cf3e05](https://github.com/Wildhoney/Chizu/commit/2cf3e055cadb88cb944f78274a4cef6ca0547be2))
-* integrated immeration ([11641a7](https://github.com/Wildhoney/Chizu/commit/11641a796066ad5791de694f7576578b946e09dd))
-* new implementation for the annotations ([eec20b2](https://github.com/Wildhoney/Chizu/commit/eec20b28483f6967a4df746e5bb79255934f7c8d))
-* re-added the model stateful and stateless concept ([0beb7c4](https://github.com/Wildhoney/Chizu/commit/0beb7c4a68cfbadf5c038495e2c2765ca4d68430))
-* supporting async and generator actions ([abbf73c](https://github.com/Wildhoney/Chizu/commit/abbf73c5e046235d563ee25ea624a9f4b7b6b723))
-* upgraded to latest immertation version ([6b3410f](https://github.com/Wildhoney/Chizu/commit/6b3410ff88f6e0cba2649965031f4e3d571edee6))
-* use `useEffectEvent` for the `useAction` hook ([a75a145](https://github.com/Wildhoney/Chizu/commit/a75a145f484d9b9b732253457a097875b1af6d66))
-* using ref to allow for sync actions ([5bc897d](https://github.com/Wildhoney/Chizu/commit/5bc897d34cbad4d4ff28b2dea406334727c8ac8c))
-
+- added error handling context ([01c1510](https://github.com/Wildhoney/Chizu/commit/01c15105f0755be06b954405d8c86e9542c68473))
+- added initial decorator example ([197889d](https://github.com/Wildhoney/Chizu/commit/197889df420d96eef5afc753a5287ebd6f949d5f))
+- added integration test for the counter example ([56e557b](https://github.com/Wildhoney/Chizu/commit/56e557b3bc046a736f35d849e4e9bea0f426e5db))
+- improved the appearance of the example ([1206d16](https://github.com/Wildhoney/Chizu/commit/1206d165c8c432a8b5d95ce1de5caa600b655ec1))
+- improved typings around the actions ([2cf3e05](https://github.com/Wildhoney/Chizu/commit/2cf3e055cadb88cb944f78274a4cef6ca0547be2))
+- integrated immeration ([11641a7](https://github.com/Wildhoney/Chizu/commit/11641a796066ad5791de694f7576578b946e09dd))
+- new implementation for the annotations ([eec20b2](https://github.com/Wildhoney/Chizu/commit/eec20b28483f6967a4df746e5bb79255934f7c8d))
+- re-added the model stateful and stateless concept ([0beb7c4](https://github.com/Wildhoney/Chizu/commit/0beb7c4a68cfbadf5c038495e2c2765ca4d68430))
+- supporting async and generator actions ([abbf73c](https://github.com/Wildhoney/Chizu/commit/abbf73c5e046235d563ee25ea624a9f4b7b6b723))
+- upgraded to latest immertation version ([6b3410f](https://github.com/Wildhoney/Chizu/commit/6b3410ff88f6e0cba2649965031f4e3d571edee6))
+- use `useEffectEvent` for the `useAction` hook ([a75a145](https://github.com/Wildhoney/Chizu/commit/a75a145f484d9b9b732253457a097875b1af6d66))
+- using ref to allow for sync actions ([5bc897d](https://github.com/Wildhoney/Chizu/commit/5bc897d34cbad4d4ff28b2dea406334727c8ac8c))
 
 ### Bug Fixes
 
-* bug with the strings as action names ([f4cd779](https://github.com/Wildhoney/Chizu/commit/f4cd77992549de13330ce1fd924e40a6b8735de0))
-* tests + lint + typecheck ([5fe94ac](https://github.com/Wildhoney/Chizu/commit/5fe94ac97d57f8954997b0156b20e00a2c2894d7))
-* tests + lint + typecheck ([91678c3](https://github.com/Wildhoney/Chizu/commit/91678c36546799208a857d487e21938ed85f6f01))
-* update GitHub URLs and fix example build configuration ([3175107](https://github.com/Wildhoney/Chizu/commit/31751074e15729c77e0ca685072ec93919e9c60c))
+- bug with the strings as action names ([f4cd779](https://github.com/Wildhoney/Chizu/commit/f4cd77992549de13330ce1fd924e40a6b8735de0))
+- tests + lint + typecheck ([5fe94ac](https://github.com/Wildhoney/Chizu/commit/5fe94ac97d57f8954997b0156b20e00a2c2894d7))
+- tests + lint + typecheck ([91678c3](https://github.com/Wildhoney/Chizu/commit/91678c36546799208a857d487e21938ed85f6f01))
+- update GitHub URLs and fix example build configuration ([3175107](https://github.com/Wildhoney/Chizu/commit/31751074e15729c77e0ca685072ec93919e9c60c))
 
 ## [0.2.27](https://github.com/Wildhoney/Marea/compare/v0.2.26...v0.2.27) (2025-07-09)
 

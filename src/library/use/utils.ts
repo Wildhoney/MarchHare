@@ -1,3 +1,5 @@
-export const contexts = new WeakMap<typeof context, any>();
+import { ContextValue } from "./types";
+
+export const contexts = new WeakMap<object, ContextValue>();
 
 export const context = Symbol("chizu.action.context");

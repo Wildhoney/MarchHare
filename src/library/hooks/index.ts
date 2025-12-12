@@ -32,11 +32,16 @@ import { context } from "../use/index.ts";
  */
 export function useAction<
   M extends Model,
-  AC extends ActionsClass<any> = never,
+  AC extends ActionsClass<any>,
+  K extends Exclude<keyof AC, "prototype"> | never = never,
 >(
   handler: (
     context: Context<M, AC>,
-    payload: AC extends Payload<infer P> ? P : never,
+    payload: [K] extends [never]
+      ? unknown
+      : AC[K] extends Payload<infer P>
+        ? P
+        : unknown,
   ) => void | Promise<void> | AsyncGenerator | Generator,
 ) {
   const handleError = useActionError();
@@ -44,7 +49,11 @@ export function useAction<
   return React.useCallback(
     async (
       context: Context<M, AC>,
-      payload: AC extends Payload<infer P> ? P : never,
+      payload: [K] extends [never]
+        ? unknown
+        : AC[K] extends Payload<infer P>
+          ? P
+          : unknown,
     ) => {
       try {
         const isGenerator =

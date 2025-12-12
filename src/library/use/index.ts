@@ -1,4 +1,4 @@
-import { Args, Field } from "./types";
+import { Args, Field, Instance, Method } from "./types";
 import { context, contexts } from "./utils";
 
 export { context } from "./utils";
@@ -7,11 +7,12 @@ export const use = {
   serial() {
     return function (_: unknown, field: Field) {
       field.addInitializer(function () {
-        const ƒ = this[field.name];
-        this[field.name] = async (args: Args) => {
-          contexts.get(this)?.controller.abort();
-          contexts.set(this, args[context]);
-          return await ƒ.call(this, args);
+        const self = this as Instance;
+        const ƒ = self[field.name] as Method;
+        self[field.name] = async (args: Args) => {
+          contexts.get(self)?.controller.abort();
+          contexts.set(self, args[context]);
+          return await ƒ.call(self, args);
         };
       });
     };
