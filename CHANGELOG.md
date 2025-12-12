@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.2.29](https://github.com/Wildhoney/Chizu/compare/v0.2.28...v0.2.29) (2025-12-12)
+
+
+### Features
+
+* improved the typing of the useAction fn ([719e00c](https://github.com/Wildhoney/Chizu/commit/719e00c567bdfcb08181784bb1d4c29cb602f299))
+
 ## [0.2.28](https://github.com/Wildhoney/Chizu/compare/v0.2.27...v0.2.28) (2025-12-09)
 
 ### Features
