@@ -2,6 +2,8 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.2.33](https://github.com/Wildhoney/Chizu/compare/v0.2.32...v0.2.33) (2025-12-13)
+
 ## [0.2.32](https://github.com/Wildhoney/Chizu/compare/v0.2.31...v0.2.32) (2025-12-13)
 
 ## [0.2.31](https://github.com/Wildhoney/Chizu/compare/v0.2.30...v0.2.31) (2025-12-13)
