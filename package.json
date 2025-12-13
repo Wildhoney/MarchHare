@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "eventemitter3": "^5.0.1",
-    "immertation": "^0.1.16",
+    "immertation": "^0.1.17",
     "lodash": "^4.17.21",
     "traverse": "0.6.11"
   },
