@@ -200,6 +200,10 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
     return () => void unicast.emit(Lifecycle.Unmount);
   }, []);
 
+  React.useEffect(() => {
+    unicast.emit(Lifecycle.Node);
+  }, []);
+
   return React.useMemo(
     () => [
       model,
