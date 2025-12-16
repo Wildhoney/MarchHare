@@ -29,7 +29,12 @@ Strongly typed React framework using generators and efficiently updated views al
 - First-class support for skeleton loading using generators.
 - Strongly typed throughout &ndash; dispatches, models, etc&hellip;
 - Easily communicate between actions using distributed actions.
-- Bundled decorators for common action functionality such as consecutive mode.
+- Bundled decorators for common action functionality such as exclusive mode and reactive triggers.
+- No need to worry about referential equality &ndash; reactive dependencies use primitives only.
+- Built-in request cancellation with `AbortController` integration.
+- Granular async state tracking per model field (pending, draft, operation type).
+- Declarative lifecycle hooks without manual `useEffect` management.
+- Centralised error handling for actions via the `Error` component.
 
 ## Getting started
 

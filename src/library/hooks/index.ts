@@ -22,7 +22,10 @@ import { State, Operation, Process } from "immertation";
 import { context, entries } from "../use/index.ts";
 
 /**
- * Creates a memoized action handler.
+ * Creates a memoized action handler that always has access to the latest closure values.
+ *
+ * This hook uses React's useEffectEvent to ensure the handler always sees current
+ * props and state values, avoiding stale closures while maintaining a stable function identity.
  *
  * @template M The type of the model.
  * @template AC The type of the actions class.
@@ -46,7 +49,7 @@ export function useAction<
 ) {
   const handleError = useError();
 
-  return React.useCallback(
+  return React.useEffectEvent(
     async (
       context: Context<M, AC>,
       payload: [K] extends [never]
@@ -74,7 +77,6 @@ export function useAction<
         handleError?.(<Error>error);
       }
     },
-    [handler, handleError],
   );
 }
 

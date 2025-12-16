@@ -4,10 +4,9 @@ All notable changes to this project will be documented in this file. See [commit
 
 ## [0.2.35](https://github.com/Wildhoney/Chizu/compare/v0.2.34...v0.2.35) (2025-12-16)
 
-
 ### Features
 
-* added action decorators and updated README ([fddc63b](https://github.com/Wildhoney/Chizu/commit/fddc63b1e064e24c6f4c587cf236719380ccab25))
+- added action decorators and updated README ([fddc63b](https://github.com/Wildhoney/Chizu/commit/fddc63b1e064e24c6f4c587cf236719380ccab25))
 
 ## [0.2.34](https://github.com/Wildhoney/Chizu/compare/v0.2.33...v0.2.34) (2025-12-13)
 
