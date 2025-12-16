@@ -26,7 +26,6 @@ Strongly typed React framework using generators and efficiently updated views al
 - Built-in support for [optimistic updates](https://medium.com/@kyledeguzmanx/what-are-optimistic-updates-483662c3e171) within components.
 - Mostly standard JavaScript without quirky rules and exceptions.
 - Clear separation of concerns between business logic and markup.
-- First-class support for skeleton loading using generators.
 - Strongly typed throughout &ndash; dispatches, models, etc&hellip;
 - Easily communicate between actions using distributed actions.
 - Bundled decorators for common action functionality such as exclusive mode and reactive triggers.
