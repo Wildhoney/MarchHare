@@ -44,7 +44,6 @@ export function useCounterActions() {
     model,
     class {
       [Actions.Reset] = resetAction;
-
       [Actions.Increment] = incrementAction;
       [Actions.Decrement] = decrementAction;
     },

@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Operation } from "immertation";
 import { Process, Inspect } from "immertation";
-import { context } from "../use";
+
+export const context = Symbol("chizu.action.context");
 
 export class Lifecycle {
   static Mount = Symbol("lifecycle/mount");
@@ -22,6 +23,13 @@ export const PayloadKey = Symbol("payload");
 export type Payload<T = unknown> = symbol & { [PayloadKey]: T };
 
 type PayloadType<A> = A extends Payload<infer P> ? P : never;
+
+type IsAsync<F> = F extends (...args: any[]) => Promise<any> ? true : false;
+
+type AssertSync<F> =
+  IsAsync<F> extends true
+    ? "Error: async functions are not allowed in produce"
+    : F;
 
 type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
   k: infer I,
@@ -67,7 +75,7 @@ export type Context<M extends Model, AC extends ActionsClass<any>> = {
   model: M;
   signal: AbortSignal;
   actions: {
-    produce(ƒ: (model: M) => void): M;
+    produce<F extends (model: M) => void>(ƒ: F & AssertSync<F>): M;
     dispatch<A extends AC[keyof AC] & Payload<any>>(
       ...args: [PayloadType<A>] extends [never] ? [A] : [A, PayloadType<A>]
     ): void;

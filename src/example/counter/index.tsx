@@ -22,7 +22,11 @@ export default function Counter(): React.ReactElement {
             −
           </button>
 
-          <div className={styles.display}>
+          <div
+            className={styles.display}
+            data-testid="count"
+            data-count={model.count}
+          >
             <FlipNumbers
               height={48}
               width={32}
@@ -43,6 +47,7 @@ export default function Counter(): React.ReactElement {
 
         <div
           className={styles.loading}
+          data-testid="loading"
           style={{
             opacity: actions.inspect.count.pending() ? 1 : 0,
             transform: actions.inspect.count.pending()

@@ -4,10 +4,9 @@ All notable changes to this project will be documented in this file. See [commit
 
 ## [0.2.34](https://github.com/Wildhoney/Chizu/compare/v0.2.33...v0.2.34) (2025-12-13)
 
-
 ### Bug Fixes
 
-* emitting Lifecycle.Node ([518ce7c](https://github.com/Wildhoney/Chizu/commit/518ce7cc594fb2b32b9782719187f61117207409))
+- emitting Lifecycle.Node ([518ce7c](https://github.com/Wildhoney/Chizu/commit/518ce7cc594fb2b32b9782719187f61117207409))
 
 ## [0.2.33](https://github.com/Wildhoney/Chizu/compare/v0.2.32...v0.2.33) (2025-12-13)
 

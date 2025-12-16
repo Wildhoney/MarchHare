@@ -1,11 +1,11 @@
-import { Action, Payload } from "../types";
+import { Action, Payload } from "../types/index.ts";
 
 /**
  * Defines a new action with a given payload type.
  *
  * @template T The type of the payload that the action will carry.
- * @param {string} [name] An optional name for the action, used for debugging purposes.
- * @returns {Payload<T>} A new action object.
+ * @param name An optional name for the action, used for debugging purposes.
+ * @returns A new action symbol.
  */
 export function createAction<T = never>(
   name: string = "anonymous",
@@ -15,11 +15,11 @@ export function createAction<T = never>(
 
 /**
  * Defines a new distributed action with a given payload type.
- * Distributed actions can be shared across different modules.
+ * Distributed actions are broadcast to all mounted components that have defined a handler for them.
  *
  * @template T The type of the payload that the action will carry.
- * @param {string} [name] An optional name for the action, used for debugging purposes.
- * @returns {Payload<T>} A new distributed action object.
+ * @param name An optional name for the action, used for debugging purposes.
+ * @returns A new distributed action symbol.
  */
 export function createDistributedAction<T = never>(
   name: string = "anonymous",
@@ -27,6 +27,13 @@ export function createDistributedAction<T = never>(
   return <Payload<T>>Symbol(`chizu.action/distributed/${name}`);
 }
 
+/**
+ * Checks whether an action is a distributed action.
+ * Distributed actions are broadcast to all mounted components that have defined a handler for them.
+ *
+ * @param action The action to check.
+ * @returns True if the action is a distributed action, false otherwise.
+ */
 export function isDistributedAction(action: Action): boolean {
   return action.toString().startsWith("Symbol(chizu.action/distributed/");
 }

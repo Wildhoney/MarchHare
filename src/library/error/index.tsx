@@ -1,13 +1,16 @@
-import { createContext, useContext } from "react";
-import { ErrorHandler, Props } from "./types";
+import { Props } from "./types";
+import { ErrorContext } from "./utils";
 
-export const ErrorContext = createContext<ErrorHandler | undefined>(undefined);
+export { useError } from "./utils";
 
-export function useActionError() {
-  return useContext(ErrorContext);
-}
-
-export function ActionError({ handler, children }: Props) {
+/**
+ * Error boundary component for catching and handling errors from actions.
+ *
+ * @param props.handler - The error handler function to call when an error occurs.
+ * @param props.children - The children to render within the error boundary.
+ * @returns The children wrapped in an error context provider.
+ */
+export function Error({ handler, children }: Props) {
   return (
     <ErrorContext.Provider value={handler}>{children}</ErrorContext.Provider>
   );

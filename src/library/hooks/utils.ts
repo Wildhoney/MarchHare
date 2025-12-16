@@ -1,5 +1,5 @@
 import { RefObject } from "react";
-import { Props } from "../types";
+import { Props } from "../types/index.ts";
 
 /**
  * @name withGetters

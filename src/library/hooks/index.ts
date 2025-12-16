@@ -17,18 +17,18 @@ import {
 import EventEmitter from "eventemitter3";
 import { useBroadcast } from "../broadcast/index.tsx";
 import { isDistributedAction } from "../action/index.ts";
-import { useActionError } from "../error/index.tsx";
+import { useError } from "../error/index.tsx";
 import { State, Operation, Process } from "immertation";
-import { context } from "../use/index.ts";
+import { context, entries } from "../use/index.ts";
 
 /**
- * Memoizes an action handler for performance optimization.
+ * Creates a memoized action handler.
  *
- * @template Model The type of the model.
- * @template Actions The type of the actions.
- * @template Action The specific action being handled.
- * @param {(context: Context<Model, Actions>, name: Action) => void} action The action handler function.
- * @returns {React.useCallback} The memoized action handler.
+ * @template M The type of the model.
+ * @template AC The type of the actions class.
+ * @template K The specific action key being handled.
+ * @param handler The action handler function that receives context and optional payload.
+ * @returns A memoized async function that executes the handler with error handling.
  */
 export function useAction<
   M extends Model,
@@ -44,7 +44,7 @@ export function useAction<
         : unknown,
   ) => void | Promise<void> | AsyncGenerator | Generator,
 ) {
-  const handleError = useActionError();
+  const handleError = useError();
 
   return React.useCallback(
     async (
@@ -113,7 +113,7 @@ export function useAction<
  *
  * // In your component
  * function Counter() {
- *   const [model, actions] = useActions();
+ *   const [model, actions] = useCounterActions();
  *
  *   return (
  *     <div>
@@ -137,6 +137,9 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
   const state = React.useRef<State<M>>(new State<M>(initialModel));
   const snapshot = useSnapshot({ model });
   const unicast = React.useMemo(() => new EventEmitter(), []);
+  const reactives = React.useRef<{
+    previous: Map<string | symbol, unknown[]>;
+  }>({ previous: new Map() });
 
   const getContext = React.useCallback(
     (result: Result) => {
@@ -194,6 +197,27 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
       });
     });
   }, [unicast]);
+
+  React.useEffect(() => {
+    const fresh = new (<Actions<M, AC>>ActionClass)();
+    const list = entries.get(<object>fresh) ?? [];
+
+    list.forEach((entry) => {
+      const current = entry.getDependencies();
+      const previous = reactives.current.previous.get(entry.action) ?? [];
+
+      const hasChanged =
+        current.length !== previous.length ||
+        current.some(
+          (dependency, index) => !Object.is(dependency, previous[index]),
+        );
+
+      if (hasChanged) {
+        reactives.current.previous.set(entry.action, [...current]);
+        unicast.emit(entry.action);
+      }
+    });
+  });
 
   React.useLayoutEffect(() => {
     unicast.emit(Lifecycle.Mount);

@@ -1,18 +1,122 @@
-import { Args, Field, Instance, Method } from "./types";
-import { context, contexts } from "./utils";
+import { Args, Field, Instance, Method, Primitive } from "./types.ts";
+import { actionName, context, internals, entries } from "./utils.ts";
 
-export { context } from "./utils";
+export { context, entries } from "./utils.ts";
 
+/**
+ * Action decorators for adding common functionality to action handlers.
+ */
 export const use = {
-  serial() {
-    return function (_: unknown, field: Field) {
+  /**
+   * Ensures only one instance of an action runs at a time. When dispatched again,
+   * the previous instance is aborted via `context.signal`.
+   *
+   * @returns A decorator function for the action.
+   */
+  exclusive() {
+    return function (_: undefined, field: Field) {
       field.addInitializer(function () {
-        const self = this as Instance;
-        const ƒ = self[field.name] as Method;
+        const self = <Instance>this;
+        const ƒ = <Method>self[field.name];
+
         self[field.name] = async (args: Args) => {
-          contexts.get(self)?.controller.abort();
-          contexts.set(self, args[context]);
+          internals.get(self)?.controller.abort();
+          internals.set(self, args[context]);
           return await ƒ.call(self, args);
+        };
+      });
+    };
+  },
+  /**
+   * Automatically triggers an action when its primitive dependencies change.
+   * Dependencies must be primitives (strings, numbers, booleans, etc.) to avoid
+   * referential equality issues.
+   *
+   * @param getDependencies A function returning an array of primitive dependencies.
+   * @returns A decorator function for the action.
+   */
+  reactive(getDependencies: () => Primitive[]) {
+    return function (_: undefined, field: Field) {
+      field.addInitializer(function () {
+        const self = <Instance>this;
+        const list = entries.get(self) ?? [];
+
+        list.push({
+          action: field.name,
+          getDependencies,
+        });
+
+        entries.set(self, list);
+      });
+    };
+  },
+  /**
+   * Logs detailed timing and debugging information for the action, including
+   * start time, produce call timings, and total duration.
+   *
+   * @returns A decorator function for the action.
+   */
+  debug() {
+    return function (_: undefined, field: Field) {
+      field.addInitializer(function () {
+        const self = <Instance>this;
+        const ƒ = <Method>self[field.name];
+        const name = actionName(field.name);
+
+        self[field.name] = async (args: Args) => {
+          let produceCount = 0;
+          const start = performance.now();
+          const timings: number[] = [];
+
+          console.group(`🔧 Action: ${name}`);
+          console.log("⏱️  Started at:", new Date().toISOString());
+
+          const produce = args.actions.produce;
+          const container = {
+            ...args,
+            actions: {
+              ...args.actions,
+              produce: (producer: (model: Record<string, unknown>) => void) => {
+                produceCount++;
+                const start = performance.now();
+                const result = produce(producer);
+                const end = performance.now();
+                const duration = end - start;
+                timings.push(duration);
+
+                console.log(
+                  `  📝 produce #${produceCount}: ${duration.toFixed(2)}ms`,
+                );
+
+                return result;
+              },
+            },
+          };
+
+          try {
+            const result = await ƒ.call(self, container as Args);
+            const end = performance.now();
+            const total = end - start;
+
+            console.log("─".repeat(40));
+            console.log(`📊 Summary for ${name}:`);
+            console.log(`   Total produce calls: ${produceCount}`);
+            if (timings.length > 0) {
+              console.log(
+                `   Produce times: ${timings.map((t) => t.toFixed(2) + "ms").join(", ")}`,
+              );
+            }
+            console.log(`   ⏱️  Total duration: ${total.toFixed(2)}ms`);
+            console.groupEnd();
+
+            return result;
+          } catch (error) {
+            const end = performance.now();
+            console.error(`❌ Error in ${name}:`, error);
+            console.log(`   ⏱️  Failed after: ${(end - start).toFixed(2)}ms`);
+            console.groupEnd();
+            throw error;
+          }
         };
       });
     };

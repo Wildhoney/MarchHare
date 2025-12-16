@@ -1,23 +1,17 @@
-import type { BroadcastContext } from "./types.ts";
 import { Props } from "./types.ts";
+import { Context } from "./utils.ts";
 import EventEmitter from "eventemitter3";
 import * as React from "react";
 
-const Context = React.createContext<BroadcastContext>({
-  instance: new EventEmitter(),
-});
-
-export function useBroadcast() {
-  return React.useContext(Context);
-}
+export { useBroadcast } from "./utils.ts";
 
 /**
- * Note: only needed if you want to create a new broadcast context, useful for
- * libraries that want to provide their own broadcast context without intefering
- * with the app's broadcast context.
+ * Creates a new broadcast context for distributed actions. Only needed if you
+ * want to isolate a broadcast context, useful for libraries that want to provide
+ * their own broadcast context without interfering with the app's broadcast context.
  *
- * @param param0 - { children }: Props
- * @returns {React.ReactNode}
+ * @param props.children - The children to render within the broadcast context.
+ * @returns The children wrapped in a broadcast context provider.
  */
 export function Broadcaster({ children }: Props): React.ReactNode {
   const context = React.useMemo(

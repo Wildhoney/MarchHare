@@ -1,7 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { ActionsClass, Context, Model, Payload, Pk } from "../types/index.ts";
 
-export { default as sleep } from "./sleep/index.ts";
+/**
+ * Returns a promise that resolves after the specified number of milliseconds.
+ *
+ * @param ms The number of milliseconds to sleep.
+ * @returns A promise that resolves after the delay.
+ */
+export function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /**
  * Generates a unique primary key.

@@ -14,9 +14,10 @@ Strongly typed React framework using generators and efficiently updated views al
 1. [Benefits](#benefits)
 1. [Getting started](#getting-started)
 1. [Error handling](#error-handling)
-<!-- 1. [Distributed actions](#distributed-actions)
-1. [Module dispatch](#module-dispatch)
-1. [Associated context](#associated-context) -->
+1. [Model annotations](#model-annotations)
+1. [Lifecycle actions](#lifecycle-actions)
+1. [Distributed actions](#distributed-actions)
+1. [Action decorators](#action-decorators)
 
 ## Benefits
 
@@ -81,17 +82,19 @@ export class Actions {
 }
 
 export default function useNameActions() {
-  const nameAction = useAction<Model, typeof Actions.Name>(async (context) => {
-    context.actions.produce((draft) => {
-      draft.name = null;
-    });
+  const nameAction = useAction<Model, typeof Actions, "Name">(
+    async (context) => {
+      context.actions.produce((draft) => {
+        draft.name = null;
+      });
 
-    const name = await fetch(/* ... */);
+      const name = await fetch(/* ... */);
 
-    context.actions.produce((draft) => {
-      draft.name = name;
-    });
-  });
+      context.actions.produce((draft) => {
+        draft.name = name;
+      });
+    },
+  );
 
   return useActions<Model, typeof Actions>(
     model,
@@ -120,160 +123,127 @@ export default function Profile(props: Props): React.ReactElement {
 
 ## Error handling
 
-Chizu provides a simple way to catch errors that occur within your actions. You can use the `ActionError` component to wrap your application and provide an error handler. This handler will be called whenever an error is thrown in an action.
+Chizu provides a simple way to catch errors that occur within your actions. You can use the `Error` component to wrap your application and provide an error handler. This handler will be called whenever an error is thrown in an action.
 
 ```tsx
-import { ActionError } from "chizu";
+import { Error } from "chizu";
 
 const App = () => (
-  <ActionError handler={(error) => console.error(error)}>
+  <Error handler={(error) => console.error(error)}>
     <Profile />
-  </ActionError>
+  </Error>
 );
 ```
 
-## Handling states
+## Model annotations
+
+Model annotations allow you to track the state of async operations on individual model fields. This is useful for showing loading indicators, optimistic updates, and tracking pending changes.
+
+Use `context.actions.annotate` to mark a value with an operation type. The view can then inspect the field to check if it's pending, get the draft value, or check the operation type:
 
 ```ts
 import { Op } from "chizu";
 
-// Mark a value as pending with an operation
 context.actions.produce((model) => {
   model.name = context.actions.annotate(Op.Update, "New Name");
 });
-
-// Check pending state
-actions.inspect.name.pending(); // true
-
-// Get remaining count of pending operations
-actions.inspect.name.remaining(); // 1 (next: actions.inspect.name.draft())
-
-// Check specific operation
-actions.inspect.name.is(Op.Update); // true
 ```
 
-<!-- However in the above example where the name is fetched asynchronously, there is no feedback to the user &ndash; we can improve that significantly by using the `module.actions.annotate` and `module.validate` helpers:
+In the view, use `actions.inspect` to check the state of annotated fields:
 
-```tsx
-export default <Actions<Module>>function Actions(module) {
-  return {
-    async *[Action.Name]() {
-      yield module.actions.produce((draft) => {
-        draft.name = module.actions.annotate(null);
-      });
-
-      const name = await fetch(/* ... */);
-      return module.actions.produce((draft) => {
-        draft.name = name;
-      });
-    },
-  };
-};
+```ts
+actions.inspect.name.pending(); // true if operation is in progress
+actions.inspect.name.remaining(); // count of pending operations
+actions.inspect.name.draft(); // the next value to be applied
+actions.inspect.name.is(Op.Update); // check specific operation type
 ```
 
-```tsx
-export default function ProfileView(props: Props): React.ReactElement {
-  return (
-    <Scope<Module> using={{ module, actions, props }}>
-      {(module) => (
-        <>
-          <p>Hey {module.model.name}</p>
+## Lifecycle actions
 
-          {module.validate.name.pending() && <p>Switching profiles&hellip;</p>}
+Chizu provides lifecycle actions that trigger at specific points in a component's lifecycle. Import `Lifecycle` from Chizu:
 
-          <button
-            disabled={module.validate.name.is(State.Op.Update)}
-            onClick={() => module.actions.dispatch([Action.Name])}
-          >
-            Switch profile
-          </button>
-        </>
-      )}
-    </Scope>
-  );
+```ts
+import { Lifecycle } from "chizu";
+
+class {
+  [Lifecycle.Mount] = mountAction;
+  [Lifecycle.Node] = nodeAction;
+  [Lifecycle.Unmount] = unmountAction;
 }
 ```
 
-
+- **`Lifecycle.Mount`** &ndash; Triggered once when the component mounts (`useLayoutEffect`).
+- **`Lifecycle.Node`** &ndash; Triggered after the component renders (`useEffect`).
+- **`Lifecycle.Unmount`** &ndash; Triggered when the component unmounts.
 
 ## Distributed actions
 
-Actions can communicate with other mounted actions using the `DistributedActions` approach. You can configure the enum and union type in the root of your application:
+Distributed actions allow different components to communicate with each other. Unlike regular actions which are scoped to a single component, distributed actions are broadcast to all mounted components that have defined a handler for them.
+
+To create a distributed action, use `createDistributedAction` instead of `createAction`. A good pattern is to define distributed actions in a shared class that other action classes can extend:
 
 ```ts
-export enum DistributedAction {
-  SignedOut = "distributed/signed-out",
+import { createAction, createDistributedAction } from "chizu";
+
+export class DistributedActions {
+  static SignedOut = createDistributedAction();
 }
 
-export type DistributedActions = [DistributedAction.SignedOut];
-```
-
-Note that you must prefix the enum name with `distributed` for it to behave as a distributed event, otherwise it'll be considered a module event only. Once you have the distributed actions you simply need to augment the module actions union with the `DistributedActions` and use it as you do other actions:
-
-```ts
-export type Actions = DistributedActions | [Action.Task, string]; // etc...
-```
-
-## Module dispatch
-
-In the eventuality that you have a component but don't want associated actions, models, etc&hellip; but want to still fire actions either the closest module or a distributed action, you can use the `useScoped` hook:
-
-```ts
-const module = useScoped<Module>();
-
-// ...
-
-module.actions.dispatch([Action.Task, "My task that needs to be done."]);
-```
-
-Alternatively you can pass the current module as a prop to your components using the `Scoped` helper:
-
-```ts
-export type Props = {
-  module: Scoped<Module>;
-};
-```
-
-## Associated context
-
-In many cases you'll still want to retrieve contextual values from within actions &ndash; which you can do by using the `module.actions.context` function:
-
-```tsx
-export default <Actions<Module>>function Actions(module) {
-  const context = module.actions.context({
-    name: NameContext
-  });
-
-  return {
-    [Action.Name](name) {
-      return module.actions.produce((draft) => {
-        draft.name = context.name;
-      });
-    },
-  };
-};
-```
-
-If you need the context values to be reactive and fire the `Lifecycle.Derive` method then simply add it to your `props` definition when you initialise your scoped component:
-
-```tsx
-export default function Profile(props: Props): React.ReactElement {
-  const name = React.useContext(NameContext);
-
-  return (
-    <Scope<Module> using={{ model, actions, props: { ...props, name } }}>
-      {(module) => (
-        <>
-          <p>Hey {module.model.name}</p>
-
-          <button
-            onClick={() => module.actions.dispatch([Action.Name, randomName()])}
-          >
-            Switch profile
-          </button>
-        </>
-      )}
-    </Scope>
-  );
+export class Actions extends DistributedActions {
+  static Increment = createAction();
 }
-``` -->
+```
+
+Any component that defines a handler for `DistributedActions.SignedOut` will receive the action when it's dispatched from any other component. For direct access to the broadcast emitter, use `useBroadcast()`.
+
+## Action decorators
+
+Chizu provides decorators to add common functionality to your actions. Import `use` from Chizu and apply decorators to action properties:
+
+```ts
+import { use } from "chizu";
+```
+
+### `use.exclusive()`
+
+Ensures only one instance of an action runs at a time. When a new action is dispatched, any previous running instance is automatically aborted. Use `context.signal` to cancel in-flight requests:
+
+```ts
+const searchAction = useAction<Model, typeof Actions, "Search">(
+  async (context, query) => {
+    const response = await fetch(`/search?q=${query}`, {
+      signal: context.signal,
+    });
+  },
+);
+
+return useActions<Model, typeof Actions>(
+  model,
+  class {
+    @use.exclusive()
+    [Actions.Search] = searchAction;
+  },
+);
+```
+
+### `use.reactive(() => [dependencies])`
+
+Automatically triggers an action when its dependencies change. Dependencies must be primitives (strings, numbers, booleans, etc.) which means you never have to worry about referential equality:
+
+```ts
+class {
+  @use.reactive(() => [props.userId])
+  [Actions.FetchUser] = fetchUserAction;
+}
+```
+
+### `use.debug()`
+
+Logs detailed timing information for debugging, including when the action started, how many `produce` calls were made, and total duration:
+
+```ts
+class {
+  @use.debug()
+  [Actions.Submit] = submitAction;
+}
+```
