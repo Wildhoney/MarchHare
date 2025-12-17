@@ -14,12 +14,7 @@ export { useBroadcast } from "./utils.ts";
  * @returns The children wrapped in a broadcast context provider.
  */
 export function Broadcaster({ children }: Props): React.ReactNode {
-  const context = React.useMemo(
-    () => ({
-      instance: new EventEmitter(),
-    }),
-    [],
-  );
+  const context = React.useMemo(() => new EventEmitter(), []);
 
   return <Context.Provider value={context}>{children}</Context.Provider>;
 }

@@ -176,8 +176,7 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
           },
           dispatch(...[action, payload]: [action: any, payload?: any]) {
             if (controller.signal.aborted) return;
-            if (isDistributedAction(action))
-              broadcast.instance.emit(action, payload);
+            if (isDistributedAction(action)) broadcast.emit(action, payload);
             else unicast.emit(action, payload);
           },
           annotate<T>(operation: Operation, value: T): T {
@@ -217,7 +216,7 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
       }
 
       isDistributedAction(action)
-        ? broadcast.instance.on(action, handler)
+        ? broadcast.on(action, handler)
         : unicast.on(action, handler);
     });
   }, [unicast]);
@@ -257,8 +256,7 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
       model,
       {
         dispatch(...[action, payload]: [action: Action, payload?: Payload]) {
-          if (isDistributedAction(action))
-            broadcast.instance.emit(action, payload);
+          if (isDistributedAction(action)) broadcast.emit(action, payload);
           else unicast.emit(action, payload);
         },
         consume() {},

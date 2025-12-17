@@ -74,6 +74,20 @@ export default function Profile(props: Props): React.ReactElement {
 }
 ```
 
+Notice `createAction<string>()` takes a generic to specify the payload type. When using `useAction`, the payload is accessible as the second argument after `context`. The third generic in `useAction<Model, typeof Actions, "Name">` extracts the correct payload type from the `Actions` class:
+
+```tsx
+export class Actions {
+  static Name = createAction<string>();
+}
+
+const nameAction = useAction<Model, typeof Actions, "Name">(
+  async (context, payload) => {
+    // payload is correctly typed as `string`
+  },
+);
+```
+
 You can perform asynchronous operations in the action which will cause the associated view to render a second time &ndash; as we're starting to require more control in our actions we&apos;ll move to our own fine-tuned action instead of `utils.set`:
 
 ```tsx
@@ -155,7 +169,7 @@ const App = () => (
 
 The `ErrorDetails` object contains:
 
-- **`reason`** &ndash; One of `Reason.Timeout` (action exceeded timeout), `Reason.Aborted` (action was cancelled, e.g., by `@use.exclusive()`), or `Reason.Error` (an error thrown in your action handler).
+- **`reason`** &ndash; One of `Reason.Timeout` (action exceeded timeout set via `@use.timeout()`), `Reason.Aborted` (action was cancelled, e.g., by `@use.exclusive()`), or `Reason.Error` (an error thrown in your action handler).
 - **`error`** &ndash; The `Error` object that was thrown.
 - **`action`** &ndash; The name of the action that caused the error (e.g., `"Increment"`).
 
@@ -170,7 +184,7 @@ export class Actions {
 
 ## Model annotations
 
-Model annotations allow you to track the state of async operations on individual model fields. This is useful for showing loading indicators, optimistic updates, and tracking pending changes.
+Model annotations allow you to track the state of async operations on individual model fields. This is useful for showing loading indicators, optimistic updates, and tracking pending changes. Annotations are powered by [Immertation](https://github.com/Wildhoney/Immertation) &ndash; refer to its documentation for more details.
 
 Use `context.actions.annotate` to mark a value with an operation type. The view can then inspect the field to check if it's pending, get the draft value, or check the operation type:
 
@@ -227,7 +241,21 @@ export class Actions extends DistributedActions {
 }
 ```
 
-Any component that defines a handler for `DistributedActions.SignedOut` will receive the action when it's dispatched from any other component. For direct access to the broadcast emitter, use `useBroadcast()`.
+Any component that defines a handler for `DistributedActions.SignedOut` will receive the action when it's dispatched from any other component. For direct access to the broadcast emitter, use `useBroadcast()`:
+
+```ts
+import { useBroadcast } from "chizu";
+
+const broadcast = useBroadcast();
+
+// Emit a distributed action
+broadcast.emit(DistributedActions.SignedOut, payload);
+
+// Listen for a distributed action
+broadcast.on(DistributedActions.SignedOut, (payload) => {
+  // Handle the action...
+});
+```
 
 ## Action decorators
 
@@ -239,7 +267,7 @@ import { use } from "chizu";
 
 ### `use.exclusive()`
 
-Ensures only one instance of an action runs at a time. When a new action is dispatched, any previous running instance is automatically aborted. Use `context.signal` to cancel in-flight requests:
+Ensures only one instance of an action runs at a time. When a new action is dispatched, any previous running instance is automatically aborted. Use `context.signal` to cancel in-flight requests. When an action is aborted, the error handler receives `Reason.Aborted`:
 
 ```ts
 const searchAction = useAction<Model, typeof Actions, "Search">(
@@ -278,5 +306,16 @@ Logs detailed timing information for debugging, including when the action starte
 class {
   @use.debug()
   [Actions.Submit] = submitAction;
+}
+```
+
+### `use.timeout(ms)`
+
+Aborts the action if it exceeds the specified duration. Triggers the abort signal via `context.signal`, allowing the action to clean up gracefully. Useful for preventing stuck states and enforcing response time limits. When a timeout occurs, the error handler receives `Reason.Timeout`:
+
+```ts
+class {
+  @use.timeout(5_000)
+  [Actions.FetchData] = fetchDataAction;
 }
 ```

@@ -7,7 +7,7 @@ function TestComponent() {
   const broadcast = useBroadcast();
   return (
     <div data-testid="has-emitter">
-      {String(broadcast.instance instanceof EventEmitter)}
+      {String(broadcast instanceof EventEmitter)}
     </div>
   );
 }
