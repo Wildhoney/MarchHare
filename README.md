@@ -172,6 +172,56 @@ The `ErrorDetails` object contains:
 - **`reason`** &ndash; One of `Reason.Timeout` (action exceeded timeout set via `@use.timeout()`), `Reason.Aborted` (action was cancelled, e.g., by `@use.exclusive()`), or `Reason.Error` (an error thrown in your action handler).
 - **`error`** &ndash; The `Error` object that was thrown.
 - **`action`** &ndash; The name of the action that caused the error (e.g., `"Increment"`).
+- **`handled`** &ndash; Whether the error was handled locally via `Lifecycle.Error`. Use this in the global `<Error>` handler to avoid duplicate handling.
+
+### Custom error types
+
+The `Error` component accepts an optional generic type parameter to include custom error classes in the handler's error type. Custom error types must extend the base `Error` class:
+
+```tsx
+class ApiError extends Error {
+  statusCode: number;
+  constructor(message: string, statusCode: number) {
+    super(message);
+    this.statusCode = statusCode;
+  }
+}
+
+const App = () => (
+  <Error<ApiError>
+    handler={(details) =>
+      details.error instanceof ApiError
+        ? console.error(
+            `API error ${details.error.statusCode}: ${details.error.message}`,
+          )
+        : console.error(
+            `Action "${details.action}" failed:`,
+            details.error.message,
+          )
+    }
+  >
+    <Profile />
+  </Error>
+);
+```
+
+You can also specify multiple custom error types using a union:
+
+```tsx
+<Error<ApiError | ValidationError>
+  handler={({ error }) => {
+    if (error instanceof ApiError) {
+      console.error(`API error ${error.statusCode}: ${error.message}`);
+    } else if (error instanceof ValidationError) {
+      console.error(`Validation failed: ${error.field} - ${error.message}`);
+    } else {
+      console.error(`Unknown error: ${error.message}`);
+    }
+  }}
+>
+  <App />
+</Error>
+```
 
 **Note:** For the `action` name to be meaningful, pass a name when creating actions:
 
@@ -180,6 +230,19 @@ export class Actions {
   static Increment = createAction("Increment");
   static Decrement = createAction("Decrement");
 }
+```
+
+### Cross-platform error classes
+
+Chizu provides `AbortError` and `TimeoutError` classes that work across all platforms including React Native (where `DOMException` is unavailable):
+
+```ts
+import { AbortError, TimeoutError } from "chizu";
+
+// Used internally by Chizu for abort/timeout handling
+// Can also be used in your own code for consistency
+throw new AbortError("Operation cancelled");
+throw new TimeoutError("Request timed out");
 ```
 
 ## Model annotations
@@ -215,13 +278,19 @@ import { Lifecycle } from "chizu";
 class {
   [Lifecycle.Mount] = mountAction;
   [Lifecycle.Node] = nodeAction;
+  [Lifecycle.Error] = errorAction;
   [Lifecycle.Unmount] = unmountAction;
 }
 ```
 
 - **`Lifecycle.Mount`** &ndash; Triggered once when the component mounts (`useLayoutEffect`).
 - **`Lifecycle.Node`** &ndash; Triggered after the component renders (`useEffect`).
+- **`Lifecycle.Error`** &ndash; Triggered when an action throws an error. Receives `ErrorDetails` as payload.
 - **`Lifecycle.Unmount`** &ndash; Triggered when the component unmounts.
+
+**Note:** Actions should ideally be self-contained and handle expected errors internally using patterns like [Option](https://mobily.github.io/ts-belt/api/option) or [Result](https://mobily.github.io/ts-belt/api/result) types to update the model accordingly. `Lifecycle.Error` is intended for timeouts, aborts, and uncaught catastrophic errors &ndash; not routine error handling.
+
+The `<Error>` component is a catch-all for errors from **any** action in your application, useful for global error reporting or logging. `Lifecycle.Error` handles errors **locally** where they occurred, allowing component-specific error recovery or UI updates.
 
 ## Distributed actions
 

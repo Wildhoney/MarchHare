@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import { withGetters, isGenerator } from "./utils.ts";
 import { getReason, normaliseError } from "./index.ts";
-import { Reason } from "../error/index.tsx";
+import { Reason, AbortError, TimeoutError } from "../error/index.tsx";
 
 describe("withGetters()", () => {
   it("should create getters that access ref values", () => {
@@ -60,12 +60,12 @@ describe("isGenerator()", () => {
 
 describe("getReason()", () => {
   it("should return Reason.Timeout for TimeoutError", () => {
-    const error = new DOMException("Timeout", "TimeoutError");
+    const error = new TimeoutError();
     expect(getReason(error)).toBe(Reason.Timeout);
   });
 
   it("should return Reason.Aborted for AbortError", () => {
-    const error = new DOMException("Aborted", "AbortError");
+    const error = new AbortError();
     expect(getReason(error)).toBe(Reason.Aborted);
   });
 
@@ -82,8 +82,8 @@ describe("getReason()", () => {
     expect(getReason({ message: "error" })).toBe(Reason.Error);
   });
 
-  it("should return Reason.Error for other DOMException types", () => {
-    const error = new DOMException("Not found", "NotFoundError");
+  it("should return Reason.Error for other error types", () => {
+    const error = new TypeError("Not a function");
     expect(getReason(error)).toBe(Reason.Error);
   });
 });
@@ -94,8 +94,8 @@ describe("normaliseError()", () => {
     expect(normaliseError(error)).toBe(error);
   });
 
-  it("should preserve DOMException instances", () => {
-    const error = new DOMException("timeout", "TimeoutError");
+  it("should preserve custom error instances", () => {
+    const error = new TimeoutError();
     expect(normaliseError(error)).toBe(error);
   });
 

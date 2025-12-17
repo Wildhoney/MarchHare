@@ -8,6 +8,7 @@ import {
 } from "@jest/globals";
 import { use, context, entries } from "./index.ts";
 import { Args } from "./types.ts";
+import { AbortError } from "../error/types.ts";
 
 /**
  * Creates a mock context object for testing action decorators.
@@ -148,8 +149,12 @@ describe("use.reactive()", () => {
     const registeredEntries = entries.get(instance);
 
     expect(registeredEntries?.length).toBe(2);
-    expect(registeredEntries?.map((e) => e.action)).toContain("actionOne");
-    expect(registeredEntries?.map((e) => e.action)).toContain("actionTwo");
+    expect(registeredEntries?.map((entry) => entry.action)).toContain(
+      "actionOne",
+    );
+    expect(registeredEntries?.map((entry) => entry.action)).toContain(
+      "actionTwo",
+    );
   });
 
   it("should store getDependencies function that returns correct values", () => {
@@ -704,7 +709,7 @@ describe("use.timeout()", () => {
             "abort",
             () => {
               clearTimeout(timerId);
-              reject(new DOMException("Parent aborted", "AbortError"));
+              reject(new AbortError("Parent aborted"));
             },
             { once: true },
           );

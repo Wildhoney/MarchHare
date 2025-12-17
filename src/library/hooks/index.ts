@@ -28,10 +28,10 @@ import { context, entries } from "../use/index.ts";
  * @returns The appropriate Reason enum value.
  */
 export function getReason(error: unknown): Reason {
-  if (error instanceof DOMException && error.name === "TimeoutError")
-    return Reason.Timeout;
-  if (error instanceof DOMException && error.name === "AbortError")
-    return Reason.Aborted;
+  if (error instanceof Error) {
+    if (error.name === "TimeoutError") return Reason.Timeout;
+    if (error.name === "AbortError") return Reason.Aborted;
+  }
   return Reason.Error;
 }
 
@@ -157,6 +157,7 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
   const state = React.useRef<State<M>>(new State<M>(initialModel));
   const snapshot = useSnapshot({ model });
   const unicast = React.useMemo(() => new EventEmitter(), []);
+  const instance = React.useRef<object | null>(null);
   const reactives = React.useRef<{
     previous: Map<string | symbol, unknown[]>;
   }>({ previous: new Map() });
@@ -193,6 +194,7 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
 
   React.useLayoutEffect(() => {
     const actions = new (<Actions<M, AC>>ActionClass)();
+    instance.current = <object>actions;
 
     Object.getOwnPropertySymbols(actions).forEach((action) => {
       const key = <keyof typeof actions>action;
@@ -203,11 +205,15 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
         try {
           await (<Function>actions[key])(getContext(result), payload);
         } catch (error) {
-          handleError?.({
+          const handled = Lifecycle.Error in <object>actions;
+          const details = {
             reason: getReason(error),
             error: normaliseError(error),
             action: getActionName(action),
-          });
+            handled,
+          };
+          handleError?.(details);
+          if (handled) unicast.emit(Lifecycle.Error, details);
         } finally {
           result.processes.forEach((process) => state.current.prune(process));
           setModel({ ...state.current.model });
@@ -222,8 +228,8 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
   }, [unicast]);
 
   React.useEffect(() => {
-    const fresh = new (<Actions<M, AC>>ActionClass)();
-    const list = entries.get(<object>fresh) ?? [];
+    if (!instance.current) return;
+    const list = entries.get(instance.current) ?? [];
 
     list.forEach((entry) => {
       const current = entry.getDependencies();
@@ -236,7 +242,7 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
         );
 
       if (hasChanged) {
-        reactives.current.previous.set(entry.action, [...current]);
+        reactives.current.previous.set(entry.action, current);
         unicast.emit(entry.action);
       }
     });

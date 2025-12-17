@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { ActionsClass, Context, Model, Payload, Pk } from "../types/index.ts";
+import { AbortError } from "../error/types.ts";
 
 /**
  * Returns a promise that resolves after the specified number of milliseconds.
@@ -13,7 +14,7 @@ import { ActionsClass, Context, Model, Payload, Pk } from "../types/index.ts";
 export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(new DOMException("Aborted", "AbortError"));
+      reject(new AbortError());
       return;
     }
 
@@ -23,7 +24,7 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
       "abort",
       () => {
         clearTimeout(timer);
-        reject(new DOMException("Aborted", "AbortError"));
+        reject(new AbortError());
       },
       { once: true },
     );
