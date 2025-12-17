@@ -28,7 +28,7 @@ Strongly typed React framework using generators and efficiently updated views al
 - Clear separation of concerns between business logic and markup.
 - Strongly typed throughout &ndash; dispatches, models, etc&hellip;
 - Easily communicate between actions using distributed actions.
-- Bundled decorators for common action functionality such as exclusive mode and reactive triggers.
+- Bundled decorators for common action functionality such as supplant mode and reactive triggers.
 - No need to worry about referential equality &ndash; reactive dependencies use primitives only.
 - Built-in request cancellation with `AbortController` integration.
 - Granular async state tracking per model field (pending, draft, operation type).
@@ -169,7 +169,7 @@ const App = () => (
 
 The `ErrorDetails` object contains:
 
-- **`reason`** &ndash; One of `Reason.Timeout` (action exceeded timeout set via `@use.timeout()`), `Reason.Aborted` (action was cancelled, e.g., by `@use.exclusive()`), or `Reason.Error` (an error thrown in your action handler).
+- **`reason`** &ndash; One of `Reason.Timeout` (action exceeded timeout set via `@use.timeout()`), `Reason.Aborted` (action was cancelled, e.g., by `@use.supplant()`), or `Reason.Error` (an error thrown in your action handler).
 - **`error`** &ndash; The `Error` object that was thrown.
 - **`action`** &ndash; The name of the action that caused the error (e.g., `"Increment"`).
 - **`handled`** &ndash; Whether the error was handled locally via `Lifecycle.Error`. Use this in the global `<Error>` handler to avoid duplicate handling.
@@ -334,7 +334,7 @@ Chizu provides decorators to add common functionality to your actions. Import `u
 import { use } from "chizu";
 ```
 
-### `use.exclusive()`
+### `use.supplant()`
 
 Ensures only one instance of an action runs at a time. When a new action is dispatched, any previous running instance is automatically aborted. Use `context.signal` to cancel in-flight requests. When an action is aborted, the error handler receives `Reason.Aborted`:
 
@@ -350,7 +350,7 @@ const searchAction = useAction<Model, typeof Actions, "Search">(
 return useActions<Model, typeof Actions>(
   model,
   class {
-    @use.exclusive()
+    @use.supplant()
     [Actions.Search] = searchAction;
   },
 );

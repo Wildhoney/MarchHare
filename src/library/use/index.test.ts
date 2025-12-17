@@ -39,12 +39,12 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-describe("use.exclusive()", () => {
+describe("use.supplant()", () => {
   it("should abort previous action when dispatched again", async () => {
     const abortedSignals: boolean[] = [];
 
     class TestActions {
-      @use.exclusive()
+      @use.supplant()
       async action(args: Args) {
         abortedSignals.push(args.signal.aborted);
         await wait(50);
@@ -71,7 +71,7 @@ describe("use.exclusive()", () => {
 
   it("should allow action to complete when not interrupted", async () => {
     class TestActions {
-      @use.exclusive()
+      @use.supplant()
       async action(_args: Args) {
         await wait(10);
         return "completed";
@@ -90,7 +90,7 @@ describe("use.exclusive()", () => {
     const calls: number[] = [];
 
     class TestActions {
-      @use.exclusive()
+      @use.supplant()
       async action(_args: Args) {
         const id = Date.now();
         calls.push(id);
@@ -282,7 +282,7 @@ describe("use.debug()", () => {
   });
 });
 
-describe.skip("use.debounce()", () => {
+describe("use.debounce()", () => {
   beforeEach(() => {
     jest.useFakeTimers();
   });
@@ -307,7 +307,7 @@ describe.skip("use.debounce()", () => {
 
     expect(calls.length).toBe(0);
 
-    jest.advanceTimersByTime(100);
+    await jest.advanceTimersByTimeAsync(100);
     await promise;
 
     expect(calls.length).toBe(1);
@@ -327,25 +327,29 @@ describe.skip("use.debounce()", () => {
     const instance = new TestActions();
 
     const promise1 = instance.action(createMockContext());
-    jest.advanceTimersByTime(50);
+    await jest.advanceTimersByTimeAsync(50);
 
     const promise2 = instance.action(createMockContext());
-    jest.advanceTimersByTime(50);
+    await jest.advanceTimersByTimeAsync(50);
 
     const promise3 = instance.action(createMockContext());
 
     // First two should reject with AbortError
-    await expect(promise1).rejects.toThrow("Debounced");
-    await expect(promise2).rejects.toThrow("Debounced");
+    await expect(promise1).rejects.toThrow(AbortError);
+    await expect(promise2).rejects.toThrow(AbortError);
 
     // Advance time to trigger the last call
-    jest.advanceTimersByTime(100);
+    await jest.advanceTimersByTimeAsync(100);
     await promise3;
 
     // Only the last call should have executed
     expect(calls.length).toBe(1);
   });
 
+  /**
+   * Verifies that aborting via the controller's signal cancels the pending
+   * debounced execution and cleans up the timer, preventing the action from running.
+   */
   it("should cleanup on abort signal", async () => {
     const calls: string[] = [];
 
@@ -360,20 +364,21 @@ describe.skip("use.debounce()", () => {
     const instance = new TestActions();
     const ctx = createMockContext();
 
-    void instance.action(ctx);
+    const promise = instance.action(ctx);
 
-    // Abort before the debounce fires
-    jest.advanceTimersByTime(50);
+    // Abort before the debounce fires - rejection happens immediately
+    await jest.advanceTimersByTimeAsync(50);
     ctx[context].controller.abort();
 
-    jest.advanceTimersByTime(100);
+    // The promise should reject with AbortError immediately on abort
+    await expect(promise).rejects.toThrow(AbortError);
 
     // The action should not execute due to abort
     expect(calls.length).toBe(0);
   });
 });
 
-describe.skip("use.throttle()", () => {
+describe("use.throttle()", () => {
   beforeEach(() => {
     jest.useFakeTimers();
   });
@@ -425,7 +430,7 @@ describe.skip("use.throttle()", () => {
     // Third call replaces the second in the queue
     const promise3 = instance.action(createMockContext());
 
-    jest.advanceTimersByTime(100);
+    await jest.advanceTimersByTimeAsync(100);
 
     await Promise.all([promise2, promise3]);
 
@@ -451,7 +456,7 @@ describe.skip("use.throttle()", () => {
     expect(calls.length).toBe(1);
 
     // Wait past throttle window
-    jest.advanceTimersByTime(150);
+    await jest.advanceTimersByTimeAsync(150);
 
     // This call should also execute immediately (window expired)
     await instance.action(createMockContext());
@@ -459,12 +464,20 @@ describe.skip("use.throttle()", () => {
   });
 });
 
-describe.skip("use.retry()", () => {
+describe("use.retry()", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it("should succeed on first attempt if no error", async () => {
     const attempts: number[] = [];
 
     class TestActions {
-      @use.retry(3)
+      @use.retry([100, 200])
       async action(_args: Args) {
         attempts.push(attempts.length + 1);
         return "success";
@@ -478,11 +491,11 @@ describe.skip("use.retry()", () => {
     expect(attempts.length).toBe(1);
   });
 
-  it("should retry on failure up to max attempts", async () => {
+  it("should retry on failure using interval array", async () => {
     let attemptCount = 0;
 
     class TestActions {
-      @use.retry(3)
+      @use.retry([100, 200]) // 2 retries = 3 total attempts
       async action(_args: Args): Promise<string> {
         attemptCount++;
         if (attemptCount < 3) {
@@ -493,17 +506,33 @@ describe.skip("use.retry()", () => {
     }
 
     const instance = new TestActions();
-    const result = await instance.action(createMockContext());
+    const promise = instance.action(createMockContext());
 
-    expect(result).toBe("success");
+    // First attempt (immediate)
+    await jest.advanceTimersByTimeAsync(0);
+    expect(attemptCount).toBe(1);
+
+    // Second attempt after 100ms
+    await jest.advanceTimersByTimeAsync(100);
+    expect(attemptCount).toBe(2);
+
+    // Third attempt after 200ms
+    await jest.advanceTimersByTimeAsync(200);
     expect(attemptCount).toBe(3);
+
+    const result = await promise;
+    expect(result).toBe("success");
   });
 
-  it("should throw after exhausting all attempts", async () => {
+  /**
+   * Ensures that after all retry intervals are exhausted, the final error
+   * is propagated to the caller rather than being silently swallowed.
+   */
+  it("should throw after exhausting all intervals", async () => {
     let attemptCount = 0;
 
     class TestActions {
-      @use.retry(3)
+      @use.retry([50, 50]) // 2 retries = 3 total attempts
       async action(_args: Args): Promise<string> {
         attemptCount++;
         throw new Error(`Attempt ${attemptCount} failed`);
@@ -511,24 +540,25 @@ describe.skip("use.retry()", () => {
     }
 
     const instance = new TestActions();
+    const promise = instance.action(createMockContext());
 
-    await expect(instance.action(createMockContext())).rejects.toThrow(
-      "Attempt 3 failed",
-    );
+    // Advance time to cover all retry intervals (50 + 50 = 100ms total)
+    // The rejection happens during this time advance, so we need to catch it properly
+    const expectation = expect(promise).rejects.toThrow("Attempt 3 failed");
+    await jest.advanceTimersByTimeAsync(100);
+
+    await expectation;
     expect(attemptCount).toBe(3);
   });
 
-  it("should delay between retries when delayMs is specified", async () => {
-    jest.useFakeTimers();
+  it("should use custom intervals between retries", async () => {
     let attemptCount = 0;
-    const attemptTimes: number[] = [];
 
     class TestActions {
-      @use.retry(3, 100)
+      @use.retry([100, 500, 1000]) // 3 retries with varying delays
       async action(_args: Args): Promise<string> {
         attemptCount++;
-        attemptTimes.push(Date.now());
-        if (attemptCount < 3) {
+        if (attemptCount < 4) {
           throw new Error("fail");
         }
         return "success";
@@ -538,30 +568,60 @@ describe.skip("use.retry()", () => {
     const instance = new TestActions();
     const promise = instance.action(createMockContext());
 
-    // First attempt happens immediately
+    // First attempt immediately
     await jest.advanceTimersByTimeAsync(0);
     expect(attemptCount).toBe(1);
 
-    // Second attempt after 100ms delay
+    // Second attempt after 100ms
     await jest.advanceTimersByTimeAsync(100);
     expect(attemptCount).toBe(2);
 
-    // Third attempt after another 100ms delay
-    await jest.advanceTimersByTimeAsync(100);
+    // Third attempt after 500ms
+    await jest.advanceTimersByTimeAsync(500);
     expect(attemptCount).toBe(3);
+
+    // Fourth attempt after 1000ms
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(attemptCount).toBe(4);
 
     const result = await promise;
     expect(result).toBe("success");
-
-    jest.useRealTimers();
   });
 
-  it("should stop retrying when aborted", async () => {
-    jest.useFakeTimers();
+  it("should use default intervals when none specified", async () => {
     let attemptCount = 0;
 
     class TestActions {
-      @use.retry(5, 100)
+      @use.retry() // Uses default [1000, 2000, 4000]
+      async action(_args: Args): Promise<string> {
+        attemptCount++;
+        if (attemptCount < 2) {
+          throw new Error("fail");
+        }
+        return "success";
+      }
+    }
+
+    const instance = new TestActions();
+    const promise = instance.action(createMockContext());
+
+    // First attempt
+    await jest.advanceTimersByTimeAsync(0);
+    expect(attemptCount).toBe(1);
+
+    // Second attempt after default 1000ms
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(attemptCount).toBe(2);
+
+    const result = await promise;
+    expect(result).toBe("success");
+  });
+
+  it("should stop retrying when aborted during delay", async () => {
+    let attemptCount = 0;
+
+    class TestActions {
+      @use.retry([100, 200, 300])
       async action(_args: Args): Promise<string> {
         attemptCount++;
         throw new Error("fail");
@@ -580,15 +640,13 @@ describe.skip("use.retry()", () => {
     await jest.advanceTimersByTimeAsync(50);
     ctx[context].controller.abort();
 
-    await expect(promise).rejects.toThrow("Aborted");
+    await expect(promise).rejects.toThrow(AbortError);
     expect(attemptCount).toBe(1);
-
-    jest.useRealTimers();
   });
 
   it("should throw AbortError if already aborted", async () => {
     class TestActions {
-      @use.retry(3)
+      @use.retry([100])
       async action(_args: Args) {
         return "success";
       }
@@ -598,7 +656,7 @@ describe.skip("use.retry()", () => {
     const ctx = createMockContext();
     ctx[context].controller.abort();
 
-    await expect(instance.action(ctx)).rejects.toThrow("Aborted");
+    await expect(instance.action(ctx)).rejects.toThrow(AbortError);
   });
 });
 
@@ -732,13 +790,7 @@ describe("use.timeout()", () => {
 });
 
 describe("decorator combinations", () => {
-  // Note: @use.retry() and @use.timeout() have a known conflict:
-  // timeout aborts the shared controller, and retry checks signal.aborted
-  // before each attempt. When timeout fires, retry sees the aborted signal
-  // and throws immediately. For retry with timeouts, use retry's built-in
-  // delay mechanism or implement custom timeout logic within the action.
-
-  it.skip("should work with debounce decorator on its own when called rapidly", async () => {
+  it("should work with debounce decorator on its own when called rapidly", async () => {
     jest.useFakeTimers();
     const calls: string[] = [];
 
@@ -758,8 +810,8 @@ describe("decorator combinations", () => {
     const promise3 = instance.action(createMockContext());
 
     // First two should reject
-    await expect(promise1).rejects.toThrow("Debounced");
-    await expect(promise2).rejects.toThrow("Debounced");
+    await expect(promise1).rejects.toThrow(AbortError);
+    await expect(promise2).rejects.toThrow(AbortError);
 
     // Advance past debounce window
     await jest.advanceTimersByTimeAsync(100);
@@ -796,7 +848,7 @@ describe("edge cases", () => {
     class TestActions {
       constructor(public name: string) {}
 
-      @use.exclusive()
+      @use.supplant()
       async action(args: Args) {
         calls.push({ instance: this.name, aborted: args.signal.aborted });
         return "done";
@@ -806,7 +858,7 @@ describe("edge cases", () => {
     const instance1 = new TestActions("A");
     const instance2 = new TestActions("B");
 
-    // Both instances should work independently - exclusive is per-instance
+    // Both instances should work independently - supplant is per-instance
     const promise1 = instance1.action(createMockContext());
     const promise2 = instance2.action(createMockContext());
 

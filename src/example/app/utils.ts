@@ -22,7 +22,7 @@ export const features = [
   {
     icon: "🎨",
     title: "Powerful Decorators",
-    desc: "@use.exclusive(), @use.reactive(), @use.timeout()",
+    desc: "@use.supplant(), @use.reactive(), @use.timeout()",
   },
   {
     icon: "🚫",

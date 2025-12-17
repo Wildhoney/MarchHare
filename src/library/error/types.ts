@@ -6,14 +6,14 @@ import { ReactNode } from "react";
 export enum Reason {
   /** Action exceeded its timeout limit (from `@use.timeout()`). */
   Timeout = "Timeout",
-  /** Action was cancelled, e.g., by `@use.exclusive()` aborting a previous run. */
+  /** Action was cancelled, e.g., by `@use.supplant()` aborting a previous run. */
   Aborted = "Aborted",
   /** An error thrown in the user's action handler. */
   Error = "Error",
 }
 
 /**
- * Error thrown when an action is aborted, e.g., by `@use.exclusive()` cancelling
+ * Error thrown when an action is aborted, e.g., by `@use.supplant()` cancelling
  * a previous run. Works across all platforms including React Native where
  * `DOMException` is unavailable.
  *

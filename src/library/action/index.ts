@@ -1,4 +1,5 @@
 import { Action, Payload } from "../types/index.ts";
+import { G } from "@mobily/ts-belt";
 
 /**
  * Defines a new action with a given payload type.
@@ -35,7 +36,8 @@ export function createDistributedAction<T = never>(
  * @returns True if the action is a distributed action, false otherwise.
  */
 export function isDistributedAction(action: Action): boolean {
-  return action.toString().startsWith("Symbol(chizu.action/distributed/");
+  if (G.isString(action)) return action.startsWith("chizu.action/distributed/");
+  return action.description?.startsWith("chizu.action/distributed/") ?? false;
 }
 
 /**
@@ -58,5 +60,8 @@ export function isDistributedAction(action: Action): boolean {
  * ```
  */
 export function getActionName(action: Action): string {
-  return action.toString().match(/\/([^/)]+)\)$/)?.[1] ?? "unknown";
+  const description = G.isString(action) ? action : (action.description ?? "");
+  if (!description.startsWith("chizu.action/")) return "unknown";
+  const name = description.slice(description.lastIndexOf("/") + 1);
+  return name || "unknown";
 }

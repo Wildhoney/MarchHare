@@ -4,12 +4,28 @@ import { Process, Inspect } from "immertation";
 
 export const context = Symbol("chizu.action.context");
 
+/**
+ * Lifecycle actions that trigger at specific points in a component's lifecycle.
+ * Define handlers for these in your actions class to respond to lifecycle events.
+ *
+ * @example
+ * ```ts
+ * class {
+ *   [Lifecycle.Mount] = mountAction;
+ *   [Lifecycle.Error] = errorAction;
+ *   [Lifecycle.Unmount] = unmountAction;
+ * }
+ * ```
+ */
 export class Lifecycle {
-  static Mount = Symbol("lifecycle/mount");
-  static Node = Symbol("lifecycle/node");
-  static Derive = Symbol("lifecycle/derive");
-  static Error = Symbol("lifecycle/error");
-  static Unmount = Symbol("lifecycle/unmount");
+  /** Triggered once when the component mounts (`useLayoutEffect`). */
+  static Mount = Symbol("chizu.action.lifecycle/Mount");
+  /** Triggered after the component renders (`useEffect`). */
+  static Node = Symbol("chizu.action.lifecycle/Node");
+  /** Triggered when the component unmounts. */
+  static Unmount = Symbol("chizu.action.lifecycle/Unmount");
+  /** Triggered when an action throws an error. Receives `ErrorDetails` as payload. */
+  static Error = Symbol("chizu.action.lifecycle/Error");
 }
 
 export type Pk<T> = undefined | symbol | T;
