@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import objectHash from "object-hash";
 import { ActionsClass, Context, Model, Payload, Pk } from "../types/index.ts";
 import { AbortError } from "../error/types.ts";
 
@@ -30,6 +31,9 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     );
   });
 }
+
+/** Shorthand alias for {@link sleep}. */
+export const ζ = sleep;
 
 /**
  * Generates a unique primary key.
@@ -75,3 +79,25 @@ export function set<M extends Model, AC extends ActionsClass<any>>(
 
 /** Shorthand alias for {@link set}. */
 export const λ = set;
+
+/**
+ * Generates a deterministic hash string from any value.
+ * Useful for creating cache keys, comparing object equality, or tracking changes.
+ * Uses ohash internally for consistent, fast hashing across all value types.
+ *
+ * @param value The value to hash (objects, arrays, primitives, etc.).
+ * @returns A deterministic hash string.
+ *
+ * @example
+ * ```ts
+ * checksum({ name: "Adam", age: 30 }); // "hKs8Nqf2x9"
+ * checksum([1, 2, 3]); // "2Hymo0jSsf"
+ * checksum("hello"); // "5d41402abc"
+ * ```
+ */
+export function checksum(value: object | string | number | boolean): string {
+  return objectHash(value);
+}
+
+/** Shorthand alias for {@link checksum}. */
+export const Σ = checksum;
