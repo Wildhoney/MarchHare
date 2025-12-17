@@ -146,25 +146,27 @@ Chizu provides a simple way to catch errors that occur within your actions. Use 
 ```tsx
 import { Error, Reason } from "chizu";
 
-const App = () => (
-  <Error
-    handler={({ reason, error, action }) => {
-      switch (reason) {
-        case Reason.Timeout:
-          console.warn(`Action "${action}" timed out:`, error.message);
-          break;
-        case Reason.Aborted:
-          console.info(`Action "${action}" was aborted`);
-          break;
-        case Reason.Error:
-          console.error(`Action "${action}" failed:`, error.message);
-          break;
-      }
-    }}
-  >
-    <Profile />
-  </Error>
-);
+function App(): ReactElement {
+  return (
+    <Error
+      handler={({ reason, error, action }) => {
+        switch (reason) {
+          case Reason.Timeout:
+            console.warn(`Action "${action}" timed out:`, error.message);
+            break;
+          case Reason.Aborted:
+            console.info(`Action "${action}" was aborted`);
+            break;
+          case Reason.Error:
+            console.error(`Action "${action}" failed:`, error.message);
+            break;
+        }
+      }}
+    >
+      <Profile />
+    </Error>
+  );
+}
 ```
 
 The `ErrorDetails` object contains:
@@ -176,51 +178,26 @@ The `ErrorDetails` object contains:
 
 ### Custom error types
 
-The `Error` component accepts an optional generic type parameter to include custom error classes in the handler's error type. Custom error types must extend the base `Error` class:
+The `Error` component accepts an optional generic type parameter to include custom error classes in the handler's error type &mdash; custom error types must extend the base `Error` class:
 
 ```tsx
-class ApiError extends Error {
-  statusCode: number;
-  constructor(message: string, statusCode: number) {
-    super(message);
-    this.statusCode = statusCode;
-  }
+function App(): ReactElement {
+  return (
+    <Error<ApiError | ValidationError>
+      handler={({ error }) => {
+        if (error instanceof ApiError) {
+          console.error(`API error ${error.statusCode}: ${error.message}`);
+        } else if (error instanceof ValidationError) {
+          console.error(`Validation failed: ${error.field} - ${error.message}`);
+        } else {
+          console.error(`Unknown error: ${error.message}`);
+        }
+      }}
+    >
+      <Profile />
+    </Error>
+  );
 }
-
-const App = () => (
-  <Error<ApiError>
-    handler={(details) =>
-      details.error instanceof ApiError
-        ? console.error(
-            `API error ${details.error.statusCode}: ${details.error.message}`,
-          )
-        : console.error(
-            `Action "${details.action}" failed:`,
-            details.error.message,
-          )
-    }
-  >
-    <Profile />
-  </Error>
-);
-```
-
-You can also specify multiple custom error types using a union:
-
-```tsx
-<Error<ApiError | ValidationError>
-  handler={({ error }) => {
-    if (error instanceof ApiError) {
-      console.error(`API error ${error.statusCode}: ${error.message}`);
-    } else if (error instanceof ValidationError) {
-      console.error(`Validation failed: ${error.field} - ${error.message}`);
-    } else {
-      console.error(`Unknown error: ${error.message}`);
-    }
-  }}
->
-  <App />
-</Error>
 ```
 
 **Note:** For the `action` name to be meaningful, pass a name when creating actions:
@@ -385,6 +362,54 @@ Aborts the action if it exceeds the specified duration. Triggers the abort signa
 ```ts
 class {
   @use.timeout(5_000)
+  [Actions.FetchData] = fetchDataAction;
+}
+```
+
+### `use.debounce(ms)`
+
+Delays action execution until no new dispatches occur for the specified duration. Useful for search inputs, form validation, and auto-save functionality:
+
+```ts
+class {
+  @use.debounce(300)
+  [Actions.Search] = searchAction;
+}
+```
+
+### `use.throttle(ms)`
+
+Limits action execution to at most once per specified time window. The first call executes immediately, subsequent calls during the cooldown period are queued and the last one executes when the window expires. Useful for scroll handlers, resize events, and rate-limited APIs:
+
+```ts
+class {
+  @use.throttle(500)
+  [Actions.TrackScroll] = trackScrollAction;
+}
+```
+
+### `use.retry(intervals)`
+
+Automatically retries failed actions with specified delay intervals. Respects the abort signal and stops retrying if aborted. Useful for network requests and other operations that may fail transiently:
+
+```ts
+class {
+  @use.retry([1_000, 2_000, 4_000])
+  [Actions.FetchData] = fetchDataAction;
+}
+```
+
+The intervals array specifies delays between retries. The example above will retry up to 3 times: first retry after 1s, second after 2s, third after 4s. Default intervals are `[1_000, 2_000, 4_000]`.
+
+### Combining decorators
+
+Decorators can be combined for powerful control flow. Apply them top-to-bottom in execution order:
+
+```ts
+class {
+  @use.supplant()    // 1. Cancel previous calls
+  @use.retry()       // 2. Retry on failure
+  @use.timeout(5_000) // 3. Timeout each attempt
   [Actions.FetchData] = fetchDataAction;
 }
 ```
