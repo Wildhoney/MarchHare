@@ -481,9 +481,11 @@ class {
 Returns a promise that resolves after the specified milliseconds. Useful for simulating delays in actions during development or adding intentional pauses. Optionally accepts an `AbortSignal` to cancel the sleep early:
 
 ```ts
-const fetchAction = useAction<Model, typeof Actions, "Fetch">(async (context) => {
-  await utils.sleep(1_000); // Simulate network delay
-  const data = await fetch("/api/data", { signal: context.signal });
-  // ...
-});
+const fetchAction = useAction<Model, typeof Actions, "Fetch">(
+  async (context) => {
+    await utils.sleep(1_000); // Simulate network delay
+    const data = await fetch("/api/data", { signal: context.signal });
+    // ...
+  },
+);
 ```

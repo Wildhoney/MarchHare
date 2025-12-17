@@ -25,6 +25,9 @@ dev:
 build:
 	npx vite build
 
+fslint:
+	npx fslint --files=dist/**/*.js --limit-kb=75
+
 checks:
 	make fmt
 	make lint
@@ -32,6 +35,8 @@ checks:
 	make circular
 	make unit
 	make integration
+	make build
+	make fslint
 
 preview:
 	npx vite preview
