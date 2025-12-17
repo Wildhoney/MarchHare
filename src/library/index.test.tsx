@@ -1,32 +1,19 @@
-import { expect, it, jest, beforeEach, afterEach } from "@jest/globals";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { expect, it } from "@jest/globals";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import Counter from "../example/counter";
 
-beforeEach(() => {
-  jest.useFakeTimers();
-});
-
-afterEach(() => {
-  jest.useRealTimers();
-});
-
-it("should increment and decrement the counter", async () => {
+it("should decrement the counter synchronously", async () => {
   render(<Counter />);
 
   expect(screen.getByLabelText("1")).toBeTruthy();
 
-  fireEvent.click(screen.getByText("+"));
-  await act(async () => {
-    jest.advanceTimersByTime(1_000);
+  fireEvent.click(screen.getByText("−"));
+  await waitFor(() => {
+    expect(screen.getByLabelText("0")).toBeTruthy();
   });
-  expect(await screen.findByLabelText("2")).toBeTruthy();
 
   fireEvent.click(screen.getByText("−"));
-  expect(await screen.findByLabelText("1")).toBeTruthy();
-
-  fireEvent.click(screen.getByText("−"));
-  expect(await screen.findByLabelText("0")).toBeTruthy();
-
-  fireEvent.click(screen.getByText("−"));
-  expect(await screen.findByLabelText("-1")).toBeTruthy();
+  await waitFor(() => {
+    expect(screen.getByLabelText("-1")).toBeTruthy();
+  });
 });

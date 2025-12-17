@@ -3,12 +3,31 @@ import { ActionsClass, Context, Model, Payload, Pk } from "../types/index.ts";
 
 /**
  * Returns a promise that resolves after the specified number of milliseconds.
+ * If an AbortSignal is provided, the sleep will reject with an AbortError
+ * when the signal is aborted, allowing cleanup of pending operations.
  *
  * @param ms The number of milliseconds to sleep.
- * @returns A promise that resolves after the delay.
+ * @param signal Optional AbortSignal to cancel the sleep early.
+ * @returns A promise that resolves after the delay or rejects if aborted.
  */
-export function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+
+    const timer = setTimeout(resolve, ms);
+
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(new DOMException("Aborted", "AbortError"));
+      },
+      { once: true },
+    );
+  });
 }
 
 /**

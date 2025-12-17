@@ -24,7 +24,7 @@ export function useCounterActions() {
         );
       });
 
-      await sleep(1_000);
+      await sleep(1_000, context.signal);
 
       context.actions.produce((model) => {
         model.count += 1;

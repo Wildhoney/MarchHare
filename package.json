@@ -13,6 +13,7 @@
     }
   },
   "dependencies": {
+    "antd": "^6.1.1",
     "eventemitter3": "^5.0.1",
     "immertation": "^0.1.17",
     "lodash": "^4.17.21",

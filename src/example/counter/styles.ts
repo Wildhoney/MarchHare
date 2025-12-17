@@ -10,15 +10,12 @@ const spin = keyframes`
 `;
 
 export const container = css`
-  width: 100vw;
-  height: 100vh;
   display: flex;
   place-content: center;
   place-items: center;
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
     Cantarell, sans-serif;
-  background: #f5f5f5;
 `;
 
 export const card = css`

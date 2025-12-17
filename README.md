@@ -127,16 +127,45 @@ export default function Profile(props: Props): React.ReactElement {
 
 ## Error handling
 
-Chizu provides a simple way to catch errors that occur within your actions. You can use the `Error` component to wrap your application and provide an error handler. This handler will be called whenever an error is thrown in an action.
+Chizu provides a simple way to catch errors that occur within your actions. Use the `Error` component to wrap your application and provide an error handler. The handler receives an `ErrorDetails` object containing information about the error:
 
 ```tsx
-import { Error } from "chizu";
+import { Error, Reason } from "chizu";
 
 const App = () => (
-  <Error handler={(error) => console.error(error)}>
+  <Error
+    handler={({ reason, error, action }) => {
+      switch (reason) {
+        case Reason.Timeout:
+          console.warn(`Action "${action}" timed out:`, error.message);
+          break;
+        case Reason.Aborted:
+          console.info(`Action "${action}" was aborted`);
+          break;
+        case Reason.Error:
+          console.error(`Action "${action}" failed:`, error.message);
+          break;
+      }
+    }}
+  >
     <Profile />
   </Error>
 );
+```
+
+The `ErrorDetails` object contains:
+
+- **`reason`** &ndash; One of `Reason.Timeout` (action exceeded timeout), `Reason.Aborted` (action was cancelled, e.g., by `@use.exclusive()`), or `Reason.Error` (an error thrown in your action handler).
+- **`error`** &ndash; The `Error` object that was thrown.
+- **`action`** &ndash; The name of the action that caused the error (e.g., `"Increment"`).
+
+**Note:** For the `action` name to be meaningful, pass a name when creating actions:
+
+```ts
+export class Actions {
+  static Increment = createAction("Increment");
+  static Decrement = createAction("Decrement");
+}
 ```
 
 ## Model annotations

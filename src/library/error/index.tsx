@@ -2,6 +2,8 @@ import { Props } from "./types";
 import { ErrorContext } from "./utils";
 
 export { useError } from "./utils";
+export { Reason } from "./types";
+export type { ErrorDetails, ErrorHandler } from "./types";
 
 /**
  * Error boundary component for catching and handling errors from actions.

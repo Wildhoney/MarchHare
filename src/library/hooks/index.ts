@@ -16,10 +16,34 @@ import {
 } from "../types/index.ts";
 import EventEmitter from "eventemitter3";
 import { useBroadcast } from "../broadcast/index.tsx";
-import { isDistributedAction } from "../action/index.ts";
-import { useError } from "../error/index.tsx";
+import { isDistributedAction, getActionName } from "../action/index.ts";
+import { useError, Reason } from "../error/index.tsx";
 import { State, Operation, Process } from "immertation";
 import { context, entries } from "../use/index.ts";
+
+/**
+ * Determines the error reason based on what was thrown.
+ *
+ * @param error The value that was thrown.
+ * @returns The appropriate Reason enum value.
+ */
+export function getReason(error: unknown): Reason {
+  if (error instanceof DOMException && error.name === "TimeoutError")
+    return Reason.Timeout;
+  if (error instanceof DOMException && error.name === "AbortError")
+    return Reason.Aborted;
+  return Reason.Error;
+}
+
+/**
+ * Normalises a thrown value into an Error instance.
+ *
+ * @param error The value that was thrown.
+ * @returns An Error instance (original if already Error, wrapped otherwise).
+ */
+export function normaliseError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}
 
 /**
  * Creates a memoized action handler that always has access to the latest closure values.
@@ -47,8 +71,6 @@ export function useAction<
         : unknown,
   ) => void | Promise<void> | AsyncGenerator | Generator,
 ) {
-  const handleError = useError();
-
   return React.useEffectEvent(
     async (
       context: Context<M, AC>,
@@ -58,23 +80,18 @@ export function useAction<
           ? P
           : unknown,
     ) => {
-      try {
-        const isGenerator =
-          handler.constructor.name === "GeneratorFunction" ||
-          handler.constructor.name === "AsyncGeneratorFunction";
+      const isGenerator =
+        handler.constructor.name === "GeneratorFunction" ||
+        handler.constructor.name === "AsyncGeneratorFunction";
 
-        if (isGenerator) {
-          const generator = handler(context, payload) as
-            | Generator
-            | AsyncGenerator;
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          for await (const _ of generator) void 0;
-        } else {
-          await handler(context, payload);
-        }
-      } catch (error) {
-        console.error("Chizu\n\n", error);
-        handleError?.(<Error>error);
+      if (isGenerator) {
+        const generator = handler(context, payload) as
+          | Generator
+          | AsyncGenerator;
+
+        for await (const _ of generator) void 0;
+      } else {
+        await handler(context, payload);
       }
     },
   );
@@ -135,6 +152,7 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
   ActionClass: Actions<M, AC> | (new () => unknown),
 ): UseActions<M, AC> {
   const broadcast = useBroadcast();
+  const handleError = useError();
   const [model, setModel] = React.useState<M>(initialModel);
   const state = React.useRef<State<M>>(new State<M>(initialModel));
   const snapshot = useSnapshot({ model });
@@ -180,23 +198,27 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
     Object.getOwnPropertySymbols(actions).forEach((action) => {
       const key = <keyof typeof actions>action;
 
-      if (isDistributedAction(action)) {
-        return void broadcast.instance.on(action, async (payload) => {
-          const result = <Result>{ processes: new Set<Process>() };
-          const task = Promise.withResolvers<void>();
-          await (<Function>actions[key])(getContext(result), payload);
-          result.processes.forEach((process) => state.current.prune(process));
-          task.resolve();
-        });
-      }
-
-      unicast.on(action, async (payload) => {
+      async function handler(payload: Payload) {
         const result = <Result>{ processes: new Set<Process>() };
         const task = Promise.withResolvers<void>();
-        await (<Function>actions[key])(getContext(result), payload);
-        result.processes.forEach((process) => state.current.prune(process));
-        task.resolve();
-      });
+        try {
+          await (<Function>actions[key])(getContext(result), payload);
+        } catch (error) {
+          handleError?.({
+            reason: getReason(error),
+            error: normaliseError(error),
+            action: getActionName(action),
+          });
+        } finally {
+          result.processes.forEach((process) => state.current.prune(process));
+          setModel({ ...state.current.model });
+          task.resolve();
+        }
+      }
+
+      isDistributedAction(action)
+        ? broadcast.instance.on(action, handler)
+        : unicast.on(action, handler);
     });
   }, [unicast]);
 

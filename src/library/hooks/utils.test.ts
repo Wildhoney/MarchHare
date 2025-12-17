@@ -1,5 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import { withGetters, isGenerator } from "./utils.ts";
+import { getReason, normaliseError } from "./index.ts";
+import { Reason } from "../error/index.tsx";
 
 describe("withGetters()", () => {
   it("should create getters that access ref values", () => {
@@ -53,5 +55,77 @@ describe("isGenerator()", () => {
 
   it("should return false for promises", () => {
     expect(isGenerator(Promise.resolve())).toBe(false);
+  });
+});
+
+describe("getReason()", () => {
+  it("should return Reason.Timeout for TimeoutError", () => {
+    const error = new DOMException("Timeout", "TimeoutError");
+    expect(getReason(error)).toBe(Reason.Timeout);
+  });
+
+  it("should return Reason.Aborted for AbortError", () => {
+    const error = new DOMException("Aborted", "AbortError");
+    expect(getReason(error)).toBe(Reason.Aborted);
+  });
+
+  it("should return Reason.Error for regular Error", () => {
+    const error = new Error("Something went wrong");
+    expect(getReason(error)).toBe(Reason.Error);
+  });
+
+  it("should return Reason.Error for thrown strings", () => {
+    expect(getReason("oops")).toBe(Reason.Error);
+  });
+
+  it("should return Reason.Error for thrown objects", () => {
+    expect(getReason({ message: "error" })).toBe(Reason.Error);
+  });
+
+  it("should return Reason.Error for other DOMException types", () => {
+    const error = new DOMException("Not found", "NotFoundError");
+    expect(getReason(error)).toBe(Reason.Error);
+  });
+});
+
+describe("normaliseError()", () => {
+  it("should return the same Error if already an Error", () => {
+    const error = new Error("original");
+    expect(normaliseError(error)).toBe(error);
+  });
+
+  it("should preserve DOMException instances", () => {
+    const error = new DOMException("timeout", "TimeoutError");
+    expect(normaliseError(error)).toBe(error);
+  });
+
+  it("should wrap thrown strings", () => {
+    const result = normaliseError("oops");
+    expect(result).toBeInstanceOf(Error);
+    expect(result.message).toBe("oops");
+  });
+
+  it("should wrap thrown numbers", () => {
+    const result = normaliseError(42);
+    expect(result).toBeInstanceOf(Error);
+    expect(result.message).toBe("42");
+  });
+
+  it("should wrap thrown objects", () => {
+    const result = normaliseError({ code: 500 });
+    expect(result).toBeInstanceOf(Error);
+    expect(result.message).toBe("[object Object]");
+  });
+
+  it("should wrap null", () => {
+    const result = normaliseError(null);
+    expect(result).toBeInstanceOf(Error);
+    expect(result.message).toBe("null");
+  });
+
+  it("should wrap undefined", () => {
+    const result = normaliseError(undefined);
+    expect(result).toBeInstanceOf(Error);
+    expect(result.message).toBe("undefined");
   });
 });

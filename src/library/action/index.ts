@@ -37,3 +37,26 @@ export function createDistributedAction<T = never>(
 export function isDistributedAction(action: Action): boolean {
   return action.toString().startsWith("Symbol(chizu.action/distributed/");
 }
+
+/**
+ * Extracts the action name from an action symbol.
+ *
+ * Parses both regular actions (`Symbol(chizu.action/Name)`) and
+ * distributed actions (`Symbol(chizu.action/distributed/Name)`)
+ * to extract just the name portion.
+ *
+ * @param action The action symbol to extract the name from.
+ * @returns The extracted action name, or "unknown" if parsing fails.
+ *
+ * @example
+ * ```typescript
+ * const action = createAction("Increment");
+ * getActionName(action); // "Increment"
+ *
+ * const distributed = createDistributedAction("SignedOut");
+ * getActionName(distributed); // "SignedOut"
+ * ```
+ */
+export function getActionName(action: Action): string {
+  return action.toString().match(/\/([^/)]+)\)$/)?.[1] ?? "unknown";
+}

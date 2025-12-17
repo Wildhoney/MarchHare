@@ -1,4 +1,5 @@
-export { Error } from "./error/index.tsx";
+export { Error, Reason } from "./error/index.tsx";
+export type { ErrorDetails, ErrorHandler } from "./error/index.tsx";
 export { createAction, createDistributedAction } from "./action/index.ts";
 export type {
   Pk,
