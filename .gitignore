@@ -3,5 +3,6 @@ test-results/
 dist/
 dist-example/
 .DS_Store
+.vite.pid
 
 stats.html

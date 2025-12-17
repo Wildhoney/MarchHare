@@ -905,3 +905,89 @@ describe("edge cases", () => {
     consoleGroupEndSpy.mockRestore();
   });
 });
+
+describe("decorator combinations", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  /**
+   * Tests that combining @use.supplant() with @use.retry() works correctly.
+   * The action should retry on failure even when wrapped with supplant.
+   */
+  it("should retry when combining supplant and retry", async () => {
+    let attemptCount = 0;
+
+    class TestActions {
+      @use.supplant()
+      @use.retry([100, 100]) // 2 retries = 3 total attempts
+      async action(_args: Args): Promise<string> {
+        attemptCount++;
+        if (attemptCount < 3) {
+          throw new Error(`Attempt ${attemptCount} failed`);
+        }
+        return "success";
+      }
+    }
+
+    const instance = new TestActions();
+    const promise = instance.action(createMockContext());
+
+    // First attempt (immediate)
+    await jest.advanceTimersByTimeAsync(0);
+    expect(attemptCount).toBe(1);
+
+    // Second attempt after 100ms
+    await jest.advanceTimersByTimeAsync(100);
+    expect(attemptCount).toBe(2);
+
+    // Third attempt after another 100ms
+    await jest.advanceTimersByTimeAsync(100);
+    expect(attemptCount).toBe(3);
+
+    const result = await promise;
+    expect(result).toBe("success");
+  });
+
+  /**
+   * Tests that supplant correctly aborts retry sequences when called again.
+   * A new call should abort the previous call's entire retry sequence.
+   * Note: supplant must be ABOVE retry for correct behavior.
+   */
+  it("should abort retry sequence when supplant is triggered again", async () => {
+    let attemptCount = 0;
+
+    class TestActions {
+      @use.supplant()
+      @use.retry([100, 100])
+      async action(_args: Args): Promise<string> {
+        attemptCount++;
+        throw new Error(`Attempt ${attemptCount} failed`);
+      }
+    }
+
+    const instance = new TestActions();
+    const ctx1 = createMockContext();
+    const ctx2 = createMockContext();
+
+    // Start first call
+    const promise1 = instance.action(ctx1);
+    await jest.advanceTimersByTimeAsync(0);
+    expect(attemptCount).toBe(1);
+
+    // Start second call while first is retrying - should abort first
+    const _promise2 = instance.action(ctx2);
+
+    // First call should be aborted
+    await expect(promise1).rejects.toThrow(AbortError);
+    expect(ctx1.signal.aborted).toBe(true);
+
+    // Second call continues independently
+    await jest.advanceTimersByTimeAsync(0);
+    expect(attemptCount).toBe(2); // Second call's first attempt
+  });
+});

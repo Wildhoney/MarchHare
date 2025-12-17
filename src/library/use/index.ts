@@ -141,7 +141,6 @@ export const use = {
         self[field.name] = (args: Args) => {
           const controller = args[context].controller;
 
-          // Cancel any pending debounced call
           if (timerId) {
             clearTimeout(timerId);
             if (pendingReject) {
@@ -225,16 +224,13 @@ export const use = {
           const now = Date.now();
           const elapsed = now - lastExecution;
 
-          // If window has passed, execute immediately
           if (elapsed >= ms) {
             lastExecution = now;
             return await ƒ.call(self, args);
           }
 
-          // Queue this call (replacing any previous pending)
           pendingArgs = args;
 
-          // Set up abort listener for this call
           const abortHandler = () => {
             if (pendingArgs === args) {
               pendingArgs = null;
@@ -244,7 +240,6 @@ export const use = {
             once: true,
           });
 
-          // If no timer running, start one
           if (!timerId) {
             return new Promise((resolve, reject) => {
               pendingResolvers.push({ resolve, reject });
@@ -276,7 +271,6 @@ export const use = {
             });
           }
 
-          // Timer already running - just add to pending resolvers
           return new Promise((resolve, reject) => {
             pendingResolvers.push({ resolve, reject });
           });
@@ -315,8 +309,6 @@ export const use = {
         self[field.name] = async (args: Args) => {
           const controller = args[context].controller;
           let lastError: unknown;
-
-          // Initial attempt + retries (one retry per interval)
           const maxAttempts = intervals.length + 1;
 
           for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -327,9 +319,11 @@ export const use = {
             try {
               return await ƒ.call(self, args);
             } catch (error) {
-              lastError = error;
+              if (error instanceof AbortError) {
+                throw error;
+              }
 
-              // If there's a next retry interval, wait before retrying
+              lastError = error;
               const nextInterval = intervals[attempt];
               if (nextInterval !== undefined && !controller.signal.aborted) {
                 await new Promise<void>((resolve, reject) => {
@@ -367,33 +361,36 @@ export const use = {
         const ƒ = <Method>self[field.name];
 
         self[field.name] = async (args: Args) => {
-          const controller = args[context].controller;
-          let timerId: ReturnType<typeof setTimeout> | null = null;
+          const parentController = args[context].controller;
+          const timeoutController = new AbortController();
+
+          const onParentAbort = () => timeoutController.abort();
+          parentController.signal.addEventListener("abort", onParentAbort, {
+            once: true,
+          });
+
           let timedOut = false;
-
-          const cleanup = () => {
-            if (timerId) {
-              clearTimeout(timerId);
-              timerId = null;
-            }
-          };
-
-          timerId = setTimeout(() => {
+          let timerId: ReturnType<typeof setTimeout> | null = setTimeout(() => {
             timerId = null;
             timedOut = true;
-            controller.abort();
+            timeoutController.abort();
           }, ms);
 
-          controller.signal.addEventListener("abort", cleanup, { once: true });
+          const timeoutArgs = {
+            ...args,
+            signal: timeoutController.signal,
+            [context]: { controller: timeoutController },
+          } as Args;
 
           try {
-            return await ƒ.call(self, args);
+            return await ƒ.call(self, timeoutArgs);
           } catch (error) {
             if (error instanceof AbortError && timedOut)
               throw new TimeoutError();
             throw error;
           } finally {
-            cleanup();
+            if (timerId) clearTimeout(timerId);
+            parentController.signal.removeEventListener("abort", onParentAbort);
           }
         };
       });
