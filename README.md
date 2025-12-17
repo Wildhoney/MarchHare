@@ -18,6 +18,7 @@ Strongly typed React framework using generators and efficiently updated views al
 1. [Lifecycle actions](#lifecycle-actions)
 1. [Distributed actions](#distributed-actions)
 1. [Action decorators](#action-decorators)
+1. [Utility functions](#utility-functions)
 
 ## Benefits
 
@@ -222,6 +223,12 @@ throw new AbortError("Operation cancelled");
 throw new TimeoutError("Request timed out");
 ```
 
+### Error handling philosophy
+
+Actions should ideally be self-contained and handle expected errors internally using patterns like [Option](https://mobily.github.io/ts-belt/api/option) or [Result](https://mobily.github.io/ts-belt/api/result) types to update the model accordingly. `Lifecycle.Error` is intended for timeouts, aborts, and uncaught catastrophic errors &ndash; not routine error handling.
+
+The `<Error>` component is a catch-all for errors from **any** action in your application, useful for global error reporting or logging. `Lifecycle.Error` handles errors **locally** where they occurred, allowing component-specific error recovery or UI updates.
+
 ## Model annotations
 
 Model annotations allow you to track the state of async operations on individual model fields. This is useful for showing loading indicators, optimistic updates, and tracking pending changes. Annotations are powered by [Immertation](https://github.com/Wildhoney/Immertation) &ndash; refer to its documentation for more details.
@@ -412,4 +419,71 @@ class {
   @use.timeout(5_000) // 3. Timeout each attempt
   [Actions.FetchData] = fetchDataAction;
 }
+```
+
+## Utility functions
+
+Chizu provides a set of utility functions via the `utils` namespace to help with common patterns. Each utility also has a shorthand Greek letter alias for concise code.
+
+```ts
+import { utils } from "chizu";
+```
+
+### `utils.set(property)` / `utils.λ`
+
+Creates a generic setter action that updates a specific property in the state. Useful for simple state updates without writing a full action handler:
+
+```ts
+class {
+  [Actions.Name] = utils.set("name");
+  // or using the alias:
+  [Actions.Name] = utils.λ("name");
+}
+```
+
+### `utils.pk()` / `utils.κ`
+
+Generates or validates primary keys. Particularly useful for optimistic updates where items need a temporary identifier before the database responds with the real ID. The symbol acts as a stable reference even if the item moves in an array due to concurrent async operations:
+
+```ts
+// Optimistic update: add item with placeholder ID
+const id = utils.pk();
+context.actions.produce((draft) => {
+  draft.todos.push({ id, text: "New todo", status: "pending" });
+});
+
+// Later when the API responds, find and update with real ID
+const response = await api.createTodo({ text: "New todo" });
+context.actions.produce((draft) => {
+  const todo = draft.todos.find((todo) => todo.id === id);
+  if (todo) todo.id = response.id; // Replace symbol with real ID
+});
+```
+
+### `utils.checksum(value)` / `utils.Σ`
+
+Generates a deterministic hash string from any value. Particularly useful with `@use.reactive()` which only accepts primitives &ndash; use checksum to convert complex objects (like React Query data) into a primitive dependency:
+
+```ts
+// Convert complex objects into reactive dependencies
+const { data } = useQuery({ queryKey: ["user"], queryFn: fetchUser });
+
+class {
+  @use.reactive(() => [utils.checksum(data)])
+  [Actions.SyncUser] = syncUserAction;
+}
+
+// The action will trigger whenever the user data changes
+```
+
+### `utils.sleep(ms, signal?)` / `utils.ζ`
+
+Returns a promise that resolves after the specified milliseconds. Useful for simulating delays in actions during development or adding intentional pauses. Optionally accepts an `AbortSignal` to cancel the sleep early:
+
+```ts
+const fetchAction = useAction<Model, typeof Actions, "Fetch">(async (context) => {
+  await utils.sleep(1_000); // Simulate network delay
+  const data = await fetch("/api/data", { signal: context.signal });
+  // ...
+});
 ```
