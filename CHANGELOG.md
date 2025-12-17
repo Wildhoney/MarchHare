@@ -6,15 +6,13 @@ All notable changes to this project will be documented in this file. See [commit
 
 ## [0.2.37](https://github.com/Wildhoney/Chizu/compare/v0.2.36...v0.2.37) (2025-12-17)
 
-
 ### Features
 
-* added decorators + updated README ([081162f](https://github.com/Wildhoney/Chizu/commit/081162ff27abcf9625b4fa4d0b987a8f1b9092f3))
-
+- added decorators + updated README ([081162f](https://github.com/Wildhoney/Chizu/commit/081162ff27abcf9625b4fa4d0b987a8f1b9092f3))
 
 ### Bug Fixes
 
-* playwright ci ([6dc3621](https://github.com/Wildhoney/Chizu/commit/6dc3621434ad617c15bb8789f21bc6a2572598d6))
+- playwright ci ([6dc3621](https://github.com/Wildhoney/Chizu/commit/6dc3621434ad617c15bb8789f21bc6a2572598d6))
 
 ## [0.2.36](https://github.com/Wildhoney/Chizu/compare/v0.2.35...v0.2.36) (2025-12-16)
 
