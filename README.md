@@ -19,6 +19,7 @@ Strongly typed React framework using generators and efficiently updated views al
 1. [Distributed actions](#distributed-actions)
 1. [Action decorators](#action-decorators)
 1. [Utility functions](#utility-functions)
+1. [Referential equality](#referential-equality)
 
 ## Benefits
 
@@ -30,7 +31,7 @@ Strongly typed React framework using generators and efficiently updated views al
 - Strongly typed throughout &ndash; dispatches, models, etc&hellip;
 - Easily communicate between actions using distributed actions.
 - Bundled decorators for common action functionality such as supplant mode and reactive triggers.
-- No need to worry about referential equality &ndash; reactive dependencies use primitives only.
+- No need to worry about referential equality &ndash; reactive dependencies use checksum comparison.
 - Built-in request cancellation with `AbortController` integration.
 - Granular async state tracking per model field (pending, draft, operation type).
 - Declarative lifecycle hooks without manual `useEffect` management.
@@ -340,16 +341,51 @@ return useActions<Model, typeof Actions>(
 );
 ```
 
-### `use.reactive(() => [dependencies])`
+### `use.reactive(action, getDependencies, getPayload?)`
 
-Automatically triggers an action when its dependencies change. Dependencies must be primitives (strings, numbers, booleans, etc.) which means you never have to worry about referential equality:
+Automatically triggers an action when primitive dependencies change. Dependencies are compared using checksum for change detection, while `getPayload` provides fresh values at dispatch time:
 
 ```ts
 class {
-  @use.reactive(() => [props.userId])
+  // Action without payload - just dependencies for triggering
+  @use.reactive(Actions.Refresh, () => [userId, filters.length])
+  [Actions.Refresh] = refreshAction;
+
+  // Action with payload - dependencies trigger, getPayload provides data
+  @use.reactive(
+    Actions.FetchUser,
+    () => [userId],
+    () => ({ userId, includeDetails: true })
+  )
   [Actions.FetchUser] = fetchUserAction;
 }
 ```
+
+**Parameters:**
+
+- **`getDependencies: () => Primitive[]`** &ndash; Called every render. Returns primitives for change detection.
+- **`getPayload?: () => P`** &ndash; Called at dispatch time. Returns fresh payload. Only allowed when action has a payload type.
+
+The payload is type-checked against the action's expected type, ensuring compile-time safety:
+
+```ts
+export class Actions {
+  static Refresh = createAction();  // No payload
+  static FetchUser = createAction<{ userId: string }>();  // With payload
+}
+
+class {
+  // TypeScript enforces: no getPayload for actions without payload
+  @use.reactive(Actions.Refresh, () => [userId])
+  [Actions.Refresh] = refreshAction;
+
+  // TypeScript enforces: getPayload return type matches action payload
+  @use.reactive(Actions.FetchUser, () => [userId], () => ({ userId }))
+  [Actions.FetchUser] = fetchUserAction;
+}
+```
+
+Combine with `@use.supplant()` if you want new triggers to cancel in-flight requests.
 
 ### `use.debug()`
 
@@ -462,19 +498,19 @@ context.actions.produce((draft) => {
 
 ### `utils.checksum(value)` / `utils.Σ`
 
-Generates a deterministic hash string from any value. Returns `null` if the value cannot be serialised (e.g., circular references).
-
-Particularly useful with `@use.reactive()` which only accepts primitives &ndash; use checksum to convert complex objects (like React Query data) into a primitive dependency:
+Generates a deterministic hash string from any value. Returns `null` if the value cannot be serialised (e.g., circular references). Useful for creating cache keys, comparing object equality, or tracking changes:
 
 ```ts
-// Convert complex objects into primitive dependencies for @use.reactive()
-const { data } = useQuery({ queryKey: ["user"], queryFn: fetchUser });
+const hash = utils.checksum({ userId: 123, filters: { active: true } });
+// Returns a stable hash string like "1a2b3c4d"
 
-class {
-  @use.reactive(() => [utils.checksum(data)])
-  [Actions.SyncUser] = syncUserAction;
+// Use for cache keys or change detection
+if (utils.checksum(currentData) !== utils.checksum(previousData)) {
+  // Data has changed...
 }
 ```
+
+**Note:** The `@use.reactive()` decorator uses checksum internally for `getDependencies`, so you don't need to manually track changes.
 
 ### `utils.sleep(ms, signal?)` / `utils.ζ`
 
@@ -489,3 +525,34 @@ const fetchAction = useAction<Model, typeof Actions, "Fetch">(
   },
 );
 ```
+
+## Referential equality
+
+Chizu uses [`useEffectEvent`](https://react.dev/reference/react/useEffectEvent) internally, so action handlers in `useAction` always access the latest values from closures without needing to re-create the handler. This means you don't need to worry about stale closures in most cases.
+
+However, in async actions where you `await` I/O operations, there's a rare edge case: if a closure reference changes while the await is in progress, you may access a stale value after the await. For these situations, use `useSnapshot`:
+
+```ts
+import { useSnapshot } from "chizu";
+
+function useSearchActions(props: Props) {
+  const snapshot = useSnapshot(props);
+
+  const searchAction = useAction<Model, typeof Actions, "Search">(
+    async (context, query) => {
+      // Before await: props.filters is current (useEffectEvent-like behavior)
+      console.log(props.filters);
+
+      const results = await fetch(`/search?q=${query}`);
+
+      // After await: props.filters might be stale if it changed during the fetch
+      // Use snapshot.filters instead for guaranteed latest value
+      console.log(snapshot.filters);
+    },
+  );
+
+  // ...
+}
+```
+
+`useSnapshot` creates a proxy object where property access always returns the latest value from a ref that updates on every render. Use it when you need to access props or external values after an await in async actions.
