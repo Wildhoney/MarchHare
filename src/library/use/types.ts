@@ -20,6 +20,25 @@ export type Internals = { controller: AbortController };
 export type Primitive = string | number | boolean | null | undefined | symbol;
 
 /**
+ * Function that returns an array of primitive values used for reactive change detection.
+ *
+ * Called on every render by `@use.reactive()` to determine if the action should be triggered.
+ * The returned array is checksummed; when the checksum changes, the decorated action is dispatched.
+ *
+ * @returns Array of primitives representing the current dependency state.
+ *
+ * @example
+ * ```ts
+ * // Single dependency
+ * const getDeps: Dependencies = () => [userId];
+ *
+ * // Multiple dependencies
+ * const getDeps: Dependencies = () => [userId, filters.length, isActive];
+ * ```
+ */
+export type Dependencies = () => Primitive[];
+
+/**
  * Represents a reactive binding that triggers an action when dependencies change.
  *
  * Created by the `@use.reactive()` decorator and stored in a WeakMap keyed by

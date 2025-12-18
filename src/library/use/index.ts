@@ -1,7 +1,8 @@
-import { Args, Field, Instance, Method, Primitive } from "./types.ts";
+import { Args, Dependencies, Field, Instance, Method } from "./types.ts";
 import { Payload } from "../types/index.ts";
 import { actionName, context, internals, entries } from "./utils.ts";
 import { AbortError, TimeoutError } from "../error/types.ts";
+import { A, G } from "@mobily/ts-belt";
 
 export { context, entries } from "./utils.ts";
 
@@ -16,7 +17,7 @@ export const use = {
    * @returns A decorator function for the action.
    */
   supplant() {
-    return function (_: undefined, field: Field) {
+    return function (_: unknown, field: Field) {
       field.addInitializer(function () {
         const self = <Instance>this;
         const ƒ = <Method>self[field.name];
@@ -69,12 +70,10 @@ export const use = {
    */
   reactive<P>(
     action: Payload<P>,
-    getDependencies: () => Primitive[],
+    getDependencies: Dependencies,
     ...args: [P] extends [never] ? [] : [getPayload: () => NoInfer<P>]
   ) {
-    const [getPayload] = args;
-
-    return function (_: undefined, field: Field) {
+    return function (_: unknown, field: Field) {
       field.addInitializer(function () {
         const self = <Instance>this;
         const set = entries.get(self) ?? new Set();
@@ -82,7 +81,7 @@ export const use = {
         set.add({
           action,
           getDependencies,
-          getPayload,
+          getPayload: args[0],
         });
 
         entries.set(self, set);
@@ -96,7 +95,7 @@ export const use = {
    * @returns A decorator function for the action.
    */
   debug() {
-    return function (_: undefined, field: Field) {
+    return function (_: unknown, field: Field) {
       field.addInitializer(function () {
         const self = <Instance>this;
         const ƒ = <Method>self[field.name];
@@ -104,24 +103,23 @@ export const use = {
 
         self[field.name] = async (args: Args) => {
           const start = performance.now();
-          const timings: number[] = [];
+          const state = { timings: <number[]>[] };
 
           console.group(`🔧 Action: ${name}`);
           console.log("⏱️  Started at:", new Date().toISOString());
 
-          const produce = args.actions.produce;
           const container = {
             ...args,
             actions: {
               ...args.actions,
               produce: (producer: (model: Record<string, unknown>) => void) => {
                 const start = performance.now();
-                const result = produce(producer);
+                const result = args.actions.produce(producer);
                 const duration = performance.now() - start;
-                timings.push(duration);
+                state.timings.push(duration);
 
                 console.log(
-                  `  📝 produce #${timings.length}: ${duration.toFixed(2)}ms`,
+                  `  📝 produce #${state.timings.length}: ${duration.toFixed(2)}ms`,
                 );
 
                 return result;
@@ -135,10 +133,10 @@ export const use = {
 
             console.log("─".repeat(40));
             console.log(`📊 Summary for ${name}:`);
-            console.log(`   Total produce calls: ${timings.length}`);
-            if (timings.length > 0) {
+            console.log(`   Total produce calls: ${state.timings.length}`);
+            if (A.isNotEmpty(state.timings)) {
               console.log(
-                `   Produce times: ${timings.map((timing) => timing.toFixed(2) + "ms").join(", ")}`,
+                `   Produce times: ${state.timings.map((timing) => timing.toFixed(2) + "ms").join(", ")}`,
               );
             }
             console.log(`   ⏱️  Total duration: ${total.toFixed(2)}ms`);
@@ -165,13 +163,13 @@ export const use = {
    * @returns A decorator function for the action.
    */
   debounce(ms: number) {
-    return function (_: undefined, field: Field) {
+    return function (_: unknown, field: Field) {
       field.addInitializer(function () {
         const self = <Instance>this;
         const ƒ = <Method>self[field.name];
         const state = {
-          timerId: null as ReturnType<typeof setTimeout> | null,
-          pendingReject: null as ((reason: unknown) => void) | null,
+          timerId: <ReturnType<typeof setTimeout> | null>null,
+          pendingReject: <((reason: unknown) => void) | null>null,
         };
 
         self[field.name] = (args: Args) => {
@@ -243,18 +241,21 @@ export const use = {
    * @returns A decorator function for the action.
    */
   throttle(ms: number) {
-    return function (_: undefined, field: Field) {
+    return function (_: unknown, field: Field) {
       field.addInitializer(function () {
         const self = <Instance>this;
         const ƒ = <Method>self[field.name];
+
         const state = {
           lastExecution: 0,
           pendingArgs: null as Args | null,
           timerId: null as ReturnType<typeof setTimeout> | null,
-          pendingResolvers: [] as Array<{
-            resolve: (value: unknown) => void;
-            reject: (reason: unknown) => void;
-          }>,
+          pendingResolvers: <
+            {
+              resolve(value: unknown): void;
+              reject(reason: unknown): void;
+            }[]
+          >[],
         };
 
         self[field.name] = async (args: Args) => {
@@ -284,14 +285,14 @@ export const use = {
 
               state.timerId = setTimeout(async () => {
                 state.timerId = null;
-                const argsToUse = state.pendingArgs;
+                const args = state.pendingArgs;
                 const resolvers = state.pendingResolvers;
                 state.pendingArgs = null;
                 state.pendingResolvers = [];
 
                 if (
-                  !argsToUse ||
-                  argsToUse[context].controller.signal.aborted
+                  G.isNullable(args) ||
+                  args[context].controller.signal.aborted
                 ) {
                   resolvers.forEach((r) => r.reject(new AbortError()));
                   return;
@@ -300,7 +301,7 @@ export const use = {
                 state.lastExecution = Date.now();
 
                 try {
-                  const result = await ƒ.call(self, argsToUse);
+                  const result = await ƒ.call(self, args);
                   resolvers.forEach((r) => r.resolve(result));
                 } catch (error) {
                   resolvers.forEach((r) => r.reject(error));
@@ -339,7 +340,7 @@ export const use = {
    * ```
    */
   retry(intervals: number[] = [1_000, 2_000, 4_000]) {
-    return function (_: undefined, field: Field) {
+    return function (_: unknown, field: Field) {
       field.addInitializer(function () {
         const self = <Instance>this;
         const ƒ = <Method>self[field.name];
@@ -401,29 +402,27 @@ export const use = {
 
         self[field.name] = async (args: Args) => {
           const parent = args[context].controller;
-          const ctrl = new AbortController();
+          const controller = new AbortController();
           const state = {
             expired: false,
-            timer: null as ReturnType<typeof setTimeout> | null,
+            timer: <ReturnType<typeof setTimeout> | null>null,
           };
 
-          const onAbort = () => ctrl.abort();
+          const onAbort = () => controller.abort();
           parent.signal.addEventListener("abort", onAbort, { once: true });
 
           state.timer = setTimeout(() => {
             state.timer = null;
             state.expired = true;
-            ctrl.abort();
+            controller.abort();
           }, ms);
 
-          const a = {
-            ...args,
-            signal: ctrl.signal,
-            [context]: { controller: ctrl },
-          } as Args;
-
           try {
-            return await ƒ.call(self, a);
+            return await ƒ.call(self, <Args>{
+              ...args,
+              signal: controller.signal,
+              [context]: { controller },
+            });
           } catch (error) {
             if (error instanceof AbortError && state.expired)
               throw new TimeoutError();
