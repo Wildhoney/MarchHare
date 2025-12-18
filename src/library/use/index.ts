@@ -1,4 +1,5 @@
 import { Args, Field, Instance, Method, Primitive } from "./types.ts";
+import { Payload } from "../types/index.ts";
 import { actionName, context, internals, entries } from "./utils.ts";
 import { AbortError, TimeoutError } from "../error/types.ts";
 
@@ -30,24 +31,61 @@ export const use = {
   },
   /**
    * Automatically triggers an action when its primitive dependencies change.
-   * Dependencies must be primitives (strings, numbers, booleans, etc.) to avoid
-   * referential equality issues.
    *
-   * @param getDependencies A function returning an array of primitive dependencies.
+   * Dependencies are primitives compared using checksum for change detection.
+   * When dependencies change, the action is dispatched with the payload (if provided).
+   *
+   * **Features:**
+   * - **Primitive dependencies**: Use primitives for reliable change detection
+   * - **Separate concerns**: Dependencies trigger the action, payload provides data
+   * - **Type-safe payload**: TypeScript enforces `getPayload` returns the correct type
+   * - **Null-safe**: Skips execution if checksum fails
+   *
+   * Combine with `@use.supplant()` if you want new triggers to cancel in-flight requests.
+   *
+   * @template P The payload type, inferred from the action.
+   * @param action The action to trigger. Must match the decorated property.
+   * @param getDependencies Function returning primitive array. Called every render for change detection.
+   * @param getPayload Function returning the payload. Called at dispatch time. Only for actions with payloads.
    * @returns A decorator function for the action.
+   *
+   * @example
+   * ```ts
+   * // Action without payload - just dependencies for triggering
+   * @use.reactive(Actions.Refresh, () => [userId, filters.length])
+   * [Actions.Refresh] = refreshAction;
+   * ```
+   *
+   * @example
+   * ```ts
+   * // Action with payload - dependencies trigger, getPayload provides fresh data
+   * @use.reactive(
+   *   Actions.FetchUser,
+   *   () => [userId],
+   *   () => ({ userId, includeDetails: true })
+   * )
+   * [Actions.FetchUser] = fetchUserAction;
+   * ```
    */
-  reactive(getDependencies: () => Primitive[]) {
+  reactive<P>(
+    action: Payload<P>,
+    getDependencies: () => Primitive[],
+    ...args: [P] extends [never] ? [] : [getPayload: () => NoInfer<P>]
+  ) {
+    const [getPayload] = args;
+
     return function (_: undefined, field: Field) {
       field.addInitializer(function () {
         const self = <Instance>this;
-        const list = entries.get(self) ?? [];
+        const set = entries.get(self) ?? new Set();
 
-        list.push({
-          action: field.name,
+        set.add({
+          action,
           getDependencies,
+          getPayload,
         });
 
-        entries.set(self, list);
+        entries.set(self, set);
       });
     };
   },
@@ -65,7 +103,6 @@ export const use = {
         const name = actionName(field.name);
 
         self[field.name] = async (args: Args) => {
-          let produceCount = 0;
           const start = performance.now();
           const timings: number[] = [];
 
@@ -78,15 +115,13 @@ export const use = {
             actions: {
               ...args.actions,
               produce: (producer: (model: Record<string, unknown>) => void) => {
-                produceCount++;
                 const start = performance.now();
                 const result = produce(producer);
-                const end = performance.now();
-                const duration = end - start;
+                const duration = performance.now() - start;
                 timings.push(duration);
 
                 console.log(
-                  `  📝 produce #${produceCount}: ${duration.toFixed(2)}ms`,
+                  `  📝 produce #${timings.length}: ${duration.toFixed(2)}ms`,
                 );
 
                 return result;
@@ -96,12 +131,11 @@ export const use = {
 
           try {
             const result = await ƒ.call(self, container as Args);
-            const end = performance.now();
-            const total = end - start;
+            const total = performance.now() - start;
 
             console.log("─".repeat(40));
             console.log(`📊 Summary for ${name}:`);
-            console.log(`   Total produce calls: ${produceCount}`);
+            console.log(`   Total produce calls: ${timings.length}`);
             if (timings.length > 0) {
               console.log(
                 `   Produce times: ${timings.map((timing) => timing.toFixed(2) + "ms").join(", ")}`,
@@ -135,60 +169,62 @@ export const use = {
       field.addInitializer(function () {
         const self = <Instance>this;
         const ƒ = <Method>self[field.name];
-        let timerId: ReturnType<typeof setTimeout> | null = null;
-        let pendingReject: ((reason: unknown) => void) | null = null;
+        const state = {
+          timerId: null as ReturnType<typeof setTimeout> | null,
+          pendingReject: null as ((reason: unknown) => void) | null,
+        };
 
         self[field.name] = (args: Args) => {
           const controller = args[context].controller;
 
-          if (timerId) {
-            clearTimeout(timerId);
-            if (pendingReject) {
-              pendingReject(new AbortError());
-              pendingReject = null;
+          if (state.timerId) {
+            clearTimeout(state.timerId);
+            if (state.pendingReject) {
+              state.pendingReject(new AbortError());
+              state.pendingReject = null;
             }
           }
 
           return new Promise((resolve, reject) => {
-            pendingReject = reject;
-            let settled = false;
+            state.pendingReject = reject;
+            const settled = { value: false };
 
             const cleanup = () => {
-              if (timerId) {
-                clearTimeout(timerId);
-                timerId = null;
+              if (state.timerId) {
+                clearTimeout(state.timerId);
+                state.timerId = null;
               }
-              pendingReject = null;
+              state.pendingReject = null;
             };
 
             controller.signal.addEventListener(
               "abort",
               () => {
-                if (settled) return;
-                settled = true;
+                if (settled.value) return;
+                settled.value = true;
                 cleanup();
                 reject(new AbortError());
               },
               { once: true },
             );
 
-            timerId = setTimeout(async () => {
-              if (settled) return;
-              timerId = null;
-              pendingReject = null;
+            state.timerId = setTimeout(async () => {
+              if (settled.value) return;
+              state.timerId = null;
+              state.pendingReject = null;
 
               if (controller.signal.aborted) {
-                settled = true;
+                settled.value = true;
                 reject(new AbortError());
                 return;
               }
 
               try {
                 const result = await ƒ.call(self, args);
-                settled = true;
+                settled.value = true;
                 resolve(result);
               } catch (error) {
-                settled = true;
+                settled.value = true;
                 reject(error);
               }
             }, ms);
@@ -211,45 +247,47 @@ export const use = {
       field.addInitializer(function () {
         const self = <Instance>this;
         const ƒ = <Method>self[field.name];
-        let lastExecution = 0;
-        let pendingArgs: Args | null = null;
-        let timerId: ReturnType<typeof setTimeout> | null = null;
-        let pendingResolvers: Array<{
-          resolve: (value: unknown) => void;
-          reject: (reason: unknown) => void;
-        }> = [];
+        const state = {
+          lastExecution: 0,
+          pendingArgs: null as Args | null,
+          timerId: null as ReturnType<typeof setTimeout> | null,
+          pendingResolvers: [] as Array<{
+            resolve: (value: unknown) => void;
+            reject: (reason: unknown) => void;
+          }>,
+        };
 
         self[field.name] = async (args: Args) => {
           const controller = args[context].controller;
           const now = Date.now();
-          const elapsed = now - lastExecution;
+          const elapsed = now - state.lastExecution;
 
           if (elapsed >= ms) {
-            lastExecution = now;
+            state.lastExecution = now;
             return await ƒ.call(self, args);
           }
 
-          pendingArgs = args;
+          state.pendingArgs = args;
 
           const abortHandler = () => {
-            if (pendingArgs === args) {
-              pendingArgs = null;
+            if (state.pendingArgs === args) {
+              state.pendingArgs = null;
             }
           };
           controller.signal.addEventListener("abort", abortHandler, {
             once: true,
           });
 
-          if (!timerId) {
+          if (!state.timerId) {
             return new Promise((resolve, reject) => {
-              pendingResolvers.push({ resolve, reject });
+              state.pendingResolvers.push({ resolve, reject });
 
-              timerId = setTimeout(async () => {
-                timerId = null;
-                const argsToUse = pendingArgs;
-                const resolvers = pendingResolvers;
-                pendingArgs = null;
-                pendingResolvers = [];
+              state.timerId = setTimeout(async () => {
+                state.timerId = null;
+                const argsToUse = state.pendingArgs;
+                const resolvers = state.pendingResolvers;
+                state.pendingArgs = null;
+                state.pendingResolvers = [];
 
                 if (
                   !argsToUse ||
@@ -259,7 +297,7 @@ export const use = {
                   return;
                 }
 
-                lastExecution = Date.now();
+                state.lastExecution = Date.now();
 
                 try {
                   const result = await ƒ.call(self, argsToUse);
@@ -272,7 +310,7 @@ export const use = {
           }
 
           return new Promise((resolve, reject) => {
-            pendingResolvers.push({ resolve, reject });
+            state.pendingResolvers.push({ resolve, reject });
           });
         };
       });
@@ -308,10 +346,8 @@ export const use = {
 
         self[field.name] = async (args: Args) => {
           const controller = args[context].controller;
-          let lastError: unknown;
-          const maxAttempts = intervals.length + 1;
 
-          for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          const attempt = async (remaining: number[]): Promise<unknown> => {
             if (controller.signal.aborted) {
               throw new AbortError();
             }
@@ -323,25 +359,28 @@ export const use = {
                 throw error;
               }
 
-              lastError = error;
-              const nextInterval = intervals[attempt];
-              if (nextInterval !== undefined && !controller.signal.aborted) {
-                await new Promise<void>((resolve, reject) => {
-                  const timerId = setTimeout(resolve, nextInterval);
-                  controller.signal.addEventListener(
-                    "abort",
-                    () => {
-                      clearTimeout(timerId);
-                      reject(new AbortError());
-                    },
-                    { once: true },
-                  );
-                });
+              const [nextInterval, ...rest] = remaining;
+              if (nextInterval === undefined || controller.signal.aborted) {
+                throw error;
               }
-            }
-          }
 
-          throw lastError;
+              await new Promise<void>((resolve, reject) => {
+                const timerId = setTimeout(resolve, nextInterval);
+                controller.signal.addEventListener(
+                  "abort",
+                  () => {
+                    clearTimeout(timerId);
+                    reject(new AbortError());
+                  },
+                  { once: true },
+                );
+              });
+
+              return attempt(rest);
+            }
+          };
+
+          return attempt(intervals);
         };
       });
     };
@@ -361,36 +400,37 @@ export const use = {
         const ƒ = <Method>self[field.name];
 
         self[field.name] = async (args: Args) => {
-          const parentController = args[context].controller;
-          const timeoutController = new AbortController();
+          const parent = args[context].controller;
+          const ctrl = new AbortController();
+          const state = {
+            expired: false,
+            timer: null as ReturnType<typeof setTimeout> | null,
+          };
 
-          const onParentAbort = () => timeoutController.abort();
-          parentController.signal.addEventListener("abort", onParentAbort, {
-            once: true,
-          });
+          const onAbort = () => ctrl.abort();
+          parent.signal.addEventListener("abort", onAbort, { once: true });
 
-          let timedOut = false;
-          let timerId: ReturnType<typeof setTimeout> | null = setTimeout(() => {
-            timerId = null;
-            timedOut = true;
-            timeoutController.abort();
+          state.timer = setTimeout(() => {
+            state.timer = null;
+            state.expired = true;
+            ctrl.abort();
           }, ms);
 
-          const timeoutArgs = {
+          const a = {
             ...args,
-            signal: timeoutController.signal,
-            [context]: { controller: timeoutController },
+            signal: ctrl.signal,
+            [context]: { controller: ctrl },
           } as Args;
 
           try {
-            return await ƒ.call(self, timeoutArgs);
+            return await ƒ.call(self, a);
           } catch (error) {
-            if (error instanceof AbortError && timedOut)
+            if (error instanceof AbortError && state.expired)
               throw new TimeoutError();
             throw error;
           } finally {
-            if (timerId) clearTimeout(timerId);
-            parentController.signal.removeEventListener("abort", onParentAbort);
+            if (state.timer) clearTimeout(state.timer);
+            parent.signal.removeEventListener("abort", onAbort);
           }
         };
       });

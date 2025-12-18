@@ -5,7 +5,6 @@ export type Model = {
 };
 
 export class Actions {
-  static Reset = createAction<number>("Reset");
   static Increment = createAction("Increment");
   static Decrement = createAction("Decrement");
 }

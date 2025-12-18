@@ -6,12 +6,11 @@ All notable changes to this project will be documented in this file. See [commit
 
 ## [0.2.39](https://github.com/Wildhoney/Chizu/compare/v0.2.38...v0.2.39) (2025-12-18)
 
-
 ### Features
 
-* added + updated decorators ([a74fb58](https://github.com/Wildhoney/Chizu/commit/a74fb58c828e826564bc9d3217f2841723351342))
-* added checksum util fn and documented the util fns ([97ddc71](https://github.com/Wildhoney/Chizu/commit/97ddc71c1a94a1c0955fcf1e50c6e27e41b54d47))
-* supporting custom error classes ([05131ab](https://github.com/Wildhoney/Chizu/commit/05131aba762f534e1596b8a8b68e2681ed565537))
+- added + updated decorators ([a74fb58](https://github.com/Wildhoney/Chizu/commit/a74fb58c828e826564bc9d3217f2841723351342))
+- added checksum util fn and documented the util fns ([97ddc71](https://github.com/Wildhoney/Chizu/commit/97ddc71c1a94a1c0955fcf1e50c6e27e41b54d47))
+- supporting custom error classes ([05131ab](https://github.com/Wildhoney/Chizu/commit/05131aba762f534e1596b8a8b68e2681ed565537))
 
 ## [0.2.38](https://github.com/Wildhoney/Chizu/compare/v0.2.37...v0.2.38) (2025-12-17)
 

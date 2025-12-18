@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-function-type */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import * as React from "react";
+import { G } from "@mobily/ts-belt";
 import { withGetters } from "./utils.ts";
 import {
   Context,
@@ -20,6 +21,7 @@ import { isDistributedAction, getActionName } from "../action/index.ts";
 import { useError, Reason } from "../error/index.tsx";
 import { State, Operation, Process } from "immertation";
 import { context, entries } from "../use/index.ts";
+import * as utils from "../utils/index.ts";
 
 /**
  * Determines the error reason based on what was thrown.
@@ -158,9 +160,8 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
   const snapshot = useSnapshot({ model });
   const unicast = React.useMemo(() => new EventEmitter(), []);
   const instance = React.useRef<object | null>(null);
-  const reactives = React.useRef<{
-    previous: Map<string | symbol, unknown[]>;
-  }>({ previous: new Map() });
+  const reactives = React.useRef<Map<symbol, string | null>>(new Map());
+  const bindings = entries.get(<object>new (<Actions<M, AC>>ActionClass)());
 
   const getContext = React.useCallback(
     (result: Result) => {
@@ -227,25 +228,22 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
     });
   }, [unicast]);
 
-  React.useEffect(() => {
-    if (!instance.current) return;
-    const list = entries.get(instance.current) ?? [];
-
-    list.forEach((entry) => {
-      const current = entry.getDependencies();
-      const previous = reactives.current.previous.get(entry.action) ?? [];
-
-      const hasChanged =
-        current.length !== previous.length ||
-        current.some(
-          (dependency, index) => !Object.is(dependency, previous[index]),
-        );
-
-      if (hasChanged) {
-        reactives.current.previous.set(entry.action, current);
-        unicast.emit(entry.action);
-      }
+  const run = React.useEffectEvent(() => {
+    bindings?.forEach((entry) => {
+      const dependencies = entry.getDependencies();
+      const checksum = utils.checksum(dependencies);
+      if (G.isNullable(checksum)) return;
+      const previous = reactives.current.get(entry.action) ?? null;
+      if (checksum === previous) return;
+      reactives.current.set(entry.action, checksum);
+      const payload = entry.getPayload?.();
+      unicast.emit(entry.action, payload);
     });
+  });
+
+  React.useEffect(() => {
+    if (G.isNullable(instance.current)) return;
+    run();
   });
 
   React.useLayoutEffect(() => {

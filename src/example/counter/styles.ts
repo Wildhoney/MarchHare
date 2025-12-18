@@ -86,7 +86,8 @@ export const group = css`
 export const button = css`
   position: relative;
   width: 48px;
-  height: 48px;
+  aspect-ratio: 1;
+  flex-shrink: 0;
   border: none;
   border-radius: 50%;
   background: white;

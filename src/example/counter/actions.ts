@@ -7,14 +7,6 @@ const model = <Model>{
 };
 
 export function useCounterActions() {
-  const resetAction = useAction<Model, typeof Actions, "Reset">(
-    (context, payload) => {
-      context.actions.produce((model) => {
-        model.count = payload;
-      });
-    },
-  );
-
   const incrementAction = useAction<Model, typeof Actions, "Increment">(
     async (context) => {
       context.actions.produce((model) => {
@@ -43,7 +35,6 @@ export function useCounterActions() {
   return useActions<Model, typeof Actions>(
     model,
     class {
-      [Actions.Reset] = resetAction;
       [Actions.Increment] = incrementAction;
       [Actions.Decrement] = decrementAction;
     },

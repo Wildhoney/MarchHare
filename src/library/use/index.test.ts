@@ -7,6 +7,7 @@ import {
   afterEach,
 } from "@jest/globals";
 import { use, context, entries } from "./index.ts";
+import { Payload } from "../types/index.ts";
 import { Args } from "./types.ts";
 import { AbortError } from "../error/types.ts";
 
@@ -110,71 +111,108 @@ describe("use.supplant()", () => {
 });
 
 describe("use.reactive()", () => {
+  // Helper to create a typed action symbol for tests
+  const createTestAction = <T>(): Payload<T> =>
+    Symbol("test.action") as Payload<T>;
+
   it("should register dependencies in the entries WeakMap", () => {
-    const getDeps = () => ["value1", 42, true];
+    type TestPayload = { value1: string; value2: number; value3: boolean };
+    const TestAction = createTestAction<TestPayload>();
+    const getDeps = () => ({ value1: "test", value2: 42, value3: true });
 
     class TestActions {
-      @use.reactive(getDeps)
-      async action(_args: Args) {
+      @use.reactive(TestAction, getDeps)
+      [TestAction] = async (_args: Args) => {
         return "done";
-      }
+      };
     }
 
     const instance = new TestActions();
     const registeredEntries = entries.get(instance);
 
     expect(registeredEntries).toBeDefined();
-    expect(registeredEntries?.length).toBe(1);
-    expect(registeredEntries?.[0].action).toBe("action");
-    expect(registeredEntries?.[0].getDependencies).toBe(getDeps);
+    expect(registeredEntries?.size).toBe(1);
+
+    const [entry] = [...(registeredEntries ?? [])];
+    expect(entry.action).toBe(TestAction);
+    expect(entry.getDependencies).toBe(getDeps);
   });
 
   it("should register multiple reactive decorators on different methods", () => {
-    const getDeps1 = () => ["a"];
-    const getDeps2 = () => [1, 2, 3];
+    type Payload1 = { a: string };
+    type Payload2 = { nums: number[] };
+    const Action1 = createTestAction<Payload1>();
+    const Action2 = createTestAction<Payload2>();
+    const getDeps1 = () => ({ a: "test" });
+    const getDeps2 = () => ({ nums: [1, 2, 3] });
 
     class TestActions {
-      @use.reactive(getDeps1)
-      async actionOne(_args: Args) {
+      @use.reactive(Action1, getDeps1)
+      [Action1] = async (_args: Args) => {
         return "one";
-      }
+      };
 
-      @use.reactive(getDeps2)
-      async actionTwo(_args: Args) {
+      @use.reactive(Action2, getDeps2)
+      [Action2] = async (_args: Args) => {
         return "two";
-      }
+      };
     }
 
     const instance = new TestActions();
     const registeredEntries = entries.get(instance);
 
-    expect(registeredEntries?.length).toBe(2);
-    expect(registeredEntries?.map((entry) => entry.action)).toContain(
-      "actionOne",
-    );
-    expect(registeredEntries?.map((entry) => entry.action)).toContain(
-      "actionTwo",
-    );
+    expect(registeredEntries?.size).toBe(2);
+
+    const actions = [...(registeredEntries ?? [])].map((e) => e.action);
+    expect(actions).toContain(Action1);
+    expect(actions).toContain(Action2);
   });
 
   it("should store getDependencies function that returns correct values", () => {
+    type CounterPayload = { count: number };
+    const CounterAction = createTestAction<CounterPayload>();
     let counter = 0;
-    const getDeps = () => [counter++];
+    const getDeps = () => ({ count: counter++ });
 
     class TestActions {
-      @use.reactive(getDeps)
-      async action(_args: Args) {
+      @use.reactive(CounterAction, getDeps)
+      [CounterAction] = async (_args: Args) => {
         return "done";
-      }
+      };
     }
 
     const instance = new TestActions();
     const registeredEntries = entries.get(instance);
+    const [entry] = [...(registeredEntries ?? [])];
 
-    // getDependencies should return incrementing values
-    expect(registeredEntries?.[0].getDependencies()).toEqual([0]);
-    expect(registeredEntries?.[0].getDependencies()).toEqual([1]);
-    expect(registeredEntries?.[0].getDependencies()).toEqual([2]);
+    // getDependencies should return incrementing values as payload objects
+    expect(entry.getDependencies()).toEqual({ count: 0 });
+    expect(entry.getDependencies()).toEqual({ count: 1 });
+    expect(entry.getDependencies()).toEqual({ count: 2 });
+  });
+
+  it("should enforce type safety between action and getDependencies", () => {
+    // This test verifies that the types are correctly inferred
+    // TypeScript would error at compile time if types don't match
+    type UserPayload = { userId: string; filters: { active: boolean } };
+    const FetchUser = createTestAction<UserPayload>();
+
+    class TestActions {
+      @use.reactive(FetchUser, () => ({
+        userId: "123",
+        filters: { active: true },
+      }))
+      [FetchUser] = async (_args: Args) => {
+        return "done";
+      };
+    }
+
+    const instance = new TestActions();
+    const registeredEntries = entries.get(instance);
+    const [entry] = [...(registeredEntries ?? [])];
+    const payload = entry.getDependencies();
+
+    expect(payload).toEqual({ userId: "123", filters: { active: true } });
   });
 });
 
@@ -824,12 +862,17 @@ describe("decorator combinations", () => {
 });
 
 describe("edge cases", () => {
+  // Helper to create a typed action symbol for tests
+  const createTestAction = <T>(): Payload<T> =>
+    Symbol("test.action") as Payload<T>;
+
   it("should handle symbol method names in reactive", () => {
-    const methodSymbol = Symbol("myMethod");
-    const getDeps = () => [1, 2, 3];
+    type NumsPayload = { nums: number[] };
+    const methodSymbol = createTestAction<NumsPayload>();
+    const getDeps = () => ({ nums: [1, 2, 3] });
 
     class TestActions {
-      @use.reactive(getDeps)
+      @use.reactive(methodSymbol, getDeps)
       [methodSymbol] = async (_args: Args) => {
         return "done";
       };
@@ -839,7 +882,8 @@ describe("edge cases", () => {
     const registeredEntries = entries.get(instance);
 
     expect(registeredEntries).toBeDefined();
-    expect(registeredEntries?.[0].action).toBe(methodSymbol);
+    const [entry] = [...(registeredEntries ?? [])];
+    expect(entry.action).toBe(methodSymbol);
   });
 
   it("should handle multiple instances independently", async () => {

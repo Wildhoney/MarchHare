@@ -5,14 +5,14 @@ const fadeIn = keyframes`
   to { opacity: 1; transform: translateY(0); }
 `;
 
-const float = keyframes`
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-5px); }
-`;
-
 const shimmer = keyframes`
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
+`;
+
+const smoke = keyframes`
+  0% { opacity: 0.8; transform: scale(1); }
+  100% { opacity: 0; transform: scale(2.5); }
 `;
 
 export const layout = css`
@@ -28,8 +28,14 @@ export const layout = css`
     sans-serif;
 
   @media (max-width: 900px) {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
+    display: flex;
+    flex-direction: column-reverse;
+    min-height: auto;
+    width: 100%;
+
+    > * {
+      width: 100%;
+    }
   }
 `;
 
@@ -40,20 +46,20 @@ export const marketing = css`
   display: flex;
   flex-direction: column;
   position: relative;
-  overflow-y: auto;
+  overflow: hidden;
 
   @media (max-width: 900px) {
-    order: 2;
     padding: 32px 24px;
+    flex: none;
   }
 
   &::before {
     content: "";
-    position: fixed;
-    top: -50%;
-    left: -25%;
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
-    height: 200%;
+    height: 100%;
     background:
       radial-gradient(
         circle at 20% 80%,
@@ -68,7 +74,7 @@ export const marketing = css`
     pointer-events: none;
 
     @media (max-width: 900px) {
-      position: absolute;
+      display: none;
     }
   }
 `;
@@ -274,11 +280,11 @@ export const demo = css`
   justify-content: center;
 
   @media (max-width: 900px) {
-    order: 1;
-    position: relative;
+    position: static;
     height: auto;
     min-height: 300px;
     padding: 48px 24px;
+    flex: none;
   }
 `;
 
@@ -306,7 +312,16 @@ export const liveDot = css`
   height: 8px;
   background: #22c55e;
   border-radius: 50%;
-  animation: ${float} 2s ease-in-out infinite;
+  position: relative;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: #22c55e;
+    border-radius: 50%;
+    animation: ${smoke} 1s ease-out infinite;
+  }
 `;
 
 export const demoCard = css`
