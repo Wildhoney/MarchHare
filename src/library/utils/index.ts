@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import objectHash from "object-hash";
 import { ActionsClass, Context, Model, Payload, Pk } from "../types/index.ts";
 import { AbortError } from "../error/types.ts";
+import { fnv1a } from "./utils.ts";
 
 /**
  * Returns a promise that resolves after the specified number of milliseconds.
@@ -83,20 +83,18 @@ export const λ = set;
 /**
  * Generates a deterministic hash string from any value.
  * Useful for creating cache keys, comparing object equality, or tracking changes.
- * Uses ohash internally for consistent, fast hashing across all value types.
  *
- * @param value The value to hash (objects, arrays, primitives, etc.).
- * @returns A deterministic hash string.
+ * Returns `null` if the value cannot be serialised (e.g., circular references).
  *
- * @example
- * ```ts
- * checksum({ name: "Adam", age: 30 }); // "hKs8Nqf2x9"
- * checksum([1, 2, 3]); // "2Hymo0jSsf"
- * checksum("hello"); // "5d41402abc"
- * ```
+ * @param value - The value to hash (objects, arrays, primitives, etc.).
+ * @returns The hash string, or `null` if serialisation fails.
  */
-export function checksum(value: object | string | number | boolean): string {
-  return objectHash(value);
+export function checksum(value: unknown): string | null {
+  try {
+    return fnv1a(JSON.stringify(value));
+  } catch {
+    return null;
+  }
 }
 
 /** Shorthand alias for {@link checksum}. */

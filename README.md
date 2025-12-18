@@ -462,18 +462,18 @@ context.actions.produce((draft) => {
 
 ### `utils.checksum(value)` / `utils.Σ`
 
-Generates a deterministic hash string from any value. Particularly useful with `@use.reactive()` which only accepts primitives &ndash; use checksum to convert complex objects (like React Query data) into a primitive dependency:
+Generates a deterministic hash string from any value. Returns `null` if the value cannot be serialised (e.g., circular references).
+
+Particularly useful with `@use.reactive()` which only accepts primitives &ndash; use checksum to convert complex objects (like React Query data) into a primitive dependency:
 
 ```ts
-// Convert complex objects into reactive dependencies
+// Convert complex objects into primitive dependencies for @use.reactive()
 const { data } = useQuery({ queryKey: ["user"], queryFn: fetchUser });
 
 class {
   @use.reactive(() => [utils.checksum(data)])
   [Actions.SyncUser] = syncUserAction;
 }
-
-// The action will trigger whenever the user data changes
 ```
 
 ### `utils.sleep(ms, signal?)` / `utils.ζ`

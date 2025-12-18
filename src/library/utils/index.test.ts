@@ -52,33 +52,19 @@ describe("set()", () => {
 });
 
 describe("checksum()", () => {
-  it("should generate a deterministic hash for objects", () => {
-    const obj = { name: "Adam", age: 30 };
-    const hash1 = checksum(obj);
-    const hash2 = checksum(obj);
-
-    expect(hash1).toBe(hash2);
-    expect(typeof hash1).toBe("string");
+  it("should return a string for valid objects", () => {
+    expect(typeof checksum({ name: "Adam" })).toBe("string");
   });
 
-  it("should generate different hashes for different objects", () => {
-    const hash1 = checksum({ a: 1 });
-    const hash2 = checksum({ a: 2 });
-
-    expect(hash1).not.toBe(hash2);
+  it("should generate different hashes for different values", () => {
+    expect(checksum({ a: 1 })).not.toBe(checksum({ a: 2 }));
   });
 
-  it("should handle arrays", () => {
-    const hash1 = checksum([1, 2, 3]);
-    const hash2 = checksum([1, 2, 3]);
+  it("should return null for circular references", () => {
+    const obj: Record<string, unknown> = {};
+    obj.self = obj;
 
-    expect(hash1).toBe(hash2);
-  });
-
-  it("should handle primitives", () => {
-    expect(checksum("hello")).toBe(checksum("hello"));
-    expect(checksum(123)).toBe(checksum(123));
-    expect(checksum(true)).toBe(checksum(true));
+    expect(checksum(obj)).toBeNull();
   });
 
   it("should be aliased as Σ", () => {

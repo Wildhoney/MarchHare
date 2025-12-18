@@ -54,27 +54,15 @@ export default defineConfig(({ mode }) => {
           },
           rollupOptions: {
             external(id) {
-              return [
-                "@mobily/ts-belt",
-                "eventemitter3",
-                "immer",
-                "immertation",
-                "lodash",
-                "react",
-                "react-dom",
-                "traverse",
-              ].some((pkg) => id === pkg || id.startsWith(pkg + "/"));
+              return ["@mobily/ts-belt", "immer", "react"].some(
+                (pkg) => id === pkg || id.startsWith(pkg + "/"),
+              );
             },
             output: {
               globals: {
                 "@mobily/ts-belt": "TsBelt",
-                eventemitter3: "EventEmitter3",
                 immer: "Immer",
-                immertation: "Immertation",
-                lodash: "_",
                 react: "React",
-                "react-dom": "ReactDOM",
-                traverse: "Traverse",
               },
             },
           },
