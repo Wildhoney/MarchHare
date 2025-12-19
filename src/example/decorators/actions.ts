@@ -30,15 +30,15 @@ export function useDecoratorActions() {
   const supplantAction = useAction<Model, typeof Actions, "SupplantAction">(
     async (context) => {
       const id = Date.now();
-      context.actions.produce(({ model: m }) => {
-        m.log = [...m.log, `supplant-start-${id}`];
+      context.actions.produce((draft) => {
+        draft.model.log = [...draft.model.log, `supplant-start-${id}`];
       });
 
       await sleep(500, context.signal);
 
-      context.actions.produce(({ model: m }) => {
-        m.log = [...m.log, `supplant-end-${id}`];
-        m.value += 1;
+      context.actions.produce((draft) => {
+        draft.model.log = [...draft.model.log, `supplant-end-${id}`];
+        draft.model.value += 1;
       });
     },
   );
@@ -49,9 +49,9 @@ export function useDecoratorActions() {
    */
   const debounceAction = useAction<Model, typeof Actions, "DebounceAction">(
     async (context) => {
-      context.actions.produce(({ model: m }) => {
-        m.log = [...m.log, "debounce-executed"];
-        m.value += 1;
+      context.actions.produce((draft) => {
+        draft.model.log = [...draft.model.log, "debounce-executed"];
+        draft.model.value += 1;
       });
     },
   );
@@ -62,9 +62,12 @@ export function useDecoratorActions() {
    */
   const throttleAction = useAction<Model, typeof Actions, "ThrottleAction">(
     async (context) => {
-      context.actions.produce(({ model: m }) => {
-        m.log = [...m.log, `throttle-executed-${Date.now()}`];
-        m.value += 1;
+      context.actions.produce((draft) => {
+        draft.model.log = [
+          ...draft.model.log,
+          `throttle-executed-${Date.now()}`,
+        ];
+        draft.model.value += 1;
       });
     },
   );
@@ -80,9 +83,12 @@ export function useDecoratorActions() {
       retryAttemptCount += 1;
       const currentAttempt = retryAttemptCount;
 
-      context.actions.produce(({ model: m }) => {
-        m.attempts = currentAttempt;
-        m.log = [...m.log, `retry-attempt-${currentAttempt}`];
+      context.actions.produce((draft) => {
+        draft.model.attempts = currentAttempt;
+        draft.model.log = [
+          ...draft.model.log,
+          `retry-attempt-${currentAttempt}`,
+        ];
       });
 
       // Fail on first 2 attempts, succeed on 3rd
@@ -90,9 +96,9 @@ export function useDecoratorActions() {
         throw new Error(`Attempt ${currentAttempt} failed`);
       }
 
-      context.actions.produce(({ model: m }) => {
-        m.log = [...m.log, "retry-success"];
-        m.value += 1;
+      context.actions.produce((draft) => {
+        draft.model.log = [...draft.model.log, "retry-success"];
+        draft.model.value += 1;
       });
     },
   );
@@ -104,8 +110,8 @@ export function useDecoratorActions() {
   const resetRetry = useAction<Model, typeof Actions, "ResetRetry">(
     (context) => {
       resetRetryAttemptCount();
-      context.actions.produce(({ model: m }) => {
-        m.attempts = 0;
+      context.actions.produce((draft) => {
+        draft.model.attempts = 0;
       });
     },
   );
@@ -116,17 +122,17 @@ export function useDecoratorActions() {
    */
   const timeoutAction = useAction<Model, typeof Actions, "TimeoutAction">(
     async (context) => {
-      context.actions.produce(({ model: m }) => {
-        m.log = [...m.log, "timeout-start"];
+      context.actions.produce((draft) => {
+        draft.model.log = [...draft.model.log, "timeout-start"];
       });
 
       // This will exceed the timeout
       await sleep(1000, context.signal);
 
       // This should never be reached
-      context.actions.produce(({ model: m }) => {
-        m.log = [...m.log, "timeout-end"];
-        m.value += 1;
+      context.actions.produce((draft) => {
+        draft.model.log = [...draft.model.log, "timeout-end"];
+        draft.model.value += 1;
       });
     },
   );
@@ -135,10 +141,10 @@ export function useDecoratorActions() {
    * Clear the log for fresh tests.
    */
   const clearLog = useAction<Model, typeof Actions, "ClearLog">((context) => {
-    context.actions.produce(({ model: m }) => {
-      m.log = [];
-      m.value = 0;
-      m.attempts = 0;
+    context.actions.produce((draft) => {
+      draft.model.log = [];
+      draft.model.value = 0;
+      draft.model.attempts = 0;
     });
   });
 

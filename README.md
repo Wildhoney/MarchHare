@@ -106,13 +106,13 @@ export default function useNameActions() {
   const nameAction = useAction<Model, typeof Actions, "Name">(
     async (context) => {
       context.actions.produce((draft) => {
-        draft.name = null;
+        draft.model.name = null;
       });
 
       const name = await fetch(/* ... */);
 
       context.actions.produce((draft) => {
-        draft.name = name;
+        draft.model.name = name;
       });
     },
   );
@@ -235,24 +235,32 @@ The `<Error>` component is a catch-all for errors from **any** action in your ap
 
 Model annotations allow you to track the state of async operations on individual model fields. This is useful for showing loading indicators, optimistic updates, and tracking pending changes. Annotations are powered by [Immertation](https://github.com/Wildhoney/Immertation) &ndash; refer to its documentation for more details.
 
-Use `context.actions.annotate` to mark a value with an operation type. The view can then inspect the field to check if it's pending, get the draft value, or check the operation type:
+Use `context.actions.annotate` to mark a value with an operation type. The `produce` callback receives a draft object with `model` and `inspect` properties, allowing you to read the current draft value when making changes:
 
 ```ts
 import { Op } from "chizu";
 
-context.actions.produce((model) => {
-  model.name = context.actions.annotate(Op.Update, "New Name");
+context.actions.produce((draft) => {
+  // Read the current draft value (or model value if no pending annotations)
+  const currentValue = draft.inspect.count.draft();
+
+  // Annotate with the new value
+  draft.model.count = context.actions.annotate(Op.Update, currentValue + 1);
 });
 ```
+
+This pattern is essential for concurrent operations &ndash; when multiple actions are in flight, `draft.inspect.count.draft()` returns the most recent pending value, ensuring each action builds on the latest state rather than the committed model value.
 
 In the view, use `actions.inspect` to check the state of annotated fields:
 
 ```ts
 actions.inspect.name.pending(); // true if operation is in progress
 actions.inspect.name.remaining(); // count of pending operations
-actions.inspect.name.draft(); // the next value to be applied
+actions.inspect.name.draft(); // the draft value (latest annotation or model value)
 actions.inspect.name.is(Op.Update); // check specific operation type
 ```
+
+**Note:** `draft()` always returns a value &ndash; either the most recent annotation's value or the current model value if no annotations exist. It never returns `undefined` for defined model properties.
 
 ## Lifecycle actions
 
@@ -445,35 +453,23 @@ class {
 
 The intervals array specifies delays between retries. The example above will retry up to 3 times: first retry after 1s, second after 2s, third after 4s. Default intervals are `[1_000, 2_000, 4_000]`.
 
-### `use.poll(ms, getPayload, getStatus?)`
+### `use.poll(ms, getPayload?)`
 
-Polls an action at regular intervals with a payload that's evaluated fresh each time. Useful for periodic data refreshes, heartbeats, and polling APIs:
+Polls an action at regular intervals with an optional payload that's evaluated fresh each time. Useful for periodic data refreshes, heartbeats, and polling APIs:
 
 ```ts
 class {
+  // With payload - getter is called at each interval for fresh values
   @use.poll(5_000, () => ({ userId, token }))
   [Actions.RefreshData] = refreshDataAction;
+
+  // Without payload - just polls at the interval
+  @use.poll(10_000)
+  [Actions.Heartbeat] = heartbeatAction;
 }
 ```
 
-The payload getter is called at each interval to get fresh values from closures. You can pause and resume polling using the optional `getStatus` parameter with `Status.Play` and `Status.Pause`:
-
-```ts
-import { Status } from "chizu";
-
-const [isPaused, setIsPaused] = useState(false);
-
-class {
-  @use.poll(
-    5_000,
-    () => ({ userId }),
-    () => isPaused ? Status.Pause : Status.Play
-  )
-  [Actions.RefreshData] = refreshDataAction;
-}
-```
-
-When `getStatus` returns `Status.Pause`, the interval continues running but the action is not dispatched until status returns to `Status.Play`. Intervals are automatically cleaned up on component unmount.
+The payload getter is called at each interval to get fresh values from closures. Intervals are automatically cleaned up on component unmount.
 
 ### Combining decorators
 
@@ -514,16 +510,16 @@ export function useVisitorActions() {
         JSON.parse(event.data) as Country,
       );
     });
-    context.actions.produce((model) => {
-      model.source = source;
+    context.actions.produce((draft) => {
+      draft.model.source = source;
     });
   });
 
   const visitorAction = useAction<Model, typeof Actions, "Visitor">(
     (context, country) => {
-      context.actions.produce((model) => {
-        model.visitor = country;
-        model.history = [country, ...model.history].slice(0, 20);
+      context.actions.produce((draft) => {
+        draft.model.visitor = country;
+        draft.model.history = [country, ...draft.model.history].slice(0, 20);
       });
     },
   );
@@ -580,13 +576,13 @@ Generates or validates primary keys. Particularly useful for optimistic updates 
 // Optimistic update: add item with placeholder ID
 const id = utils.pk();
 context.actions.produce((draft) => {
-  draft.todos.push({ id, text: "New todo", status: "pending" });
+  draft.model.todos.push({ id, text: "New todo", status: "pending" });
 });
 
 // Later when the API responds, find and update with real ID
 const response = await api.createTodo({ text: "New todo" });
 context.actions.produce((draft) => {
-  const todo = draft.todos.find((todo) => todo.id === id);
+  const todo = draft.model.todos.find((todo) => todo.id === id);
   if (todo) todo.id = response.id; // Replace symbol with real ID
 });
 ```

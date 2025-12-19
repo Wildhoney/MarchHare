@@ -13,8 +13,8 @@ export function useVisitorActions() {
   const mountAction = useAction<Model, typeof Actions>((context) => {
     const source = new EventSource("/visitors");
     source.addEventListener("connected", () => {
-      context.actions.produce(({ model }) => {
-        model.connected = true;
+      context.actions.produce((draft) => {
+        draft.model.connected = true;
       });
     });
     source.addEventListener("visitor", (event) => {
@@ -26,16 +26,18 @@ export function useVisitorActions() {
     source.addEventListener("error", () => {
       source.close();
     });
-    context.actions.produce(({ model }) => {
-      model.source = source;
+    context.actions.produce((draft) => {
+      draft.model.source = source;
     });
   });
 
   const visitorAction = useAction<Model, typeof Actions, "Visitor">(
     (context, country) => {
-      context.actions.produce(({ model }) => {
-        model.visitor = country;
-        model.history = [...A.take([country, ...model.history], 20)];
+      context.actions.produce((draft) => {
+        draft.model.visitor = country;
+        draft.model.history = [
+          ...A.take([country, ...draft.model.history], 20),
+        ];
       });
     },
   );
