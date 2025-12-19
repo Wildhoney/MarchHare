@@ -241,11 +241,10 @@ Use `context.actions.annotate` to mark a value with an operation type. The `prod
 import { Op } from "chizu";
 
 context.actions.produce((draft) => {
-  // Read the current draft value (or model value if no pending annotations)
-  const currentValue = draft.inspect.count.draft();
-
-  // Annotate with the new value
-  draft.model.count = context.actions.annotate(Op.Update, currentValue + 1);
+  draft.model.count = context.actions.annotate(
+    Op.Update,
+    draft.inspect.count.draft() + 1,
+  );
 });
 ```
 
