@@ -15,7 +15,7 @@
   "dependencies": {
     "antd": "^6.1.1",
     "eventemitter3": "^5.0.1",
-    "immertation": "^0.1.17",
+    "immertation": "^0.1.19",
     "lucide-react": "^0.561.0"
   },
   "peerDependencies": {

@@ -14,13 +14,14 @@ import {
   Action,
   UseActions,
   Result,
+  Status,
 } from "../types/index.ts";
 import EventEmitter from "eventemitter3";
 import { useBroadcast } from "../broadcast/index.tsx";
 import { isDistributedAction, getActionName } from "../action/index.ts";
 import { useError, Reason } from "../error/index.tsx";
 import { State, Operation, Process } from "immertation";
-import { context, entries } from "../use/index.ts";
+import { context, entries, polls } from "../use/index.ts";
 import * as utils from "../utils/index.ts";
 
 /**
@@ -162,6 +163,7 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
   const instance = React.useRef<object | null>(null);
   const reactives = React.useRef<Map<symbol, string | null>>(new Map());
   const bindings = entries.get(<object>new (<Actions<M, AC>>ActionClass)());
+  const pollBindings = polls.get(<object>new (<Actions<M, AC>>ActionClass)());
 
   const getContext = React.useCallback(
     (result: Result) => {
@@ -172,7 +174,9 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
         actions: {
           produce(f) {
             if (controller.signal.aborted) return;
-            const process = state.current.mutate((draft) => f(draft));
+            const process = state.current.mutate((draft) =>
+              f({ model: draft, inspect: state.current.inspect }),
+            );
             setModel(state.current.model);
             result.processes.add(process);
           },
@@ -230,13 +234,14 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
 
   const run = React.useEffectEvent(() => {
     bindings?.forEach((entry) => {
-      const dependencies = entry.getDependencies();
+      const context = { model, inspect: state.current.inspect };
+      const dependencies = entry.getDependencies(context);
       const checksum = utils.checksum(dependencies);
       if (G.isNullable(checksum)) return;
       const previous = reactives.current.get(entry.action) ?? null;
       if (checksum === previous) return;
       reactives.current.set(entry.action, checksum);
-      const payload = entry.getPayload?.();
+      const payload = entry.getPayload?.(context);
       unicast.emit(entry.action, payload);
     });
   });
@@ -254,6 +259,39 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
   React.useEffect(() => {
     unicast.emit(Lifecycle.Node);
   }, []);
+
+  // Set up polling intervals
+  // Note: We use refs to access the latest model and inspect in the interval callback
+  // to avoid recreating intervals on every model change
+  const modelRef = React.useRef(model);
+  const inspectRef = React.useRef(state.current.inspect);
+  React.useLayoutEffect(() => {
+    modelRef.current = model;
+    inspectRef.current = state.current.inspect;
+  }, [model]);
+
+  React.useEffect(() => {
+    if (!pollBindings) return;
+
+    const intervals: ReturnType<typeof setInterval>[] = [];
+
+    pollBindings.forEach((entry) => {
+      const intervalId = setInterval(() => {
+        const context = {
+          model: modelRef.current,
+          inspect: inspectRef.current,
+        };
+        if (entry.getStatus(context) === Status.Pause) return;
+        const payload = entry.getPayload?.(context);
+        unicast.emit(entry.action, payload);
+      }, entry.interval);
+      intervals.push(intervalId);
+    });
+
+    return () => {
+      intervals.forEach((id) => clearInterval(id));
+    };
+  }, [unicast, pollBindings]);
 
   return React.useMemo(
     () => [

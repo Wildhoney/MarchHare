@@ -1,10 +1,17 @@
-import { Args, Dependencies, Field, Instance, Method } from "./types.ts";
-import { Payload } from "../types/index.ts";
-import { actionName, context, internals, entries } from "./utils.ts";
+import {
+  Args,
+  Field,
+  Instance,
+  Method,
+  Primitive,
+  DecoratorContext,
+} from "./types.ts";
+import { Payload, Status, Model, ActionsClass } from "../types/index.ts";
+import { actionName, context, internals, entries, polls } from "./utils.ts";
 import { AbortError, TimeoutError } from "../error/types.ts";
 import { A, G } from "@mobily/ts-belt";
 
-export { context, entries } from "./utils.ts";
+export { context, entries, polls } from "./utils.ts";
 
 /**
  * Action decorators for adding common functionality to action handlers.
@@ -37,6 +44,7 @@ export const use = {
    * When dependencies change, the action is dispatched with the payload (if provided).
    *
    * **Features:**
+   * - **Context-aware**: Callbacks receive context with current model state
    * - **Primitive dependencies**: Use primitives for reliable change detection
    * - **Separate concerns**: Dependencies trigger the action, payload provides data
    * - **Type-safe payload**: TypeScript enforces `getPayload` returns the correct type
@@ -46,45 +54,114 @@ export const use = {
    *
    * @template P The payload type, inferred from the action.
    * @param action The action to trigger. Must match the decorated property.
-   * @param getDependencies Function returning primitive array. Called every render for change detection.
-   * @param getPayload Function returning the payload. Called at dispatch time. Only for actions with payloads.
+   * @param getDependencies Function receiving context and returning primitive array. Called every render for change detection.
+   * @param getPayload Function receiving context and returning the payload. Called at dispatch time. Only for actions with payloads.
    * @returns A decorator function for the action.
    *
    * @example
    * ```ts
-   * // Action without payload - just dependencies for triggering
-   * @use.reactive(Actions.Refresh, () => [userId, filters.length])
-   * [Actions.Refresh] = refreshAction;
-   * ```
+   * // Without typing
+   * @use.reactive((ctx) => [ctx.model.userId])
    *
-   * @example
-   * ```ts
-   * // Action with payload - dependencies trigger, getPayload provides fresh data
-   * @use.reactive(
-   *   Actions.FetchUser,
-   *   () => [userId],
-   *   () => ({ userId, includeDetails: true })
-   * )
-   * [Actions.FetchUser] = fetchUserAction;
+   * // With Model typing (same as useAction)
+   * @use.reactive<Model, typeof Actions, "FetchUser">(
+   *   (ctx) => [ctx.model.userId],
+   *   (ctx) => ({ userId: ctx.model.userId }))
    * ```
    */
-  reactive<P>(
-    action: Payload<P>,
-    getDependencies: Dependencies,
-    ...args: [P] extends [never] ? [] : [getPayload: () => NoInfer<P>]
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  reactive<
+    M extends Model = any,
+    AC extends ActionsClass<any> = any,
+    K extends Exclude<keyof AC, "prototype"> = any,
+  >(
+    getDependencies: (context: DecoratorContext<M>) => Primitive[],
+    ...args: AC[K] extends Payload<infer P>
+      ? [P] extends [never]
+        ? []
+        : [getPayload: (context: DecoratorContext<M>) => P]
+      : []
   ) {
+    /* eslint-enable @typescript-eslint/no-explicit-any */
     return function (_: unknown, field: Field) {
       field.addInitializer(function () {
         const self = <Instance>this;
         const set = entries.get(self) ?? new Set();
 
         set.add({
-          action,
-          getDependencies,
-          getPayload: args[0],
+          action: field.name as Payload,
+          getDependencies: getDependencies as (
+            context: DecoratorContext,
+          ) => Primitive[],
+          getPayload: args[0] as
+            | ((context: DecoratorContext) => unknown)
+            | undefined,
         });
 
         entries.set(self, set);
+      });
+    };
+  },
+  /**
+   * Polls an action at regular intervals with an optional payload that's evaluated fresh each time.
+   *
+   * The polling can be paused and resumed using the `getStatus` function. When status
+   * returns `Status.Pause`, polling stops until it returns `Status.Play` again.
+   *
+   * **Features:**
+   * - **Context-aware**: Callbacks receive context with current model state
+   * - **Fixed interval polling**: Executes action every `ms` milliseconds
+   * - **Fresh payload**: `getPayload` is called at each interval for current values
+   * - **Pausable**: Use `getStatus` to pause/resume polling dynamically
+   * - **Auto cleanup**: Intervals are cleared on component unmount
+   * - **Type-safe payload**: TypeScript enforces `getPayload` returns the correct type
+   *
+   * @template P The payload type, inferred from the action.
+   * @param action The action to trigger. Must match the decorated property.
+   * @param ms The polling interval in milliseconds.
+   * @param getPayload Function receiving context and returning the payload. Called at each interval for fresh values. Only for actions with payloads.
+   * @param getStatus Function receiving context and returning Status.Play or Status.Pause. Defaults to always playing.
+   * @returns A decorator function for the action.
+   *
+   * @example
+   * ```ts
+   * // Without typing
+   * @use.poll(1_000)
+   *
+   * // With Model typing (same as useAction)
+   * @use.poll<Model, typeof Actions, "Increment">(1_000,
+   *   (ctx) => ctx.model.count < 10 ? Status.Play : Status.Pause)
+   * ```
+   */
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  poll<
+    M extends Model = any,
+    AC extends ActionsClass<any> = any,
+    K extends Exclude<keyof AC, "prototype"> = any,
+  >(
+    ms: number,
+    ...args: AC[K] extends Payload<infer P>
+      ? [P] extends [never]
+        ? []
+        : [getPayload: (context: DecoratorContext<M>) => P]
+      : []
+  ) {
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+    return function (_: unknown, field: Field) {
+      field.addInitializer(function () {
+        const self = <Instance>this;
+        const set = polls.get(self) ?? new Set();
+
+        set.add({
+          action: field.name as Payload,
+          interval: ms,
+          getPayload: args[0] as
+            | ((context: DecoratorContext) => unknown)
+            | undefined,
+          getStatus: () => Status.Play,
+        });
+
+        polls.set(self, set);
       });
     };
   },

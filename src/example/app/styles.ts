@@ -288,10 +288,23 @@ export const demo = css`
   }
 `;
 
-export const demoLabel = css`
+export const demoHeader = css`
   position: absolute;
   top: 24px;
+  left: 24px;
   right: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  @media (max-width: 900px) {
+    top: 16px;
+    left: 16px;
+    right: 16px;
+  }
+`;
+
+export const demoLabel = css`
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 1.5px;
@@ -300,11 +313,6 @@ export const demoLabel = css`
   align-items: center;
   gap: 8px;
   font-weight: 500;
-
-  @media (max-width: 900px) {
-    top: 16px;
-    right: 16px;
-  }
 `;
 
 export const liveDot = css`

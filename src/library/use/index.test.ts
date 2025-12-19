@@ -6,8 +6,8 @@ import {
   beforeEach,
   afterEach,
 } from "@jest/globals";
-import { use, context, entries } from "./index.ts";
-import { Payload } from "../types/index.ts";
+import { use, context, entries, polls } from "./index.ts";
+import { Payload, Status } from "../types/index.ts";
 import { Args } from "./types.ts";
 import { AbortError } from "../error/types.ts";
 
@@ -116,12 +116,11 @@ describe("use.reactive()", () => {
     Symbol("test.action") as Payload<T>;
 
   it("should register dependencies in the entries WeakMap", () => {
-    type TestPayload = { value1: string; value2: number; value3: boolean };
-    const TestAction = createTestAction<TestPayload>();
-    const getDeps = () => ({ value1: "test", value2: 42, value3: true });
+    const TestAction = createTestAction<never>();
+    const getDeps = () => ["test", 42, true];
 
     class TestActions {
-      @use.reactive(TestAction, getDeps)
+      @use.reactive(getDeps)
       [TestAction] = async (_args: Args) => {
         return "done";
       };
@@ -135,24 +134,21 @@ describe("use.reactive()", () => {
 
     const [entry] = [...(registeredEntries ?? [])];
     expect(entry.action).toBe(TestAction);
-    expect(entry.getDependencies).toBe(getDeps);
   });
 
   it("should register multiple reactive decorators on different methods", () => {
-    type Payload1 = { a: string };
-    type Payload2 = { nums: number[] };
-    const Action1 = createTestAction<Payload1>();
-    const Action2 = createTestAction<Payload2>();
-    const getDeps1 = () => ({ a: "test" });
-    const getDeps2 = () => ({ nums: [1, 2, 3] });
+    const Action1 = createTestAction<never>();
+    const Action2 = createTestAction<never>();
+    const getDeps1 = () => ["test"];
+    const getDeps2 = () => [1, 2, 3];
 
     class TestActions {
-      @use.reactive(Action1, getDeps1)
+      @use.reactive(getDeps1)
       [Action1] = async (_args: Args) => {
         return "one";
       };
 
-      @use.reactive(Action2, getDeps2)
+      @use.reactive(getDeps2)
       [Action2] = async (_args: Args) => {
         return "two";
       };
@@ -169,13 +165,12 @@ describe("use.reactive()", () => {
   });
 
   it("should store getDependencies function that returns correct values", () => {
-    type CounterPayload = { count: number };
-    const CounterAction = createTestAction<CounterPayload>();
+    const CounterAction = createTestAction<never>();
     let counter = 0;
-    const getDeps = () => ({ count: counter++ });
+    const getDeps = () => [counter++];
 
     class TestActions {
-      @use.reactive(CounterAction, getDeps)
+      @use.reactive(getDeps)
       [CounterAction] = async (_args: Args) => {
         return "done";
       };
@@ -184,25 +179,27 @@ describe("use.reactive()", () => {
     const instance = new TestActions();
     const registeredEntries = entries.get(instance);
     const [entry] = [...(registeredEntries ?? [])];
+    const ctx = { model: {}, inspect: {} };
 
-    // getDependencies should return incrementing values as payload objects
-    expect(entry.getDependencies()).toEqual({ count: 0 });
-    expect(entry.getDependencies()).toEqual({ count: 1 });
-    expect(entry.getDependencies()).toEqual({ count: 2 });
+    // getDependencies should return incrementing values
+    expect(entry.getDependencies(ctx)).toEqual([0]);
+    expect(entry.getDependencies(ctx)).toEqual([1]);
+    expect(entry.getDependencies(ctx)).toEqual([2]);
   });
 
-  it("should enforce type safety between action and getDependencies", () => {
-    // This test verifies that the types are correctly inferred
-    // TypeScript would error at compile time if types don't match
-    type UserPayload = { userId: string; filters: { active: boolean } };
-    const FetchUser = createTestAction<UserPayload>();
+  it("should pass context with model and inspect to getDependencies", () => {
+    type TestPayload = { doubled: number };
+    const TestAction = createTestAction<TestPayload>();
+    const getDependencies = jest.fn((context: { model: { count: number } }) => [
+      context.model.count,
+    ]);
+    const getPayload = jest.fn((context: { model: { count: number } }) => ({
+      doubled: context.model.count * 2,
+    }));
 
     class TestActions {
-      @use.reactive(FetchUser, () => ({
-        userId: "123",
-        filters: { active: true },
-      }))
-      [FetchUser] = async (_args: Args) => {
+      @use.reactive(getDependencies, getPayload)
+      [TestAction] = async (_args: Args) => {
         return "done";
       };
     }
@@ -210,9 +207,69 @@ describe("use.reactive()", () => {
     const instance = new TestActions();
     const registeredEntries = entries.get(instance);
     const [entry] = [...(registeredEntries ?? [])];
-    const payload = entry.getDependencies();
 
-    expect(payload).toEqual({ userId: "123", filters: { active: true } });
+    // Call getDependencies with context
+    const context = { model: { count: 5 }, inspect: {} };
+    const deps = entry.getDependencies(context);
+
+    expect(deps).toEqual([5]);
+    expect(getDependencies).toHaveBeenCalledWith(context);
+  });
+
+  it("should pass context with model and inspect to getPayload", () => {
+    type TestPayload = { doubled: number };
+    const TestAction = createTestAction<TestPayload>();
+    const getDependencies = jest.fn((context: { model: { count: number } }) => [
+      context.model.count,
+    ]);
+    const getPayload = jest.fn((context: { model: { count: number } }) => ({
+      doubled: context.model.count * 2,
+    }));
+
+    class TestActions {
+      @use.reactive(getDependencies, getPayload)
+      [TestAction] = async (_args: Args) => {
+        return "done";
+      };
+    }
+
+    const instance = new TestActions();
+    const registeredEntries = entries.get(instance);
+    const [entry] = [...(registeredEntries ?? [])];
+
+    // Call getPayload with context
+    const context = { model: { count: 7 }, inspect: {} };
+    const payload = entry.getPayload!(context);
+
+    expect(payload).toEqual({ doubled: 14 });
+    expect(getPayload).toHaveBeenCalledWith(context);
+  });
+
+  it("should support no-payload actions with context-aware dependencies", () => {
+    const TestAction = createTestAction<never>();
+    const getDependencies = jest.fn(
+      (context: { model: { filters: string[] } }) => [
+        context.model.filters.length,
+      ],
+    );
+
+    class TestActions {
+      @use.reactive(getDependencies)
+      [TestAction] = async (_args: Args) => {
+        return "done";
+      };
+    }
+
+    const instance = new TestActions();
+    const registeredEntries = entries.get(instance);
+    const [entry] = [...(registeredEntries ?? [])];
+
+    // Call getDependencies with context
+    const context = { model: { filters: ["a", "b", "c"] }, inspect: {} };
+    const deps = entry.getDependencies(context);
+
+    expect(deps).toEqual([3]);
+    expect(entry.getPayload).toBeUndefined();
   });
 });
 
@@ -867,12 +924,11 @@ describe("edge cases", () => {
     Symbol("test.action") as Payload<T>;
 
   it("should handle symbol method names in reactive", () => {
-    type NumsPayload = { nums: number[] };
-    const methodSymbol = createTestAction<NumsPayload>();
-    const getDeps = () => ({ nums: [1, 2, 3] });
+    const methodSymbol = createTestAction<never>();
+    const getDeps = () => [1, 2, 3];
 
     class TestActions {
-      @use.reactive(methodSymbol, getDeps)
+      @use.reactive(getDeps)
       [methodSymbol] = async (_args: Args) => {
         return "done";
       };
@@ -1033,5 +1089,166 @@ describe("decorator combinations", () => {
     // Second call continues independently
     await jest.advanceTimersByTimeAsync(0);
     expect(attemptCount).toBe(2); // Second call's first attempt
+  });
+});
+
+describe("@use.poll()", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("should register poll entries with payload in the polls WeakMap", () => {
+    const PollAction = Symbol("PollAction") as Payload<{ value: number }>;
+    const getPayload = () => ({ value: 42 });
+    const getStatus = () => Status.Play;
+
+    class TestActions {
+      @use.poll(1000, getPayload, getStatus)
+      [PollAction] = async (_args: Args) => {};
+    }
+
+    const instance = new TestActions();
+    const pollEntries = polls.get(instance);
+
+    expect(pollEntries).toBeDefined();
+    expect(pollEntries?.size).toBe(1);
+
+    const entry = Array.from(pollEntries!)[0];
+    expect(entry.action).toBe(PollAction);
+    expect(entry.interval).toBe(1000);
+    expect(entry.getPayload?.({ model: {}, inspect: {} })).toEqual({
+      value: 42,
+    });
+    expect(entry.getStatus({ model: {}, inspect: {} })).toBe(Status.Play);
+  });
+
+  it("should register poll entries without payload", () => {
+    const PollAction = Symbol("PollAction") as Payload<never>;
+
+    class TestActions {
+      @use.poll(1000)
+      [PollAction] = async (_args: Args) => {};
+    }
+
+    const instance = new TestActions();
+    const pollEntries = polls.get(instance);
+
+    expect(pollEntries).toBeDefined();
+    expect(pollEntries?.size).toBe(1);
+
+    const entry = Array.from(pollEntries!)[0];
+    expect(entry.action).toBe(PollAction);
+    expect(entry.interval).toBe(1000);
+    expect(entry.getPayload).toBeUndefined();
+    expect(entry.getStatus({ model: {}, inspect: {} })).toBe(Status.Play);
+  });
+
+  it("should default status to Status.Play when not provided", () => {
+    const PollAction = Symbol("PollAction") as Payload<{ data: string }>;
+
+    class TestActions {
+      @use.poll(1000, () => ({ data: "test" }))
+      [PollAction] = async (_args: Args) => {};
+    }
+
+    const instance = new TestActions();
+    const pollEntries = polls.get(instance);
+    const entry = Array.from(pollEntries!)[0];
+
+    expect(entry.getStatus({ model: {}, inspect: {} })).toBe(Status.Play);
+  });
+
+  it("should register multiple poll decorators independently", () => {
+    const ActionA = Symbol("ActionA") as Payload<{ a: number }>;
+    const ActionB = Symbol("ActionB") as Payload<{ b: number }>;
+
+    class TestActions {
+      @use.poll(1000, () => ({ a: 1 }))
+      [ActionA] = async (_args: Args) => {};
+
+      @use.poll(2000, () => ({ b: 2 }))
+      [ActionB] = async (_args: Args) => {};
+    }
+
+    const instance = new TestActions();
+    const pollEntries = polls.get(instance);
+
+    expect(pollEntries?.size).toBe(2);
+
+    const entries = Array.from(pollEntries!);
+    const intervals = entries.map((e) => e.interval).sort((a, b) => a - b);
+    expect(intervals).toEqual([1000, 2000]);
+  });
+
+  it("should call getPayload fresh at each interval check", () => {
+    const PollAction = Symbol("PollAction") as Payload<{ count: number }>;
+    let counter = 0;
+    const getPayload = jest.fn(() => ({ count: ++counter }));
+
+    class TestActions {
+      @use.poll(100, getPayload)
+      [PollAction] = async (_args: Args) => {};
+    }
+
+    const instance = new TestActions();
+    const pollEntries = polls.get(instance);
+    const entry = Array.from(pollEntries!)[0];
+
+    // Simulate what the hook does at each interval
+    const ctx = { model: {}, inspect: {} };
+    expect(entry.getPayload!(ctx)).toEqual({ count: 1 });
+    expect(entry.getPayload!(ctx)).toEqual({ count: 2 });
+    expect(entry.getPayload!(ctx)).toEqual({ count: 3 });
+
+    expect(getPayload).toHaveBeenCalledTimes(3);
+  });
+
+  it("should work with different poll instances independently", () => {
+    const PollAction = Symbol("PollAction") as Payload<never>;
+
+    class TestActions {
+      constructor(private interval: number) {}
+
+      @use.poll(1000)
+      [PollAction] = async (_args: Args) => {};
+    }
+
+    const instance1 = new TestActions(1000);
+    const instance2 = new TestActions(2000);
+
+    const polls1 = polls.get(instance1);
+    const polls2 = polls.get(instance2);
+
+    // Each instance has its own poll entry set
+    expect(polls1).toBeDefined();
+    expect(polls2).toBeDefined();
+    expect(polls1).not.toBe(polls2);
+  });
+
+  it("should pass context with model and inspect to getPayload", () => {
+    const PollAction = Symbol("PollAction") as Payload<{ count: number }>;
+    const getPayload = jest.fn((context: { model: { value: number } }) => ({
+      count: context.model.value * 2,
+    }));
+
+    class TestActions {
+      @use.poll(100, getPayload)
+      [PollAction] = async (_args: Args) => {};
+    }
+
+    const instance = new TestActions();
+    const pollEntries = polls.get(instance);
+    const entry = Array.from(pollEntries!)[0];
+
+    // Call with context containing model
+    const context = { model: { value: 5 }, inspect: {} };
+    const result = entry.getPayload!(context);
+
+    expect(result).toEqual({ count: 10 });
+    expect(getPayload).toHaveBeenCalledWith(context);
   });
 });

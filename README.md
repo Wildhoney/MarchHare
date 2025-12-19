@@ -18,6 +18,7 @@ Strongly typed React framework using generators and efficiently updated views al
 1. [Lifecycle actions](#lifecycle-actions)
 1. [Distributed actions](#distributed-actions)
 1. [Action decorators](#action-decorators)
+1. [Real-time applications](#real-time-applications)
 1. [Utility functions](#utility-functions)
 1. [Referential equality](#referential-equality)
 
@@ -444,6 +445,36 @@ class {
 
 The intervals array specifies delays between retries. The example above will retry up to 3 times: first retry after 1s, second after 2s, third after 4s. Default intervals are `[1_000, 2_000, 4_000]`.
 
+### `use.poll(ms, getPayload, getStatus?)`
+
+Polls an action at regular intervals with a payload that's evaluated fresh each time. Useful for periodic data refreshes, heartbeats, and polling APIs:
+
+```ts
+class {
+  @use.poll(5_000, () => ({ userId, token }))
+  [Actions.RefreshData] = refreshDataAction;
+}
+```
+
+The payload getter is called at each interval to get fresh values from closures. You can pause and resume polling using the optional `getStatus` parameter with `Status.Play` and `Status.Pause`:
+
+```ts
+import { Status } from "chizu";
+
+const [isPaused, setIsPaused] = useState(false);
+
+class {
+  @use.poll(
+    5_000,
+    () => ({ userId }),
+    () => isPaused ? Status.Pause : Status.Play
+  )
+  [Actions.RefreshData] = refreshDataAction;
+}
+```
+
+When `getStatus` returns `Status.Pause`, the interval continues running but the action is not dispatched until status returns to `Status.Play`. Intervals are automatically cleaned up on component unmount.
+
 ### Combining decorators
 
 Decorators can be combined for powerful control flow. Apply them top-to-bottom in execution order:
@@ -456,6 +487,70 @@ class {
   [Actions.FetchData] = fetchDataAction;
 }
 ```
+
+## Real-time applications
+
+Chizu's lifecycle actions make it easy to integrate with real-time data sources like Server-Sent Events (SSE), WebSockets, or any event-based API. Use `Lifecycle.Mount` to establish connections and `Lifecycle.Unmount` to clean them up.
+
+Here's an example that tracks website visitors in real-time using SSE:
+
+```ts
+import { useAction, useActions, Lifecycle } from "chizu";
+
+type Country = { name: string; flag: string; timestamp: number };
+
+type Model = {
+  visitor: Country | null;
+  history: Country[];
+  source: EventSource | null;
+};
+
+export function useVisitorActions() {
+  const mountAction = useAction<Model, typeof Actions>((context) => {
+    const source = new EventSource("/visitors");
+    source.addEventListener("visitor", (event) => {
+      context.actions.dispatch(
+        Actions.Visitor,
+        JSON.parse(event.data) as Country,
+      );
+    });
+    context.actions.produce((model) => {
+      model.source = source;
+    });
+  });
+
+  const visitorAction = useAction<Model, typeof Actions, "Visitor">(
+    (context, country) => {
+      context.actions.produce((model) => {
+        model.visitor = country;
+        model.history = [country, ...model.history].slice(0, 20);
+      });
+    },
+  );
+
+  const unmountAction = useAction<Model, typeof Actions>((context) => {
+    context.model.source?.close();
+  });
+
+  return useActions<Model, typeof Actions>(
+    model,
+    class {
+      [Lifecycle.Mount] = mountAction;
+      [Actions.Visitor] = visitorAction;
+      [Lifecycle.Unmount] = unmountAction;
+    },
+  );
+}
+```
+
+Key patterns demonstrated:
+
+- **Connection in `Lifecycle.Mount`** &ndash; Establish the SSE connection when the component mounts, storing the `EventSource` in the model for later cleanup.
+- **Event-driven dispatches** &ndash; When SSE events arrive, dispatch actions to update the model, triggering efficient re-renders.
+- **Cleanup in `Lifecycle.Unmount`** &ndash; Close the connection when the component unmounts to prevent memory leaks.
+- **All handlers use `useAction`** &ndash; Lifecycle handlers benefit from the same `useEffectEvent` wrapper as regular actions.
+
+See the full implementation in the [Visitor example source code](https://github.com/Wildhoney/Chizu/blob/main/src/example/visitor/actions.ts).
 
 ## Utility functions
 

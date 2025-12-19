@@ -1,5 +1,6 @@
 import * as React from "react";
 import Counter from "../counter/index.tsx";
+import Visitor from "../visitor/index.tsx";
 import { Error, Reason } from "../../library/index.ts";
 import { message } from "antd";
 import * as styles from "./styles.ts";
@@ -56,9 +57,12 @@ export default function App(): React.ReactElement {
       </div>
 
       <div className={styles.demo}>
-        <div className={styles.demoLabel}>
-          <span className={styles.liveDot} />
-          Live Demo
+        <div className={styles.demoHeader}>
+          <Visitor />
+          <div className={styles.demoLabel}>
+            <span className={styles.liveDot} />
+            Live Demo
+          </div>
         </div>
 
         <div className={styles.demoCard}>

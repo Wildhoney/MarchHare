@@ -4,5 +4,6 @@ dist/
 dist-example/
 .DS_Store
 .vite.pid
+.playwright-mcp/
 
 stats.html

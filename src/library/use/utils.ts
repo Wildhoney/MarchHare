@@ -1,11 +1,13 @@
 import { context } from "../types/index.ts";
-import { Internals, Entries } from "./types.ts";
+import { Internals, Entries, PollEntries } from "./types.ts";
 
 export { context };
 
 export const internals = new WeakMap<object, Internals>();
 
 export const entries = new WeakMap<object, Entries>();
+
+export const polls = new WeakMap<object, PollEntries>();
 
 /**
  * Extracts a readable name from an action symbol or string.

@@ -30,13 +30,13 @@ export function useDecoratorActions() {
   const supplantAction = useAction<Model, typeof Actions, "SupplantAction">(
     async (context) => {
       const id = Date.now();
-      context.actions.produce((m) => {
+      context.actions.produce(({ model: m }) => {
         m.log = [...m.log, `supplant-start-${id}`];
       });
 
       await sleep(500, context.signal);
 
-      context.actions.produce((m) => {
+      context.actions.produce(({ model: m }) => {
         m.log = [...m.log, `supplant-end-${id}`];
         m.value += 1;
       });
@@ -49,7 +49,7 @@ export function useDecoratorActions() {
    */
   const debounceAction = useAction<Model, typeof Actions, "DebounceAction">(
     async (context) => {
-      context.actions.produce((m) => {
+      context.actions.produce(({ model: m }) => {
         m.log = [...m.log, "debounce-executed"];
         m.value += 1;
       });
@@ -62,7 +62,7 @@ export function useDecoratorActions() {
    */
   const throttleAction = useAction<Model, typeof Actions, "ThrottleAction">(
     async (context) => {
-      context.actions.produce((m) => {
+      context.actions.produce(({ model: m }) => {
         m.log = [...m.log, `throttle-executed-${Date.now()}`];
         m.value += 1;
       });
@@ -80,7 +80,7 @@ export function useDecoratorActions() {
       retryAttemptCount += 1;
       const currentAttempt = retryAttemptCount;
 
-      context.actions.produce((m) => {
+      context.actions.produce(({ model: m }) => {
         m.attempts = currentAttempt;
         m.log = [...m.log, `retry-attempt-${currentAttempt}`];
       });
@@ -90,7 +90,7 @@ export function useDecoratorActions() {
         throw new Error(`Attempt ${currentAttempt} failed`);
       }
 
-      context.actions.produce((m) => {
+      context.actions.produce(({ model: m }) => {
         m.log = [...m.log, "retry-success"];
         m.value += 1;
       });
@@ -104,7 +104,7 @@ export function useDecoratorActions() {
   const resetRetry = useAction<Model, typeof Actions, "ResetRetry">(
     (context) => {
       resetRetryAttemptCount();
-      context.actions.produce((m) => {
+      context.actions.produce(({ model: m }) => {
         m.attempts = 0;
       });
     },
@@ -116,7 +116,7 @@ export function useDecoratorActions() {
    */
   const timeoutAction = useAction<Model, typeof Actions, "TimeoutAction">(
     async (context) => {
-      context.actions.produce((m) => {
+      context.actions.produce(({ model: m }) => {
         m.log = [...m.log, "timeout-start"];
       });
 
@@ -124,7 +124,7 @@ export function useDecoratorActions() {
       await sleep(1000, context.signal);
 
       // This should never be reached
-      context.actions.produce((m) => {
+      context.actions.produce(({ model: m }) => {
         m.log = [...m.log, "timeout-end"];
         m.value += 1;
       });
@@ -135,7 +135,7 @@ export function useDecoratorActions() {
    * Clear the log for fresh tests.
    */
   const clearLog = useAction<Model, typeof Actions, "ClearLog">((context) => {
-    context.actions.produce((m) => {
+    context.actions.produce(({ model: m }) => {
       m.log = [];
       m.value = 0;
       m.attempts = 0;

@@ -9,25 +9,25 @@ const model = <Model>{
 export function useCounterActions() {
   const incrementAction = useAction<Model, typeof Actions, "Increment">(
     async (context) => {
-      context.actions.produce((model) => {
+      context.actions.produce(({ model, inspect }) => {
         model.count = context.actions.annotate(
           Operation.Update,
-          model.count + 1,
+          inspect.count.draft() + 1,
         );
       });
 
       await sleep(1_000, context.signal);
 
-      context.actions.produce((model) => {
-        model.count += 1;
+      context.actions.produce(({ model }) => {
+        model.count = model.count + 1;
       });
     },
   );
 
   const decrementAction = useAction<Model, typeof Actions, "Decrement">(
     (context) => {
-      context.actions.produce((model) => {
-        model.count -= 1;
+      context.actions.produce(({ model, inspect }) => {
+        model.count = inspect.count.draft() - 1;
       });
     },
   );
@@ -35,6 +35,7 @@ export function useCounterActions() {
   return useActions<Model, typeof Actions>(
     model,
     class {
+      // @use.poll<Model, typeof Actions>(1_200)
       [Actions.Increment] = incrementAction;
       [Actions.Decrement] = decrementAction;
     },

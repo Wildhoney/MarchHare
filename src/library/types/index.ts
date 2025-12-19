@@ -28,6 +28,27 @@ export class Lifecycle {
   static Error = Symbol("chizu.action.lifecycle/Error");
 }
 
+/**
+ * Status enum for controlling poll behavior.
+ * Use with `@use.poll()` to pause and resume polling.
+ *
+ * @example
+ * ```ts
+ * const [isPaused, setIsPaused] = useState(false);
+ *
+ * class {
+ *   @use.poll(5000, () => ({ userId }), () => isPaused ? Status.Pause : Status.Play)
+ *   [Actions.RefreshData] = refreshAction;
+ * }
+ * ```
+ */
+export enum Status {
+  /** Polling is active and will continue at the specified interval. */
+  Play = "play",
+  /** Polling is paused and will not execute until status returns to Play. */
+  Pause = "pause",
+}
+
 export type Pk<T> = undefined | symbol | T;
 
 export type Task = PromiseWithResolvers<void>;
@@ -91,7 +112,9 @@ export type Context<M extends Model, AC extends ActionsClass<any>> = {
   model: M;
   signal: AbortSignal;
   actions: {
-    produce<F extends (model: M) => void>(ƒ: F & AssertSync<F>): M;
+    produce<F extends (context: { model: M; inspect: Inspect<M> }) => void>(
+      ƒ: F & AssertSync<F>,
+    ): M;
     dispatch<A extends AC[keyof AC] & Payload<any>>(
       ...args: [PayloadType<A>] extends [never] ? [A] : [A, PayloadType<A>]
     ): void;

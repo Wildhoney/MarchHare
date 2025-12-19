@@ -38,16 +38,18 @@ describe("sleep()", () => {
 describe("set()", () => {
   it("should create a setter action for a property", () => {
     const setter = set("name");
-    const draft = { name: "initial" };
+    const model = { name: "initial" };
     const context = {
       actions: {
-        produce: (fn: (d: typeof draft) => void) => fn(draft),
+        produce: (
+          fn: (ctx: { model: typeof model; inspect: unknown }) => void,
+        ) => fn({ model, inspect: {} }),
       },
     };
 
     setter(context as never, "updated" as never);
 
-    expect(draft.name).toBe("updated");
+    expect(model.name).toBe("updated");
   });
 });
 
