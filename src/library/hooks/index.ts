@@ -23,6 +23,7 @@ import { useError, Reason } from "../error/index.tsx";
 import { State, Operation, Process } from "immertation";
 import { context, entries, polls } from "../use/index.ts";
 import * as utils from "../utils/index.ts";
+import Regulator from "../regulator/index.ts";
 
 /**
  * Determines the error reason based on what was thrown.
@@ -161,17 +162,27 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
   const snapshot = useSnapshot({ model });
   const unicast = React.useMemo(() => new EventEmitter(), []);
   const instance = React.useRef<object | null>(null);
+  const regulator = React.useRef<Regulator>(new Regulator());
   const reactives = React.useRef<Map<symbol, string | null>>(new Map());
   const bindings = entries.get(<object>new (<Actions<M, AC>>ActionClass)());
   const pollBindings = polls.get(<object>new (<Actions<M, AC>>ActionClass)());
 
   const getContext = React.useCallback(
-    (result: Result) => {
-      const controller = new AbortController();
+    (action: Action, result: Result) => {
+      const controller = regulator.current.controller(action);
 
       return <Context<M, AC>>{
+        model,
         signal: controller.signal,
         actions: {
+          regulator: {
+            abort: {
+              all: regulator.current.abort.all,
+              for: regulator.current.abort.for,
+              self: () => regulator.current.abort.for(action),
+            },
+            policy: regulator.current.policy,
+          },
           produce(f) {
             if (controller.signal.aborted) return;
             const process = state.current.mutate((draft) =>
@@ -202,13 +213,14 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
     instance.current = <object>actions;
 
     Object.getOwnPropertySymbols(actions).forEach((action) => {
-      const key = <keyof typeof actions>action;
-
       async function handler(payload: Payload) {
         const result = <Result>{ processes: new Set<Process>() };
         const task = Promise.withResolvers<void>();
         try {
-          await (<Function>actions[key])(getContext(result), payload);
+          await (<Function>actions[<keyof typeof actions>action])(
+            getContext(action, result),
+            payload,
+          );
         } catch (error) {
           const handled = Lifecycle.Error in <object>actions;
           const details = {

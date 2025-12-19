@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Operation } from "immertation";
 import { Process, Inspect } from "immertation";
+import Regulator from "../regulator/index.js";
 
 export const context = Symbol("chizu.action.context");
 
@@ -47,6 +48,29 @@ export enum Status {
   Play = "play",
   /** Polling is paused and will not execute until status returns to Play. */
   Pause = "pause",
+}
+
+/**
+ * Abort modes for controlling which actions to abort.
+ *
+ * @example
+ * ```ts
+ * // Abort only the current action instance (default)
+ * context.abort();
+ * context.abort(Abort.Self);
+ *
+ * // Abort all instances of a named action
+ * context.abort(Abort.Named, Actions.Increment);
+ *
+ * // Abort all actions globally
+ * context.abort(Abort.All);
+ * ```
+ */
+export enum Abort {
+  /** Abort all instances of a named action (local or distributed). */
+  Action = "action",
+  /** Abort all actions globally. */
+  Everything = "everything",
 }
 
 export type Pk<T> = undefined | symbol | T;
@@ -111,8 +135,26 @@ export type OperationFunction = <T>(value: T, process: Process) => T;
 export type Context<M extends Model, AC extends ActionsClass<any>> = {
   model: M;
   signal: AbortSignal;
+  /**
+   * Abort actions based on the specified mode.
+   *
+   * @param mode The abort mode (defaults to `Abort.Self` if not specified).
+   * @param action Required when mode is `Abort.Named` - the action to abort.
+   *
+   * @example
+   * ```ts
+   * context.abort();                            // Abort current action instance
+   * context.abort(Abort.Self);                  // Same as above
+   * context.abort(Abort.Named, Actions.Fetch);  // Abort all instances of Fetch
+   * context.abort(Abort.All);                   // Abort ALL actions globally
+   * ```
+   */
   actions: {
-    produce<F extends (context: { model: M; inspect: Inspect<M> }) => void>(
+    regulator: {
+      abort: Regulator["abort"] & { self(): void };
+      policy: Regulator["policy"];
+    };
+    produce<F extends (draft: { model: M; inspect: Inspect<M> }) => void>(
       ƒ: F & AssertSync<F>,
     ): M;
     dispatch<A extends AC[keyof AC] & Payload<any>>(
