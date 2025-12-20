@@ -1,3 +1,4 @@
+import { Reason } from "../error/types.ts";
 import { Action } from "../types/index.ts";
 import { Entries, Policies, Policy } from "./types.ts";
 
@@ -35,7 +36,7 @@ export default class Regulator {
 
     [...this.policies].forEach((policy) => {
       if (policy.action === action && policy.rule === Policy.Disallow) {
-        controller.abort();
+        controller.abort(Reason.AbortDisallowed);
         //  this.controllers.delete(controller);
       }
     });
@@ -54,7 +55,7 @@ export default class Regulator {
      */
     all: (): void => {
       [...this.controllers].forEach((entry) => {
-        entry.controller.abort();
+        entry.controller.abort(Reason.AbortDisallowed);
         this.controllers.delete(entry);
       });
     },
@@ -62,10 +63,10 @@ export default class Regulator {
      * Abort all controllers for a specific action and remove them from the set.
      * @param action - The action identifier (symbol or string)
      */
-    for: (action: Action): void => {
+    matching: (action: Action): void => {
       [...this.controllers].forEach((entry) => {
         if (entry.action === action) {
-          entry.controller.abort();
+          entry.controller.abort(Reason.AbortDisallowed);
           this.controllers.delete(entry);
         }
       });
@@ -80,21 +81,33 @@ export default class Regulator {
      * Allow one or more actions by updating their policy.
      * @param actions - One or more action identifiers (symbol or string)
      */
-    allow: (...actions: Action[]): void => {
-      actions.forEach((action) => {
+    allow: {
+      all: (...actions: Action[]): void => {
+        actions.forEach((action) => {
+          this.policies.delete({ rule: Policy.Disallow, action });
+          this.policies.add({ rule: Policy.Allow, action });
+        });
+      },
+      matching: (action: Action): void => {
         this.policies.delete({ rule: Policy.Disallow, action });
         this.policies.add({ rule: Policy.Allow, action });
-      });
+      },
     },
     /**
      * Disallow one or more actions by updating their policy.
      * @param actions - One or more action identifiers (symbol or string)
      */
-    disallow: (...actions: Action[]): void => {
-      actions.forEach((action) => {
+    disallow: {
+      all: (...actions: Action[]): void => {
+        actions.forEach((action) => {
+          this.policies.delete({ rule: Policy.Allow, action });
+          this.policies.add({ rule: Policy.Disallow, action });
+        });
+      },
+      matching: (action: Action): void => {
         this.policies.delete({ rule: Policy.Allow, action });
         this.policies.add({ rule: Policy.Disallow, action });
-      });
+      },
     },
   };
 }

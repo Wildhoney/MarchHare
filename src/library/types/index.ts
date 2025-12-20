@@ -135,6 +135,13 @@ export type OperationFunction = <T>(value: T, process: Process) => T;
 export type Context<M extends Model, AC extends ActionsClass<any>> = {
   model: M;
   signal: AbortSignal;
+  regulator: {
+    abort: Regulator["abort"] & { self(): void };
+    policy: {
+      allow: Regulator["policy"]["allow"] & { self(): void };
+      disallow: Regulator["policy"]["disallow"] & { self(): void };
+    };
+  };
   /**
    * Abort actions based on the specified mode.
    *
@@ -150,10 +157,6 @@ export type Context<M extends Model, AC extends ActionsClass<any>> = {
    * ```
    */
   actions: {
-    regulator: {
-      abort: Regulator["abort"] & { self(): void };
-      policy: Regulator["policy"];
-    };
     produce<F extends (draft: { model: M; inspect: Inspect<M> }) => void>(
       ƒ: F & AssertSync<F>,
     ): M;

@@ -174,15 +174,30 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
       return <Context<M, AC>>{
         model,
         signal: controller.signal,
-        actions: {
-          regulator: {
-            abort: {
-              all: regulator.current.abort.all,
-              for: regulator.current.abort.for,
-              self: () => regulator.current.abort.for(action),
-            },
-            policy: regulator.current.policy,
+        regulator: {
+          abort: {
+            all: regulator.current.abort.all,
+            matching: regulator.current.abort.matching,
+            self: () => regulator.current.abort.matching(action),
           },
+          policy: {
+            allow: {
+              all: regulator.current.policy.allow.all,
+              matching: regulator.current.policy.allow.matching,
+              self(action: Action) {
+                return regulator.current.policy.allow.matching(action);
+              },
+            },
+            disallow: {
+              all: regulator.current.policy.disallow.all,
+              matching: regulator.current.policy.disallow.matching,
+              self(action: Action) {
+                return regulator.current.policy.disallow.matching(action);
+              },
+            },
+          },
+        },
+        actions: {
           produce(f) {
             if (controller.signal.aborted) return;
             const process = state.current.mutate((draft) =>

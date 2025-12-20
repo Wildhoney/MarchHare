@@ -8,7 +8,7 @@ import {
 } from "./types.ts";
 import { Payload, Status, Model, ActionsClass } from "../types/index.ts";
 import { actionName, context, internals, entries, polls } from "./utils.ts";
-import { AbortError, TimeoutError } from "../error/types.ts";
+import { AbortError, Reason, TimeoutError } from "../error/types.ts";
 import { A, G } from "@mobily/ts-belt";
 
 export { context, entries, polls } from "./utils.ts";
@@ -30,7 +30,7 @@ export const use = {
         const ƒ = <Method>self[field.name];
 
         self[field.name] = async (args: Args) => {
-          internals.get(self)?.controller.abort();
+          internals.get(self)?.controller.abort(Reason.AbortSupplanted);
           internals.set(self, args[context]);
           return await ƒ.call(self, args);
         };

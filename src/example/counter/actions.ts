@@ -10,6 +10,8 @@ export function useCounterActions() {
   const incrementAction = useAction<Model, typeof Actions, "Increment">(
     async (context) => {
       context.actions.produce((draft) => {
+        context.signal;
+
         draft.model.count = context.actions.annotate(
           Operation.Update,
           draft.inspect.count.draft() + 1,

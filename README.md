@@ -21,6 +21,7 @@ Strongly typed React framework using generators and efficiently updated views al
 1. [Real-time applications](#real-time-applications)
 1. [Utility functions](#utility-functions)
 1. [Referential equality](#referential-equality)
+1. [Action regulator](#action-regulator)
 
 ## Benefits
 
@@ -212,7 +213,7 @@ export class Actions {
 }
 ```
 
-### Cross-platform error classes
+### Cross-platform
 
 Chizu provides `AbortError` and `TimeoutError` classes that work across all platforms including React Native (where `DOMException` is unavailable):
 
@@ -225,7 +226,7 @@ throw new AbortError("Operation cancelled");
 throw new TimeoutError("Request timed out");
 ```
 
-### Error handling philosophy
+### Philosophy
 
 Actions should ideally be self-contained and handle expected errors internally using patterns like [Option](https://mobily.github.io/ts-belt/api/option) or [Result](https://mobily.github.io/ts-belt/api/result) types to update the model accordingly. `Lifecycle.Error` is intended for timeouts, aborts, and uncaught catastrophic errors &ndash; not routine error handling.
 
@@ -646,3 +647,44 @@ function useSearchActions(props: Props) {
 ```
 
 `useSnapshot` creates a proxy object where property access always returns the latest value from a ref that updates on every render. Use it when you need to access props or external values after an await in async actions.
+
+## Action regulator
+
+The `Regulator` class is accessed via `context.actions.regulator` inside your action handlers. It provides fine-grained control over asynchronous actions by managing `AbortController` instances and action policies. You can programmatically allow or disallow actions, and abort running actions either globally or by type.
+
+### Usage
+
+```ts
+const fetchAction = useAction<Model, typeof Actions, "Fetch">(
+  async (context) => {
+    // Disallow a specific action
+    context.actions.regulator.policy.disallow(Actions.Fetch);
+
+    // When you try to start this action, its controller will be aborted immediately
+    const controller = context.actions.regulator.controller(Actions.Fetch);
+    console.log(controller.signal.aborted); // true
+
+    // Allow the action again
+    context.actions.regulator.policy.allow(Actions.Fetch);
+  },
+);
+```
+
+You can also abort all controllers or controllers for a specific action:
+
+```ts
+context.actions.regulator.abort.self();
+context.actions.regulator.abort.matching(Actions.Fetch);
+context.actions.regulator.abort.all();
+```
+
+### API
+
+- `add(action: Action, controller: AbortController): void` — Registers an AbortController for a given action.
+- `controller(action: Action): AbortController` — Creates and registers an AbortController for an action, aborting immediately if disallowed by policy.
+- `abort.all(): void` — Aborts all controllers and removes them.
+- `abort.for(action: Action): void` — Aborts controllers for a specific action and removes them.
+- `policy.allow(...actions: Action[]): void` — Allows one or more actions.
+- `policy.disallow(...actions: Action[]): void` — Disallows one or more actions.
+
+The `Regulator` class is useful for advanced scenarios where you need to centrally manage cancellation and permission of asynchronous actions, such as rate limiting, feature toggling, or global aborts.
