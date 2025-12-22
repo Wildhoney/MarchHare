@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Operation } from "immertation";
 import { Process, Inspect } from "immertation";
-import Regulator from "../regulator/index.js";
+import type Regulator from "../regulator/index.js";
+export type { Action } from "../regulator/types.ts";
 
 export const context = Symbol("chizu.action.context");
 
@@ -99,8 +100,6 @@ type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
   : never;
 
 export type Props = Record<string, unknown>;
-
-export type Action = symbol | string;
 
 export type ActionsClass<AC extends Record<string, Payload<any>>> = {
   new (): unknown;

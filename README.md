@@ -155,13 +155,13 @@ function App(): ReactElement {
     <Error
       handler={({ reason, error, action }) => {
         switch (reason) {
-          case Reason.Timeout:
+          case Reason.Timedout:
             console.warn(`Action "${action}" timed out:`, error.message);
             break;
-          case Reason.Aborted:
-            console.info(`Action "${action}" was aborted`);
+          case Reason.Supplanted:
+            console.info(`Action "${action}" was supplanted`);
             break;
-          case Reason.Error:
+          case Reason.Errored:
             console.error(`Action "${action}" failed:`, error.message);
             break;
         }
@@ -175,7 +175,7 @@ function App(): ReactElement {
 
 The `ErrorDetails` object contains:
 
-- **`reason`** &ndash; One of `Reason.Timeout` (action exceeded timeout set via `@use.timeout()`), `Reason.Aborted` (action was cancelled, e.g., by `@use.supplant()`), or `Reason.Error` (an error thrown in your action handler).
+- **`reason`** &ndash; One of `Reason.Timedout` (action exceeded timeout set via `@use.timeout()`), `Reason.Supplanted` (action was cancelled, e.g., by `@use.supplant()`), `Reason.Disallowed` (action was blocked by the regulator), or `Reason.Errored` (a generic error thrown in your action handler).
 - **`error`** &ndash; The `Error` object that was thrown.
 - **`action`** &ndash; The name of the action that caused the error (e.g., `"Increment"`).
 - **`handled`** &ndash; Whether the error was handled locally via `Lifecycle.Error`. Use this in the global `<Error>` handler to avoid duplicate handling.
@@ -330,7 +330,7 @@ import { use } from "chizu";
 
 ### `use.supplant()`
 
-Ensures only one instance of an action runs at a time. When a new action is dispatched, any previous running instance is automatically aborted. Use `context.signal` to cancel in-flight requests. When an action is aborted, the error handler receives `Reason.Aborted`:
+Ensures only one instance of an action runs at a time. When a new action is dispatched, any previous running instance is automatically aborted. Use `context.signal` to cancel in-flight requests. When an action is supplanted, the error handler receives `Reason.Supplanted`:
 
 ```ts
 const searchAction = useAction<Model, typeof Actions, "Search">(
@@ -409,7 +409,7 @@ class {
 
 ### `use.timeout(ms)`
 
-Aborts the action if it exceeds the specified duration. Triggers the abort signal via `context.signal`, allowing the action to clean up gracefully. Useful for preventing stuck states and enforcing response time limits. When a timeout occurs, the error handler receives `Reason.Timeout`:
+Aborts the action if it exceeds the specified duration. Triggers the abort signal via `context.signal`, allowing the action to clean up gracefully. Useful for preventing stuck states and enforcing response time limits. When a timeout occurs, the error handler receives `Reason.Timedout`:
 
 ```ts
 class {
@@ -658,14 +658,14 @@ The `Regulator` class is accessed via `context.actions.regulator` inside your ac
 const fetchAction = useAction<Model, typeof Actions, "Fetch">(
   async (context) => {
     // Disallow a specific action
-    context.actions.regulator.policy.disallow(Actions.Fetch);
+    context.actions.regulator.policy.disallow.matching(Actions.Fetch);
 
     // When you try to start this action, its controller will be aborted immediately
     const controller = context.actions.regulator.controller(Actions.Fetch);
     console.log(controller.signal.aborted); // true
 
     // Allow the action again
-    context.actions.regulator.policy.allow(Actions.Fetch);
+    context.actions.regulator.policy.allow.matching(Actions.Fetch);
   },
 );
 ```
@@ -673,7 +673,6 @@ const fetchAction = useAction<Model, typeof Actions, "Fetch">(
 You can also abort all controllers or controllers for a specific action:
 
 ```ts
-context.actions.regulator.abort.self();
 context.actions.regulator.abort.matching(Actions.Fetch);
 context.actions.regulator.abort.all();
 ```
@@ -683,8 +682,10 @@ context.actions.regulator.abort.all();
 - `add(action: Action, controller: AbortController): void` — Registers an AbortController for a given action.
 - `controller(action: Action): AbortController` — Creates and registers an AbortController for an action, aborting immediately if disallowed by policy.
 - `abort.all(): void` — Aborts all controllers and removes them.
-- `abort.for(action: Action): void` — Aborts controllers for a specific action and removes them.
-- `policy.allow(...actions: Action[]): void` — Allows one or more actions.
-- `policy.disallow(...actions: Action[]): void` — Disallows one or more actions.
+- `abort.matching(action: Action): void` — Aborts controllers for a specific action and removes them.
+- `policy.allow.all(...actions: Action[]): void` — Allows one or more actions.
+- `policy.allow.matching(action: Action): void` — Allows a specific action.
+- `policy.disallow.all(...actions: Action[]): void` — Disallows one or more actions.
+- `policy.disallow.matching(action: Action): void` — Disallows a specific action.
 
 The `Regulator` class is useful for advanced scenarios where you need to centrally manage cancellation and permission of asynchronous actions, such as rate limiting, feature toggling, or global aborts.

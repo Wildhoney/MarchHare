@@ -9,7 +9,7 @@ import {
 import { use, context, entries, polls } from "./index.ts";
 import { Payload, Status } from "../types/index.ts";
 import { Args } from "./types.ts";
-import { AbortError } from "../error/types.ts";
+import { AbortError, TimeoutError } from "../error/types.ts";
 
 /**
  * Creates a mock context object for testing action decorators.
@@ -778,36 +778,33 @@ describe("use.timeout()", () => {
     expect(result).toBe("success");
   });
 
-  it("should abort if action exceeds timeout", async () => {
+  it("should reject with TimeoutError and abort signal if action exceeds timeout", async () => {
     let signalAborted = false;
 
     class TestActions {
       @use.timeout(50)
       async action(args: Args): Promise<string> {
-        // Track when signal is aborted
         args.signal.addEventListener("abort", () => {
           signalAborted = true;
         });
-
-        // Wait longer than timeout
         await new Promise((resolve) => setTimeout(resolve, 100));
         return "success";
       }
     }
 
     const instance = new TestActions();
-    const promise = instance.action(createMockContext());
+    const resultPromise = instance
+      .action(createMockContext())
+      .catch((error) => {
+        expect(error).toBeInstanceOf(TimeoutError);
+        return "caught";
+      });
 
-    // Advance past the timeout
     await jest.advanceTimersByTimeAsync(60);
 
-    // The signal should have been aborted
+    const result = await resultPromise;
+    expect(result).toBe("caught");
     expect(signalAborted).toBe(true);
-
-    // Let the action complete (it returns success since we don't check abort in the action)
-    await jest.advanceTimersByTimeAsync(50);
-    const result = await promise;
-    expect(result).toBe("success");
   });
 
   it("should provide a combined signal that aborts on timeout", async () => {

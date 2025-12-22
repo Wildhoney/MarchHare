@@ -30,7 +30,7 @@ export const use = {
         const ƒ = <Method>self[field.name];
 
         self[field.name] = async (args: Args) => {
-          internals.get(self)?.controller.abort(Reason.AbortSupplanted);
+          internals.get(self)?.controller.abort(Reason.Supplanted);
           internals.set(self, args[context]);
           return await ƒ.call(self, args);
         };
@@ -478,35 +478,20 @@ export const use = {
         const ƒ = <Method>self[field.name];
 
         self[field.name] = async (args: Args) => {
-          const parent = args[context].controller;
-          const controller = new AbortController();
-          const state = {
-            expired: false,
-            timer: <ReturnType<typeof setTimeout> | null>null,
-          };
-
-          const onAbort = () => controller.abort();
-          parent.signal.addEventListener("abort", onAbort, { once: true });
-
-          state.timer = setTimeout(() => {
-            state.timer = null;
-            state.expired = true;
-            controller.abort();
-          }, ms);
+          const state = { timer: <ReturnType<typeof setTimeout> | null>null };
 
           try {
-            return await ƒ.call(self, <Args>{
-              ...args,
-              signal: controller.signal,
-              [context]: { controller },
-            });
-          } catch (error) {
-            if (error instanceof AbortError && state.expired)
-              throw new TimeoutError();
-            throw error;
+            return await Promise.race([
+              ƒ.call(self, args),
+              new Promise<never>((_, reject) => {
+                state.timer = setTimeout(() => {
+                  args[context].controller.abort(new TimeoutError());
+                  reject(new TimeoutError());
+                }, ms);
+              }),
+            ]);
           } finally {
             if (state.timer) clearTimeout(state.timer);
-            parent.signal.removeEventListener("abort", onAbort);
           }
         };
       });

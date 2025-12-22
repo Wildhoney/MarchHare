@@ -69,13 +69,13 @@ export default function App(): React.ReactElement {
           <Error
             handler={({ reason, error }) => {
               switch (reason) {
-                case Reason.Timeout:
+                case Reason.Timedout:
                   messageApi.warning(error.message);
                   break;
-                case Reason.Aborted:
+                case Reason.Supplanted:
                   messageApi.info(error.message);
                   break;
-                case Reason.Error:
+                case Reason.Errored:
                   messageApi.error(error.message);
                   break;
               }

@@ -5,12 +5,13 @@ import { ReactNode } from "react";
  */
 export enum Reason {
   /** Action exceeded its timeout limit (from `@use.timeout()`). */
-  AbortTimeout,
+  Timedout,
   /** Action was cancelled, e.g., by `@use.supplant()` aborting a previous run. */
-  AbortSupplanted,
-  AbortDisallowed,
-  /** An error thrown in the user's action handler. */
-  ActionError,
+  Supplanted,
+  /** Action was blocked by the regulator's `allow` function returning `false`. */
+  Disallowed,
+  /** A generic error thrown in the user's action handler (not timeout, supplant, or disallowed). */
+  Errored,
 }
 
 /**

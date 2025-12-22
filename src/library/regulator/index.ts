@@ -1,6 +1,5 @@
 import { Reason } from "../error/types.ts";
-import { Action } from "../types/index.ts";
-import { Entries, Policies, Policy } from "./types.ts";
+import { Action, Entries, Policies, Policy } from "./types.ts";
 
 /**
  * Manages AbortControllers and action policies for controlling asynchronous operations.
@@ -33,15 +32,12 @@ export default class Regulator {
    */
   public controller(action: Action): AbortController {
     const controller = new AbortController();
+    const disallowed = [...this.policies].some(
+      (policy) => policy.action === action && policy.rule === Policy.Disallow,
+    );
 
-    [...this.policies].forEach((policy) => {
-      if (policy.action === action && policy.rule === Policy.Disallow) {
-        controller.abort(Reason.AbortDisallowed);
-        //  this.controllers.delete(controller);
-      }
-    });
-
-    this.controllers.add({ action, controller });
+    if (disallowed) controller.abort(Reason.Disallowed);
+    else this.controllers.add({ action, controller });
 
     return controller;
   }
@@ -55,7 +51,7 @@ export default class Regulator {
      */
     all: (): void => {
       [...this.controllers].forEach((entry) => {
-        entry.controller.abort(Reason.AbortDisallowed);
+        entry.controller.abort(Reason.Disallowed);
         this.controllers.delete(entry);
       });
     },
@@ -66,7 +62,7 @@ export default class Regulator {
     matching: (action: Action): void => {
       [...this.controllers].forEach((entry) => {
         if (entry.action === action) {
-          entry.controller.abort(Reason.AbortDisallowed);
+          entry.controller.abort(Reason.Disallowed);
           this.controllers.delete(entry);
         }
       });
@@ -78,34 +74,61 @@ export default class Regulator {
    */
   policy = {
     /**
-     * Allow one or more actions by updating their policy.
-     * @param actions - One or more action identifiers (symbol or string)
+     * Remove a policy entry matching the given rule and action.
+     * @param rule - The policy rule to match
+     * @param action - The action identifier to match
+     */
+    remove: (rule: Policy, action: Action): void => {
+      for (const policy of this.policies) {
+        if (policy.rule === rule && policy.action === action) {
+          this.policies.delete(policy);
+          break;
+        }
+      }
+    },
+    /**
+     * Methods for allowing actions.
      */
     allow: {
+      /**
+       * Allow multiple actions by updating their policies.
+       * @param actions - One or more action identifiers (symbol or string)
+       */
       all: (...actions: Action[]): void => {
         actions.forEach((action) => {
-          this.policies.delete({ rule: Policy.Disallow, action });
+          this.policy.remove(Policy.Disallow, action);
           this.policies.add({ rule: Policy.Allow, action });
         });
       },
+      /**
+       * Allow a specific action by updating its policy.
+       * @param action - The action identifier (symbol or string)
+       */
       matching: (action: Action): void => {
-        this.policies.delete({ rule: Policy.Disallow, action });
+        this.policy.remove(Policy.Disallow, action);
         this.policies.add({ rule: Policy.Allow, action });
       },
     },
     /**
-     * Disallow one or more actions by updating their policy.
-     * @param actions - One or more action identifiers (symbol or string)
+     * Methods for disallowing actions.
      */
     disallow: {
+      /**
+       * Disallow multiple actions by updating their policies.
+       * @param actions - One or more action identifiers (symbol or string)
+       */
       all: (...actions: Action[]): void => {
         actions.forEach((action) => {
-          this.policies.delete({ rule: Policy.Allow, action });
+          this.policy.remove(Policy.Allow, action);
           this.policies.add({ rule: Policy.Disallow, action });
         });
       },
+      /**
+       * Disallow a specific action by updating its policy.
+       * @param action - The action identifier (symbol or string)
+       */
       matching: (action: Action): void => {
-        this.policies.delete({ rule: Policy.Allow, action });
+        this.policy.remove(Policy.Allow, action);
         this.policies.add({ rule: Policy.Disallow, action });
       },
     },

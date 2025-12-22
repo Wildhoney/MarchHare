@@ -33,10 +33,10 @@ import Regulator from "../regulator/index.ts";
  */
 export function getReason(error: unknown): Reason {
   if (error instanceof Error) {
-    if (error.name === "TimeoutError") return Reason.Timeout;
-    if (error.name === "AbortError") return Reason.Aborted;
+    if (error.name === "TimeoutError") return Reason.Timedout;
+    if (error.name === "AbortError") return Reason.Supplanted;
   }
-  return Reason.Error;
+  return Reason.Errored;
 }
 
 /**

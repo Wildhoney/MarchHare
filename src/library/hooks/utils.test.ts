@@ -59,32 +59,32 @@ describe("isGenerator()", () => {
 });
 
 describe("getReason()", () => {
-  it("should return Reason.Timeout for TimeoutError", () => {
+  it("should return Reason.Timedout for TimeoutError", () => {
     const error = new TimeoutError();
-    expect(getReason(error)).toBe(Reason.Timeout);
+    expect(getReason(error)).toBe(Reason.Timedout);
   });
 
-  it("should return Reason.Aborted for AbortError", () => {
+  it("should return Reason.Supplanted for AbortError", () => {
     const error = new AbortError();
-    expect(getReason(error)).toBe(Reason.Aborted);
+    expect(getReason(error)).toBe(Reason.Supplanted);
   });
 
-  it("should return Reason.Error for regular Error", () => {
+  it("should return Reason.Errored for regular Error", () => {
     const error = new Error("Something went wrong");
-    expect(getReason(error)).toBe(Reason.Error);
+    expect(getReason(error)).toBe(Reason.Errored);
   });
 
-  it("should return Reason.Error for thrown strings", () => {
-    expect(getReason("oops")).toBe(Reason.Error);
+  it("should return Reason.Errored for thrown strings", () => {
+    expect(getReason("oops")).toBe(Reason.Errored);
   });
 
-  it("should return Reason.Error for thrown objects", () => {
-    expect(getReason({ message: "error" })).toBe(Reason.Error);
+  it("should return Reason.Errored for thrown objects", () => {
+    expect(getReason({ message: "error" })).toBe(Reason.Errored);
   });
 
-  it("should return Reason.Error for other error types", () => {
+  it("should return Reason.Errored for other error types", () => {
     const error = new TypeError("Not a function");
-    expect(getReason(error)).toBe(Reason.Error);
+    expect(getReason(error)).toBe(Reason.Errored);
   });
 });
 

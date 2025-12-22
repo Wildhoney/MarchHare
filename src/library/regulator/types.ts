@@ -1,4 +1,7 @@
-import { Action } from "../types/index.ts";
+/**
+ * An action identifier - either a symbol (preferred) or string.
+ */
+export type Action = symbol | string;
 
 /**
  * Represents an entry associating an action with its AbortController.

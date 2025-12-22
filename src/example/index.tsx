@@ -49,13 +49,13 @@ function DecoratorTestsWithErrorHandler() {
     <Error
       handler={({ reason, error, action }) => {
         switch (reason) {
-          case Reason.Timeout:
+          case Reason.Timedout:
             messageApi.warning(`${action}: ${error.message}`);
             break;
-          case Reason.Aborted:
+          case Reason.Supplanted:
             messageApi.info(`${action}: ${error.message}`);
             break;
-          case Reason.Error:
+          case Reason.Errored:
             messageApi.error(`${action}: ${error.message}`);
             break;
         }

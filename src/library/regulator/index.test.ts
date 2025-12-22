@@ -16,17 +16,17 @@ describe("Regulator", () => {
 
   it("should abort controller if action is disallowed", () => {
     const regulator = new Regulator();
-    regulator.policy.disallow(actionA);
+    regulator.policy.disallow.matching(actionA);
     const controller = regulator.controller(actionA);
     expect(controller.signal.aborted).toBe(true);
   });
 
   it("should allow action after being disallowed", () => {
     const regulator = new Regulator();
-    regulator.policy.disallow(actionA);
+    regulator.policy.disallow.matching(actionA);
     let controller = regulator.controller(actionA);
     expect(controller.signal.aborted).toBe(true);
-    regulator.policy.allow(actionA);
+    regulator.policy.allow.matching(actionA);
     controller = regulator.controller(actionA);
     expect(controller.signal.aborted).toBe(false);
   });
