@@ -5379,10 +5379,10 @@ immer@^11.0.1:
   resolved "https://registry.yarnpkg.com/immer/-/immer-11.0.1.tgz#2191adadc17afc94553bfb7a4c0ca95e55ec2489"
   integrity sha512-naDCyggtcBWANtIrjQEajhhBEuL9b0Zg4zmlWK2CzS6xCWSE39/vvf4LqnMjUAWHBhot4m9MHCM/Z+mfWhUkiA==
 
-immertation@^0.1.19:
-  version "0.1.19"
-  resolved "https://registry.yarnpkg.com/immertation/-/immertation-0.1.19.tgz#0d419b3646aa16551a8b7a5a93cdb46fd05bc4b2"
-  integrity sha512-+coMqqLQ1BXSNLz1gdPgFkPYl9QE8rpgWEfBpjAKgk1v+yKwXmFVttuHmvbxDGbTqr/9Mwfq/7+E8TsVJrQdXQ==
+immertation@^0.1.21:
+  version "0.1.21"
+  resolved "https://registry.yarnpkg.com/immertation/-/immertation-0.1.21.tgz#b7993795b7a2a23aa3ad7d79be8bfe96e4a6f6b3"
+  integrity sha512-feplI76lEtL2eU+5e89ETzKL7RDfBsa69Dd+1zTLOwUPhzCvrBgB52dUdT4XjmAleqkBEpzHaNEIUOeBRKXlEA==
   dependencies:
     nanoid "^5.1.6"
 

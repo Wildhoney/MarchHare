@@ -158,7 +158,14 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
   const broadcast = useBroadcast();
   const handleError = useError();
   const [model, setModel] = React.useState<M>(initialModel);
-  const state = React.useRef<State<M>>(new State<M>(initialModel));
+  const hydration = React.useRef<Process | null>(null);
+  const state = React.useRef<State<M>>(
+    (() => {
+      const state = new State<M>();
+      hydration.current = state.hydrate(initialModel);
+      return state;
+    })(),
+  );
   const snapshot = useSnapshot({ model });
   const unicast = React.useMemo(() => new EventEmitter(), []);
   const instance = React.useRef<object | null>(null);
@@ -200,11 +207,15 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
         actions: {
           produce(f) {
             if (controller.signal.aborted) return;
-            const process = state.current.mutate((draft) =>
+            const process = state.current.produce((draft) =>
               f({ model: draft, inspect: state.current.inspect }),
             );
             setModel(state.current.model);
             result.processes.add(process);
+            if (hydration.current) {
+              result.processes.add(hydration.current);
+              hydration.current = null;
+            }
           },
           dispatch(...[action, payload]: [action: any, payload?: any]) {
             if (controller.signal.aborted) return;
