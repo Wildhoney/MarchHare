@@ -56,12 +56,12 @@ export default class Regulator {
       });
     },
     /**
-     * Abort all controllers for a specific action and remove them from the set.
-     * @param action - The action identifier (symbol or string)
+     * Abort controllers for specific actions and remove them from the set.
+     * @param actions - One or more action identifiers (symbol or string)
      */
-    matching: (action: Action): void => {
+    matching: (...actions: Action[]): void => {
       [...this.controllers].forEach((entry) => {
-        if (entry.action === action) {
+        if (actions.includes(entry.action)) {
           entry.controller.abort(Reason.Disallowed);
           this.controllers.delete(entry);
         }
@@ -101,12 +101,14 @@ export default class Regulator {
         });
       },
       /**
-       * Allow a specific action by updating its policy.
-       * @param action - The action identifier (symbol or string)
+       * Allow specific actions by updating their policies.
+       * @param actions - One or more action identifiers (symbol or string)
        */
-      matching: (action: Action): void => {
-        this.policy.remove(Policy.Disallow, action);
-        this.policies.add({ rule: Policy.Allow, action });
+      matching: (...actions: Action[]): void => {
+        actions.forEach((action) => {
+          this.policy.remove(Policy.Disallow, action);
+          this.policies.add({ rule: Policy.Allow, action });
+        });
       },
     },
     /**
@@ -124,12 +126,14 @@ export default class Regulator {
         });
       },
       /**
-       * Disallow a specific action by updating its policy.
-       * @param action - The action identifier (symbol or string)
+       * Disallow specific actions by updating their policies.
+       * @param actions - One or more action identifiers (symbol or string)
        */
-      matching: (action: Action): void => {
-        this.policy.remove(Policy.Allow, action);
-        this.policies.add({ rule: Policy.Disallow, action });
+      matching: (...actions: Action[]): void => {
+        actions.forEach((action) => {
+          this.policy.remove(Policy.Allow, action);
+          this.policies.add({ rule: Policy.Disallow, action });
+        });
       },
     },
   };

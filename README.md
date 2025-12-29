@@ -657,20 +657,29 @@ The `Regulator` class is accessed via `context.actions.regulator` inside your ac
 ```ts
 const fetchAction = useAction<Model, typeof Actions, "Fetch">(
   async (context) => {
-    // Disallow a specific action
-    context.actions.regulator.policy.disallow.matching(Actions.Fetch);
+    // Disallow future dispatches of these actions
+    context.actions.regulator.policy.disallow.matching(
+      Actions.Fetch,
+      Actions.Save,
+    );
 
-    // When you try to start this action, its controller will be aborted immediately
-    const controller = context.actions.regulator.controller(Actions.Fetch);
-    console.log(controller.signal.aborted); // true
+    // Future dispatches via useAction will be aborted immediately
+    // and the error handler will receive Reason.Disallowed
+  },
+);
 
-    // Allow the action again
-    context.actions.regulator.policy.allow.matching(Actions.Fetch);
+const resetAction = useAction<Model, typeof Actions, "Reset">(
+  async (context) => {
+    // Allow the actions again
+    context.actions.regulator.policy.allow.matching(
+      Actions.Fetch,
+      Actions.Save,
+    );
   },
 );
 ```
 
-You can also abort all controllers or controllers for a specific action:
+You can also abort running actions:
 
 ```ts
 context.actions.regulator.abort.matching(Actions.Fetch);
@@ -682,10 +691,10 @@ context.actions.regulator.abort.all();
 - `add(action: Action, controller: AbortController): void` — Registers an AbortController for a given action.
 - `controller(action: Action): AbortController` — Creates and registers an AbortController for an action, aborting immediately if disallowed by policy.
 - `abort.all(): void` — Aborts all controllers and removes them.
-- `abort.matching(action: Action): void` — Aborts controllers for a specific action and removes them.
+- `abort.matching(...actions: Action[]): void` — Aborts controllers for specific actions and removes them.
 - `policy.allow.all(...actions: Action[]): void` — Allows one or more actions.
-- `policy.allow.matching(action: Action): void` — Allows a specific action.
+- `policy.allow.matching(...actions: Action[]): void` — Allows specific actions.
 - `policy.disallow.all(...actions: Action[]): void` — Disallows one or more actions.
-- `policy.disallow.matching(action: Action): void` — Disallows a specific action.
+- `policy.disallow.matching(...actions: Action[]): void` — Disallows specific actions.
 
 The `Regulator` class is useful for advanced scenarios where you need to centrally manage cancellation and permission of asynchronous actions, such as rate limiting, feature toggling, or global aborts.
