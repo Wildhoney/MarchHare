@@ -4,16 +4,15 @@ All notable changes to this project will be documented in this file. See [commit
 
 ## [0.2.41](https://github.com/Wildhoney/Chizu/compare/v0.2.40...v0.2.41) (2025-12-29)
 
-
 ### Features
 
-* added <Visitor /> example for real-time data ([061534f](https://github.com/Wildhoney/Chizu/commit/061534f98851fc777ea4cf3ffc069cfae6994b72))
-* changed the interface of the regulator object ([ee1a2b4](https://github.com/Wildhoney/Chizu/commit/ee1a2b4f4356aac553d72ad253488cfeef7c9564))
-* regulator class ([2c84e3a](https://github.com/Wildhoney/Chizu/commit/2c84e3a3f884a52837f3a7ce069cab04fdda594b))
-* support variadic arguments in regulator matching methods ([9e9351a](https://github.com/Wildhoney/Chizu/commit/9e9351aeea950f7ce2e043d1b100c189e01715d0))
-* update Immertation to 0.1.21 and set yarn as package manager ([517fa74](https://github.com/Wildhoney/Chizu/commit/517fa74e6da8ec4bdcc5cde09f75265e507a5572))
-* updated inteface for the regulator ([6fd5fd3](https://github.com/Wildhoney/Chizu/commit/6fd5fd3ff7369d5c65c88237e94d46178636bfa0))
-* updated the api for the reactive() decorator ([537f17b](https://github.com/Wildhoney/Chizu/commit/537f17b911705080ad2559f6a747694b5aec5857))
+- added <Visitor /> example for real-time data ([061534f](https://github.com/Wildhoney/Chizu/commit/061534f98851fc777ea4cf3ffc069cfae6994b72))
+- changed the interface of the regulator object ([ee1a2b4](https://github.com/Wildhoney/Chizu/commit/ee1a2b4f4356aac553d72ad253488cfeef7c9564))
+- regulator class ([2c84e3a](https://github.com/Wildhoney/Chizu/commit/2c84e3a3f884a52837f3a7ce069cab04fdda594b))
+- support variadic arguments in regulator matching methods ([9e9351a](https://github.com/Wildhoney/Chizu/commit/9e9351aeea950f7ce2e043d1b100c189e01715d0))
+- update Immertation to 0.1.21 and set yarn as package manager ([517fa74](https://github.com/Wildhoney/Chizu/commit/517fa74e6da8ec4bdcc5cde09f75265e507a5572))
+- updated inteface for the regulator ([6fd5fd3](https://github.com/Wildhoney/Chizu/commit/6fd5fd3ff7369d5c65c88237e94d46178636bfa0))
+- updated the api for the reactive() decorator ([537f17b](https://github.com/Wildhoney/Chizu/commit/537f17b911705080ad2559f6a747694b5aec5857))
 
 ## [0.2.40](https://github.com/Wildhoney/Chizu/compare/v0.2.39...v0.2.40) (2025-12-18)
 
