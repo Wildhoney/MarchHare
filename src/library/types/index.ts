@@ -1,8 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Operation } from "immertation";
 import { Process, Inspect } from "immertation";
 import type Regulator from "../regulator/index.js";
-export type { Action } from "../regulator/types.ts";
+import type { Action } from "../regulator/types.ts";
+export type { Action };
 
 export const context = Symbol("chizu.action.context");
 
@@ -86,28 +86,30 @@ export type Payload<T = unknown> = symbol & { [PayloadKey]: T };
 
 type PayloadType<A> = A extends Payload<infer P> ? P : never;
 
-type IsAsync<F> = F extends (...args: any[]) => Promise<any> ? true : false;
+type IsAsync<F> = F extends (...args: unknown[]) => Promise<unknown>
+  ? true
+  : false;
 
 type AssertSync<F> =
   IsAsync<F> extends true
     ? "Error: async functions are not allowed in produce"
     : F;
 
-type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
-  k: infer I,
-) => void
+type UnionToIntersection<U> = (
+  U extends unknown ? (k: U) => void : never
+) extends (k: infer I) => void
   ? I
   : never;
 
 export type Props = Record<string, unknown>;
 
-export type ActionsClass<AC extends Record<string, Payload<any>>> = {
+export type ActionsClass<AC = object> = {
   new (): unknown;
 } & AC;
 
 export type ActionInstance<
   M extends Model,
-  AC extends ActionsClass<any>,
+  AC extends ActionsClass,
 > = UnionToIntersection<
   AC[keyof AC] extends infer P
     ? P extends symbol
@@ -131,7 +133,7 @@ export type Result = {
 
 export type OperationFunction = <T>(value: T, process: Process) => T;
 
-export type Context<M extends Model, AC extends ActionsClass<any>> = {
+export type Context<M extends Model, AC extends ActionsClass> = {
   model: M;
   signal: AbortSignal;
   regulator: {
@@ -159,7 +161,7 @@ export type Context<M extends Model, AC extends ActionsClass<any>> = {
     produce<F extends (draft: { model: M; inspect: Inspect<M> }) => void>(
       ƒ: F & AssertSync<F>,
     ): M;
-    dispatch<A extends AC[keyof AC] & Payload<any>>(
+    dispatch<A extends AC[keyof AC] & Payload<unknown>>(
       ...args: [PayloadType<A>] extends [never] ? [A] : [A, PayloadType<A>]
     ): void;
     annotate<T>(operation: Operation, value: T): T;
@@ -171,15 +173,13 @@ export type Context<M extends Model, AC extends ActionsClass<any>> = {
 
 export type Actions<
   M extends Model,
-  AC extends ActionsClass<any>,
+  AC extends ActionsClass,
 > = new () => ActionInstance<M, AC>;
 
-export type UseActions<M extends Model, AC extends ActionsClass<any>> = [
+export type UseActions<M extends Model, _AC extends ActionsClass> = [
   M,
   {
-    dispatch<A extends AC[keyof AC] & Payload<any>>(
-      ...args: [PayloadType<A>] extends [never] ? [A] : [A, PayloadType<A>]
-    ): void;
+    dispatch(action: Action, payload?: Payload): void;
     inspect: Inspect<M>;
   },
 ];

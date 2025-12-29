@@ -1,8 +1,10 @@
-/* eslint-disable @typescript-eslint/no-unsafe-function-type */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import * as React from "react";
-import { G } from "@mobily/ts-belt";
-import { withGetters } from "./utils.ts";
+import {
+  withGetters,
+  useReactives,
+  useLifecycle,
+  usePollings,
+} from "./utils.ts";
 import {
   Context,
   Lifecycle,
@@ -14,15 +16,13 @@ import {
   Action,
   UseActions,
   Result,
-  Status,
 } from "../types/index.ts";
 import EventEmitter from "eventemitter3";
 import { useBroadcast } from "../broadcast/index.tsx";
 import { isDistributedAction, getActionName } from "../action/index.ts";
 import { useError, Reason } from "../error/index.tsx";
 import { State, Operation, Process } from "immertation";
-import { context, entries, polls } from "../use/index.ts";
-import * as utils from "../utils/index.ts";
+import { context } from "../use/index.ts";
 import Regulator from "../regulator/index.ts";
 
 /**
@@ -63,7 +63,7 @@ export function normaliseError(error: unknown): Error {
  */
 export function useAction<
   M extends Model,
-  AC extends ActionsClass<any>,
+  AC extends ActionsClass,
   K extends Exclude<keyof AC, "prototype"> | never = never,
 >(
   handler: (
@@ -89,9 +89,7 @@ export function useAction<
         handler.constructor.name === "AsyncGeneratorFunction";
 
       if (isGenerator) {
-        const generator = handler(context, payload) as
-          | Generator
-          | AsyncGenerator;
+        const generator = <Generator | AsyncGenerator>handler(context, payload);
 
         for await (const _ of generator) void 0;
       } else {
@@ -151,7 +149,7 @@ export function useAction<
  * }
  * ```
  */
-export function useActions<M extends Model, AC extends ActionsClass<any>>(
+export function useActions<M extends Model, AC extends ActionsClass>(
   initialModel: M,
   ActionClass: Actions<M, AC> | (new () => unknown),
 ): UseActions<M, AC> {
@@ -166,14 +164,28 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
       return state;
     })(),
   );
-  const snapshot = useSnapshot({ model });
+  const snapshot = useSnapshot({ model, inspect: state.current.inspect });
   const unicast = React.useMemo(() => new EventEmitter(), []);
-  const instance = React.useRef<object | null>(null);
+  const actions = React.useMemo(
+    () => new (<Actions<M, AC>>ActionClass)(),
+    [ActionClass],
+  );
   const regulator = React.useRef<Regulator>(new Regulator());
-  const reactives = React.useRef<Map<symbol, string | null>>(new Map());
-  const bindings = entries.get(<object>new (<Actions<M, AC>>ActionClass)());
-  const pollBindings = polls.get(<object>new (<Actions<M, AC>>ActionClass)());
+  const checksums = React.useRef<Map<symbol, string | null>>(new Map());
 
+  /**
+   * Creates the context object passed to action handlers during dispatch.
+   *
+   * The context provides action handlers with access to:
+   * - **model**: Current immutable model state
+   * - **signal**: AbortSignal for cooperative cancellation
+   * - **regulator**: Methods to abort actions and control execution policies
+   * - **actions**: API for producing state changes, dispatching other actions, and annotating values
+   *
+   * @param action The action symbol being dispatched.
+   * @param result Container for tracking Immertation processes created during execution.
+   * @returns A fully-typed Context object for the action handler.
+   */
   const getContext = React.useCallback(
     (action: Action, result: Result) => {
       const controller = regulator.current.controller(action);
@@ -217,7 +229,7 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
               hydration.current = null;
             }
           },
-          dispatch(...[action, payload]: [action: any, payload?: any]) {
+          dispatch(...[action, payload]: [action: Action, payload?: Payload]) {
             if (controller.signal.aborted) return;
             if (isDistributedAction(action)) broadcast.emit(action, payload);
             else unicast.emit(action, payload);
@@ -235,18 +247,18 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
   );
 
   React.useLayoutEffect(() => {
-    const actions = new (<Actions<M, AC>>ActionClass)();
-    instance.current = <object>actions;
+    type ActionHandler = (
+      context: Context<M, AC>,
+      payload: Payload,
+    ) => void | Promise<void>;
 
     Object.getOwnPropertySymbols(actions).forEach((action) => {
       async function handler(payload: Payload) {
         const result = <Result>{ processes: new Set<Process>() };
         const task = Promise.withResolvers<void>();
         try {
-          await (<Function>actions[<keyof typeof actions>action])(
-            getContext(action, result),
-            payload,
-          );
+          const handler = <ActionHandler>actions[<keyof typeof actions>action];
+          await handler(getContext(action, result), payload);
         } catch (error) {
           const handled = Lifecycle.Error in <object>actions;
           const details = {
@@ -270,66 +282,11 @@ export function useActions<M extends Model, AC extends ActionsClass<any>>(
     });
   }, [unicast]);
 
-  const run = React.useEffectEvent(() => {
-    bindings?.forEach((entry) => {
-      const context = { model, inspect: state.current.inspect };
-      const dependencies = entry.getDependencies(context);
-      const checksum = utils.checksum(dependencies);
-      if (G.isNullable(checksum)) return;
-      const previous = reactives.current.get(entry.action) ?? null;
-      if (checksum === previous) return;
-      reactives.current.set(entry.action, checksum);
-      const payload = entry.getPayload?.(context);
-      unicast.emit(entry.action, payload);
-    });
-  });
+  useReactives({ actions: <object>actions, model, state, checksums, unicast });
 
-  React.useEffect(() => {
-    if (G.isNullable(instance.current)) return;
-    run();
-  });
+  useLifecycle(unicast);
 
-  React.useLayoutEffect(() => {
-    unicast.emit(Lifecycle.Mount);
-    return () => void unicast.emit(Lifecycle.Unmount);
-  }, []);
-
-  React.useEffect(() => {
-    unicast.emit(Lifecycle.Node);
-  }, []);
-
-  // Set up polling intervals
-  // Note: We use refs to access the latest model and inspect in the interval callback
-  // to avoid recreating intervals on every model change
-  const modelRef = React.useRef(model);
-  const inspectRef = React.useRef(state.current.inspect);
-  React.useLayoutEffect(() => {
-    modelRef.current = model;
-    inspectRef.current = state.current.inspect;
-  }, [model]);
-
-  React.useEffect(() => {
-    if (!pollBindings) return;
-
-    const intervals: ReturnType<typeof setInterval>[] = [];
-
-    pollBindings.forEach((entry) => {
-      const intervalId = setInterval(() => {
-        const context = {
-          model: modelRef.current,
-          inspect: inspectRef.current,
-        };
-        if (entry.getStatus(context) === Status.Pause) return;
-        const payload = entry.getPayload?.(context);
-        unicast.emit(entry.action, payload);
-      }, entry.interval);
-      intervals.push(intervalId);
-    });
-
-    return () => {
-      intervals.forEach((id) => clearInterval(id));
-    };
-  }, [unicast, pollBindings]);
+  usePollings({ actions: <object>actions, snapshot, unicast });
 
   return React.useMemo(
     () => [

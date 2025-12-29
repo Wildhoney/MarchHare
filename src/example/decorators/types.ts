@@ -6,23 +6,12 @@ export type Model = {
   attempts: number;
 };
 
-export const Actions = {
-  // Supplant tests
-  SupplantAction: createAction<void>("SupplantAction"),
-
-  // Debounce tests
-  DebounceAction: createAction<void>("DebounceAction"),
-
-  // Throttle tests
-  ThrottleAction: createAction<void>("ThrottleAction"),
-
-  // Retry tests
-  RetryAction: createAction<void>("RetryAction"),
-  ResetRetry: createAction<void>("ResetRetry"),
-
-  // Timeout tests
-  TimeoutAction: createAction<void>("TimeoutAction"),
-
-  // Clear log
-  ClearLog: createAction<void>("ClearLog"),
-};
+export class Actions {
+  static SupplantAction = createAction<void>("SupplantAction");
+  static DebounceAction = createAction<void>("DebounceAction");
+  static ThrottleAction = createAction<void>("ThrottleAction");
+  static RetryAction = createAction<void>("RetryAction");
+  static ResetRetry = createAction<void>("ResetRetry");
+  static TimeoutAction = createAction<void>("TimeoutAction");
+  static ClearLog = createAction<void>("ClearLog");
+}

@@ -1,5 +1,7 @@
 import { describe, expect, it, jest } from "@jest/globals";
+import { Inspect } from "immertation";
 import { pk, sleep, set, checksum, Σ } from "./index.ts";
+import { ActionsClass, Context, Payload } from "../types/index.ts";
 
 describe("pk()", () => {
   it("should generate a unique symbol when called without arguments", () => {
@@ -37,17 +39,21 @@ describe("sleep()", () => {
 
 describe("set()", () => {
   it("should create a setter action for a property", () => {
-    const setter = set("name");
-    const model = { name: "initial" };
-    const context = {
+    type TestModel = { name: string };
+    const setter = set<TestModel, ActionsClass>("name");
+    const model: TestModel = { name: "initial" };
+    const context: Pick<Context<TestModel, ActionsClass>, "actions"> = {
       actions: {
-        produce: (
-          fn: (ctx: { model: typeof model; inspect: unknown }) => void,
-        ) => fn({ model, inspect: {} }),
+        produce: (fn) => {
+          fn({ model, inspect: <Inspect<TestModel>>{} });
+          return model;
+        },
+        dispatch: () => {},
+        annotate: <T>(_, value: T) => value,
       },
     };
 
-    setter(context as never, "updated" as never);
+    setter(<Context<TestModel, ActionsClass>>context, <Payload>"updated");
 
     expect(model.name).toBe("updated");
   });

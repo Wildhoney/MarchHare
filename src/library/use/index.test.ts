@@ -6,7 +6,7 @@ import {
   beforeEach,
   afterEach,
 } from "@jest/globals";
-import { use, context, entries, polls } from "./index.ts";
+import { use, context, reactives, polls } from "./index.ts";
 import { Payload, Status } from "../types/index.ts";
 import { Args } from "./types.ts";
 import { AbortError, TimeoutError } from "../error/types.ts";
@@ -16,7 +16,7 @@ import { AbortError, TimeoutError } from "../error/types.ts";
  */
 function createMockContext(overrides: Partial<Args> = {}): Args {
   const controller = new AbortController();
-  return {
+  return <Args>{
     model: {},
     signal: controller.signal,
     actions: {
@@ -30,7 +30,7 @@ function createMockContext(overrides: Partial<Args> = {}): Args {
     },
     [context]: { controller },
     ...overrides,
-  } as Args;
+  };
 }
 
 /**
@@ -113,9 +113,9 @@ describe("use.supplant()", () => {
 describe("use.reactive()", () => {
   // Helper to create a typed action symbol for tests
   const createTestAction = <T>(): Payload<T> =>
-    Symbol("test.action") as Payload<T>;
+    <Payload<T>>Symbol("test.action");
 
-  it("should register dependencies in the entries WeakMap", () => {
+  it("should register dependencies in the reactives WeakMap", () => {
     const TestAction = createTestAction<never>();
     const getDeps = () => ["test", 42, true];
 
@@ -127,7 +127,7 @@ describe("use.reactive()", () => {
     }
 
     const instance = new TestActions();
-    const registeredEntries = entries.get(instance);
+    const registeredEntries = reactives.get(instance);
 
     expect(registeredEntries).toBeDefined();
     expect(registeredEntries?.size).toBe(1);
@@ -155,7 +155,7 @@ describe("use.reactive()", () => {
     }
 
     const instance = new TestActions();
-    const registeredEntries = entries.get(instance);
+    const registeredEntries = reactives.get(instance);
 
     expect(registeredEntries?.size).toBe(2);
 
@@ -177,7 +177,7 @@ describe("use.reactive()", () => {
     }
 
     const instance = new TestActions();
-    const registeredEntries = entries.get(instance);
+    const registeredEntries = reactives.get(instance);
     const [entry] = [...(registeredEntries ?? [])];
     const ctx = { model: {}, inspect: {} };
 
@@ -205,7 +205,7 @@ describe("use.reactive()", () => {
     }
 
     const instance = new TestActions();
-    const registeredEntries = entries.get(instance);
+    const registeredEntries = reactives.get(instance);
     const [entry] = [...(registeredEntries ?? [])];
 
     // Call getDependencies with context
@@ -234,7 +234,7 @@ describe("use.reactive()", () => {
     }
 
     const instance = new TestActions();
-    const registeredEntries = entries.get(instance);
+    const registeredEntries = reactives.get(instance);
     const [entry] = [...(registeredEntries ?? [])];
 
     // Call getPayload with context
@@ -261,7 +261,7 @@ describe("use.reactive()", () => {
     }
 
     const instance = new TestActions();
-    const registeredEntries = entries.get(instance);
+    const registeredEntries = reactives.get(instance);
     const [entry] = [...(registeredEntries ?? [])];
 
     // Call getDependencies with context
@@ -292,7 +292,7 @@ describe("use.debug()", () => {
     jest.restoreAllMocks();
   });
 
-  it("should log action start and completion", async () => {
+  it("should skip logging during tests", async () => {
     class TestActions {
       @use.debug()
       async myAction(_args: Args) {
@@ -303,20 +303,19 @@ describe("use.debug()", () => {
     const instance = new TestActions();
     await instance.myAction(createMockContext());
 
-    expect(consoleGroupSpy).toHaveBeenCalledWith("🔧 Action: myAction");
-    expect(consoleLogSpy).toHaveBeenCalledWith(
-      expect.stringContaining("⏱️  Started at:"),
-      expect.any(String),
-    );
-    expect(consoleGroupEndSpy).toHaveBeenCalled();
+    expect(consoleGroupSpy).not.toHaveBeenCalled();
+    expect(consoleLogSpy).not.toHaveBeenCalled();
+    expect(consoleGroupEndSpy).not.toHaveBeenCalled();
   });
 
-  it("should track produce calls", async () => {
+  it("should still track produce calls without logging", async () => {
+    const produceCalls: number[] = [];
+
     class TestActions {
       @use.debug()
       async myAction(args: Args) {
-        args.actions.produce(() => {});
-        args.actions.produce(() => {});
+        args.actions.produce(() => produceCalls.push(1));
+        args.actions.produce(() => produceCalls.push(2));
         return "done";
       }
     }
@@ -324,19 +323,11 @@ describe("use.debug()", () => {
     const instance = new TestActions();
     await instance.myAction(createMockContext());
 
-    // Should log produce timing for each call
-    expect(consoleLogSpy).toHaveBeenCalledWith(
-      expect.stringMatching(/📝 produce #1:/),
-    );
-    expect(consoleLogSpy).toHaveBeenCalledWith(
-      expect.stringMatching(/📝 produce #2:/),
-    );
-    expect(consoleLogSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Total produce calls: 2"),
-    );
+    expect(produceCalls).toEqual([1, 2]);
+    expect(consoleLogSpy).not.toHaveBeenCalled();
   });
 
-  it("should log errors when action fails", async () => {
+  it("should still throw errors without logging", async () => {
     const error = new Error("Test error");
 
     class TestActions {
@@ -352,14 +343,8 @@ describe("use.debug()", () => {
       "Test error",
     );
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      "❌ Error in failingAction:",
-      error,
-    );
-    expect(consoleLogSpy).toHaveBeenCalledWith(
-      expect.stringMatching(/Failed after:/),
-    );
-    expect(consoleGroupEndSpy).toHaveBeenCalled();
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+    expect(consoleGroupEndSpy).not.toHaveBeenCalled();
   });
 
   it("should return the action result", async () => {
@@ -918,7 +903,7 @@ describe("decorator combinations", () => {
 describe("edge cases", () => {
   // Helper to create a typed action symbol for tests
   const createTestAction = <T>(): Payload<T> =>
-    Symbol("test.action") as Payload<T>;
+    <Payload<T>>Symbol("test.action");
 
   it("should handle symbol method names in reactive", () => {
     const methodSymbol = createTestAction<never>();
@@ -932,7 +917,7 @@ describe("edge cases", () => {
     }
 
     const instance = new TestActions();
-    const registeredEntries = entries.get(instance);
+    const registeredEntries = reactives.get(instance);
 
     expect(registeredEntries).toBeDefined();
     const [entry] = [...(registeredEntries ?? [])];
@@ -990,7 +975,7 @@ describe("edge cases", () => {
 
     const instance = new TestActions();
     const ctx = createMockContext();
-    (ctx.actions.produce as jest.Mock).mockImplementation((fn) => {
+    (<jest.Mock>ctx.actions.produce).mockImplementation((fn) => {
       fn({});
       throw produceError;
     });
@@ -1098,8 +1083,8 @@ describe("@use.poll()", () => {
     jest.useRealTimers();
   });
 
-  it("should register poll entries with payload in the polls WeakMap", () => {
-    const PollAction = Symbol("PollAction") as Payload<{ value: number }>;
+  it("should register poll reactives with payload in the polls WeakMap", () => {
+    const PollAction = <Payload<{ value: number }>>Symbol("PollAction");
     const getPayload = () => ({ value: 42 });
     const getStatus = () => Status.Play;
 
@@ -1123,8 +1108,8 @@ describe("@use.poll()", () => {
     expect(entry.getStatus({ model: {}, inspect: {} })).toBe(Status.Play);
   });
 
-  it("should register poll entries without payload", () => {
-    const PollAction = Symbol("PollAction") as Payload<never>;
+  it("should register poll reactives without payload", () => {
+    const PollAction = <Payload<never>>Symbol("PollAction");
 
     class TestActions {
       @use.poll(1000)
@@ -1145,7 +1130,7 @@ describe("@use.poll()", () => {
   });
 
   it("should default status to Status.Play when not provided", () => {
-    const PollAction = Symbol("PollAction") as Payload<{ data: string }>;
+    const PollAction = <Payload<{ data: string }>>Symbol("PollAction");
 
     class TestActions {
       @use.poll(1000, () => ({ data: "test" }))
@@ -1160,8 +1145,8 @@ describe("@use.poll()", () => {
   });
 
   it("should register multiple poll decorators independently", () => {
-    const ActionA = Symbol("ActionA") as Payload<{ a: number }>;
-    const ActionB = Symbol("ActionB") as Payload<{ b: number }>;
+    const ActionA = <Payload<{ a: number }>>Symbol("ActionA");
+    const ActionB = <Payload<{ b: number }>>Symbol("ActionB");
 
     class TestActions {
       @use.poll(1000, () => ({ a: 1 }))
@@ -1176,13 +1161,13 @@ describe("@use.poll()", () => {
 
     expect(pollEntries?.size).toBe(2);
 
-    const entries = Array.from(pollEntries!);
-    const intervals = entries.map((e) => e.interval).sort((a, b) => a - b);
+    const reactives = Array.from(pollEntries!);
+    const intervals = reactives.map((e) => e.interval).sort((a, b) => a - b);
     expect(intervals).toEqual([1000, 2000]);
   });
 
   it("should call getPayload fresh at each interval check", () => {
-    const PollAction = Symbol("PollAction") as Payload<{ count: number }>;
+    const PollAction = <Payload<{ count: number }>>Symbol("PollAction");
     let counter = 0;
     const getPayload = jest.fn(() => ({ count: ++counter }));
 
@@ -1205,7 +1190,7 @@ describe("@use.poll()", () => {
   });
 
   it("should work with different poll instances independently", () => {
-    const PollAction = Symbol("PollAction") as Payload<never>;
+    const PollAction = <Payload<never>>Symbol("PollAction");
 
     class TestActions {
       constructor(private interval: number) {}
@@ -1227,7 +1212,7 @@ describe("@use.poll()", () => {
   });
 
   it("should pass context with model and inspect to getPayload", () => {
-    const PollAction = Symbol("PollAction") as Payload<{ count: number }>;
+    const PollAction = <Payload<{ count: number }>>Symbol("PollAction");
     const getPayload = jest.fn((context: { model: { value: number } }) => ({
       count: context.model.value * 2,
     }));

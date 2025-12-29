@@ -75,7 +75,7 @@ describe("getActionName()", () => {
   });
 
   it("should return unknown for malformed symbols", () => {
-    const malformed = Symbol("not-a-chizu-action") as unknown as symbol;
+    const malformed = <symbol>(<unknown>Symbol("not-a-chizu-action"));
     expect(getActionName(malformed)).toBe("unknown");
   });
 });

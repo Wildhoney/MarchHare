@@ -7,11 +7,11 @@ import {
   DecoratorContext,
 } from "./types.ts";
 import { Payload, Status, Model, ActionsClass } from "../types/index.ts";
-import { actionName, context, internals, entries, polls } from "./utils.ts";
+import { actionName, context, internals, reactives, polls } from "./utils.ts";
 import { AbortError, Reason, TimeoutError } from "../error/types.ts";
 import { A, G } from "@mobily/ts-belt";
 
-export { context, entries, polls } from "./utils.ts";
+export { context, reactives, polls } from "./utils.ts";
 
 /**
  * Action decorators for adding common functionality to action handlers.
@@ -86,19 +86,19 @@ export const use = {
     return function (_: unknown, field: Field) {
       field.addInitializer(function () {
         const self = <Instance>this;
-        const set = entries.get(self) ?? new Set();
+        const set = reactives.get(self) ?? new Set();
 
         set.add({
-          action: field.name as Payload,
-          getDependencies: getDependencies as (
-            context: DecoratorContext,
-          ) => Primitive[],
-          getPayload: args[0] as
-            | ((context: DecoratorContext) => unknown)
-            | undefined,
+          action: <Payload>field.name,
+          getDependencies: <(context: DecoratorContext) => Primitive[]>(
+            getDependencies
+          ),
+          getPayload: <((context: DecoratorContext) => unknown) | undefined>(
+            args[0]
+          ),
         });
 
-        entries.set(self, set);
+        reactives.set(self, set);
       });
     };
   },
@@ -153,11 +153,11 @@ export const use = {
         const set = polls.get(self) ?? new Set();
 
         set.add({
-          action: field.name as Payload,
+          action: <Payload>field.name,
           interval: ms,
-          getPayload: args[0] as
-            | ((context: DecoratorContext) => unknown)
-            | undefined,
+          getPayload: <((context: DecoratorContext) => unknown) | undefined>(
+            args[0]
+          ),
           getStatus: () => Status.Play,
         });
 
@@ -177,13 +177,16 @@ export const use = {
         const self = <Instance>this;
         const ƒ = <Method>self[field.name];
         const name = actionName(field.name);
+        const isTest = process.env.NODE_ENV === "test";
 
         self[field.name] = async (args: Args) => {
           const start = performance.now();
           const state = { timings: <number[]>[] };
 
-          console.group(`🔧 Action: ${name}`);
-          console.log("⏱️  Started at:", new Date().toISOString());
+          if (!isTest) {
+            console.group(`🔧 Action: ${name}`);
+            console.log("⏱️  Started at:", new Date().toISOString());
+          }
 
           const container = {
             ...args,
@@ -195,9 +198,11 @@ export const use = {
                 const duration = performance.now() - start;
                 state.timings.push(duration);
 
-                console.log(
-                  `  📝 produce #${state.timings.length}: ${duration.toFixed(2)}ms`,
-                );
+                if (!isTest) {
+                  console.log(
+                    `  📝 produce #${state.timings.length}: ${duration.toFixed(2)}ms`,
+                  );
+                }
 
                 return result;
               },
@@ -205,26 +210,30 @@ export const use = {
           };
 
           try {
-            const result = await ƒ.call(self, container as Args);
+            const result = await ƒ.call(self, <Args>container);
             const total = performance.now() - start;
 
-            console.log("─".repeat(40));
-            console.log(`📊 Summary for ${name}:`);
-            console.log(`   Total produce calls: ${state.timings.length}`);
-            if (A.isNotEmpty(state.timings)) {
-              console.log(
-                `   Produce times: ${state.timings.map((timing) => timing.toFixed(2) + "ms").join(", ")}`,
-              );
+            if (!isTest) {
+              console.log("─".repeat(40));
+              console.log(`📊 Summary for ${name}:`);
+              console.log(`   Total produce calls: ${state.timings.length}`);
+              if (A.isNotEmpty(state.timings)) {
+                console.log(
+                  `   Produce times: ${state.timings.map((timing) => timing.toFixed(2) + "ms").join(", ")}`,
+                );
+              }
+              console.log(`   ⏱️  Total duration: ${total.toFixed(2)}ms`);
+              console.groupEnd();
             }
-            console.log(`   ⏱️  Total duration: ${total.toFixed(2)}ms`);
-            console.groupEnd();
 
             return result;
           } catch (error) {
-            const end = performance.now();
-            console.error(`❌ Error in ${name}:`, error);
-            console.log(`   ⏱️  Failed after: ${(end - start).toFixed(2)}ms`);
-            console.groupEnd();
+            if (!isTest) {
+              const end = performance.now();
+              console.error(`❌ Error in ${name}:`, error);
+              console.log(`   ⏱️  Failed after: ${(end - start).toFixed(2)}ms`);
+              console.groupEnd();
+            }
             throw error;
           }
         };
@@ -325,8 +334,8 @@ export const use = {
 
         const state = {
           lastExecution: 0,
-          pendingArgs: null as Args | null,
-          timerId: null as ReturnType<typeof setTimeout> | null,
+          pendingArgs: <Args | null>null,
+          timerId: <ReturnType<typeof setTimeout> | null>null,
           pendingResolvers: <
             {
               resolve(value: unknown): void;

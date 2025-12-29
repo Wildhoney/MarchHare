@@ -5,7 +5,7 @@ export { context };
 
 export const internals = new WeakMap<object, Internals>();
 
-export const entries = new WeakMap<object, Entries>();
+export const reactives = new WeakMap<object, Entries>();
 
 export const polls = new WeakMap<object, PollEntries>();
 

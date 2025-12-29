@@ -1,4 +1,5 @@
-import { Action, Payload } from "../types/index.ts";
+import { Payload } from "../types/index.ts";
+import type { Action } from "../regulator/types.ts";
 import { G } from "@mobily/ts-belt";
 
 /**

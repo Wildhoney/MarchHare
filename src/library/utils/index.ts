@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { ActionsClass, Context, Model, Payload, Pk } from "../types/index.ts";
 import { AbortError } from "../error/types.ts";
 import { fnv1a } from "./utils.ts";
@@ -67,7 +66,7 @@ export const κ = pk;
  * @param property The name of the property in the state to update.
  * @returns An action function that takes the context and a payload, and updates the state.
  */
-export function set<M extends Model, AC extends ActionsClass<any>>(
+export function set<M extends Model, AC extends ActionsClass>(
   property: string,
 ) {
   return (context: Context<M, AC>, payload: Payload): void => {

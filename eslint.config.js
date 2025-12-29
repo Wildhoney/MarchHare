@@ -29,6 +29,26 @@ export default defineConfig([
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
+      "@typescript-eslint/consistent-type-definitions": ["error", "type"],
+      complexity: ["warn", { max: 20 }],
+    },
+  },
+  {
+    files: ["**/*.ts"],
+    rules: {
+      "@typescript-eslint/consistent-type-assertions": [
+        "error",
+        { assertionStyle: "angle-bracket" },
+      ],
+    },
+  },
+  {
+    files: ["**/*.tsx"],
+    rules: {
+      "@typescript-eslint/consistent-type-assertions": [
+        "error",
+        { assertionStyle: "as" },
+      ],
     },
   },
 ]);
