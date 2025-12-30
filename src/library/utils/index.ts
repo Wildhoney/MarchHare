@@ -1,6 +1,6 @@
 import { ActionsClass, Context, Model, Payload, Pk } from "../types/index.ts";
 import { AbortError } from "../error/types.ts";
-import { fnv1a } from "./utils.ts";
+import fnv1a from "./utils.ts";
 
 /**
  * Returns a promise that resolves after the specified number of milliseconds.

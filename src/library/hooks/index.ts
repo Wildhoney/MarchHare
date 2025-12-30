@@ -23,7 +23,7 @@ import { isDistributedAction, getActionName } from "../action/index.ts";
 import { useError, Reason } from "../error/index.tsx";
 import { State, Operation, Process } from "immertation";
 import { context } from "../use/index.ts";
-import Regulator from "../regulator/index.ts";
+import { Regulator, useRegulators } from "../regulator/utils.ts";
 
 /**
  * Determines the error reason based on what was thrown.
@@ -155,6 +155,7 @@ export function useActions<M extends Model, AC extends ActionsClass>(
 ): UseActions<M, AC> {
   const broadcast = useBroadcast();
   const handleError = useError();
+  const regulators = useRegulators();
   const [model, setModel] = React.useState<M>(initialModel);
   const hydration = React.useRef<Process | null>(null);
   const state = React.useRef<State<M>>(
@@ -170,7 +171,7 @@ export function useActions<M extends Model, AC extends ActionsClass>(
     () => new (<Actions<M, AC>>ActionClass)(),
     [ActionClass],
   );
-  const regulator = React.useRef<Regulator>(new Regulator());
+  const regulator = React.useRef<Regulator>(new Regulator(regulators));
   const checksums = React.useRef<Map<symbol, string | null>>(new Map());
 
   /**
@@ -195,24 +196,23 @@ export function useActions<M extends Model, AC extends ActionsClass>(
         signal: controller.signal,
         regulator: {
           abort: {
-            all: regulator.current.abort.all,
-            matching: regulator.current.abort.matching,
+            all: () => regulator.current.abort.all(),
+            matching: (...actions: Action[]) =>
+              regulator.current.abort.matching(...actions),
             self: () => regulator.current.abort.matching(action),
           },
           policy: {
             allow: {
-              all: regulator.current.policy.allow.all,
-              matching: regulator.current.policy.allow.matching,
-              self(action: Action) {
-                return regulator.current.policy.allow.matching(action);
-              },
+              all: () => regulator.current.policy.allow.all(),
+              matching: (...actions: Action[]) =>
+                regulator.current.policy.allow.matching(...actions),
+              self: () => regulator.current.policy.allow.matching(action),
             },
             disallow: {
-              all: regulator.current.policy.disallow.all,
-              matching: regulator.current.policy.disallow.matching,
-              self(action: Action) {
-                return regulator.current.policy.disallow.matching(action);
-              },
+              all: () => regulator.current.policy.disallow.all(),
+              matching: (...actions: Action[]) =>
+                regulator.current.policy.disallow.matching(...actions),
+              self: () => regulator.current.policy.disallow.matching(action),
             },
           },
         },
@@ -287,6 +287,13 @@ export function useActions<M extends Model, AC extends ActionsClass>(
   useLifecycle(unicast);
 
   usePollings({ actions: <object>actions, snapshot, unicast });
+
+  React.useEffect(() => {
+    regulators.add(regulator.current);
+    return () => {
+      regulators.delete(regulator.current);
+    };
+  }, []);
 
   return React.useMemo(
     () => [

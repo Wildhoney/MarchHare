@@ -25,6 +25,17 @@ function ssePlugin(): Plugin {
   return {
     name: "sse-visitor",
     configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const url = req.url ?? "/";
+        const hasExtension = /\.\w+($|\?)/.test(url);
+        const isApi = url.startsWith("/visitors") || url.startsWith("/@");
+
+        if (!hasExtension && !isApi) {
+          req.url = "/example/index.html";
+        }
+        next();
+      });
+
       server.middlewares.use("/visitors", (req, res) => {
         console.log("[SSE] Client connected");
 
@@ -103,11 +114,10 @@ export default defineConfig(({ mode }) => {
         ],
     build: isExample
       ? {
-          // Example build configuration
           outDir: "dist-example",
           rollupOptions: {
             input: {
-              main: resolve(__dirname, "index.html"),
+              main: resolve(__dirname, "example/index.html"),
             },
           },
         }

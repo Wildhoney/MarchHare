@@ -22,6 +22,7 @@ Strongly typed React framework using generators and efficiently updated views al
 1. [Utility functions](#utility-functions)
 1. [Referential equality](#referential-equality)
 1. [Action regulator](#action-regulator)
+1. [Context providers](#context-providers)
 
 ## Benefits
 
@@ -650,7 +651,7 @@ function useSearchActions(props: Props) {
 
 ## Action regulator
 
-The `Regulator` class is accessed via `context.actions.regulator` inside your action handlers. It provides fine-grained control over asynchronous actions by managing `AbortController` instances and action policies. You can programmatically allow or disallow actions, and abort running actions either globally or by type.
+The regulator is accessed via `context.regulator` inside your action handlers. It provides fine-grained control over asynchronous actions by managing `AbortController` instances and action policies. You can programmatically allow or disallow actions, and abort running actions across all components in the context.
 
 ### Usage
 
@@ -658,10 +659,7 @@ The `Regulator` class is accessed via `context.actions.regulator` inside your ac
 const fetchAction = useAction<Model, typeof Actions, "Fetch">(
   async (context) => {
     // Disallow future dispatches of these actions
-    context.actions.regulator.policy.disallow.matching(
-      Actions.Fetch,
-      Actions.Save,
-    );
+    context.regulator.policy.disallow.matching(Actions.Fetch, Actions.Save);
 
     // Future dispatches via useAction will be aborted immediately
     // and the error handler will receive Reason.Disallowed
@@ -671,10 +669,7 @@ const fetchAction = useAction<Model, typeof Actions, "Fetch">(
 const resetAction = useAction<Model, typeof Actions, "Reset">(
   async (context) => {
     // Allow the actions again
-    context.actions.regulator.policy.allow.matching(
-      Actions.Fetch,
-      Actions.Save,
-    );
+    context.regulator.policy.allow.matching(Actions.Fetch, Actions.Save);
   },
 );
 ```
@@ -682,19 +677,66 @@ const resetAction = useAction<Model, typeof Actions, "Reset">(
 You can also abort running actions:
 
 ```ts
-context.actions.regulator.abort.matching(Actions.Fetch);
-context.actions.regulator.abort.all();
+// Abort specific actions across all components
+context.regulator.abort.matching(Actions.Fetch);
+
+// Abort all actions across all components
+context.regulator.abort.all();
+
+// Abort only the current action instance
+context.regulator.abort.self();
 ```
 
 ### API
 
-- `add(action: Action, controller: AbortController): void` — Registers an AbortController for a given action.
-- `controller(action: Action): AbortController` — Creates and registers an AbortController for an action, aborting immediately if disallowed by policy.
-- `abort.all(): void` — Aborts all controllers and removes them.
-- `abort.matching(...actions: Action[]): void` — Aborts controllers for specific actions and removes them.
-- `policy.allow.all(...actions: Action[]): void` — Allows one or more actions.
-- `policy.allow.matching(...actions: Action[]): void` — Allows specific actions.
-- `policy.disallow.all(...actions: Action[]): void` — Disallows one or more actions.
-- `policy.disallow.matching(...actions: Action[]): void` — Disallows specific actions.
+**Abort methods:**
 
-The `Regulator` class is useful for advanced scenarios where you need to centrally manage cancellation and permission of asynchronous actions, such as rate limiting, feature toggling, or global aborts.
+- `abort.all()` — Aborts all running actions across all components in the context.
+- `abort.matching(...actions)` — Aborts specific actions across all components.
+- `abort.self()` — Aborts only the current action instance.
+
+**Allow methods:**
+
+- `policy.allow.all()` — Clears all disallow policies across all components.
+- `policy.allow.matching(...actions)` — Allows specific actions across all components.
+- `policy.allow.self()` — Allows the current action.
+
+**Disallow methods:**
+
+- `policy.disallow.all()` — Clears all allow policies across all components.
+- `policy.disallow.matching(...actions)` — Disallows specific actions across all components.
+- `policy.disallow.self()` — Disallows the current action.
+
+The regulator is useful for advanced scenarios where you need to centrally manage cancellation and permission of asynchronous actions, such as rate limiting, feature toggling, or global aborts.
+
+## Context providers
+
+Chizu provides context providers for advanced use cases where you need isolated contexts. These are edge cases &ndash; most applications don't need them.
+
+### `Broadcaster`
+
+Creates an isolated broadcast context for distributed actions. Useful for libraries that want their own broadcast context without interfering with the host application:
+
+```tsx
+import { Broadcaster } from "chizu";
+
+function MyLibraryRoot({ children }) {
+  return <Broadcaster>{children}</Broadcaster>;
+}
+```
+
+Components inside `<Broadcaster>` have their own isolated broadcast channel. Distributed actions dispatched inside won't reach components outside, and vice versa.
+
+### `Regulators`
+
+Creates an isolated regulator context. All regulator operations (`abort.all()`, `policy.disallow.matching()`, etc.) only affect components within the same `Regulators` provider:
+
+```tsx
+import { Regulators } from "chizu";
+
+function Example({ children }) {
+  return <Regulators>{children}</Regulators>;
+}
+```
+
+This is useful for libraries that need action control without affecting the host application's actions. An `abort.all()` inside the provider won't abort actions outside it.

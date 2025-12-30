@@ -1,6 +1,6 @@
 import { Operation } from "immertation";
 import { Process, Inspect } from "immertation";
-import type Regulator from "../regulator/index.js";
+import type { Regulator } from "../regulator/index.js";
 import type { Action } from "../regulator/types.ts";
 export type { Action };
 

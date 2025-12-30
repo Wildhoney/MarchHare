@@ -10,6 +10,7 @@ export type {
   Actions,
 } from "./types/index.ts";
 export { Abort, Lifecycle, Status } from "./types/index.ts";
+export { Regulators } from "./regulator/index.tsx";
 export * as utils from "./utils/index.ts";
 export { Broadcaster } from "./broadcast/index.tsx";
 export { useActions, useAction, useSnapshot } from "./hooks/index.ts";

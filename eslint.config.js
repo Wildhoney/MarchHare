@@ -2,6 +2,7 @@ import js from "@eslint/js";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 import pluginReact from "eslint-plugin-react";
+import pluginImport from "eslint-plugin-import";
 import { defineConfig } from "eslint/config";
 
 export default defineConfig([
@@ -17,6 +18,9 @@ export default defineConfig([
   tseslint.configs.recommended,
   pluginReact.configs.flat.recommended,
   {
+    plugins: {
+      import: pluginImport,
+    },
     settings: {
       react: {
         version: "detect",
@@ -31,6 +35,14 @@ export default defineConfig([
       ],
       "@typescript-eslint/consistent-type-definitions": ["error", "type"],
       complexity: ["warn", { max: 20 }],
+      "import/prefer-default-export": "warn",
+      "import/no-default-export": "off",
+    },
+  },
+  {
+    files: ["src/example/**/*.{ts,tsx}"],
+    rules: {
+      "import/prefer-default-export": "off",
     },
   },
   {

@@ -1,3 +1,5 @@
+import * as React from "react";
+
 /**
  * An action identifier - either a symbol (preferred) or string.
  */
@@ -32,3 +34,10 @@ export enum Policy {
   Allow,
   Disallow,
 }
+
+/**
+ * Props for the Regulators provider component.
+ */
+export type Props = {
+  children: React.ReactNode;
+};

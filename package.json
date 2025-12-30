@@ -59,6 +59,7 @@
     "dayjs": "^1.11.19",
     "dexie": "^4.2.1",
     "eslint": "^9.39.2",
+    "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-react": "^7.37.5",
     "fslint": "^1.1.0",
     "get-port-cli": "^3.0.0",
