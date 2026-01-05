@@ -196,23 +196,26 @@ export function useActions<M extends Model, AC extends ActionsClass>(
         signal: controller.signal,
         regulator: {
           abort: {
+            own: () => regulator.current.abort.own(),
             all: () => regulator.current.abort.all(),
-            matching: (...actions: Action[]) =>
-              regulator.current.abort.matching(...actions),
-            self: () => regulator.current.abort.matching(action),
+            matching: (actions: Action[]) =>
+              regulator.current.abort.matching(actions),
+            self: () => regulator.current.abort.matching([action]),
           },
           policy: {
             allow: {
+              own: () => regulator.current.policy.allow.own(),
               all: () => regulator.current.policy.allow.all(),
-              matching: (...actions: Action[]) =>
-                regulator.current.policy.allow.matching(...actions),
-              self: () => regulator.current.policy.allow.matching(action),
+              matching: (actions: Action[]) =>
+                regulator.current.policy.allow.matching(actions),
+              self: () => regulator.current.policy.allow.matching([action]),
             },
             disallow: {
+              own: () => regulator.current.policy.disallow.own(),
               all: () => regulator.current.policy.disallow.all(),
-              matching: (...actions: Action[]) =>
-                regulator.current.policy.disallow.matching(...actions),
-              self: () => regulator.current.policy.disallow.matching(action),
+              matching: (actions: Action[]) =>
+                regulator.current.policy.disallow.matching(actions),
+              self: () => regulator.current.policy.disallow.matching([action]),
             },
           },
         },
@@ -284,7 +287,7 @@ export function useActions<M extends Model, AC extends ActionsClass>(
 
   useReactives({ actions: <object>actions, model, state, checksums, unicast });
 
-  useLifecycle(unicast);
+  useLifecycle({ unicast, regulator });
 
   usePollings({ actions: <object>actions, snapshot, unicast });
 

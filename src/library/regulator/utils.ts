@@ -63,25 +63,38 @@ export class Regulator {
    */
   abort = {
     /**
-     * Abort all controllers across all components in the context.
+     * Abort all controllers belonging only to this regulator instance.
+     * Unlike `all()`, this does not affect other regulators in the context.
+     * @param reason - The reason for aborting (defaults to Disallowed)
      */
-    all: (): void => {
+    own: (reason: Reason = Reason.Disallowed): void => {
+      [...this.controllers].forEach((entry) => {
+        entry.controller.abort(reason);
+        this.controllers.delete(entry);
+      });
+    },
+    /**
+     * Abort all controllers across all components in the context.
+     * @param reason - The reason for aborting (defaults to Disallowed)
+     */
+    all: (reason: Reason = Reason.Disallowed): void => {
       this.regulators.forEach((regulator) => {
         [...regulator.controllers].forEach((entry) => {
-          entry.controller.abort(Reason.Disallowed);
+          entry.controller.abort(reason);
           regulator.controllers.delete(entry);
         });
       });
     },
     /**
      * Abort controllers for specific actions across all components in the context.
-     * @param actions - One or more action identifiers (symbol or string)
+     * @param actions - Array of action identifiers (symbol or string)
+     * @param reason - The reason for aborting (defaults to Disallowed)
      */
-    matching: (...actions: Action[]): void => {
+    matching: (actions: Action[], reason: Reason = Reason.Disallowed): void => {
       this.regulators.forEach((regulator) => {
         [...regulator.controllers].forEach((entry) => {
           if (actions.includes(entry.action)) {
-            entry.controller.abort(Reason.Disallowed);
+            entry.controller.abort(reason);
             regulator.controllers.delete(entry);
           }
         });
@@ -111,20 +124,29 @@ export class Regulator {
      */
     allow: {
       /**
+       * Clear all Disallow policies belonging only to this regulator instance.
+       * Unlike `all()`, this does not affect other regulators in the context.
+       */
+      own: (): void => {
+        [...this.policies]
+          .filter((policy) => policy.rule === Policy.Disallow)
+          .forEach((policy) => this.policies.delete(policy));
+      },
+      /**
        * Clear all Disallow policies across all components in the context.
        */
       all: (): void => {
         this.regulators.forEach((regulator) => {
           [...regulator.policies]
-            .filter((p) => p.rule === Policy.Disallow)
-            .forEach((p) => regulator.policies.delete(p));
+            .filter((policy) => policy.rule === Policy.Disallow)
+            .forEach((policy) => regulator.policies.delete(policy));
         });
       },
       /**
        * Allow specific actions across all components in the context.
-       * @param actions - One or more action identifiers (symbol or string)
+       * @param actions - Array of action identifiers (symbol or string)
        */
-      matching: (...actions: Action[]): void => {
+      matching: (actions: Action[]): void => {
         this.regulators.forEach((regulator) => {
           actions.forEach((action) => {
             regulator.policy.remove(Policy.Disallow, action);
@@ -138,20 +160,29 @@ export class Regulator {
      */
     disallow: {
       /**
+       * Clear all Allow policies belonging only to this regulator instance.
+       * Unlike `all()`, this does not affect other regulators in the context.
+       */
+      own: (): void => {
+        [...this.policies]
+          .filter((policy) => policy.rule === Policy.Allow)
+          .forEach((policy) => this.policies.delete(policy));
+      },
+      /**
        * Clear all Allow policies across all components in the context.
        */
       all: (): void => {
         this.regulators.forEach((regulator) => {
           [...regulator.policies]
-            .filter((p) => p.rule === Policy.Allow)
-            .forEach((p) => regulator.policies.delete(p));
+            .filter((policy) => policy.rule === Policy.Allow)
+            .forEach((policy) => regulator.policies.delete(policy));
         });
       },
       /**
        * Disallow specific actions across all components in the context.
-       * @param actions - One or more action identifiers (symbol or string)
+       * @param actions - Array of action identifiers (symbol or string)
        */
-      matching: (...actions: Action[]): void => {
+      matching: (actions: Action[]): void => {
         this.regulators.forEach((regulator) => {
           actions.forEach((action) => {
             regulator.policy.remove(Policy.Allow, action);

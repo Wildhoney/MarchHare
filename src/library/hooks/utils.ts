@@ -2,11 +2,14 @@ import * as React from "react";
 import { RefObject } from "react";
 import { G } from "@mobily/ts-belt";
 import { Props, Lifecycle, Status, Model } from "../types/index.ts";
-import { State } from "immertation";
 import { reactives, polls } from "../use/index.ts";
 import * as utils from "../utils/index.ts";
-import type EventEmitter from "eventemitter3";
-import type { DecoratorContext } from "../use/types.ts";
+import { Reason } from "../error/types.ts";
+import type {
+  ReactivesConfig,
+  PollingsConfig,
+  LifecycleConfig,
+} from "./types.ts";
 
 /**
  * @name withGetters
@@ -45,19 +48,6 @@ export function isGenerator(
   const name = (<object>result).constructor.name;
   return name === "Generator" || name === "AsyncGenerator";
 }
-
-/**
- * Configuration for {@link useReactives}.
- *
- * @template M The model type extending Model.
- */
-type ReactivesConfig<M extends Model> = {
-  actions: object;
-  model: M;
-  state: React.RefObject<State<M>>;
-  checksums: React.RefObject<Map<symbol, string | null>>;
-  unicast: EventEmitter;
-};
 
 /**
  * Tracks reactive dependencies and dispatches actions when dependencies change.
@@ -101,28 +91,25 @@ export function useReactives<M extends Model>({
  * Emits lifecycle events for component mount/unmount and DOM attachment.
  *
  * - `Lifecycle.Mount`: Emitted synchronously in useLayoutEffect on mount
- * - `Lifecycle.Unmount`: Emitted on cleanup when component unmounts
+ * - `Lifecycle.Unmount`: Emitted on cleanup when component unmounts (after aborting all actions)
  * - `Lifecycle.Node`: Emitted in useEffect after first render (DOM available)
  *
- * @param unicast The EventEmitter to emit lifecycle events on.
+ * On unmount, all in-flight actions belonging to this component's regulator are aborted
+ * before emitting the unmount event, ensuring proper cleanup of async operations.
+ *
+ * @param config Configuration containing unicast emitter and regulator reference.
  */
-export function useLifecycle(unicast: EventEmitter): void {
+export function useLifecycle({ unicast, regulator }: LifecycleConfig): void {
   React.useLayoutEffect(() => {
     unicast.emit(Lifecycle.Mount);
-    return () => void unicast.emit(Lifecycle.Unmount);
+    return () => {
+      regulator.current.abort.own(Reason.Unmounted);
+      unicast.emit(Lifecycle.Unmount);
+    };
   }, []);
 
   React.useEffect(() => void unicast.emit(Lifecycle.Node), []);
 }
-
-/**
- * Configuration for {@link usePollings}.
- */
-type PollingsConfig = {
-  actions: object;
-  snapshot: DecoratorContext<Model>;
-  unicast: EventEmitter;
-};
 
 /**
  * Sets up polling intervals for actions decorated with `@use.poll`.

@@ -12,6 +12,8 @@ export enum Reason {
   Disallowed,
   /** A generic error thrown in the user's action handler (not timeout, supplant, or disallowed). */
   Errored,
+  /** Action was aborted because the component unmounted. */
+  Unmounted,
 }
 
 /**
