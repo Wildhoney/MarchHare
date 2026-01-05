@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.2.44](https://github.com/Wildhoney/Chizu/compare/v0.2.43...v0.2.44) (2026-01-05)
+
+### Features
+
+- abort in-flight actions on unmount, add own() methods, unify to array notation ([ca07aea](https://github.com/Wildhoney/Chizu/commit/ca07aea3d6dc8be2ffe169f6837b01202ca9f7b1))
+- add consume() method for subscribing to distributed action values ([76b6984](https://github.com/Wildhoney/Chizu/commit/76b698443abebcbe5e480c002ec844ed0463b834))
+
 ## [0.2.43](https://github.com/Wildhoney/Chizu/compare/v0.2.42...v0.2.43) (2025-12-30)
 
 ## [0.2.42](https://github.com/Wildhoney/Chizu/compare/v0.2.41...v0.2.42) (2025-12-29)
