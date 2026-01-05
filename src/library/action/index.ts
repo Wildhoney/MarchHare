@@ -1,13 +1,24 @@
-import { Payload } from "../types/index.ts";
+import { Payload, DistributedPayload } from "../types/index.ts";
 import type { Action } from "../regulator/types.ts";
 import { G } from "@mobily/ts-belt";
 
 /**
- * Defines a new action with a given payload type.
+ * Defines a new local action with a given payload type.
+ * Local actions are scoped to the component that defines them and cannot be consumed
+ * by other components. Use `createDistributedAction()` for actions that need to be
+ * shared across components via `actions.consume()`.
  *
  * @template T The type of the payload that the action will carry.
  * @param name An optional name for the action, used for debugging purposes.
  * @returns A new action symbol.
+ *
+ * @example
+ * ```ts
+ * const Increment = createAction<number>("Increment");
+ *
+ * // Dispatch within the same component
+ * actions.dispatch(Increment, 5);
+ * ```
  */
 export function createAction<T = never>(
   name: string = "anonymous",
@@ -19,14 +30,25 @@ export function createAction<T = never>(
  * Defines a new distributed action with a given payload type.
  * Distributed actions are broadcast to all mounted components that have defined a handler for them.
  *
+ * Returns a `DistributedPayload<T>` which is required by `actions.consume()`. Local actions
+ * created with `createAction()` cannot be consumed &ndash; this is enforced at compile-time.
+ *
  * @template T The type of the payload that the action will carry.
  * @param name An optional name for the action, used for debugging purposes.
- * @returns A new distributed action symbol.
+ * @returns A new distributed action symbol that can be used with `consume()`.
+ *
+ * @example
+ * ```ts
+ * const SignedOut = createDistributedAction<User>("SignedOut");
+ *
+ * // Can be consumed across components
+ * actions.consume(SignedOut, (box) => <div>{box.value.name}</div>);
+ * ```
  */
 export function createDistributedAction<T = never>(
   name: string = "anonymous",
-): Payload<T> {
-  return <Payload<T>>Symbol(`chizu.action/distributed/${name}`);
+): DistributedPayload<T> {
+  return <DistributedPayload<T>>Symbol(`chizu.action/distributed/${name}`);
 }
 
 /**

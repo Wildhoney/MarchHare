@@ -17,6 +17,8 @@ Strongly typed React framework using generators and efficiently updated views al
 1. [Model annotations](#model-annotations)
 1. [Lifecycle actions](#lifecycle-actions)
 1. [Distributed actions](#distributed-actions)
+1. [Consuming actions](#consuming-actions)
+1. [Stateful props](#stateful-props)
 1. [Action decorators](#action-decorators)
 1. [Real-time applications](#real-time-applications)
 1. [Utility functions](#utility-functions)
@@ -305,6 +307,8 @@ export class Actions extends DistributedActions {
 }
 ```
 
+`createDistributedAction()` returns a `DistributedPayload<T>` type, which is distinct from the `Payload<T>` returned by `createAction()`. This enables compile-time enforcement &ndash; only distributed actions can be passed to `actions.consume()`.
+
 Any component that defines a handler for `DistributedActions.SignedOut` will receive the action when it's dispatched from any other component. For direct access to the broadcast emitter, use `useBroadcast()`:
 
 ```ts
@@ -320,6 +324,41 @@ broadcast.on(DistributedActions.SignedOut, (payload) => {
   // Handle the action...
 });
 ```
+
+## Consuming actions
+
+The `consume()` method subscribes to a distributed action and re-renders content whenever a new value is dispatched, making it ideal for global context scenarios where you want to fetch data once and access it throughout your app without prop drilling. The callback receives a `Box<T>` from [Immertation](https://github.com/Wildhoney/Immertation) containing the `value` and an `inspect` proxy for checking annotation status.
+
+```tsx
+export default function Visitor(): React.ReactElement {
+  const [model, actions] = useVisitorActions();
+
+  return (
+    <div>
+      {actions.consume(Actions.Visitor, (visitor) =>
+        visitor.inspect.pending() ? <>Loading&hellip;</> : visitor.value.name,
+      )}
+    </div>
+  );
+}
+```
+
+> **Important:** The `consume()` method only accepts distributed actions created with `createDistributedAction()`. Attempting to pass a local action created with `createAction()` will result in a TypeScript error. This is enforced at compile-time to prevent confusion &ndash; local actions are scoped to a single component and cannot be consumed across the application.
+
+> **Note:** When a component mounts, `consume()` displays the most recent value for that action, even if it was dispatched before the component mounted. This is managed by the `Consumer` context provider. If no value has been dispatched yet, `consume()` renders `null` until the first dispatch occurs.
+
+## Stateful props
+
+Chizu uses the `Box<T>` type from [Immertation](https://github.com/Wildhoney/Immertation) to wrap values with metadata about their async state. Passing `Box<T>` to React components allows them to observe an object's state &ndash; checking if a value is pending, how many operations are in flight, and what the optimistic draft value is &ndash; all without additional state management.
+
+The `Box<T>` type has two properties:
+
+- **`box.value`** &ndash; The payload (e.g., `Country` object with `name`, `flag`, etc.).
+- **`box.inspect`** &ndash; An `Inspect<T>` proxy for checking annotation status:
+  - `box.inspect.pending()` &ndash; Returns `true` if any pending annotations exist.
+  - `box.inspect.remaining()` &ndash; Returns the count of pending annotations.
+  - `box.inspect.draft()` &ndash; Returns the draft value from the latest annotation.
+  - `box.inspect.is(Op.Update)` &ndash; Checks if the annotation matches a specific operation.
 
 ## Action decorators
 
@@ -743,3 +782,19 @@ function Example({ children }) {
 ```
 
 This is useful for libraries that need action control without affecting the host application's actions. An `abort.all()` inside the provider won't abort actions outside it.
+
+### `Consumer`
+
+Creates an isolated consumer context for storing distributed action values. The Consumer stores the latest payload for each distributed action, enabling the `consume()` method to display the most recent value even when components mount after the action was dispatched:
+
+```tsx
+import { Consumer } from "chizu";
+
+function MyLibraryRoot({ children }) {
+  return <Consumer>{children}</Consumer>;
+}
+```
+
+Components inside `<Consumer>` have their own isolated value store. Actions consumed inside won't see values dispatched outside, and vice versa. This is useful for libraries that want to use `consume()` without interfering with the host application's consumed values.
+
+**Note:** In most applications, you don't need to provide a `Consumer` &ndash; one is created automatically at the default context level. Only use `<Consumer>` when you need isolation for library boundaries or testing.

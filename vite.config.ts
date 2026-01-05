@@ -10,17 +10,33 @@ type Country = {
   cca2: string;
 };
 
-function ssePlugin(): Plugin {
-  const countries = new Set<Country>();
+const fallbackCountries: Country[] = [
+  { name: { common: "United States" }, flag: "🇺🇸", cca2: "US" },
+  { name: { common: "United Kingdom" }, flag: "🇬🇧", cca2: "GB" },
+  { name: { common: "Germany" }, flag: "🇩🇪", cca2: "DE" },
+  { name: { common: "France" }, flag: "🇫🇷", cca2: "FR" },
+  { name: { common: "Japan" }, flag: "🇯🇵", cca2: "JP" },
+  { name: { common: "Australia" }, flag: "🇦🇺", cca2: "AU" },
+  { name: { common: "Brazil" }, flag: "🇧🇷", cca2: "BR" },
+  { name: { common: "Canada" }, flag: "🇨🇦", cca2: "CA" },
+  { name: { common: "India" }, flag: "🇮🇳", cca2: "IN" },
+  { name: { common: "Mexico" }, flag: "🇲🇽", cca2: "MX" },
+];
 
-  // Pre-fetch countries on plugin init
+function ssePlugin(): Plugin {
+  const countries = new Set<Country>(fallbackCountries);
+
+  // Pre-fetch countries on plugin init, fallback already loaded
   fetch("https://restcountries.com/v3.1/all?fields=name,flag,cca2")
     .then((response) => response.json())
     .then((data: Country[]) => {
+      countries.clear();
       data.forEach((country) => countries.add(country));
       console.log(`[SSE] Loaded ${countries.size} countries`);
     })
-    .catch((err) => console.error("[SSE] Failed to load countries:", err));
+    .catch(() =>
+      console.log(`[SSE] Using ${countries.size} fallback countries`),
+    );
 
   return {
     name: "sse-visitor",

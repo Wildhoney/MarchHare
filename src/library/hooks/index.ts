@@ -17,37 +17,15 @@ import {
   UseActions,
   Result,
 } from "../types/index.ts";
+import { ConsumeRenderer, ConsumerRenderer } from "../consumer/index.tsx";
+import { getReason, normaliseError } from "../utils/index.ts";
 import EventEmitter from "eventemitter3";
 import { useBroadcast } from "../broadcast/index.tsx";
 import { isDistributedAction, getActionName } from "../action/index.ts";
-import { useError, Reason } from "../error/index.tsx";
+import { useError } from "../error/index.tsx";
 import { State, Operation, Process } from "immertation";
 import { context } from "../use/index.ts";
 import { Regulator, useRegulators } from "../regulator/utils.ts";
-
-/**
- * Determines the error reason based on what was thrown.
- *
- * @param error The value that was thrown.
- * @returns The appropriate Reason enum value.
- */
-export function getReason(error: unknown): Reason {
-  if (error instanceof Error) {
-    if (error.name === "TimeoutError") return Reason.Timedout;
-    if (error.name === "AbortError") return Reason.Supplanted;
-  }
-  return Reason.Errored;
-}
-
-/**
- * Normalises a thrown value into an Error instance.
- *
- * @param error The value that was thrown.
- * @returns An Error instance (original if already Error, wrapped otherwise).
- */
-export function normaliseError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
-}
 
 /**
  * Creates a memoized action handler that always has access to the latest closure values.
@@ -299,19 +277,27 @@ export function useActions<M extends Model, AC extends ActionsClass>(
   }, []);
 
   return React.useMemo(
-    () => [
-      model,
-      {
-        dispatch(...[action, payload]: [action: Action, payload?: Payload]) {
-          if (isDistributedAction(action)) broadcast.emit(action, payload);
-          else unicast.emit(action, payload);
+    () => <UseActions<M, AC>>(<unknown>[
+        model,
+        {
+          dispatch(...[action, payload]: [action: Action, payload?: Payload]) {
+            if (isDistributedAction(action)) broadcast.emit(action, payload);
+            else unicast.emit(action, payload);
+          },
+          consume(
+            action: symbol,
+            renderer: ConsumerRenderer<unknown>,
+          ): React.ReactNode {
+            return React.createElement(ConsumeRenderer, {
+              action,
+              renderer,
+            });
+          },
+          get inspect() {
+            return state.current.inspect;
+          },
         },
-        consume() {},
-        get inspect() {
-          return state.current.inspect;
-        },
-      },
-    ],
+      ]),
     [model, unicast],
   );
 }

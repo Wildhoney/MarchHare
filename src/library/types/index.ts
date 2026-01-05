@@ -1,8 +1,12 @@
 import { Operation } from "immertation";
-import { Process, Inspect } from "immertation";
+import { Process, Inspect, Box } from "immertation";
 import type { Regulator } from "../regulator/index.js";
 import type { Action } from "../regulator/types.ts";
-export type { Action };
+import type { ConsumerRenderer } from "../consumer/index.tsx";
+import type * as React from "react";
+
+export type { Action, Box };
+export type { ConsumerRenderer };
 
 export const context = Symbol("chizu.action.context");
 
@@ -82,7 +86,40 @@ export type Model<M = Record<string, unknown>> = M;
 
 export const PayloadKey = Symbol("payload");
 
+export const DistributedKey = Symbol("distributed");
+
+/**
+ * Branded type for action payloads created with `createAction()`.
+ * The phantom type parameter `T` carries the payload type at the type level.
+ *
+ * @template T - The payload type for the action
+ */
 export type Payload<T = unknown> = symbol & { [PayloadKey]: T };
+
+/**
+ * Branded type for distributed action payloads created with `createDistributedAction()`.
+ * Distributed actions are broadcast to all mounted components and can be consumed with `actions.consume()`.
+ *
+ * This type extends `Payload<T>` with an additional brand to enforce at compile-time
+ * that only distributed actions can be passed to `consume()`. Attempting to consume
+ * a local action will result in a TypeScript error.
+ *
+ * @template T - The payload type for the action
+ *
+ * @example
+ * ```ts
+ * // This compiles - SignedOut is a distributed action
+ * const SignedOut = createDistributedAction<User>("SignedOut");
+ * actions.consume(SignedOut, (box) => <div>{box.value.name}</div>);
+ *
+ * // This fails to compile - Increment is a local action
+ * const Increment = createAction<number>("Increment");
+ * actions.consume(Increment, ...); // Type error!
+ * ```
+ */
+export type DistributedPayload<T = unknown> = Payload<T> & {
+  [DistributedKey]: true;
+};
 
 type PayloadType<A> = A extends Payload<infer P> ? P : never;
 
@@ -176,10 +213,69 @@ export type Actions<
   AC extends ActionsClass,
 > = new () => ActionInstance<M, AC>;
 
-export type UseActions<M extends Model, _AC extends ActionsClass> = [
+/**
+ * Return type for the useActions hook.
+ *
+ * A tuple containing:
+ * 1. The current model state of type M
+ * 2. An actions object with dispatch, consume, and inspect capabilities
+ *
+ * @template M - The model type representing the component's state
+ * @template AC - The actions class containing action definitions
+ *
+ * @example
+ * ```tsx
+ * const [model, actions] = useActions<Model, typeof Actions>(initialModel, Actions);
+ *
+ * // Access state
+ * model.count;
+ *
+ * // Dispatch actions
+ * actions.dispatch(Actions.Increment, 5);
+ *
+ * // Consume action values declaratively
+ * {actions.consume(Actions.Data, (box) => box.value.name)}
+ *
+ * // Check pending state
+ * actions.inspect.count.pending();
+ * ```
+ */
+export type UseActions<M extends Model, AC extends ActionsClass> = [
   M,
   {
     dispatch(action: Action, payload?: Payload): void;
+    /**
+     * Subscribes to a distributed action's values and renders based on the callback.
+     * The callback receives a Box with `value` (the payload) and `inspect` (for annotation status).
+     * On mount, displays the most recent value from the Consumer store if available.
+     *
+     * Supports two usage patterns:
+     * 1. Consuming actions from the local actions class (with autocomplete)
+     * 2. Consuming any distributed action from external modules
+     *
+     * @param action - The distributed action to consume
+     * @param renderer - Render function receiving the Box
+     * @returns React element rendered by the callback
+     *
+     * @example
+     * ```tsx
+     * // Local action (from same actions class)
+     * {actions.consume(Actions.Visitor, (visitor) =>
+     *   visitor.inspect.pending() ? "Loading..." : visitor.value.name
+     * )}
+     *
+     * // External distributed action
+     * {actions.consume(SharedActions.Counter, (counter) => counter.value)}
+     * ```
+     */
+    consume<T>(
+      action: DistributedPayload<T>,
+      renderer: ConsumerRenderer<T>,
+    ): React.ReactNode;
+    consume<K extends keyof AC>(
+      action: AC[K] & DistributedPayload<unknown>,
+      renderer: ConsumerRenderer<PayloadType<AC[K]>>,
+    ): React.ReactNode;
     inspect: Inspect<M>;
   },
 ];

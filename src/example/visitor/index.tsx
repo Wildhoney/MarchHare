@@ -3,9 +3,10 @@ import { useVisitorActions } from "./actions.ts";
 import * as styles from "./styles.ts";
 import { Popover } from "antd";
 import { A } from "@mobily/ts-belt";
+import { DistributedActions } from "../types.ts";
 
 export default function Visitor(): React.ReactElement | null {
-  const [model] = useVisitorActions();
+  const [model, actions] = useVisitorActions();
 
   if (!model.connected) return null;
 
@@ -21,7 +22,13 @@ export default function Visitor(): React.ReactElement | null {
 
   return (
     <Popover content={history} placement="bottom">
-      <div className={styles.container}>
+      <div
+        className={styles.container}
+        data-counter={actions.consume(
+          DistributedActions.Counter,
+          (counter) => counter.value,
+        )}
+      >
         {model.visitor ? (
           <span key={model.visitor.timestamp} className={styles.visitor}>
             {model.visitor.flag} User visited from {model.visitor.name}

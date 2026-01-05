@@ -1,6 +1,30 @@
 import { ActionsClass, Context, Model, Payload, Pk } from "../types/index.ts";
-import { AbortError } from "../error/types.ts";
+import { AbortError, Reason } from "../error/types.ts";
 import fnv1a from "./utils.ts";
+
+/**
+ * Determines the error reason based on what was thrown.
+ *
+ * @param error - The value that was thrown.
+ * @returns The appropriate Reason enum value.
+ */
+export function getReason(error: unknown): Reason {
+  if (error instanceof Error) {
+    if (error.name === "TimeoutError") return Reason.Timedout;
+    if (error.name === "AbortError") return Reason.Supplanted;
+  }
+  return Reason.Errored;
+}
+
+/**
+ * Normalises a thrown value into an Error instance.
+ *
+ * @param error - The value that was thrown.
+ * @returns An Error instance (original if already Error, wrapped otherwise).
+ */
+export function normaliseError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}
 
 /**
  * Returns a promise that resolves after the specified number of milliseconds.

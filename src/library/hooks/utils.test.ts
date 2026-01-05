@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import { withGetters, isGenerator } from "./utils.ts";
-import { getReason, normaliseError } from "./index.ts";
+import { getReason, normaliseError } from "../utils/index.ts";
 import { Reason, AbortError, TimeoutError } from "../error/index.tsx";
 
 describe("withGetters()", () => {
