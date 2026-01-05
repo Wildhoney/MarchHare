@@ -32,7 +32,8 @@
     "build:example": "vite build --mode example --outDir dist-example --base /Chizu/",
     "dev": "vite",
     "preview": "vite preview",
-    "release": "make checks"
+    "release": "make checks",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@babel/plugin-proposal-decorators": "^7.28.0",
@@ -63,6 +64,7 @@
     "fslint": "^1.1.0",
     "get-port-cli": "^3.0.0",
     "globals": "^16.5.0",
+    "husky": "^9.1.7",
     "immer": "^11.1.0",
     "jest": "^30.2.0",
     "jest-environment-jsdom": "^30.2.0",

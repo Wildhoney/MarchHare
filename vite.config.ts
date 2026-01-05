@@ -31,7 +31,7 @@ function ssePlugin(): Plugin {
         const isApi = url.startsWith("/visitors") || url.startsWith("/@");
 
         if (!hasExtension && !isApi) {
-          req.url = "/example/index.html";
+          req.url = "/src/example/index.html";
         }
         next();
       });
@@ -117,7 +117,7 @@ export default defineConfig(({ mode }) => {
           outDir: "dist-example",
           rollupOptions: {
             input: {
-              main: resolve(__dirname, "example/index.html"),
+              main: resolve(__dirname, "src/example/index.html"),
             },
           },
         }
