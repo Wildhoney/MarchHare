@@ -44,19 +44,21 @@ Strongly typed React framework using generators and efficiently updated views al
 
 ## Getting started
 
-Actions are responsible for mutating the state of the view. In the below example the `name` is dispatched from the view to the actions, the state is updated and the view is rendered with the updated value. We use the `Actions` type to ensure type safety for our actions class.
+Actions are responsible for mutating the state of the view. In the below example the `name` is dispatched from the view to the actions, the state is updated and the view is rendered with the updated value. We define an `Action` type as a tuple `[Model, typeof Actions]` to ensure type safety throughout.
 
 ```tsx
-const model: Model = {
+const model = {
   name: null,
-};
+} satisfies Model;
 
 export class Actions {
   static Name = createAction<string>();
 }
 
+export type Action = [Model, typeof Actions];
+
 export default function useNameActions() {
-  return useActions<Model, typeof Actions>(
+  return useActions<Action>(
     model,
     class {
       [Actions.Name] = utils.set("name");
@@ -81,50 +83,50 @@ export default function Profile(props: Props): React.ReactElement {
 }
 ```
 
-Notice `createAction<string>()` takes a generic to specify the payload type. When using `useAction`, the payload is accessible as the second argument after `context`. The third generic in `useAction<Model, typeof Actions, "Name">` extracts the correct payload type from the `Actions` class:
+Notice `createAction<string>()` takes a generic to specify the payload type. When using `useAction`, the payload is accessible as the second argument after `context`. The second generic in `useAction<Action, "Name">` extracts the correct payload type from the `Actions` class:
 
 ```tsx
 export class Actions {
   static Name = createAction<string>();
 }
 
-const nameAction = useAction<Model, typeof Actions, "Name">(
-  async (context, payload) => {
-    // payload is correctly typed as `string`
-  },
-);
+export type Action = [Model, typeof Actions];
+
+const name = useAction<Action, "Name">(async (context, payload) => {
+  // payload is correctly typed as `string`
+});
 ```
 
 You can perform asynchronous operations in the action which will cause the associated view to render a second time &ndash; as we're starting to require more control in our actions we&apos;ll move to our own fine-tuned action instead of `utils.set`:
 
 ```tsx
-const model: Model = {
+const model = {
   name: null,
-};
+} satisfies Model;
 
 export class Actions {
   static Name = createAction();
 }
 
+export type Action = [Model, typeof Actions];
+
 export default function useNameActions() {
-  const nameAction = useAction<Model, typeof Actions, "Name">(
-    async (context) => {
-      context.actions.produce((draft) => {
-        draft.model.name = null;
-      });
+  const name = useAction<Action, "Name">(async (context) => {
+    context.actions.produce((draft) => {
+      draft.model.name = null;
+    });
 
-      const name = await fetch(/* ... */);
+    const name = await fetch(/* ... */);
 
-      context.actions.produce((draft) => {
-        draft.model.name = name;
-      });
-    },
-  );
+    context.actions.produce((draft) => {
+      draft.model.name = name;
+    });
+  });
 
-  return useActions<Model, typeof Actions>(
+  return useActions<Action>(
     model,
     class {
-      [Actions.Name] = nameAction;
+      [Actions.Name] = name;
     },
   );
 }
@@ -373,19 +375,19 @@ import { use } from "chizu";
 Ensures only one instance of an action runs at a time. When a new action is dispatched, any previous running instance is automatically aborted. Use `context.signal` to cancel in-flight requests. When an action is supplanted, the error handler receives `Reason.Supplanted`:
 
 ```ts
-const searchAction = useAction<Model, typeof Actions, "Search">(
-  async (context, query) => {
-    const response = await fetch(`/search?q=${query}`, {
-      signal: context.signal,
-    });
-  },
-);
+export type Action = [Model, typeof Actions];
 
-return useActions<Model, typeof Actions>(
+const search = useAction<Action, "Search">(async (context, query) => {
+  const response = await fetch(`/search?q=${query}`, {
+    signal: context.signal,
+  });
+});
+
+return useActions<Action>(
   model,
   class {
     @use.supplant()
-    [Actions.Search] = searchAction;
+    [Actions.Search] = search;
   },
 );
 ```
@@ -541,8 +543,10 @@ type Model = {
   source: EventSource | null;
 };
 
+export type Action = [Model, typeof Actions];
+
 export function useVisitorActions() {
-  const mountAction = useAction<Model, typeof Actions>((context) => {
+  const mount = useAction<Action>((context) => {
     const source = new EventSource("/visitors");
     source.addEventListener("visitor", (event) => {
       context.actions.dispatch(
@@ -555,25 +559,23 @@ export function useVisitorActions() {
     });
   });
 
-  const visitorAction = useAction<Model, typeof Actions, "Visitor">(
-    (context, country) => {
-      context.actions.produce((draft) => {
-        draft.model.visitor = country;
-        draft.model.history = [country, ...draft.model.history].slice(0, 20);
-      });
-    },
-  );
+  const visitor = useAction<Action, "Visitor">((context, country) => {
+    context.actions.produce((draft) => {
+      draft.model.visitor = country;
+      draft.model.history = [country, ...draft.model.history].slice(0, 20);
+    });
+  });
 
-  const unmountAction = useAction<Model, typeof Actions>((context) => {
+  const unmount = useAction<Action>((context) => {
     context.model.source?.close();
   });
 
-  return useActions<Model, typeof Actions>(
+  return useActions<Action>(
     model,
     class {
-      [Lifecycle.Mount] = mountAction;
-      [Actions.Visitor] = visitorAction;
-      [Lifecycle.Unmount] = unmountAction;
+      [Lifecycle.Mount] = mount;
+      [Actions.Visitor] = visitor;
+      [Lifecycle.Unmount] = unmount;
     },
   );
 }
@@ -648,13 +650,11 @@ if (utils.checksum(currentData) !== utils.checksum(previousData)) {
 Returns a promise that resolves after the specified milliseconds. Useful for simulating delays in actions during development or adding intentional pauses. Optionally accepts an `AbortSignal` to cancel the sleep early:
 
 ```ts
-const fetchAction = useAction<Model, typeof Actions, "Fetch">(
-  async (context) => {
-    await utils.sleep(1_000); // Simulate network delay
-    const data = await fetch("/api/data", { signal: context.signal });
-    // ...
-  },
-);
+const fetch = useAction<Action, "Fetch">(async (context) => {
+  await utils.sleep(1_000); // Simulate network delay
+  const data = await fetch("/api/data", { signal: context.signal });
+  // ...
+});
 ```
 
 ## Referential equality
@@ -669,18 +669,16 @@ import { useSnapshot } from "chizu";
 function useSearchActions(props: Props) {
   const snapshot = useSnapshot(props);
 
-  const searchAction = useAction<Model, typeof Actions, "Search">(
-    async (context, query) => {
-      // Before await: props.filters is current (useEffectEvent-like behavior)
-      console.log(props.filters);
+  const search = useAction<Action, "Search">(async (context, query) => {
+    // Before await: props.filters is current (useEffectEvent-like behavior)
+    console.log(props.filters);
 
-      const results = await fetch(`/search?q=${query}`);
+    const results = await fetch(`/search?q=${query}`);
 
-      // After await: props.filters might be stale if it changed during the fetch
-      // Use snapshot.filters instead for guaranteed latest value
-      console.log(snapshot.filters);
-    },
-  );
+    // After await: props.filters might be stale if it changed during the fetch
+    // Use snapshot.filters instead for guaranteed latest value
+    console.log(snapshot.filters);
+  });
 
   // ...
 }
@@ -695,22 +693,18 @@ The regulator is accessed via `context.regulator` inside your action handlers. I
 ### Usage
 
 ```ts
-const fetchAction = useAction<Model, typeof Actions, "Fetch">(
-  async (context) => {
-    // Disallow future dispatches of these actions
-    context.regulator.policy.disallow.matching([Actions.Fetch, Actions.Save]);
+const fetch = useAction<Action, "Fetch">(async (context) => {
+  // Disallow future dispatches of these actions
+  context.regulator.policy.disallow.matching([Actions.Fetch, Actions.Save]);
 
-    // Future dispatches via useAction will be aborted immediately
-    // and the error handler will receive Reason.Disallowed
-  },
-);
+  // Future dispatches via useAction will be aborted immediately
+  // and the error handler will receive Reason.Disallowed
+});
 
-const resetAction = useAction<Model, typeof Actions, "Reset">(
-  async (context) => {
-    // Allow the actions again
-    context.regulator.policy.allow.matching([Actions.Fetch, Actions.Save]);
-  },
-);
+const reset = useAction<Action, "Reset">(async (context) => {
+  // Allow the actions again
+  context.regulator.policy.allow.matching([Actions.Fetch, Actions.Save]);
+});
 ```
 
 You can also abort running actions:

@@ -144,6 +144,35 @@ export type ActionsClass<AC = object> = {
   new (): unknown;
 } & AC;
 
+/**
+ * Helper type to extract the Model from an ActionPair tuple.
+ * If T is a tuple [M, AC], returns M. Otherwise returns T directly.
+ */
+export type InferModel<T> = T extends [infer M, ActionsClass] ? M : T;
+
+/**
+ * Helper type to extract the ActionsClass from an ActionPair tuple.
+ * If T is a tuple [M, AC], returns AC. Otherwise returns the Fallback.
+ */
+export type InferActionsClass<T, Fallback = ActionsClass> = T extends [
+  Model,
+  infer AC,
+]
+  ? AC
+  : Fallback;
+
+/**
+ * Type alias for the [Model, ActionsClass] tuple pattern.
+ * Use this to define a single type that captures both model and actions.
+ *
+ * @example
+ * ```ts
+ * type Action = [Model, typeof Actions];
+ * const handler = useAction<Action>((context) => { ... });
+ * ```
+ */
+export type ActionPair = [Model, ActionsClass];
+
 export type ActionInstance<
   M extends Model,
   AC extends ActionsClass,

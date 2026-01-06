@@ -17,3 +17,5 @@ export type Model = {
 export class Actions {
   static Visitor = createAction<Country>("Visitor");
 }
+
+export type Action = [Model, typeof Actions];

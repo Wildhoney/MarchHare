@@ -1,6 +1,6 @@
 import { useAction, useActions, use } from "../../library/index.ts";
 import { sleep } from "../../library/utils/index.ts";
-import { Model, Actions } from "./types.ts";
+import { Model, Actions, Action } from "./types.ts";
 
 const model: Model = {
   value: 0,
@@ -16,7 +16,7 @@ let retryAttemptCount = 0;
 
 /**
  * Reset the module-scope retry counter.
- * Called by the ResetRetry action.
+ * Called by the Reset action.
  */
 export function resetRetryAttemptCount(): void {
   retryAttemptCount = 0;
@@ -27,50 +27,41 @@ export function useDecoratorActions() {
    * Supplant action - demonstrates that only one instance runs at a time.
    * Previous execution is aborted when called again.
    */
-  const supplantAction = useAction<Model, typeof Actions, "SupplantAction">(
-    async (context) => {
-      const id = Date.now();
-      context.actions.produce((draft) => {
-        draft.model.log = [...draft.model.log, `supplant-start-${id}`];
-      });
+  const supplant = useAction<Action, "Supplant">(async (context) => {
+    const id = Date.now();
+    context.actions.produce((draft) => {
+      draft.model.log = [...draft.model.log, `supplant-start-${id}`];
+    });
 
-      await sleep(500, context.signal);
+    await sleep(500, context.signal);
 
-      context.actions.produce((draft) => {
-        draft.model.log = [...draft.model.log, `supplant-end-${id}`];
-        draft.model.value += 1;
-      });
-    },
-  );
+    context.actions.produce((draft) => {
+      draft.model.log = [...draft.model.log, `supplant-end-${id}`];
+      draft.model.value += 1;
+    });
+  });
 
   /**
    * Debounce action - waits for quiet period before executing.
    * Rapid calls only result in one execution.
    */
-  const debounceAction = useAction<Model, typeof Actions, "DebounceAction">(
-    async (context) => {
-      context.actions.produce((draft) => {
-        draft.model.log = [...draft.model.log, "debounce-executed"];
-        draft.model.value += 1;
-      });
-    },
-  );
+  const debounce = useAction<Action, "Debounce">(async (context) => {
+    context.actions.produce((draft) => {
+      draft.model.log = [...draft.model.log, "debounce-executed"];
+      draft.model.value += 1;
+    });
+  });
 
   /**
    * Throttle action - rate limits execution.
    * First call executes immediately, subsequent calls during window are queued.
    */
-  const throttleAction = useAction<Model, typeof Actions, "ThrottleAction">(
-    async (context) => {
-      context.actions.produce((draft) => {
-        draft.model.log = [
-          ...draft.model.log,
-          `throttle-executed-${Date.now()}`,
-        ];
-        draft.model.value += 1;
-      });
-    },
-  );
+  const throttle = useAction<Action, "Throttle">(async (context) => {
+    context.actions.produce((draft) => {
+      draft.model.log = [...draft.model.log, `throttle-executed-${Date.now()}`];
+      draft.model.value += 1;
+    });
+  });
 
   /**
    * Retry action - retries on failure with specified intervals.
@@ -78,69 +69,60 @@ export function useDecoratorActions() {
    * Uses module-scope variable to track attempts across retries since
    * context.model is frozen at the initial call's state.
    */
-  const retryAction = useAction<Model, typeof Actions, "RetryAction">(
-    async (context) => {
-      retryAttemptCount += 1;
-      const currentAttempt = retryAttemptCount;
+  const retry = useAction<Action, "Retry">(async (context) => {
+    retryAttemptCount += 1;
+    const currentAttempt = retryAttemptCount;
 
-      context.actions.produce((draft) => {
-        draft.model.attempts = currentAttempt;
-        draft.model.log = [
-          ...draft.model.log,
-          `retry-attempt-${currentAttempt}`,
-        ];
-      });
+    context.actions.produce((draft) => {
+      draft.model.attempts = currentAttempt;
+      draft.model.log = [...draft.model.log, `retry-attempt-${currentAttempt}`];
+    });
 
-      // Fail on first 2 attempts, succeed on 3rd
-      if (currentAttempt < 3) {
-        throw new Error(`Attempt ${currentAttempt} failed`);
-      }
+    // Fail on first 2 attempts, succeed on 3rd
+    if (currentAttempt < 3) {
+      throw new Error(`Attempt ${currentAttempt} failed`);
+    }
 
-      context.actions.produce((draft) => {
-        draft.model.log = [...draft.model.log, "retry-success"];
-        draft.model.value += 1;
-      });
-    },
-  );
+    context.actions.produce((draft) => {
+      draft.model.log = [...draft.model.log, "retry-success"];
+      draft.model.value += 1;
+    });
+  });
 
   /**
    * Reset retry counter for testing.
    * Resets both the module-scope variable and the model state.
    */
-  const resetRetry = useAction<Model, typeof Actions, "ResetRetry">(
-    (context) => {
-      resetRetryAttemptCount();
-      context.actions.produce((draft) => {
-        draft.model.attempts = 0;
-      });
-    },
-  );
+  const reset = useAction<Action, "Reset">((context) => {
+    resetRetryAttemptCount();
+    context.actions.produce((draft) => {
+      draft.model.attempts = 0;
+    });
+  });
 
   /**
    * Timeout action - aborts if takes too long.
    * Sleeps for 1000ms but timeout is 200ms.
    */
-  const timeoutAction = useAction<Model, typeof Actions, "TimeoutAction">(
-    async (context) => {
-      context.actions.produce((draft) => {
-        draft.model.log = [...draft.model.log, "timeout-start"];
-      });
+  const timeout = useAction<Action, "Timeout">(async (context) => {
+    context.actions.produce((draft) => {
+      draft.model.log = [...draft.model.log, "timeout-start"];
+    });
 
-      // This will exceed the timeout
-      await sleep(1000, context.signal);
+    // This will exceed the timeout
+    await sleep(1000, context.signal);
 
-      // This should never be reached
-      context.actions.produce((draft) => {
-        draft.model.log = [...draft.model.log, "timeout-end"];
-        draft.model.value += 1;
-      });
-    },
-  );
+    // This should never be reached
+    context.actions.produce((draft) => {
+      draft.model.log = [...draft.model.log, "timeout-end"];
+      draft.model.value += 1;
+    });
+  });
 
   /**
    * Clear the log for fresh tests.
    */
-  const clearLog = useAction<Model, typeof Actions, "ClearLog">((context) => {
+  const clear = useAction<Action, "Clear">((context) => {
     context.actions.produce((draft) => {
       draft.model.log = [];
       draft.model.value = 0;
@@ -148,27 +130,27 @@ export function useDecoratorActions() {
     });
   });
 
-  return useActions<Model, typeof Actions>(
+  return useActions<Action>(
     model,
     class {
       @use.supplant()
-      [Actions.SupplantAction] = supplantAction;
+      [Actions.Supplant] = supplant;
 
       @use.debounce(300)
-      [Actions.DebounceAction] = debounceAction;
+      [Actions.Debounce] = debounce;
 
       @use.throttle(500)
-      [Actions.ThrottleAction] = throttleAction;
+      [Actions.Throttle] = throttle;
 
       @use.retry([100, 100])
-      [Actions.RetryAction] = retryAction;
+      [Actions.Retry] = retry;
 
-      [Actions.ResetRetry] = resetRetry;
+      [Actions.Reset] = reset;
 
       @use.timeout(200)
-      [Actions.TimeoutAction] = timeoutAction;
+      [Actions.Timeout] = timeout;
 
-      [Actions.ClearLog] = clearLog;
+      [Actions.Clear] = clear;
     },
   );
 }

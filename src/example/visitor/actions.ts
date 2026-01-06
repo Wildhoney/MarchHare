@@ -1,5 +1,5 @@
 import { useAction, useActions, Lifecycle } from "../../library/index.ts";
-import { Model, Actions, Country } from "./types.ts";
+import { Model, Actions, Country, Action } from "./types.ts";
 import { A } from "@mobily/ts-belt";
 
 const model: Model = {
@@ -10,7 +10,7 @@ const model: Model = {
 };
 
 export function useVisitorActions() {
-  const mountAction = useAction<Model, typeof Actions>((context) => {
+  const mount = useAction<Action>((context) => {
     const source = new EventSource("/visitors");
     source.addEventListener("connected", () => {
       context.actions.produce((draft) => {
@@ -31,27 +31,23 @@ export function useVisitorActions() {
     });
   });
 
-  const visitorAction = useAction<Model, typeof Actions, "Visitor">(
-    (context, country) => {
-      context.actions.produce((draft) => {
-        draft.model.visitor = country;
-        draft.model.history = [
-          ...A.take([country, ...draft.model.history], 20),
-        ];
-      });
-    },
-  );
+  const visitor = useAction<Action, "Visitor">((context, country) => {
+    context.actions.produce((draft) => {
+      draft.model.visitor = country;
+      draft.model.history = [...A.take([country, ...draft.model.history], 20)];
+    });
+  });
 
-  const unmountAction = useAction<Model, typeof Actions>((context) => {
+  const unmount = useAction<Action>((context) => {
     context.model.source?.close();
   });
 
-  return useActions<Model, typeof Actions>(
+  return useActions<Action>(
     model,
     class {
-      [Lifecycle.Mount] = mountAction;
-      [Actions.Visitor] = visitorAction;
-      [Lifecycle.Unmount] = unmountAction;
+      [Lifecycle.Mount] = mount;
+      [Actions.Visitor] = visitor;
+      [Lifecycle.Unmount] = unmount;
     },
   );
 }

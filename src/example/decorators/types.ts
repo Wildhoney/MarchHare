@@ -7,11 +7,13 @@ export type Model = {
 };
 
 export class Actions {
-  static SupplantAction = createAction<void>("SupplantAction");
-  static DebounceAction = createAction<void>("DebounceAction");
-  static ThrottleAction = createAction<void>("ThrottleAction");
-  static RetryAction = createAction<void>("RetryAction");
-  static ResetRetry = createAction<void>("ResetRetry");
-  static TimeoutAction = createAction<void>("TimeoutAction");
-  static ClearLog = createAction<void>("ClearLog");
+  static Supplant = createAction<void>("Supplant");
+  static Debounce = createAction<void>("Debounce");
+  static Throttle = createAction<void>("Throttle");
+  static Retry = createAction<void>("Retry");
+  static Reset = createAction<void>("Reset");
+  static Timeout = createAction<void>("Timeout");
+  static Clear = createAction<void>("Clear");
 }
+
+export type Action = [Model, typeof Actions];

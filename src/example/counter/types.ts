@@ -9,3 +9,5 @@ export class Actions extends DistributedActions {
   static Increment = createAction("Increment");
   static Decrement = createAction("Decrement");
 }
+
+export type Action = [Model, typeof Actions];

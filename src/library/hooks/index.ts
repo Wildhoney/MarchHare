@@ -16,6 +16,9 @@ import {
   Action,
   UseActions,
   Result,
+  ActionPair,
+  InferModel,
+  InferActionsClass,
 } from "../types/index.ts";
 import { ConsumeRenderer, ConsumerRenderer } from "../consumer/index.tsx";
 import { getReason, normaliseError } from "../utils/index.ts";
@@ -33,55 +36,79 @@ import { Regulator, useRegulators } from "../regulator/utils.ts";
  * This hook uses React's useEffectEvent to ensure the handler always sees current
  * props and state values, avoiding stale closures while maintaining a stable function identity.
  *
- * @template M The type of the model.
- * @template AC The type of the actions class.
- * @template K The specific action key being handled.
+ * Supports two usage patterns:
+ * 1. Tuple pattern: `useAction<[Model, typeof Actions]>` or `useAction<[Model, typeof Actions], "ActionKey">`
+ * 2. Separate params: `useAction<Model, typeof Actions>` or `useAction<Model, typeof Actions, "ActionKey">`
+ *
+ * @template A The ActionPair tuple [Model, ActionsClass] or just the Model type.
+ * @template K The specific action key being handled (when using tuple pattern), or ActionsClass (when using separate params).
  * @param handler The action handler function that receives context and optional payload.
  * @returns A memoized async function that executes the handler with error handling.
+ *
+ * @example
+ * ```ts
+ * // Tuple pattern (recommended)
+ * type Action = [Model, typeof Actions];
+ * const mount = useAction<Action>((context) => { ... });
+ * const increment = useAction<Action, "Increment">((context, payload) => { ... });
+ *
+ * // Separate params pattern
+ * const mount = useAction<Model, typeof Actions>((context) => { ... });
+ * ```
  */
 export function useAction<
-  M extends Model,
-  AC extends ActionsClass,
-  K extends Exclude<keyof AC, "prototype"> | never = never,
+  A extends Model | ActionPair,
+  K extends A extends ActionPair
+    ? Exclude<keyof A[1], "prototype"> | never
+    : ActionsClass = A extends ActionPair ? never : never,
 >(
   handler: (
-    context: Context<M, AC>,
-    payload: [K] extends [never]
-      ? unknown
-      : AC[K] extends Payload<infer P>
-        ? P
-        : unknown,
+    context: Context<
+      InferModel<A> & Model,
+      InferActionsClass<A, K extends ActionsClass ? K : ActionsClass> &
+        ActionsClass
+    >,
+    payload: A extends ActionPair
+      ? K extends Exclude<keyof A[1], "prototype">
+        ? A[1][K] extends Payload<infer P>
+          ? P
+          : unknown
+        : unknown
+      : unknown,
   ) => void | Promise<void> | AsyncGenerator | Generator,
 ) {
-  return React.useEffectEvent(
-    async (
-      context: Context<M, AC>,
-      payload: [K] extends [never]
-        ? unknown
-        : AC[K] extends Payload<infer P>
-          ? P
-          : unknown,
-    ) => {
-      const isGenerator =
-        handler.constructor.name === "GeneratorFunction" ||
-        handler.constructor.name === "AsyncGeneratorFunction";
+  type M = InferModel<A> & Model;
+  type AC = InferActionsClass<A, K extends ActionsClass ? K : ActionsClass> &
+    ActionsClass;
+  type P = A extends ActionPair
+    ? K extends Exclude<keyof A[1], "prototype">
+      ? A[1][K] extends Payload<infer P>
+        ? P
+        : unknown
+      : unknown
+    : unknown;
 
-      if (isGenerator) {
-        const generator = <Generator | AsyncGenerator>handler(context, payload);
+  return React.useEffectEvent(async (context: Context<M, AC>, payload: P) => {
+    const isGenerator =
+      handler.constructor.name === "GeneratorFunction" ||
+      handler.constructor.name === "AsyncGeneratorFunction";
 
-        for await (const _ of generator) void 0;
-      } else {
-        await handler(context, payload);
-      }
-    },
-  );
+    if (isGenerator) {
+      const generator = <Generator | AsyncGenerator>handler(context, payload);
+
+      for await (const _ of generator) void 0;
+    } else {
+      await handler(context, payload);
+    }
+  });
 }
 
 /**
  * A hook for managing state with actions.
  *
- * Pass type parameters explicitly to get proper type inference for the returned tuple:
- * `useActions<Model, typeof Actions>(initialModel, actionClass)`
+ * Supports two usage patterns:
+ * 1. Tuple pattern: `useActions<[Model, typeof Actions]>(initialModel, actionClass)`
+ * 2. Separate params: `useActions<Model, typeof Actions>(initialModel, actionClass)`
  *
  * The hook returns a tuple containing:
  * 1. The current model state
@@ -91,15 +118,28 @@ export function useAction<
  * allowing you to check for pending operations on model properties using
  * methods like `actions.inspect.count.pending()` and `actions.inspect.count.remaining()`.
  *
- * @template M The type of the model state.
- * @template AC The type of the actions class (should be `typeof YourActionsClass`).
+ * @template A The ActionPair tuple [Model, ActionsClass] or just the Model type.
+ * @template AC The type of the actions class (only needed when using separate params pattern).
  * @param {M} initialModel The initial model state.
  * @param {Actions<M, AC> | (new () => unknown)} ActionClass The class defining the actions.
  * @returns {UseActions<M, AC>} A tuple `[model, actions]` where `actions` includes `dispatch` and `inspect`.
  *
  * @example
  * ```typescript
- * // In your actions file
+ * // Tuple pattern (recommended)
+ * type Action = [Model, typeof Actions];
+ *
+ * export default function useCounterActions() {
+ *   return useActions<Action>(
+ *     { count: 0 },
+ *     class {
+ *       [Actions.Increment] = incrementAction;
+ *       [Actions.Decrement] = decrementAction;
+ *     }
+ *   );
+ * }
+ *
+ * // Separate params pattern
  * export default function useCounterActions() {
  *   return useActions<Model, typeof Actions>(
  *     { count: 0 },
@@ -109,28 +149,20 @@ export function useAction<
  *     }
  *   );
  * }
- *
- * // In your component
- * function Counter() {
- *   const [model, actions] = useCounterActions();
- *
- *   return (
- *     <div>
- *       <p>Count: {model.count}</p>
- *       {actions.inspect.count.pending() && <Spinner />}
- *       {actions.inspect.count.pending() && (
- *         <p>Remaining: {actions.inspect.count.remaining()}</p>
- *       )}
- *       <button onClick={() => actions.dispatch(Actions.Increment)}>+</button>
- *     </div>
- *   );
- * }
  * ```
  */
-export function useActions<M extends Model, AC extends ActionsClass>(
-  initialModel: M,
-  ActionClass: Actions<M, AC> | (new () => unknown),
-): UseActions<M, AC> {
+export function useActions<
+  A extends Model | ActionPair,
+  AC extends ActionsClass = A extends ActionPair
+    ? A[1] & ActionsClass
+    : ActionsClass,
+>(
+  initialModel: InferModel<A> & Model,
+  ActionClass:
+    | Actions<InferModel<A> & Model, InferActionsClass<A, AC> & ActionsClass>
+    | (new () => unknown),
+): UseActions<InferModel<A> & Model, InferActionsClass<A, AC> & ActionsClass> {
+  type M = InferModel<A> & Model;
   const broadcast = useBroadcast();
   const handleError = useError();
   const regulators = useRegulators();
@@ -277,7 +309,13 @@ export function useActions<M extends Model, AC extends ActionsClass>(
   }, []);
 
   return React.useMemo(
-    () => <UseActions<M, AC>>(<unknown>[
+    () =>
+      <
+        UseActions<
+          InferModel<A> & Model,
+          InferActionsClass<A, AC> & ActionsClass
+        >
+      >(<unknown>[
         model,
         {
           dispatch(...[action, payload]: [action: Action, payload?: Payload]) {

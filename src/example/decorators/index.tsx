@@ -72,7 +72,7 @@ export default function DecoratorTests(): React.ReactElement {
         <button
           className={styles.button}
           data-testid="supplant-trigger"
-          onClick={() => actions.dispatch(Actions.SupplantAction)}
+          onClick={() => actions.dispatch(Actions.Supplant)}
         >
           Trigger Supplant Action
         </button>
@@ -91,7 +91,7 @@ export default function DecoratorTests(): React.ReactElement {
         <button
           className={styles.button}
           data-testid="debounce-trigger"
-          onClick={() => actions.dispatch(Actions.DebounceAction)}
+          onClick={() => actions.dispatch(Actions.Debounce)}
         >
           Trigger Debounce Action
         </button>
@@ -110,7 +110,7 @@ export default function DecoratorTests(): React.ReactElement {
         <button
           className={styles.button}
           data-testid="throttle-trigger"
-          onClick={() => actions.dispatch(Actions.ThrottleAction)}
+          onClick={() => actions.dispatch(Actions.Throttle)}
         >
           Trigger Throttle Action
         </button>
@@ -128,14 +128,14 @@ export default function DecoratorTests(): React.ReactElement {
         <button
           className={styles.button}
           data-testid="retry-trigger"
-          onClick={() => actions.dispatch(Actions.RetryAction)}
+          onClick={() => actions.dispatch(Actions.Retry)}
         >
           Trigger Retry Action
         </button>
         <button
           className={styles.button}
           data-testid="retry-reset"
-          onClick={() => actions.dispatch(Actions.ResetRetry)}
+          onClick={() => actions.dispatch(Actions.Reset)}
         >
           Reset Attempts
         </button>
@@ -154,7 +154,7 @@ export default function DecoratorTests(): React.ReactElement {
         <button
           className={styles.button}
           data-testid="timeout-trigger"
-          onClick={() => actions.dispatch(Actions.TimeoutAction)}
+          onClick={() => actions.dispatch(Actions.Timeout)}
         >
           Trigger Timeout Action
         </button>
@@ -166,7 +166,7 @@ export default function DecoratorTests(): React.ReactElement {
         <button
           className={styles.button}
           data-testid="clear-log"
-          onClick={() => actions.dispatch(Actions.ClearLog)}
+          onClick={() => actions.dispatch(Actions.Clear)}
         >
           Clear Log
         </button>
