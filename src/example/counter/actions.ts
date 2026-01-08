@@ -1,17 +1,17 @@
-import { useAction, useActions, Operation } from "../../library/index.ts";
+import { useActions, Operation } from "../../library/index.ts";
 import { sleep } from "../../library/utils/index.ts";
 import { DistributedActions } from "../types.ts";
-import { Model, Actions, Action } from "./types.ts";
+import { Model, Actions } from "./types.ts";
 
 const model: Model = {
   count: 1,
 };
 
 export function useCounterActions() {
-  const increment = useAction<Action, "Increment">(async (context) => {
-    context.actions.produce((draft) => {
-      context.signal;
+  const actions = useActions<Model, typeof Actions>(model);
 
+  actions.useAction(Actions.Increment, async (context) => {
+    context.actions.produce((draft) => {
       draft.model.count = context.actions.annotate(
         Operation.Update,
         draft.inspect.count.draft() + 1,
@@ -26,18 +26,12 @@ export function useCounterActions() {
     });
   });
 
-  const decrement = useAction<Action, "Decrement">((context) => {
+  actions.useAction(Actions.Decrement, (context) => {
     context.actions.produce((draft) => {
-      draft.model.count = draft.inspect.count.draft() - 1;
+      draft.model.count = draft.model.count - 1;
       context.actions.dispatch(DistributedActions.Counter, draft.model.count);
     });
   });
 
-  return useActions<Action>(
-    model,
-    class {
-      [Actions.Increment] = increment;
-      [Actions.Decrement] = decrement;
-    },
-  );
+  return actions;
 }

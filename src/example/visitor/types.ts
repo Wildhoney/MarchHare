@@ -1,4 +1,4 @@
-import { createAction } from "../../library/index.ts";
+import { Action } from "../../library/index.ts";
 
 export type Country = {
   name: string;
@@ -15,7 +15,5 @@ export type Model = {
 };
 
 export class Actions {
-  static Visitor = createAction<Country>("Visitor");
+  static Visitor = Action<Country>("Visitor");
 }
-
-export type Action = [Model, typeof Actions];

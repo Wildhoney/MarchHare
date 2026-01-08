@@ -1,24 +1,32 @@
 import * as React from "react";
 import {
   withGetters,
-  useReactives,
   useLifecycle,
+  useReactives,
   usePollings,
 } from "./utils.ts";
+import type {
+  ActionHandler,
+  ActionsScope,
+  ReactiveEntry,
+  PollEntry,
+} from "./types.ts";
 import {
+  meta,
   Context,
   Lifecycle,
   Model,
   Payload,
   Props,
   ActionsClass,
-  Actions,
   Action,
   UseActions,
   Result,
   ActionPair,
   InferModel,
   InferActionsClass,
+  ExtractPayload,
+  Middleware,
 } from "../types/index.ts";
 import { ConsumeRenderer, ConsumerRenderer } from "../consumer/index.tsx";
 import { getReason, normaliseError } from "../utils/index.ts";
@@ -27,127 +35,109 @@ import { useBroadcast } from "../broadcast/index.tsx";
 import { isDistributedAction, getActionName } from "../action/index.ts";
 import { useError } from "../error/index.tsx";
 import { State, Operation, Process } from "immertation";
-import { context } from "../use/index.ts";
 import { Regulator, useRegulators } from "../regulator/utils.ts";
 
-/**
- * Creates a memoized action handler that always has access to the latest closure values.
- *
- * This hook uses React's useEffectEvent to ensure the handler always sees current
- * props and state values, avoiding stale closures while maintaining a stable function identity.
- *
- * Supports two usage patterns:
- * 1. Tuple pattern: `useAction<[Model, typeof Actions]>` or `useAction<[Model, typeof Actions], "ActionKey">`
- * 2. Separate params: `useAction<Model, typeof Actions>` or `useAction<Model, typeof Actions, "ActionKey">`
- *
- * @template A The ActionPair tuple [Model, ActionsClass] or just the Model type.
- * @template K The specific action key being handled (when using tuple pattern), or ActionsClass (when using separate params).
- * @param handler The action handler function that receives context and optional payload.
- * @returns A memoized async function that executes the handler with error handling.
- *
- * @example
- * ```ts
- * // Tuple pattern (recommended)
- * type Action = [Model, typeof Actions];
- * const mount = useAction<Action>((context) => { ... });
- * const increment = useAction<Action, "Increment">((context, payload) => { ... });
- *
- * // Separate params pattern
- * const mount = useAction<Model, typeof Actions>((context) => { ... });
- * ```
- */
-export function useAction<
-  A extends Model | ActionPair,
-  K extends A extends ActionPair
-    ? Exclude<keyof A[1], "prototype"> | never
-    : ActionsClass = A extends ActionPair ? never : never,
->(
+type ExtendedMiddleware = Middleware & {
+  reactive?: Omit<ReactiveEntry, "action">;
+  poll?: Omit<PollEntry, "action">;
+};
+
+function useRegisterHandler<M extends Model, AC extends ActionsClass>(
+  scope: React.RefObject<ActionsScope>,
+  action: symbol,
   handler: (
-    context: Context<
-      InferModel<A> & Model,
-      InferActionsClass<A, K extends ActionsClass ? K : ActionsClass> &
-        ActionsClass
-    >,
-    payload: A extends ActionPair
-      ? K extends Exclude<keyof A[1], "prototype">
-        ? A[1][K] extends Payload<infer P>
-          ? P
-          : unknown
-        : unknown
-      : unknown,
+    context: Context<M, AC>,
+    payload: unknown,
   ) => void | Promise<void> | AsyncGenerator | Generator,
-) {
-  type M = InferModel<A> & Model;
-  type AC = InferActionsClass<A, K extends ActionsClass ? K : ActionsClass> &
-    ActionsClass;
-  type P = A extends ActionPair
-    ? K extends Exclude<keyof A[1], "prototype">
-      ? A[1][K] extends Payload<infer P>
-        ? P
-        : unknown
-      : unknown
-    : unknown;
-
-  return React.useEffectEvent(async (context: Context<M, AC>, payload: P) => {
-    const isGenerator =
-      handler.constructor.name === "GeneratorFunction" ||
-      handler.constructor.name === "AsyncGeneratorFunction";
-
-    if (isGenerator) {
-      const generator = <Generator | AsyncGenerator>handler(context, payload);
-
-      for await (const _ of generator) void 0;
-    } else {
-      await handler(context, payload);
+  middleware: ExtendedMiddleware[] = [],
+): void {
+  for (const mw of middleware) {
+    if (mw.reactive) {
+      scope.current.reactives.add(<ReactiveEntry>{ action, ...mw.reactive });
     }
-  });
+    if (mw.poll) {
+      scope.current.polls.add(<PollEntry>{ action, ...mw.poll });
+    }
+  }
+
+  const wrappedHandler = middleware.reduceRight(
+    (currentHandler, currentMiddleware) =>
+      currentMiddleware.wrap(currentHandler, action),
+    handler,
+  );
+
+  const stableHandler = React.useEffectEvent(
+    async (context: Context<M, AC>, payload: unknown) => {
+      const isGenerator =
+        wrappedHandler.constructor.name === "GeneratorFunction" ||
+        wrappedHandler.constructor.name === "AsyncGeneratorFunction";
+
+      if (isGenerator) {
+        const generator = <Generator | AsyncGenerator>(
+          wrappedHandler(context, payload)
+        );
+        for await (const _ of generator) void 0;
+      } else {
+        await wrappedHandler(context, payload);
+      }
+    },
+  );
+
+  scope.current.handlers.set(action, <ActionHandler>stableHandler);
 }
 
 /**
  * A hook for managing state with actions.
  *
- * Supports two usage patterns:
- * 1. Tuple pattern: `useActions<[Model, typeof Actions]>(initialModel, actionClass)`
- * 2. Separate params: `useActions<Model, typeof Actions>(initialModel, actionClass)`
+ * Call `useActions` first, then use `actions.useAction` to bind handlers
+ * to action symbols. Types are pre-baked from the generic parameters, so
+ * no additional type annotations are needed on handler calls.
  *
  * The hook returns a tuple containing:
  * 1. The current model state
- * 2. An actions object with `dispatch` and `inspect` properties
+ * 2. An actions object with `dispatch`, `consume`, `inspect`, and `useAction`
  *
  * The `inspect` property provides access to Immertation's annotation system,
- * allowing you to check for pending operations on model properties using
- * methods like `actions.inspect.count.pending()` and `actions.inspect.count.remaining()`.
+ * allowing you to check for pending operations on model properties.
  *
- * @template A The ActionPair tuple [Model, ActionsClass] or just the Model type.
- * @template AC The type of the actions class (only needed when using separate params pattern).
- * @param {M} initialModel The initial model state.
- * @param {Actions<M, AC> | (new () => unknown)} ActionClass The class defining the actions.
- * @returns {UseActions<M, AC>} A tuple `[model, actions]` where `actions` includes `dispatch` and `inspect`.
+ * @template A The ActionPair tuple [Model, typeof Actions] for type inference.
+ * @template AC The type of the actions class (inferred from A).
+ * @param initialModel The initial model state.
+ * @returns A tuple `[model, actions]` with pre-typed `useAction` method.
  *
  * @example
  * ```typescript
- * // Tuple pattern (recommended)
- * type Action = [Model, typeof Actions];
- *
- * export default function useCounterActions() {
- *   return useActions<Action>(
- *     { count: 0 },
- *     class {
- *       [Actions.Increment] = incrementAction;
- *       [Actions.Decrement] = decrementAction;
- *     }
- *   );
+ * // types.ts
+ * type Model = { visitor: Country | null };
+ * export class Actions {
+ *   static Visitor = Action<Country>("Visitor");
  * }
  *
- * // Separate params pattern
- * export default function useCounterActions() {
- *   return useActions<Model, typeof Actions>(
- *     { count: 0 },
- *     class {
- *       [Actions.Increment] = incrementAction;
- *       [Actions.Decrement] = decrementAction;
- *     }
- *   );
+ * // actions.ts
+ * export function useVisitorActions() {
+ *   const actions = useActions<Model, typeof Actions>(model);
+ *
+ *   actions.useAction(Lifecycle.Mount, (context) => {
+ *     // Setup logic - types are pre-baked from useActions
+ *   });
+ *
+ *   actions.useAction(Actions.Visitor, (meta, country) => {
+ *     context.actions.produce((draft) => {
+ *       draft.model.visitor = country;
+ *     });
+ *   });
+ *
+ *   actions.useAction(Lifecycle.Unmount, (context) => {
+ *     // Cleanup logic
+ *   });
+ *
+ *   return actions;
+ * }
+ *
+ * // Component usage
+ * function Visitor() {
+ *   const [model, actions] = useVisitorActions();
+ *   return <div>{model.visitor?.name}</div>;
  * }
  * ```
  */
@@ -158,9 +148,6 @@ export function useActions<
     : ActionsClass,
 >(
   initialModel: InferModel<A> & Model,
-  ActionClass:
-    | Actions<InferModel<A> & Model, InferActionsClass<A, AC> & ActionsClass>
-    | (new () => unknown),
 ): UseActions<InferModel<A> & Model, InferActionsClass<A, AC> & ActionsClass> {
   type M = InferModel<A> & Model;
   const broadcast = useBroadcast();
@@ -177,21 +164,16 @@ export function useActions<
   );
   const snapshot = useSnapshot({ model, inspect: state.current.inspect });
   const unicast = React.useMemo(() => new EventEmitter(), []);
-  const actions = React.useMemo(
-    () => new (<Actions<M, AC>>ActionClass)(),
-    [ActionClass],
-  );
+  const scope = React.useRef<ActionsScope>({
+    handlers: new Map(),
+    reactives: new Set(),
+    polls: new Set(),
+  });
   const regulator = React.useRef<Regulator>(new Regulator(regulators));
   const checksums = React.useRef<Map<symbol, string | null>>(new Map());
 
   /**
    * Creates the context object passed to action handlers during dispatch.
-   *
-   * The context provides action handlers with access to:
-   * - **model**: Current immutable model state
-   * - **signal**: AbortSignal for cooperative cancellation
-   * - **regulator**: Methods to abort actions and control execution policies
-   * - **actions**: API for producing state changes, dispatching other actions, and annotating values
    *
    * @param action The action symbol being dispatched.
    * @param result Container for tracking Immertation processes created during execution.
@@ -244,14 +226,15 @@ export function useActions<
           },
           dispatch(...[action, payload]: [action: Action, payload?: Payload]) {
             if (controller.signal.aborted) return;
-            if (isDistributedAction(action)) broadcast.emit(action, payload);
-            else unicast.emit(action, payload);
+            isDistributedAction(action)
+              ? broadcast.emit(action, payload)
+              : unicast.emit(action, payload);
           },
           annotate<T>(operation: Operation, value: T): T {
             return state.current.annotate(operation, value);
           },
         },
-        [context]: {
+        [meta]: {
           controller,
         },
       };
@@ -260,34 +243,32 @@ export function useActions<
   );
 
   React.useLayoutEffect(() => {
-    type ActionHandler = (
-      context: Context<M, AC>,
-      payload: Payload,
-    ) => void | Promise<void>;
-
-    Object.getOwnPropertySymbols(actions).forEach((action) => {
-      async function handler(payload: Payload) {
+    function createHandler(action: symbol, actionHandler: ActionHandler) {
+      return async function handler(payload: Payload) {
         const result = <Result>{ processes: new Set<Process>() };
         const task = Promise.withResolvers<void>();
         try {
-          const handler = <ActionHandler>actions[<keyof typeof actions>action];
-          await handler(getContext(action, result), payload);
+          await actionHandler(getContext(action, result), payload);
         } catch (error) {
-          const handled = Lifecycle.Error in <object>actions;
+          const hasErrorHandler = scope.current.handlers.has(Lifecycle.Error);
           const details = {
             reason: getReason(error),
             error: normaliseError(error),
             action: getActionName(action),
-            handled,
+            handled: hasErrorHandler,
           };
           handleError?.(details);
-          if (handled) unicast.emit(Lifecycle.Error, details);
+          if (hasErrorHandler) unicast.emit(Lifecycle.Error, details);
         } finally {
           result.processes.forEach((process) => state.current.prune(process));
           setModel({ ...state.current.model });
           task.resolve();
         }
-      }
+      };
+    }
+
+    scope.current.handlers.forEach((actionHandler, action) => {
+      const handler = createHandler(action, actionHandler);
 
       isDistributedAction(action)
         ? broadcast.on(action, handler)
@@ -295,11 +276,11 @@ export function useActions<
     });
   }, [unicast]);
 
-  useReactives({ actions: <object>actions, model, state, checksums, unicast });
-
   useLifecycle({ unicast, regulator });
 
-  usePollings({ actions: <object>actions, snapshot, unicast });
+  useReactives({ model, state, checksums, scope, unicast });
+
+  usePollings({ state, scope, unicast });
 
   React.useEffect(() => {
     regulators.add(regulator.current);
@@ -308,36 +289,48 @@ export function useActions<
     };
   }, []);
 
-  return React.useMemo(
-    () =>
-      <
-        UseActions<
-          InferModel<A> & Model,
-          InferActionsClass<A, AC> & ActionsClass
-        >
-      >(<unknown>[
-        model,
-        {
-          dispatch(...[action, payload]: [action: Action, payload?: Payload]) {
-            if (isDistributedAction(action)) broadcast.emit(action, payload);
-            else unicast.emit(action, payload);
-          },
-          consume(
-            action: symbol,
-            renderer: ConsumerRenderer<unknown>,
-          ): React.ReactNode {
-            return React.createElement(ConsumeRenderer, {
-              action,
-              renderer,
-            });
-          },
-          get inspect() {
-            return state.current.inspect;
-          },
-        },
-      ]),
-    [model, unicast],
-  );
+  const useActionMethod = <Act extends symbol>(
+    action: Act,
+    handler: (
+      context: Context<M, AC>,
+      payload: ExtractPayload<Act>,
+    ) => void | Promise<void> | AsyncGenerator | Generator,
+    ...middleware: Middleware[]
+  ): void => {
+    useRegisterHandler<M, AC>(
+      scope,
+      action,
+      <ActionHandler<M, AC>>handler,
+      middleware,
+    );
+  };
+
+  const baseTuple = React.useMemo(() => {
+    const actionsObj = {
+      dispatch(...[action, payload]: [action: Action, payload?: Payload]) {
+        isDistributedAction(action)
+          ? broadcast.emit(action, payload)
+          : unicast.emit(action, payload);
+      },
+      consume(
+        action: symbol,
+        renderer: ConsumerRenderer<unknown>,
+      ): React.ReactNode {
+        return React.createElement(ConsumeRenderer, {
+          action,
+          renderer,
+        });
+      },
+      get inspect() {
+        return state.current.inspect;
+      },
+    };
+    return <[M, typeof actionsObj]>[model, actionsObj];
+  }, [model, unicast]);
+
+  return <
+    UseActions<InferModel<A> & Model, InferActionsClass<A, AC> & ActionsClass>
+  >Object.assign(baseTuple, { useAction: useActionMethod });
 }
 
 /**

@@ -1,4 +1,4 @@
-import { createAction } from "../../library/index.ts";
+import { Action } from "../../library/index.ts";
 
 export type Model = {
   value: number;
@@ -7,13 +7,11 @@ export type Model = {
 };
 
 export class Actions {
-  static Supplant = createAction<void>("Supplant");
-  static Debounce = createAction<void>("Debounce");
-  static Throttle = createAction<void>("Throttle");
-  static Retry = createAction<void>("Retry");
-  static Reset = createAction<void>("Reset");
-  static Timeout = createAction<void>("Timeout");
-  static Clear = createAction<void>("Clear");
+  static Supplant = Action("Supplant");
+  static Debounce = Action("Debounce");
+  static Throttle = Action("Throttle");
+  static Retry = Action("Retry");
+  static Reset = Action("Reset");
+  static Timeout = Action("Timeout");
+  static Clear = Action("Clear");
 }
-
-export type Action = [Model, typeof Actions];

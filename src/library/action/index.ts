@@ -1,55 +1,84 @@
-import { Payload, DistributedPayload } from "../types/index.ts";
-import type { Action } from "../regulator/types.ts";
+import { Payload, DistributedPayload, Distribution } from "../types/index.ts";
+import type { Action as ActionType } from "../regulator/types.ts";
 import { G } from "@mobily/ts-belt";
 
 /**
- * Defines a new local action with a given payload type.
- * Local actions are scoped to the component that defines them and cannot be consumed
- * by other components. Use `createDistributedAction()` for actions that need to be
- * shared across components via `actions.consume()`.
- *
- * @template T The type of the payload that the action will carry.
- * @param name An optional name for the action, used for debugging purposes.
- * @returns A new action symbol.
- *
- * @example
- * ```ts
- * const Increment = createAction<number>("Increment");
- *
- * // Dispatch within the same component
- * actions.dispatch(Increment, 5);
- * ```
+ * Interface for the Action factory function.
  */
-export function createAction<T = never>(
-  name: string = "anonymous",
-): Payload<T> {
-  return <Payload<T>>Symbol(`chizu.action/${name}`);
-}
+type ActionFactory = {
+  /**
+   * Creates a new unicast action with the given name.
+   * @template T The payload type for the action.
+   * @param name The action name, used for debugging purposes.
+   * @returns A typed action symbol.
+   */
+  <T = never>(name: string): Payload<T>;
+
+  /**
+   * Creates a new action with the specified distribution mode.
+   * @template T The payload type for the action.
+   * @param distribution The distribution mode (Unicast or Broadcast).
+   * @param name The action name, used for debugging purposes.
+   * @returns A typed action symbol (DistributedPayload if Broadcast).
+   */
+  <T = never>(
+    distribution: Distribution.Broadcast,
+    name: string,
+  ): DistributedPayload<T>;
+  <T = never>(distribution: Distribution.Unicast, name: string): Payload<T>;
+  <T = never>(
+    distribution: Distribution,
+    name: string,
+  ): Payload<T> | DistributedPayload<T>;
+};
 
 /**
- * Defines a new distributed action with a given payload type.
- * Distributed actions are broadcast to all mounted components that have defined a handler for them.
+ * Creates a new action with a given payload type and optional distribution mode.
  *
- * Returns a `DistributedPayload<T>` which is required by `actions.consume()`. Local actions
- * created with `createAction()` cannot be consumed &ndash; this is enforced at compile-time.
+ * Actions are strongly typed identifiers used to dispatch and handle state changes.
+ * By default, actions use `Distribution.Unicast` (local to the defining component).
+ * Use `Distribution.Broadcast` for actions that need to be shared across components.
  *
  * @template T The type of the payload that the action will carry.
- * @param name An optional name for the action, used for debugging purposes.
- * @returns A new distributed action symbol that can be used with `consume()`.
  *
  * @example
  * ```ts
- * const SignedOut = createDistributedAction<User>("SignedOut");
+ * export class Actions {
+ *   // Unicast action with no payload
+ *   static Reset = Action("Reset");
  *
- * // Can be consumed across components
- * actions.consume(SignedOut, (box) => <div>{box.value.name}</div>);
+ *   // Unicast action with typed payload
+ *   static Increment = Action<number>("Increment");
+ *
+ *   // Broadcast action - can be consumed across components
+ *   static Counter = Action<number>(Distribution.Broadcast, "Counter");
+ * }
+ *
+ * // Usage
+ * actions.dispatch(Actions.Reset);
+ * actions.dispatch(Actions.Increment, 5);
+ * actions.consume(Actions.Counter, (box) => box.value);
  * ```
  */
-export function createDistributedAction<T = never>(
-  name: string = "anonymous",
-): DistributedPayload<T> {
-  return <DistributedPayload<T>>Symbol(`chizu.action/distributed/${name}`);
-}
+export const Action = <ActionFactory>(<unknown>(<T = never>(
+  distributionOrName: Distribution | string,
+  name?: string,
+): Payload<T> | DistributedPayload<T> => {
+  const isDistributionFirst = Object.values(Distribution).includes(
+    <Distribution>distributionOrName,
+  );
+
+  const distribution = isDistributionFirst
+    ? <Distribution>distributionOrName
+    : Distribution.Unicast;
+  const actionName = isDistributionFirst
+    ? (name ?? "anonymous")
+    : distributionOrName;
+
+  return distribution === Distribution.Broadcast
+    ? <DistributedPayload<T>>Symbol(`chizu.action/distributed/${actionName}`)
+    : <Payload<T>>Symbol(`chizu.action/${actionName}`);
+}));
 
 /**
  * Checks whether an action is a distributed action.
@@ -58,7 +87,7 @@ export function createDistributedAction<T = never>(
  * @param action The action to check.
  * @returns True if the action is a distributed action, false otherwise.
  */
-export function isDistributedAction(action: Action): boolean {
+export function isDistributedAction(action: ActionType): boolean {
   if (G.isString(action)) return action.startsWith("chizu.action/distributed/");
   return action.description?.startsWith("chizu.action/distributed/") ?? false;
 }
@@ -75,14 +104,14 @@ export function isDistributedAction(action: Action): boolean {
  *
  * @example
  * ```typescript
- * const action = createAction("Increment");
- * getActionName(action); // "Increment"
+ * const Increment = Action("Increment");
+ * getActionName(Increment); // "Increment"
  *
- * const distributed = createDistributedAction("SignedOut");
- * getActionName(distributed); // "SignedOut"
+ * const SignedOut = Action(Distribution.Broadcast, "SignedOut");
+ * getActionName(SignedOut); // "SignedOut"
  * ```
  */
-export function getActionName(action: Action): string {
+export function getActionName(action: ActionType): string {
   const description = G.isString(action) ? action : (action.description ?? "");
   if (!description.startsWith("chizu.action/")) return "unknown";
   const name = description.slice(description.lastIndexOf("/") + 1);

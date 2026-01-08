@@ -1,4 +1,4 @@
-import { createAction } from "../../library/index.ts";
+import { Action } from "../../library/index.ts";
 import { DistributedActions } from "../types.ts";
 
 export type Model = {
@@ -6,8 +6,6 @@ export type Model = {
 };
 
 export class Actions extends DistributedActions {
-  static Increment = createAction("Increment");
-  static Decrement = createAction("Decrement");
+  static Increment = Action("Increment");
+  static Decrement = Action("Decrement");
 }
-
-export type Action = [Model, typeof Actions];

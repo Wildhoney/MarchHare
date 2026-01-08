@@ -57,15 +57,12 @@ export default function DecoratorTests(): React.ReactElement {
 
   return (
     <div className={styles.container} data-testid="decorator-tests">
-      <h1>Decorator Integration Tests</h1>
+      <h1>Action Control Patterns</h1>
 
-      {/* Supplant Test */}
+      {/* Async Action Test */}
       <section className={styles.section} data-testid="supplant-section">
-        <h2 className={styles.title}>@use.supplant()</h2>
-        <p>
-          Only one instance runs at a time. Click rapidly to see previous calls
-          get aborted.
-        </p>
+        <h2 className={styles.title}>Async Action</h2>
+        <p>Async action with signal cancellation support.</p>
         <div className={styles.value} data-testid="supplant-value">
           Value: {model.value}
         </div>
@@ -74,17 +71,14 @@ export default function DecoratorTests(): React.ReactElement {
           data-testid="supplant-trigger"
           onClick={() => actions.dispatch(Actions.Supplant)}
         >
-          Trigger Supplant Action
+          Trigger Async Action
         </button>
       </section>
 
-      {/* Debounce Test */}
+      {/* Immediate Action Test */}
       <section className={styles.section} data-testid="debounce-section">
-        <h2 className={styles.title}>@use.debounce(300)</h2>
-        <p>
-          Waits 300ms after last call before executing. Rapid clicks result in
-          one execution.
-        </p>
+        <h2 className={styles.title}>Immediate Action</h2>
+        <p>Action that executes immediately.</p>
         <div className={styles.value} data-testid="debounce-value">
           Value: {model.value}
         </div>
@@ -93,17 +87,14 @@ export default function DecoratorTests(): React.ReactElement {
           data-testid="debounce-trigger"
           onClick={() => actions.dispatch(Actions.Debounce)}
         >
-          Trigger Debounce Action
+          Trigger Immediate Action
         </button>
       </section>
 
-      {/* Throttle Test */}
+      {/* Another Immediate Action Test */}
       <section className={styles.section} data-testid="throttle-section">
-        <h2 className={styles.title}>@use.throttle(500)</h2>
-        <p>
-          Executes at most once per 500ms. First call immediate, subsequent
-          queued.
-        </p>
+        <h2 className={styles.title}>Another Immediate Action</h2>
+        <p>Another action that executes immediately.</p>
         <div className={styles.value} data-testid="throttle-value">
           Value: {model.value}
         </div>
@@ -112,16 +103,14 @@ export default function DecoratorTests(): React.ReactElement {
           data-testid="throttle-trigger"
           onClick={() => actions.dispatch(Actions.Throttle)}
         >
-          Trigger Throttle Action
+          Trigger Action
         </button>
       </section>
 
-      {/* Retry Test */}
+      {/* Error Handling Test */}
       <section className={styles.section} data-testid="retry-section">
-        <h2 className={styles.title}>@use.retry([100, 100])</h2>
-        <p>
-          Fails first 2 times, succeeds on 3rd. Retries with 100ms intervals.
-        </p>
+        <h2 className={styles.title}>Error Handling</h2>
+        <p>Action that fails first 2 times, succeeds on 3rd attempt.</p>
         <div className={styles.value} data-testid="retry-value">
           Value: {model.value} | Attempts: {model.attempts}
         </div>
@@ -130,7 +119,7 @@ export default function DecoratorTests(): React.ReactElement {
           data-testid="retry-trigger"
           onClick={() => actions.dispatch(Actions.Retry)}
         >
-          Trigger Retry Action
+          Trigger Action
         </button>
         <button
           className={styles.button}
@@ -141,13 +130,10 @@ export default function DecoratorTests(): React.ReactElement {
         </button>
       </section>
 
-      {/* Timeout Test */}
+      {/* Long Running Action Test */}
       <section className={styles.section} data-testid="timeout-section">
-        <h2 className={styles.title}>@use.timeout(200)</h2>
-        <p>
-          Action takes 1000ms but timeout is 200ms. Should abort with
-          TimeoutError.
-        </p>
+        <h2 className={styles.title}>Long Running Action</h2>
+        <p>Action that takes 1000ms to complete.</p>
         <div className={styles.value} data-testid="timeout-value">
           Value: {model.value}
         </div>
@@ -156,7 +142,7 @@ export default function DecoratorTests(): React.ReactElement {
           data-testid="timeout-trigger"
           onClick={() => actions.dispatch(Actions.Timeout)}
         >
-          Trigger Timeout Action
+          Trigger Long Action
         </button>
       </section>
 

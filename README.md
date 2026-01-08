@@ -19,7 +19,7 @@ Strongly typed React framework using generators and efficiently updated views al
 1. [Distributed actions](#distributed-actions)
 1. [Consuming actions](#consuming-actions)
 1. [Stateful props](#stateful-props)
-1. [Action decorators](#action-decorators)
+1. [Action middleware](#action-middleware)
 1. [Real-time applications](#real-time-applications)
 1. [Utility functions](#utility-functions)
 1. [Referential equality](#referential-equality)
@@ -35,7 +35,7 @@ Strongly typed React framework using generators and efficiently updated views al
 - Clear separation of concerns between business logic and markup.
 - Strongly typed throughout &ndash; dispatches, models, etc&hellip;
 - Easily communicate between actions using distributed actions.
-- Bundled decorators for common action functionality such as supplant mode and reactive triggers.
+- Bundled middleware for common action functionality such as supplant mode, reactive triggers, and polling.
 - No need to worry about referential equality &ndash; reactive dependencies use checksum comparison.
 - Built-in request cancellation with `AbortController` integration.
 - Granular async state tracking per model field (pending, draft, operation type).
@@ -44,31 +44,38 @@ Strongly typed React framework using generators and efficiently updated views al
 
 ## Getting started
 
-Actions are responsible for mutating the state of the view. In the below example the `name` is dispatched from the view to the actions, the state is updated and the view is rendered with the updated value. We define an `Action` type as a tuple `[Model, typeof Actions]` to ensure type safety throughout.
+Actions are responsible for mutating the state of the view. In the below example the `name` is dispatched from the view to the actions, the state is updated and the view is rendered with the updated value.
 
 ```tsx
-const model = {
+import { useActions, Action } from "chizu";
+
+type Model = {
+  name: string | null;
+};
+
+const model: Model = {
   name: null,
-} satisfies Model;
+};
 
 export class Actions {
-  static Name = createAction<string>();
+  static Name = Action<string>("Name");
 }
 
-export type Action = [Model, typeof Actions];
-
 export default function useNameActions() {
-  return useActions<Action>(
-    model,
-    class {
-      [Actions.Name] = utils.set("name");
-    },
-  );
+  const actions = useActions<Model, typeof Actions>(model);
+
+  actions.useAction(Actions.Name, (context, name) => {
+    context.actions.produce((draft) => {
+      draft.model.name = name;
+    });
+  });
+
+  return actions;
 }
 ```
 
 ```tsx
-export default function Profile(props: Props): React.ReactElement {
+export default function Profile(): React.ReactElement {
   const [model, actions] = useNameActions();
 
   return (
@@ -83,35 +90,46 @@ export default function Profile(props: Props): React.ReactElement {
 }
 ```
 
-Notice `createAction<string>()` takes a generic to specify the payload type. When using `useAction`, the payload is accessible as the second argument after `context`. The second generic in `useAction<Action, "Name">` extracts the correct payload type from the `Actions` class:
+Notice `Action<string>("Name")` takes a generic to specify the payload type. The `actions.useAction` method registers handlers directly with the `useActions` scope &ndash; types are pre-baked from the `useActions<Model, typeof Actions>` call, so payload types are automatically inferred:
 
 ```tsx
 export class Actions {
-  static Name = createAction<string>();
+  static Name = Action<string>("Name");
 }
-
-export type Action = [Model, typeof Actions];
-
-const name = useAction<Action, "Name">(async (context, payload) => {
-  // payload is correctly typed as `string`
-});
-```
-
-You can perform asynchronous operations in the action which will cause the associated view to render a second time &ndash; as we're starting to require more control in our actions we&apos;ll move to our own fine-tuned action instead of `utils.set`:
-
-```tsx
-const model = {
-  name: null,
-} satisfies Model;
-
-export class Actions {
-  static Name = createAction();
-}
-
-export type Action = [Model, typeof Actions];
 
 export default function useNameActions() {
-  const name = useAction<Action, "Name">(async (context) => {
+  const actions = useActions<Model, typeof Actions>(model);
+
+  // The payload is automatically typed as `string` from the action definition
+  actions.useAction(Actions.Name, (context, payload) => {
+    // payload is correctly typed as `string`
+  });
+
+  return actions;
+}
+```
+
+You can perform asynchronous operations in the action which will cause the associated view to render a second time:
+
+```tsx
+import { useActions, Action } from "chizu";
+
+type Model = {
+  name: string | null;
+};
+
+const model: Model = {
+  name: null,
+};
+
+export class Actions {
+  static Name = Action("Name");
+}
+
+export default function useNameActions() {
+  const actions = useActions<Model, typeof Actions>(model);
+
+  actions.useAction(Actions.Name, async (context) => {
     context.actions.produce((draft) => {
       draft.model.name = null;
     });
@@ -123,17 +141,12 @@ export default function useNameActions() {
     });
   });
 
-  return useActions<Action>(
-    model,
-    class {
-      [Actions.Name] = name;
-    },
-  );
+  return actions;
 }
 ```
 
 ```tsx
-export default function Profile(props: Props): React.ReactElement {
+export default function Profile(): React.ReactElement {
   const [model, actions] = useNameActions();
 
   return (
@@ -180,7 +193,7 @@ function App(): ReactElement {
 
 The `ErrorDetails` object contains:
 
-- **`reason`** &ndash; One of `Reason.Timedout` (action exceeded timeout set via `@use.timeout()`), `Reason.Supplanted` (action was cancelled, e.g., by `@use.supplant()`), `Reason.Disallowed` (action was blocked by the regulator), or `Reason.Errored` (a generic error thrown in your action handler).
+- **`reason`** &ndash; One of `Reason.Timedout` (action exceeded timeout set via `Use.Timeout()`), `Reason.Supplanted` (action was cancelled, e.g., by `Use.Supplant()`), `Reason.Disallowed` (action was blocked by the regulator), or `Reason.Errored` (a generic error thrown in your action handler).
 - **`error`** &ndash; The `Error` object that was thrown.
 - **`action`** &ndash; The name of the action that caused the error (e.g., `"Increment"`).
 - **`handled`** &ndash; Whether the error was handled locally via `Lifecycle.Error`. Use this in the global `<Error>` handler to avoid duplicate handling.
@@ -213,22 +226,9 @@ function App(): ReactElement {
 
 ```ts
 export class Actions {
-  static Increment = createAction("Increment");
-  static Decrement = createAction("Decrement");
+  static Increment = Action("Increment");
+  static Decrement = Action("Decrement");
 }
-```
-
-### Cross-platform
-
-Chizu provides `AbortError` and `TimeoutError` classes that work across all platforms including React Native (where `DOMException` is unavailable):
-
-```ts
-import { AbortError, TimeoutError } from "chizu";
-
-// Used internally by Chizu for abort/timeout handling
-// Can also be used in your own code for consistency
-throw new AbortError("Operation cancelled");
-throw new TimeoutError("Request timed out");
 ```
 
 ### Philosophy
@@ -269,16 +269,27 @@ actions.inspect.name.is(Op.Update); // check specific operation type
 
 ## Lifecycle actions
 
-Chizu provides lifecycle actions that trigger at specific points in a component's lifecycle. Import `Lifecycle` from Chizu:
+Chizu provides lifecycle actions that trigger at specific points in a component's lifecycle. Import `Lifecycle` from Chizu and bind handlers using `actions.useAction`:
 
 ```ts
-import { Lifecycle } from "chizu";
+import { useActions, Lifecycle } from "chizu";
 
-class {
-  [Lifecycle.Mount] = mountAction;
-  [Lifecycle.Node] = nodeAction;
-  [Lifecycle.Error] = errorAction;
-  [Lifecycle.Unmount] = unmountAction;
+export function useMyActions() {
+  const actions = useActions<Model, typeof Actions>(model);
+
+  actions.useAction(Lifecycle.Mount, (context) => {
+    // Setup logic when component mounts
+  });
+
+  actions.useAction(Lifecycle.Unmount, (context) => {
+    // Cleanup logic when component unmounts
+  });
+
+  actions.useAction(Lifecycle.Error, (context, error) => {
+    // Handle errors from other actions
+  });
+
+  return actions;
 }
 ```
 
@@ -295,21 +306,21 @@ The `<Error>` component is a catch-all for errors from **any** action in your ap
 
 Distributed actions allow different components to communicate with each other. Unlike regular actions which are scoped to a single component, distributed actions are broadcast to all mounted components that have defined a handler for them.
 
-To create a distributed action, use `createDistributedAction` instead of `createAction`. A good pattern is to define distributed actions in a shared class that other action classes can extend:
+To create a distributed action, use `Distribution.Broadcast` as the first parameter. A good pattern is to define distributed actions in a shared class that other action classes can extend:
 
 ```ts
-import { createAction, createDistributedAction } from "chizu";
+import { Action, Distribution } from "chizu";
 
 export class DistributedActions {
-  static SignedOut = createDistributedAction();
+  static SignedOut = Action(Distribution.Broadcast, "SignedOut");
 }
 
 export class Actions extends DistributedActions {
-  static Increment = createAction();
+  static Increment = Action("Increment");
 }
 ```
 
-`createDistributedAction()` returns a `DistributedPayload<T>` type, which is distinct from the `Payload<T>` returned by `createAction()`. This enables compile-time enforcement &ndash; only distributed actions can be passed to `actions.consume()`.
+Distributed actions return a `DistributedPayload<T>` type, which is distinct from the `Payload<T>` returned by unicast actions. This enables compile-time enforcement &ndash; only distributed actions can be passed to `actions.consume()`.
 
 Any component that defines a handler for `DistributedActions.SignedOut` will receive the action when it's dispatched from any other component. For direct access to the broadcast emitter, use `useBroadcast()`:
 
@@ -345,7 +356,7 @@ export default function Visitor(): React.ReactElement {
 }
 ```
 
-> **Important:** The `consume()` method only accepts distributed actions created with `createDistributedAction()`. Attempting to pass a local action created with `createAction()` will result in a TypeScript error. This is enforced at compile-time to prevent confusion &ndash; local actions are scoped to a single component and cannot be consumed across the application.
+> **Important:** The `consume()` method only accepts distributed actions created with `Distribution.Broadcast`. Attempting to pass a local (unicast) action will result in a TypeScript error. This is enforced at compile-time to prevent confusion &ndash; local actions are scoped to a single component and cannot be consumed across the application.
 
 > **Note:** When a component mounts, `consume()` displays the most recent value for that action, even if it was dispatched before the component mounted. This is managed by the `Consumer` context provider. If no value has been dispatched yet, `consume()` renders `null` until the first dispatch occurs.
 
@@ -362,169 +373,220 @@ The `Box<T>` type has two properties:
   - `box.inspect.draft()` &ndash; Returns the draft value from the latest annotation.
   - `box.inspect.is(Op.Update)` &ndash; Checks if the annotation matches a specific operation.
 
-## Action decorators
+## Action middleware
 
-Chizu provides decorators to add common functionality to your actions. Import `use` from Chizu and apply decorators to action properties:
+Chizu provides middleware for adding common behaviors to action handlers. Pass middleware as additional arguments after the handler:
 
 ```ts
-import { use } from "chizu";
+import { useActions, Use } from "chizu";
+
+export function useSearchActions() {
+  const actions = useActions<Model, typeof Actions>(model);
+
+  actions.useAction(
+    Actions.Search,
+    async (context, query) => {
+      const results = await fetch(`/search?q=${query}`, {
+        signal: context.signal,
+      });
+      // ...
+    },
+    Use.Debounce(300), // Wait 300ms after last call
+    Use.Supplant(), // Cancel previous in-flight request
+  );
+
+  return actions;
+}
 ```
 
-### `use.supplant()`
+### Available middleware
 
-Ensures only one instance of an action runs at a time. When a new action is dispatched, any previous running instance is automatically aborted. Use `context.signal` to cancel in-flight requests. When an action is supplanted, the error handler receives `Reason.Supplanted`:
+| Middleware                            | Description                                                                                                                         |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `Use.Supplant()`                      | Cancels the previous in-flight handler when a new dispatch arrives. Useful for search inputs where only the latest request matters. |
+| `Use.Debounce(ms)`                    | Delays execution until no new dispatches occur for the specified duration. The timer resets on each call.                           |
+| `Use.Throttle(ms)`                    | Limits execution to at most once per time window. First call executes immediately, subsequent calls during cooldown are queued.     |
+| `Use.Retry(intervals)`                | Retries failed handlers with configurable delays. Defaults to exponential backoff `[1000, 2000, 4000]`. Respects the abort signal.  |
+| `Use.Timeout(ms)`                     | Aborts the handler if it exceeds the specified duration. Triggers the abort signal for graceful cleanup.                            |
+| `Use.Reactive(getDeps, getPayload)`   | Auto-triggers when primitive dependencies change. Uses checksum comparison for change detection.                                    |
+| `Use.Poll(ms, getPayload, getStatus)` | Auto-triggers at regular intervals. Supports pause/play via `getStatus` returning `Status.Pause` or `Status.Play`.                  |
+
+### Combining middleware
+
+Middleware are applied in order (first middleware is outermost). This matters for certain combinations:
 
 ```ts
-export type Action = [Model, typeof Actions];
-
-const search = useAction<Action, "Search">(async (context, query) => {
-  const response = await fetch(`/search?q=${query}`, {
-    signal: context.signal,
-  });
-});
-
-return useActions<Action>(
-  model,
-  class {
-    @use.supplant()
-    [Actions.Search] = search;
+actions.useAction(
+  Actions.Fetch,
+  async (context, id) => {
+    const data = await fetch(`/api/${id}`, { signal: context.signal });
+    return data.json();
   },
+  Use.Supplant(), // 1. Cancel previous request
+  Use.Retry([500, 1000]), // 2. Retry on failure
+  Use.Timeout(5000), // 3. Abort if too slow
 );
 ```
 
-### `use.reactive(action, getDependencies, getPayload?)`
+In this example:
 
-Automatically triggers an action when primitive dependencies change. Dependencies are compared using checksum for change detection, while `getPayload` provides fresh values at dispatch time:
+1. `Use.Supplant()` wraps everything, so a new dispatch cancels the entire retry sequence
+2. `Use.Retry()` wraps the timeout, so each retry attempt has its own 5s limit
+3. `Use.Timeout()` applies to the handler directly
 
-```ts
-class {
-  // Action without payload - just dependencies for triggering
-  @use.reactive(Actions.Refresh, () => [userId, filters.length])
-  [Actions.Refresh] = refreshAction;
+### Examples
 
-  // Action with payload - dependencies trigger, getPayload provides data
-  @use.reactive(
-    Actions.FetchUser,
-    () => [userId],
-    () => ({ userId, includeDetails: true })
-  )
-  [Actions.FetchUser] = fetchUserAction;
-}
-```
-
-**Parameters:**
-
-- **`getDependencies: () => Primitive[]`** &ndash; Called every render. Returns primitives for change detection.
-- **`getPayload?: () => P`** &ndash; Called at dispatch time. Returns fresh payload. Only allowed when action has a payload type.
-
-The payload is type-checked against the action's expected type, ensuring compile-time safety:
+**Search with debounce and supplant:**
 
 ```ts
-export class Actions {
-  static Refresh = createAction();  // No payload
-  static FetchUser = createAction<{ userId: string }>();  // With payload
-}
-
-class {
-  // TypeScript enforces: no getPayload for actions without payload
-  @use.reactive(Actions.Refresh, () => [userId])
-  [Actions.Refresh] = refreshAction;
-
-  // TypeScript enforces: getPayload return type matches action payload
-  @use.reactive(Actions.FetchUser, () => [userId], () => ({ userId }))
-  [Actions.FetchUser] = fetchUserAction;
-}
+actions.useAction(
+  Actions.Search,
+  async (context, query) => {
+    const results = await fetch(`/search?q=${query}`, {
+      signal: context.signal,
+    });
+    context.actions.produce((draft) => {
+      draft.model.results = await results.json();
+    });
+  },
+  Use.Debounce(300),
+  Use.Supplant(),
+);
 ```
 
-Combine with `@use.supplant()` if you want new triggers to cancel in-flight requests.
-
-### `use.debug()`
-
-Logs detailed timing information for debugging, including when the action started, how many `produce` calls were made, and total duration:
+**API call with retry and timeout:**
 
 ```ts
-class {
-  @use.debug()
-  [Actions.Submit] = submitAction;
-}
+actions.useAction(
+  Actions.FetchData,
+  async (context, id) => {
+    const response = await fetch(`/api/data/${id}`, {
+      signal: context.signal,
+    });
+    if (!response.ok) throw new Error("Failed to fetch");
+    // ...
+  },
+  Use.Retry([1000, 2000, 4000]),
+  Use.Timeout(10000),
+);
 ```
 
-### `use.timeout(ms)`
-
-Aborts the action if it exceeds the specified duration. Triggers the abort signal via `context.signal`, allowing the action to clean up gracefully. Useful for preventing stuck states and enforcing response time limits. When a timeout occurs, the error handler receives `Reason.Timedout`:
+**Scroll handler with throttle:**
 
 ```ts
-class {
-  @use.timeout(5_000)
-  [Actions.FetchData] = fetchDataAction;
-}
+actions.useAction(
+  Actions.Scroll,
+  (context, position) => {
+    context.actions.produce((draft) => {
+      draft.model.scrollPosition = position;
+    });
+  },
+  Use.Throttle(100),
+);
 ```
 
-### `use.debounce(ms)`
-
-Delays action execution until no new dispatches occur for the specified duration. Useful for search inputs, form validation, and auto-save functionality:
+**Auto-trigger on dependency change:**
 
 ```ts
-class {
-  @use.debounce(300)
-  [Actions.Search] = searchAction;
-}
+actions.useAction(
+  Actions.Search,
+  async (context, query) => {
+    const results = await fetch(`/search?q=${query}`);
+    context.actions.produce((draft) => {
+      draft.model.results = await results.json();
+    });
+  },
+  Use.Reactive(
+    (ctx) => [ctx.model.searchTerm],
+    (ctx) => ctx.model.searchTerm,
+  ),
+  Use.Supplant(),
+);
 ```
 
-### `use.throttle(ms)`
-
-Limits action execution to at most once per specified time window. The first call executes immediately, subsequent calls during the cooldown period are queued and the last one executes when the window expires. Useful for scroll handlers, resize events, and rate-limited APIs:
+**Polling with pause control:**
 
 ```ts
-class {
-  @use.throttle(500)
-  [Actions.TrackScroll] = trackScrollAction;
-}
+actions.useAction(
+  Actions.Refresh,
+  async (context) => {
+    const data = await fetch("/api/data");
+    context.actions.produce((draft) => {
+      draft.model.data = await data.json();
+    });
+  },
+  Use.Poll(5000, undefined, (ctx) =>
+    ctx.model.isPaused ? Status.Pause : Status.Play,
+  ),
+);
 ```
 
-### `use.retry(intervals)`
+## Action control patterns
 
-Automatically retries failed actions with specified delay intervals. Respects the abort signal and stops retrying if aborted. Useful for network requests and other operations that may fail transiently:
+While [middleware](#action-middleware) provides a declarative approach, you can also implement these patterns manually using `context.signal` and standard JavaScript:
+
+### Cancellation with `context.signal`
+
+Every action receives an `AbortSignal` via `context.signal`. Use it to cancel in-flight requests when the component unmounts or when actions are aborted:
 
 ```ts
-class {
-  @use.retry([1_000, 2_000, 4_000])
-  [Actions.FetchData] = fetchDataAction;
-}
+actions.useAction(Actions.Search, async (context, query) => {
+  const response = await fetch(`/search?q=${query}`, {
+    signal: context.signal,
+  });
+  // ...
+});
 ```
 
-The intervals array specifies delays between retries. The example above will retry up to 3 times: first retry after 1s, second after 2s, third after 4s. Default intervals are `[1_000, 2_000, 4_000]`.
+### Timeouts
 
-### `use.poll(ms, getPayload?)`
-
-Polls an action at regular intervals with an optional payload that's evaluated fresh each time. Useful for periodic data refreshes, heartbeats, and polling APIs:
+Implement timeouts using `AbortSignal.timeout()` combined with `context.signal`:
 
 ```ts
-class {
-  // With payload - getter is called at each interval for fresh values
-  @use.poll(5_000, () => ({ userId, token }))
-  [Actions.RefreshData] = refreshDataAction;
-
-  // Without payload - just polls at the interval
-  @use.poll(10_000)
-  [Actions.Heartbeat] = heartbeatAction;
-}
+actions.useAction(Actions.FetchData, async (context) => {
+  const response = await fetch("/api/data", {
+    signal: AbortSignal.any([context.signal, AbortSignal.timeout(5_000)]),
+  });
+  // ...
+});
 ```
 
-The payload getter is called at each interval to get fresh values from closures. Intervals are automatically cleaned up on component unmount.
+### Retry logic
 
-### Combining decorators
-
-Decorators can be combined for powerful control flow. Apply them top-to-bottom in execution order:
+Implement retries with a simple loop:
 
 ```ts
-class {
-  @use.supplant()    // 1. Cancel previous calls
-  @use.retry()       // 2. Retry on failure
-  @use.timeout(5_000) // 3. Timeout each attempt
-  [Actions.FetchData] = fetchDataAction;
-}
+actions.useAction(Actions.FetchData, async (context) => {
+  const intervals = [1_000, 2_000, 4_000];
+  let lastError: Error | null = null;
+
+  for (const delay of [0, ...intervals]) {
+    if (delay > 0) await utils.sleep(delay, context.signal);
+    try {
+      const response = await fetch("/api/data", { signal: context.signal });
+      return await response.json();
+    } catch (error) {
+      lastError = error as Error;
+    }
+  }
+
+  throw lastError;
+});
 ```
+
+### Debouncing and throttling
+
+For debounced inputs, use `context.regulator.abort.self()` to cancel previous instances:
+
+```ts
+actions.useAction(Actions.Search, async (context, query) => {
+  await utils.sleep(300, context.signal); // Debounce delay
+  const results = await fetch(`/search?q=${query}`, { signal: context.signal });
+  // ...
+});
+```
+
+Dispatch the action on every keystroke &ndash; the sleep will be aborted when a new dispatch occurs, effectively debouncing the search.
 
 ## Real-time applications
 
@@ -533,7 +595,7 @@ Chizu's lifecycle actions make it easy to integrate with real-time data sources 
 Here's an example that tracks website visitors in real-time using SSE:
 
 ```ts
-import { useAction, useActions, Lifecycle } from "chizu";
+import { useActions, Lifecycle, Action } from "chizu";
 
 type Country = { name: string; flag: string; timestamp: number };
 
@@ -543,10 +605,20 @@ type Model = {
   source: EventSource | null;
 };
 
-export type Action = [Model, typeof Actions];
+export class Actions {
+  static Visitor = Action<Country>("Visitor");
+}
+
+const model: Model = {
+  visitor: null,
+  history: [],
+  source: null,
+};
 
 export function useVisitorActions() {
-  const mount = useAction<Action>((context) => {
+  const actions = useActions<Model, typeof Actions>(model);
+
+  actions.useAction(Lifecycle.Mount, (context) => {
     const source = new EventSource("/visitors");
     source.addEventListener("visitor", (event) => {
       context.actions.dispatch(
@@ -559,25 +631,18 @@ export function useVisitorActions() {
     });
   });
 
-  const visitor = useAction<Action, "Visitor">((context, country) => {
+  actions.useAction(Actions.Visitor, (context, country) => {
     context.actions.produce((draft) => {
       draft.model.visitor = country;
       draft.model.history = [country, ...draft.model.history].slice(0, 20);
     });
   });
 
-  const unmount = useAction<Action>((context) => {
+  actions.useAction(Lifecycle.Unmount, (context) => {
     context.model.source?.close();
   });
 
-  return useActions<Action>(
-    model,
-    class {
-      [Lifecycle.Mount] = mount;
-      [Actions.Visitor] = visitor;
-      [Lifecycle.Unmount] = unmount;
-    },
-  );
+  return actions;
 }
 ```
 
@@ -586,7 +651,7 @@ Key patterns demonstrated:
 - **Connection in `Lifecycle.Mount`** &ndash; Establish the SSE connection when the component mounts, storing the `EventSource` in the model for later cleanup.
 - **Event-driven dispatches** &ndash; When SSE events arrive, dispatch actions to update the model, triggering efficient re-renders.
 - **Cleanup in `Lifecycle.Unmount`** &ndash; Close the connection when the component unmounts to prevent memory leaks.
-- **All handlers use `useAction`** &ndash; Lifecycle handlers benefit from the same `useEffectEvent` wrapper as regular actions.
+- **All handlers use `actions.useAction`** &ndash; Lifecycle handlers benefit from the same `useEffectEvent` wrapper as regular actions, with types pre-baked from the `useActions` call.
 
 See the full implementation in the [Visitor example source code](https://github.com/Wildhoney/Chizu/blob/main/src/example/visitor/actions.ts).
 
@@ -643,7 +708,7 @@ if (utils.checksum(currentData) !== utils.checksum(previousData)) {
 }
 ```
 
-**Note:** The `@use.reactive()` decorator uses checksum internally for `getDependencies`, so you don't need to manually track changes.
+**Note:** The `Use.Reactive()` middleware uses checksum internally for `getDependencies`, so you don't need to manually track changes.
 
 ### `utils.sleep(ms, signal?)` / `utils.ζ`
 
@@ -659,17 +724,18 @@ const fetch = useAction<Action, "Fetch">(async (context) => {
 
 ## Referential equality
 
-Chizu uses [`useEffectEvent`](https://react.dev/reference/react/useEffectEvent) internally, so action handlers in `useAction` always access the latest values from closures without needing to re-create the handler. This means you don't need to worry about stale closures in most cases.
+Chizu uses [`useEffectEvent`](https://react.dev/reference/react/useEffectEvent) internally, so action handlers in `actions.useAction` always access the latest values from closures without needing to re-create the handler. This means you don't need to worry about stale closures in most cases.
 
 However, in async actions where you `await` I/O operations, there's a rare edge case: if a closure reference changes while the await is in progress, you may access a stale value after the await. For these situations, use `useSnapshot`:
 
 ```ts
-import { useSnapshot } from "chizu";
+import { useActions, useSnapshot } from "chizu";
 
 function useSearchActions(props: Props) {
+  const actions = useActions<Model, typeof Actions>(model);
   const snapshot = useSnapshot(props);
 
-  const search = useAction<Action, "Search">(async (context, query) => {
+  actions.useAction(Actions.Search, async (context, query) => {
     // Before await: props.filters is current (useEffectEvent-like behavior)
     console.log(props.filters);
 
@@ -680,7 +746,7 @@ function useSearchActions(props: Props) {
     console.log(snapshot.filters);
   });
 
-  // ...
+  return actions;
 }
 ```
 
@@ -693,15 +759,15 @@ The regulator is accessed via `context.regulator` inside your action handlers. I
 ### Usage
 
 ```ts
-const fetch = useAction<Action, "Fetch">(async (context) => {
+actions.useAction(Actions.Fetch, async (context) => {
   // Disallow future dispatches of these actions
   context.regulator.policy.disallow.matching([Actions.Fetch, Actions.Save]);
 
-  // Future dispatches via useAction will be aborted immediately
+  // Future dispatches via actions.useAction will be aborted immediately
   // and the error handler will receive Reason.Disallowed
 });
 
-const reset = useAction<Action, "Reset">(async (context) => {
+actions.useAction(Actions.Reset, async (context) => {
   // Allow the actions again
   context.regulator.policy.allow.matching([Actions.Fetch, Actions.Save]);
 });

@@ -1,6 +1,6 @@
-import { useAction, useActions, use } from "../../library/index.ts";
+import { useActions } from "../../library/index.ts";
 import { sleep } from "../../library/utils/index.ts";
-import { Model, Actions, Action } from "./types.ts";
+import { Model, Actions } from "./types.ts";
 
 const model: Model = {
   value: 0,
@@ -23,11 +23,13 @@ export function resetRetryAttemptCount(): void {
 }
 
 export function useDecoratorActions() {
+  const actions = useActions<Model, typeof Actions>(model);
+
   /**
    * Supplant action - demonstrates that only one instance runs at a time.
    * Previous execution is aborted when called again.
    */
-  const supplant = useAction<Action, "Supplant">(async (context) => {
+  actions.useAction(Actions.Supplant, async (context) => {
     const id = Date.now();
     context.actions.produce((draft) => {
       draft.model.log = [...draft.model.log, `supplant-start-${id}`];
@@ -45,7 +47,7 @@ export function useDecoratorActions() {
    * Debounce action - waits for quiet period before executing.
    * Rapid calls only result in one execution.
    */
-  const debounce = useAction<Action, "Debounce">(async (context) => {
+  actions.useAction(Actions.Debounce, async (context) => {
     context.actions.produce((draft) => {
       draft.model.log = [...draft.model.log, "debounce-executed"];
       draft.model.value += 1;
@@ -56,7 +58,7 @@ export function useDecoratorActions() {
    * Throttle action - rate limits execution.
    * First call executes immediately, subsequent calls during window are queued.
    */
-  const throttle = useAction<Action, "Throttle">(async (context) => {
+  actions.useAction(Actions.Throttle, async (context) => {
     context.actions.produce((draft) => {
       draft.model.log = [...draft.model.log, `throttle-executed-${Date.now()}`];
       draft.model.value += 1;
@@ -69,7 +71,7 @@ export function useDecoratorActions() {
    * Uses module-scope variable to track attempts across retries since
    * context.model is frozen at the initial call's state.
    */
-  const retry = useAction<Action, "Retry">(async (context) => {
+  actions.useAction(Actions.Retry, async (context) => {
     retryAttemptCount += 1;
     const currentAttempt = retryAttemptCount;
 
@@ -93,7 +95,7 @@ export function useDecoratorActions() {
    * Reset retry counter for testing.
    * Resets both the module-scope variable and the model state.
    */
-  const reset = useAction<Action, "Reset">((context) => {
+  actions.useAction(Actions.Reset, (context) => {
     resetRetryAttemptCount();
     context.actions.produce((draft) => {
       draft.model.attempts = 0;
@@ -104,7 +106,7 @@ export function useDecoratorActions() {
    * Timeout action - aborts if takes too long.
    * Sleeps for 1000ms but timeout is 200ms.
    */
-  const timeout = useAction<Action, "Timeout">(async (context) => {
+  actions.useAction(Actions.Timeout, async (context) => {
     context.actions.produce((draft) => {
       draft.model.log = [...draft.model.log, "timeout-start"];
     });
@@ -122,7 +124,7 @@ export function useDecoratorActions() {
   /**
    * Clear the log for fresh tests.
    */
-  const clear = useAction<Action, "Clear">((context) => {
+  actions.useAction(Actions.Clear, (context) => {
     context.actions.produce((draft) => {
       draft.model.log = [];
       draft.model.value = 0;
@@ -130,27 +132,5 @@ export function useDecoratorActions() {
     });
   });
 
-  return useActions<Action>(
-    model,
-    class {
-      @use.supplant()
-      [Actions.Supplant] = supplant;
-
-      @use.debounce(300)
-      [Actions.Debounce] = debounce;
-
-      @use.throttle(500)
-      [Actions.Throttle] = throttle;
-
-      @use.retry([100, 100])
-      [Actions.Retry] = retry;
-
-      [Actions.Reset] = reset;
-
-      @use.timeout(200)
-      [Actions.Timeout] = timeout;
-
-      [Actions.Clear] = clear;
-    },
-  );
+  return actions;
 }

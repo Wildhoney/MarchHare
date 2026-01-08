@@ -8,7 +8,7 @@ import type * as React from "react";
 export type { Action, Box };
 export type { ConsumerRenderer };
 
-export const context = Symbol("chizu.action.context");
+export const meta = Symbol("chizu.action.meta");
 
 /**
  * Lifecycle actions that trigger at specific points in a component's lifecycle.
@@ -32,6 +32,32 @@ export class Lifecycle {
   static Unmount = Symbol("chizu.action.lifecycle/Unmount");
   /** Triggered when an action throws an error. Receives `ErrorDetails` as payload. */
   static Error = Symbol("chizu.action.lifecycle/Error");
+}
+
+/**
+ * Distribution modes for actions.
+ *
+ * - **Unicast** &ndash; Action is scoped to the component that defines it and cannot be
+ *   consumed by other components. This is the default behavior.
+ * - **Broadcast** &ndash; Action is distributed to all mounted components that have defined
+ *   a handler for it. Can be consumed with `actions.consume()`.
+ *
+ * @example
+ * ```ts
+ * export class Actions {
+ *   // Unicast action (default) - local to this component
+ *   static Increment = new Action("Increment");
+ *
+ *   // Broadcast action - can be consumed across components
+ *   static Counter = new Action(Distribution.Broadcast, "Counter");
+ * }
+ * ```
+ */
+export enum Distribution {
+  /** Action is scoped to the component that defines it. This is the default. */
+  Unicast = "unicast",
+  /** Action is broadcast to all mounted components and can be consumed. */
+  Broadcast = "broadcast",
 }
 
 /**
@@ -79,8 +105,6 @@ export enum Abort {
 }
 
 export type Pk<T> = undefined | symbol | T;
-
-export type Task = PromiseWithResolvers<void>;
 
 export type Model<M = Record<string, unknown>> = M;
 
@@ -132,12 +156,6 @@ type AssertSync<F> =
     ? "Error: async functions are not allowed in produce"
     : F;
 
-type UnionToIntersection<U> = (
-  U extends unknown ? (k: U) => void : never
-) extends (k: infer I) => void
-  ? I
-  : never;
-
 export type Props = Record<string, unknown>;
 
 export type ActionsClass<AC = object> = {
@@ -173,31 +191,9 @@ export type InferActionsClass<T, Fallback = ActionsClass> = T extends [
  */
 export type ActionPair = [Model, ActionsClass];
 
-export type ActionInstance<
-  M extends Model,
-  AC extends ActionsClass,
-> = UnionToIntersection<
-  AC[keyof AC] extends infer P
-    ? P extends symbol
-      ? P extends Payload<infer T>
-        ? {
-            [K in P]: ((
-              context: Context<M, AC>,
-              payload: T,
-            ) => void | Promise<void>) & {
-              payload: T;
-            };
-          }
-        : never
-      : never
-    : never
->;
-
 export type Result = {
   processes: Set<Process>;
 };
-
-export type OperationFunction = <T>(value: T, process: Process) => T;
 
 export type Context<M extends Model, AC extends ActionsClass> = {
   model: M;
@@ -232,15 +228,10 @@ export type Context<M extends Model, AC extends ActionsClass> = {
     ): void;
     annotate<T>(operation: Operation, value: T): T;
   };
-  [context]: {
+  [meta]: {
     controller: AbortController;
   };
 };
-
-export type Actions<
-  M extends Model,
-  AC extends ActionsClass,
-> = new () => ActionInstance<M, AC>;
 
 /**
  * Return type for the useActions hook.
@@ -269,6 +260,12 @@ export type Actions<
  * actions.inspect.count.pending();
  * ```
  */
+/**
+ * Helper type to extract payload type from an action symbol.
+ * If the action is Payload<T>, returns T. Otherwise returns never.
+ */
+export type ExtractPayload<A> = A extends Payload<infer P> ? P : never;
+
 export type UseActions<M extends Model, AC extends ActionsClass> = [
   M,
   {
@@ -307,4 +304,78 @@ export type UseActions<M extends Model, AC extends ActionsClass> = [
     ): React.ReactNode;
     inspect: Inspect<M>;
   },
-];
+] & {
+  /**
+   * Registers an action handler with the current scope.
+   * Types are pre-baked from the useActions call, so no type parameter is needed.
+   *
+   * Optionally accepts middleware to modify handler behavior (supplant, debounce, etc.).
+   *
+   * @param action - The action symbol to bind (e.g., Lifecycle.Mount, Actions.Visitor)
+   * @param handler - The handler function receiving context and optional payload
+   * @param middleware - Optional middleware to apply (Use.Supplant(), Use.Debounce(300), etc.)
+   *
+   * @example
+   * ```ts
+   * const actions = useActions<Model, typeof Actions>(model);
+   *
+   * actions.useAction(Lifecycle.Mount, (context) => {
+   *   // Setup logic
+   * });
+   *
+   * actions.useAction(
+   *   Actions.Visitor,
+   *   (context, country) => {
+   *     context.actions.produce((draft) => {
+   *       draft.model.visitor = country;
+   *     });
+   *   },
+   *   Use.Supplant(),
+   *   Use.Retry([500, 1000]),
+   * );
+   * ```
+   */
+  useAction<Act extends symbol>(
+    action: Act,
+    handler: (
+      context: Context<M, AC>,
+      payload: ExtractPayload<Act>,
+    ) => void | Promise<void> | AsyncGenerator | Generator,
+    ...middleware: Middleware[]
+  ): void;
+};
+
+/**
+ * Handler function signature for action handlers used by middleware.
+ */
+export type MiddlewareHandler<
+  M extends Model = Model,
+  AC extends ActionsClass = ActionsClass,
+> = (
+  context: Context<M, AC>,
+  payload: unknown,
+) => void | Promise<void> | AsyncGenerator | Generator;
+
+/**
+ * Middleware that wraps action handlers to add behavior like
+ * supplant, debounce, throttle, retry, and timeout.
+ *
+ * @example
+ * ```ts
+ * actions.useAction(
+ *   Actions.Visitor,
+ *   (context, country) => { ... },
+ *   Use.Supplant(),
+ *   Use.Retry(3),
+ * );
+ * ```
+ */
+export type Middleware = {
+  /** Unique identifier for the middleware type. */
+  name: string;
+  /** Wraps a handler to add the middleware's behavior. */
+  wrap: <M extends Model, AC extends ActionsClass>(
+    handler: MiddlewareHandler<M, AC>,
+    action: symbol,
+  ) => MiddlewareHandler<M, AC>;
+};
