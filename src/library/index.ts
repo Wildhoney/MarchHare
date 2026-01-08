@@ -13,4 +13,4 @@ export * as utils from "./utils/index.ts";
 
 export type { Box } from "immertation";
 export type { ErrorDetails, ErrorHandler } from "./error/index.tsx";
-export type { Pk, Context, UseActions } from "./types/index.ts";
+export type { Pk, ReactiveInterface, UseActions } from "./types/index.ts";

@@ -158,6 +158,12 @@ type AssertSync<F> =
 
 export type Props = Record<string, unknown>;
 
+/**
+ * Primitive types that can be used as reactive dependencies.
+ * Only primitives are allowed to avoid referential equality issues.
+ */
+export type Primitive = string | number | boolean | null | undefined | symbol;
+
 export type ActionsClass<AC = object> = {
   new (): unknown;
 } & AC;
@@ -195,7 +201,7 @@ export type Result = {
   processes: Set<Process>;
 };
 
-export type Context<M extends Model, AC extends ActionsClass> = {
+export type ReactiveInterface<M extends Model, AC extends ActionsClass> = {
   model: M;
   signal: AbortSignal;
   regulator: {
@@ -245,7 +251,7 @@ export type Context<M extends Model, AC extends ActionsClass> = {
  *
  * @example
  * ```tsx
- * const [model, actions] = useActions<Model, typeof Actions>(initialModel, Actions);
+ * const [model, actions] = useActions<typeof Actions>(initialModel);
  *
  * // Access state
  * model.count;
@@ -265,6 +271,14 @@ export type Context<M extends Model, AC extends ActionsClass> = {
  * If the action is Payload<T>, returns T. Otherwise returns never.
  */
 export type ExtractPayload<A> = A extends Payload<infer P> ? P : never;
+
+/**
+ * Context provided to useReactive callbacks.
+ * Contains only the dispatch method for triggering actions.
+ */
+export type ReactiveContext<AC extends ActionsClass> = {
+  dispatch(action: AC[keyof AC], payload?: unknown): void;
+};
 
 export type UseActions<M extends Model, AC extends ActionsClass> = [
   M,
@@ -317,7 +331,7 @@ export type UseActions<M extends Model, AC extends ActionsClass> = [
    *
    * @example
    * ```ts
-   * const actions = useActions<Model, typeof Actions>(model);
+   * const actions = useActions<typeof Actions>(model);
    *
    * actions.useAction(Lifecycle.Mount, (context) => {
    *   // Setup logic
@@ -338,10 +352,31 @@ export type UseActions<M extends Model, AC extends ActionsClass> = [
   useAction<Act extends symbol>(
     action: Act,
     handler: (
-      context: Context<M, AC>,
+      context: ReactiveInterface<M, AC>,
       payload: ExtractPayload<Act>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
     ...middleware: Middleware[]
+  ): void;
+
+  /**
+   * Registers a reactive effect that triggers when dependencies change.
+   * Similar to useEffect, but provides a dispatch-only context for triggering actions.
+   *
+   * @param dependencies - Array of values to watch for changes
+   * @param callback - Function called when dependencies change, receives context with dispatch
+   *
+   * @example
+   * ```ts
+   * const [name, setName] = useState("Adam");
+   *
+   * actions.useReactive([name], (context) => {
+   *   context.dispatch(Actions.FetchUser);
+   * });
+   * ```
+   */
+  useReactive(
+    dependencies: Primitive[],
+    callback: (context: ReactiveContext<AC>) => void,
   ): void;
 };
 
@@ -352,7 +387,7 @@ export type MiddlewareHandler<
   M extends Model = Model,
   AC extends ActionsClass = ActionsClass,
 > = (
-  context: Context<M, AC>,
+  context: ReactiveInterface<M, AC>,
   payload: unknown,
 ) => void | Promise<void> | AsyncGenerator | Generator;
 

@@ -1,4 +1,10 @@
-import { ActionsClass, Context, Model, Payload, Pk } from "../types/index.ts";
+import {
+  ActionsClass,
+  ReactiveInterface,
+  Model,
+  Payload,
+  Pk,
+} from "../types/index.ts";
 import { AbortError, Reason } from "../error/types.ts";
 import fnv1a from "./utils.ts";
 
@@ -93,7 +99,7 @@ export const κ = pk;
 export function set<M extends Model, AC extends ActionsClass>(
   property: string,
 ) {
-  return (context: Context<M, AC>, payload: Payload): void => {
+  return (context: ReactiveInterface<M, AC>, payload: Payload): void => {
     context.actions.produce(({ model }) => {
       (<Record<string, Payload>>model)[property] = payload;
     });

@@ -3,7 +3,7 @@ import type { State, Inspect } from "immertation";
 import type EventEmitter from "eventemitter3";
 import type {
   Model,
-  Context,
+  ReactiveInterface,
   ActionsClass,
   Status,
   Payload,
@@ -14,7 +14,7 @@ export type ActionHandler<
   M extends Model = Model,
   AC extends ActionsClass = ActionsClass,
 > = (
-  context: Context<M, AC>,
+  context: ReactiveInterface<M, AC>,
   payload: unknown,
 ) => void | Promise<void> | AsyncGenerator | Generator;
 

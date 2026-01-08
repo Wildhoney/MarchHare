@@ -13,18 +13,17 @@ import type {
 } from "./types.ts";
 import {
   meta,
-  Context,
+  ReactiveInterface,
+  ReactiveContext,
   Lifecycle,
   Model,
   Payload,
+  Primitive,
   Props,
   ActionsClass,
   Action,
   UseActions,
   Result,
-  ActionPair,
-  InferModel,
-  InferActionsClass,
   ExtractPayload,
   Middleware,
 } from "../types/index.ts";
@@ -46,7 +45,7 @@ function useRegisterHandler<M extends Model, AC extends ActionsClass>(
   scope: React.RefObject<ActionsScope>,
   action: symbol,
   handler: (
-    context: Context<M, AC>,
+    context: ReactiveInterface<M, AC>,
     payload: unknown,
   ) => void | Promise<void> | AsyncGenerator | Generator,
   middleware: ExtendedMiddleware[] = [],
@@ -67,7 +66,7 @@ function useRegisterHandler<M extends Model, AC extends ActionsClass>(
   );
 
   const stableHandler = React.useEffectEvent(
-    async (context: Context<M, AC>, payload: unknown) => {
+    async (context: ReactiveInterface<M, AC>, payload: unknown) => {
       const isGenerator =
         wrappedHandler.constructor.name === "GeneratorFunction" ||
         wrappedHandler.constructor.name === "AsyncGeneratorFunction";
@@ -100,8 +99,8 @@ function useRegisterHandler<M extends Model, AC extends ActionsClass>(
  * The `inspect` property provides access to Immertation's annotation system,
  * allowing you to check for pending operations on model properties.
  *
- * @template A The ActionPair tuple [Model, typeof Actions] for type inference.
- * @template AC The type of the actions class (inferred from A).
+ * @template M The model type representing the component's state.
+ * @template AC The actions class containing action definitions.
  * @param initialModel The initial model state.
  * @returns A tuple `[model, actions]` with pre-typed `useAction` method.
  *
@@ -109,6 +108,7 @@ function useRegisterHandler<M extends Model, AC extends ActionsClass>(
  * ```typescript
  * // types.ts
  * type Model = { visitor: Country | null };
+ *
  * export class Actions {
  *   static Visitor = Action<Country>("Visitor");
  * }
@@ -121,7 +121,7 @@ function useRegisterHandler<M extends Model, AC extends ActionsClass>(
  *     // Setup logic - types are pre-baked from useActions
  *   });
  *
- *   actions.useAction(Actions.Visitor, (meta, country) => {
+ *   actions.useAction(Actions.Visitor, (context, country) => {
  *     context.actions.produce((draft) => {
  *       draft.model.visitor = country;
  *     });
@@ -141,15 +141,9 @@ function useRegisterHandler<M extends Model, AC extends ActionsClass>(
  * }
  * ```
  */
-export function useActions<
-  A extends Model | ActionPair,
-  AC extends ActionsClass = A extends ActionPair
-    ? A[1] & ActionsClass
-    : ActionsClass,
->(
-  initialModel: InferModel<A> & Model,
-): UseActions<InferModel<A> & Model, InferActionsClass<A, AC> & ActionsClass> {
-  type M = InferModel<A> & Model;
+export function useActions<M extends Model, AC extends ActionsClass>(
+  initialModel: M,
+): UseActions<M, AC> {
   const broadcast = useBroadcast();
   const handleError = useError();
   const regulators = useRegulators();
@@ -183,7 +177,7 @@ export function useActions<
     (action: Action, result: Result) => {
       const controller = regulator.current.controller(action);
 
-      return <Context<M, AC>>{
+      return <ReactiveInterface<M, AC>>{
         model,
         signal: controller.signal,
         regulator: {
@@ -292,7 +286,7 @@ export function useActions<
   const useActionMethod = <Act extends symbol>(
     action: Act,
     handler: (
-      context: Context<M, AC>,
+      context: ReactiveInterface<M, AC>,
       payload: ExtractPayload<Act>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
     ...middleware: Middleware[]
@@ -303,6 +297,25 @@ export function useActions<
       <ActionHandler<M, AC>>handler,
       middleware,
     );
+  };
+
+  const useReactiveMethod = (
+    dependencies: Primitive[],
+    callback: (context: ReactiveContext<AC>) => void,
+  ): void => {
+    const dispatch = (action: AC[keyof AC], payload?: unknown) => {
+      isDistributedAction(<Action>action)
+        ? broadcast.emit(<Action>action, <Payload>payload)
+        : unicast.emit(<Action>action, <Payload>payload);
+    };
+
+    const stableCallback = React.useEffectEvent(() => {
+      callback({ dispatch });
+    });
+
+    React.useLayoutEffect(() => {
+      stableCallback();
+    }, dependencies);
   };
 
   const baseTuple = React.useMemo(() => {
@@ -328,9 +341,10 @@ export function useActions<
     return <[M, typeof actionsObj]>[model, actionsObj];
   }, [model, unicast]);
 
-  return <
-    UseActions<InferModel<A> & Model, InferActionsClass<A, AC> & ActionsClass>
-  >Object.assign(baseTuple, { useAction: useActionMethod });
+  return <UseActions<M, AC>>Object.assign(baseTuple, {
+    useAction: useActionMethod,
+    useReactive: useReactiveMethod,
+  });
 }
 
 /**
