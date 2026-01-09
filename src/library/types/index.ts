@@ -49,7 +49,7 @@ export class Lifecycle {
  *   static Increment = new Action("Increment");
  *
  *   // Broadcast action - can be consumed across components
- *   static Counter = new Action(Distribution.Broadcast, "Counter");
+ *   static Counter = new Action("Counter", Distribution.Broadcast);
  * }
  * ```
  */

@@ -12,7 +12,7 @@ describe("Action (unicast)", () => {
 
 describe("Action (broadcast)", () => {
   it("should create a distributed symbol with custom name", () => {
-    const action = Action(Distribution.Broadcast, "signed-out");
+    const action = Action("signed-out", Distribution.Broadcast);
     expect(typeof action).toBe("symbol");
     expect(action.toString()).toBe(
       "Symbol(chizu.action/distributed/signed-out)",
@@ -22,7 +22,7 @@ describe("Action (broadcast)", () => {
 
 describe("isDistributedAction()", () => {
   it("should return true for distributed actions", () => {
-    const distributed = Action(Distribution.Broadcast, "test");
+    const distributed = Action("test", Distribution.Broadcast);
     expect(isDistributedAction(distributed)).toBe(true);
   });
 
@@ -39,7 +39,7 @@ describe("getActionName()", () => {
   });
 
   it("should extract name from distributed action", () => {
-    const action = Action(Distribution.Broadcast, "SignedOut");
+    const action = Action("SignedOut", Distribution.Broadcast);
     expect(getActionName(action)).toBe("SignedOut");
   });
 

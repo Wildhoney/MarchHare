@@ -17,18 +17,18 @@ type ActionFactory = {
   /**
    * Creates a new action with the specified distribution mode.
    * @template T The payload type for the action.
-   * @param distribution The distribution mode (Unicast or Broadcast).
    * @param name The action name, used for debugging purposes.
+   * @param distribution The distribution mode (Unicast or Broadcast).
    * @returns A typed action symbol (DistributedPayload if Broadcast).
    */
   <T = never>(
+    name: string,
     distribution: Distribution.Broadcast,
-    name: string,
   ): DistributedPayload<T>;
-  <T = never>(distribution: Distribution.Unicast, name: string): Payload<T>;
+  <T = never>(name: string, distribution: Distribution.Unicast): Payload<T>;
   <T = never>(
-    distribution: Distribution,
     name: string,
+    distribution: Distribution,
   ): Payload<T> | DistributedPayload<T>;
 };
 
@@ -51,7 +51,7 @@ type ActionFactory = {
  *   static Increment = Action<number>("Increment");
  *
  *   // Broadcast action - can be consumed across components
- *   static Counter = Action<number>(Distribution.Broadcast, "Counter");
+ *   static Counter = Action<number>("Counter", Distribution.Broadcast);
  * }
  *
  * // Usage
@@ -61,23 +61,14 @@ type ActionFactory = {
  * ```
  */
 export const Action = <ActionFactory>(<unknown>(<T = never>(
-  distributionOrName: Distribution | string,
-  name?: string,
+  name: string,
+  distribution?: Distribution,
 ): Payload<T> | DistributedPayload<T> => {
-  const isDistributionFirst = Object.values(Distribution).includes(
-    <Distribution>distributionOrName,
-  );
+  const resolvedDistribution = distribution ?? Distribution.Unicast;
 
-  const distribution = isDistributionFirst
-    ? <Distribution>distributionOrName
-    : Distribution.Unicast;
-  const actionName = isDistributionFirst
-    ? (name ?? "anonymous")
-    : distributionOrName;
-
-  return distribution === Distribution.Broadcast
-    ? <DistributedPayload<T>>Symbol(`chizu.action/distributed/${actionName}`)
-    : <Payload<T>>Symbol(`chizu.action/${actionName}`);
+  return resolvedDistribution === Distribution.Broadcast
+    ? <DistributedPayload<T>>Symbol(`chizu.action/distributed/${name}`)
+    : <Payload<T>>Symbol(`chizu.action/${name}`);
 }));
 
 /**
@@ -107,7 +98,7 @@ export function isDistributedAction(action: ActionType): boolean {
  * const Increment = Action("Increment");
  * getActionName(Increment); // "Increment"
  *
- * const SignedOut = Action(Distribution.Broadcast, "SignedOut");
+ * const SignedOut = Action("SignedOut", Distribution.Broadcast);
  * getActionName(SignedOut); // "SignedOut"
  * ```
  */
