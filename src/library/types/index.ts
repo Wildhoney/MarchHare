@@ -111,12 +111,6 @@ type AssertSync<F> =
 
 export type Props = Record<string, unknown>;
 
-/**
- * Primitive types that can be used as reactive dependencies.
- * Only primitives are allowed to avoid referential equality issues.
- */
-export type Primitive = string | number | boolean | null | undefined | symbol;
-
 export type ActionsClass<AC = object> = {
   new (): unknown;
 } & AC;
@@ -253,14 +247,6 @@ export type ReactiveInterface<
  */
 export type ExtractPayload<A> = A extends Payload<infer P> ? P : never;
 
-/**
- * Context provided to useReactive callbacks.
- * Contains only the dispatch method for triggering actions.
- */
-export type ReactiveContext<AC extends ActionsClass> = {
-  dispatch(action: AC[keyof AC], payload?: unknown): void;
-};
-
 export type UseActions<
   M extends Model,
   AC extends ActionsClass,
@@ -332,26 +318,5 @@ export type UseActions<
       context: ReactiveInterface<M, AC, S>,
       payload: ExtractPayload<Act>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
-  ): void;
-
-  /**
-   * Registers a reactive effect that triggers when dependencies change.
-   * Similar to useEffect, but provides a dispatch-only context for triggering actions.
-   *
-   * @param dependencies - Array of values to watch for changes
-   * @param callback - Function called when dependencies change, receives context with dispatch
-   *
-   * @example
-   * ```ts
-   * const [name, setName] = useState("Adam");
-   *
-   * actions.useReactive([name], (context) => {
-   *   context.dispatch(Actions.FetchUser);
-   * });
-   * ```
-   */
-  useReactive(
-    dependencies: Primitive[],
-    callback: (context: ReactiveContext<AC>) => void,
   ): void;
 };

@@ -3,11 +3,9 @@ import { withGetters, useLifecycles } from "./utils.ts";
 import type { ActionHandler, ActionsScope } from "./types.ts";
 import {
   ReactiveInterface,
-  ReactiveContext,
   Lifecycle,
   Model,
   Payload,
-  Primitive,
   Props,
   ActionsClass,
   Action,
@@ -267,25 +265,6 @@ export function useActions<
     );
   };
 
-  const useReactiveMethod = (
-    dependencies: Primitive[],
-    callback: (context: ReactiveContext<AC>) => void,
-  ): void => {
-    const dispatch = (action: AC[keyof AC], payload?: unknown) => {
-      isDistributedAction(<Action>action)
-        ? broadcast.emit(<Action>action, <Payload>payload)
-        : unicast.emit(<Action>action, <Payload>payload);
-    };
-
-    const stableCallback = React.useEffectEvent(() => {
-      callback({ dispatch });
-    });
-
-    React.useLayoutEffect(() => {
-      stableCallback();
-    }, dependencies);
-  };
-
   const baseTuple = React.useMemo(() => {
     const actionsObj = {
       dispatch(...[action, payload]: [action: Action, payload?: Payload]) {
@@ -311,7 +290,6 @@ export function useActions<
 
   return <UseActions<M, AC, S>>Object.assign(baseTuple, {
     useAction: useActionMethod,
-    useReactive: useReactiveMethod,
   });
 }
 
