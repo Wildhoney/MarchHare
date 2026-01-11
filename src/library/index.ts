@@ -3,9 +3,7 @@ export { Distribution, Lifecycle } from "./types/index.ts";
 export { Error, Reason } from "./error/index.tsx";
 export { Operation, Op, State } from "immertation";
 
-export { Broadcaster } from "./broadcast/index.tsx";
-export { Consumer } from "./consumer/index.tsx";
-export { Tasks } from "./tasks/index.tsx";
+export { Boundary } from "./boundary/index.tsx";
 
 export { useActions } from "./hooks/index.ts";
 export * as utils from "./utils/index.ts";
