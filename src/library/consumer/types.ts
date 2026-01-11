@@ -1,5 +1,5 @@
 import type { Box } from "immertation";
-import type { Action } from "../regulator/types.ts";
+import type { Action } from "../tasks/types.ts";
 import * as React from "react";
 
 /**

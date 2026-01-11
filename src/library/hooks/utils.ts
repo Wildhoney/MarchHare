@@ -1,7 +1,6 @@
 import * as React from "react";
 import { RefObject } from "react";
 import { Props, Lifecycle } from "../types/index.ts";
-import { Reason } from "../error/types.ts";
 import type { LifecycleConfig } from "./types.ts";
 
 /**
@@ -39,13 +38,10 @@ export function isGenerator(
 /**
  * Emits lifecycle events for component mount/unmount and DOM attachment.
  */
-export function useLifecycle({ unicast, regulator }: LifecycleConfig): void {
+export function useLifecycles({ unicast }: LifecycleConfig): void {
   React.useLayoutEffect(() => {
     unicast.emit(Lifecycle.Mount);
-    return () => {
-      regulator.current.abort.own(Reason.Unmounted);
-      unicast.emit(Lifecycle.Unmount);
-    };
+    return () => void unicast.emit(Lifecycle.Unmount);
   }, []);
 
   React.useEffect(() => void unicast.emit(Lifecycle.Node), []);

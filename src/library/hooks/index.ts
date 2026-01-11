@@ -1,8 +1,7 @@
 import * as React from "react";
-import { withGetters, useLifecycle } from "./utils.ts";
+import { withGetters, useLifecycles } from "./utils.ts";
 import type { ActionHandler, ActionsScope } from "./types.ts";
 import {
-  meta,
   ReactiveInterface,
   ReactiveContext,
   Lifecycle,
@@ -15,6 +14,7 @@ import {
   UseActions,
   Result,
   ExtractPayload,
+  Task,
 } from "../types/index.ts";
 
 type SnapshotFn<S extends Props> = () => S;
@@ -25,7 +25,7 @@ import { useBroadcast } from "../broadcast/index.tsx";
 import { isDistributedAction, getActionName } from "../action/index.ts";
 import { useError } from "../error/index.tsx";
 import { State, Operation, Process } from "immertation";
-import { Regulator, useRegulators } from "../regulator/utils.ts";
+import { useTasks } from "../tasks/utils.ts";
 
 function useRegisterHandler<
   M extends Model,
@@ -141,7 +141,7 @@ export function useActions<
 >(initialModel: M, snapshotFn?: SnapshotFn<S>): UseActions<M, AC, S> {
   const broadcast = useBroadcast();
   const handleError = useError();
-  const regulators = useRegulators();
+  const tasks = useTasks();
   const [model, setModel] = React.useState<M>(initialModel);
   const hydration = React.useRef<Process | null>(null);
   const state = React.useRef<State<M>>(
@@ -161,48 +161,26 @@ export function useActions<
   const scope = React.useRef<ActionsScope>({
     handlers: new Map(),
   });
-  const regulator = React.useRef<Regulator>(new Regulator(regulators));
 
   /**
    * Creates the context object passed to action handlers during dispatch.
    *
    * @param action The action symbol being dispatched.
+   * @param payload The payload passed with the action.
    * @param result Container for tracking Immertation processes created during execution.
    * @returns A fully-typed Context object for the action handler.
    */
   const getContext = React.useCallback(
-    (action: Action, result: Result) => {
-      const controller = regulator.current.controller(action);
+    (action: Action, payload: unknown, result: Result) => {
+      const controller = new AbortController();
+      const task: Task = { task: controller, action, payload };
+      tasks.add(task);
 
       return <ReactiveInterface<M, AC, S>>{
         model,
-        signal: controller.signal,
+        task: controller,
         snapshot: userSnapshot,
-        regulator: {
-          abort: {
-            own: () => regulator.current.abort.own(),
-            all: () => regulator.current.abort.all(),
-            matching: (actions: Action[]) =>
-              regulator.current.abort.matching(actions),
-            self: () => regulator.current.abort.matching([action]),
-          },
-          policy: {
-            allow: {
-              own: () => regulator.current.policy.allow.own(),
-              all: () => regulator.current.policy.allow.all(),
-              matching: (actions: Action[]) =>
-                regulator.current.policy.allow.matching(actions),
-              self: () => regulator.current.policy.allow.matching([action]),
-            },
-            disallow: {
-              own: () => regulator.current.policy.disallow.own(),
-              all: () => regulator.current.policy.disallow.all(),
-              matching: (actions: Action[]) =>
-                regulator.current.policy.disallow.matching(actions),
-              self: () => regulator.current.policy.disallow.matching([action]),
-            },
-          },
-        },
+        tasks,
         actions: {
           produce(f) {
             if (controller.signal.aborted) return;
@@ -226,9 +204,6 @@ export function useActions<
             return state.current.annotate(operation, value);
           },
         },
-        [meta]: {
-          controller,
-        },
       };
     },
     [internalSnapshot.model],
@@ -238,9 +213,10 @@ export function useActions<
     function createHandler(action: symbol, actionHandler: ActionHandler) {
       return async function handler(payload: Payload) {
         const result = <Result>{ processes: new Set<Process>() };
-        const task = Promise.withResolvers<void>();
+        const promiseTask = Promise.withResolvers<void>();
+        const context = getContext(action, payload, result);
         try {
-          await actionHandler(getContext(action, result), payload);
+          await actionHandler(context, payload);
         } catch (error) {
           const hasErrorHandler = scope.current.handlers.has(Lifecycle.Error);
           const details = {
@@ -252,9 +228,16 @@ export function useActions<
           handleError?.(details);
           if (hasErrorHandler) unicast.emit(Lifecycle.Error, details);
         } finally {
+          // Clean up task from shared Set
+          for (const t of tasks) {
+            if (t.task === context.task) {
+              tasks.delete(t);
+              break;
+            }
+          }
           result.processes.forEach((process) => state.current.prune(process));
           setModel({ ...state.current.model });
-          task.resolve();
+          promiseTask.resolve();
         }
       };
     }
@@ -268,14 +251,7 @@ export function useActions<
     });
   }, [unicast]);
 
-  useLifecycle({ unicast, regulator });
-
-  React.useEffect(() => {
-    regulators.add(regulator.current);
-    return () => {
-      regulators.delete(regulator.current);
-    };
-  }, []);
+  useLifecycles({ unicast, tasks });
 
   const useActionMethod = <Act extends symbol>(
     action: Act,

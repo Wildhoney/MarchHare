@@ -1,12 +1,11 @@
-import type * as React from "react";
 import type EventEmitter from "eventemitter3";
 import type {
   Model,
   ReactiveInterface,
   ActionsClass,
   Props,
+  Task,
 } from "../types/index.ts";
-import type { Regulator } from "../regulator/utils.ts";
 
 export type ActionHandler<
   M extends Model = Model,
@@ -26,9 +25,9 @@ export type ActionsScope<
 };
 
 /**
- * Configuration for {@link useLifecycle}.
+ * Configuration for {@link useLifecycles}.
  */
 export type LifecycleConfig = {
   unicast: EventEmitter;
-  regulator: React.RefObject<Regulator>;
+  tasks: Set<Task>;
 };

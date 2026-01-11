@@ -1,5 +1,5 @@
 import { Payload, DistributedPayload, Distribution } from "../types/index.ts";
-import type { Action as ActionType } from "../regulator/types.ts";
+import type { Action as ActionType } from "../tasks/types.ts";
 import { G } from "@mobily/ts-belt";
 
 /**

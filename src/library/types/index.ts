@@ -1,14 +1,11 @@
 import { Operation } from "immertation";
 import { Process, Inspect, Box } from "immertation";
-import type { Regulator } from "../regulator/index.js";
-import type { Action } from "../regulator/types.ts";
+import type { Action, Task } from "../tasks/types.ts";
 import type { ConsumerRenderer } from "../consumer/index.tsx";
 import type * as React from "react";
 
-export type { Action, Box };
+export type { Action, Box, Task };
 export type { ConsumerRenderer };
-
-export const meta = Symbol("chizu.action.meta");
 
 /**
  * Lifecycle actions that trigger at specific points in a component's lifecycle.
@@ -58,29 +55,6 @@ export enum Distribution {
   Unicast = "unicast",
   /** Action is broadcast to all mounted components and can be consumed. */
   Broadcast = "broadcast",
-}
-
-/**
- * Abort modes for controlling which actions to abort.
- *
- * @example
- * ```ts
- * // Abort only the current action instance (default)
- * context.abort();
- * context.abort(Abort.Self);
- *
- * // Abort all instances of a named action
- * context.abort(Abort.Named, Actions.Increment);
- *
- * // Abort all actions globally
- * context.abort(Abort.All);
- * ```
- */
-export enum Abort {
-  /** Abort all instances of a named action (local or distributed). */
-  Action = "action",
-  /** Abort all actions globally. */
-  Everything = "everything",
 }
 
 export type Pk<T> = undefined | symbol | T;
@@ -186,7 +160,7 @@ export type ReactiveInterface<
   S extends Props = Props,
 > = {
   model: M;
-  signal: AbortSignal;
+  task: AbortController;
   /**
    * Snapshot of reactive values passed to useActions.
    * Always returns the latest values, even after awaits in async handlers.
@@ -204,27 +178,37 @@ export type ReactiveInterface<
    * ```
    */
   snapshot: S;
-  regulator: {
-    abort: Regulator["abort"] & { self(): void };
-    policy: {
-      allow: Regulator["policy"]["allow"] & { self(): void };
-      disallow: Regulator["policy"]["disallow"] & { self(): void };
-    };
-  };
   /**
-   * Abort actions based on the specified mode.
+   * Set of all running tasks across all components in the context.
+   * Tasks are ordered by creation time (oldest first).
    *
-   * @param mode The abort mode (defaults to `Abort.Self` if not specified).
-   * @param action Required when mode is `Abort.Named` - the action to abort.
+   * Each task contains:
+   * - `controller`: The AbortController to cancel this task
+   * - `action`: The action identifier that triggered this task
+   * - `payload`: The payload passed when the action was dispatched
    *
    * @example
    * ```ts
-   * context.abort();                            // Abort current action instance
-   * context.abort(Abort.Self);                  // Same as above
-   * context.abort(Abort.Named, Actions.Fetch);  // Abort all instances of Fetch
-   * context.abort(Abort.All);                   // Abort ALL actions globally
+   * // Abort all tasks for a specific action
+   * for (const t of context.tasks) {
+   *   if (t.action === Actions.Fetch) {
+   *     t.task.abort();
+   *   }
+   * }
+   *
+   * // Abort the oldest task
+   * const oldest = context.tasks.values().next().value;
+   * oldest?.task.abort();
+   *
+   * // Abort all tasks except the current one
+   * for (const t of context.tasks) {
+   *   if (t.task !== context.task) {
+   *     t.task.abort();
+   *   }
+   * }
    * ```
    */
+  tasks: Set<Task>;
   actions: {
     produce<F extends (draft: { model: M; inspect: Inspect<M> }) => void>(
       ƒ: F & AssertSync<F>,
@@ -233,9 +217,6 @@ export type ReactiveInterface<
       ...args: [PayloadType<A>] extends [never] ? [A] : [A, PayloadType<A>]
     ): void;
     annotate<T>(operation: Operation, value: T): T;
-  };
-  [meta]: {
-    controller: AbortController;
   };
 };
 
