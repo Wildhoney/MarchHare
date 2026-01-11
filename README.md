@@ -97,6 +97,23 @@ actions.useAction(Actions.Name, async (context) => {
 
 Notice we're using `annotate` which you can read more about in the [Immertation documentation](https://github.com/Wildhoney/Immertation). Nevertheless once the request is finished we update the model again with the `name` fetched from the response and update our React component again.
 
+If you need to access external reactive values (like props or `useState` from parent components) that always reflect the latest value even after `await` operations, pass a snapshot callback to `useActions`:
+
+```tsx
+const actions = useActions<Model, typeof Actions, { query: string }>(
+  model,
+  () => ({ query: props.query }),
+);
+
+actions.useAction(Actions.Search, async (context) => {
+  await fetch("/search");
+  // context.snapshot.query is always the latest value
+  console.log(context.snapshot.query);
+});
+```
+
+For more details, see the [referential equality recipe](./recipes/referential-equality.md).
+
 Each action should be responsible for managing its own data &ndash; in this case our `Profile` action handles fetching the user but other components may want to consume it &ndash; for that we should use a distributed action:
 
 ```tsx

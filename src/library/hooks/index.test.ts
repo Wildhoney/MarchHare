@@ -1,80 +1,171 @@
 import { describe, expect, it } from "@jest/globals";
-import { renderHook } from "@testing-library/react";
-import { useSnapshot } from "./index.ts";
+import { renderHook, act } from "@testing-library/react";
+import { useActions } from "./index.ts";
+import { Action } from "../action/index.ts";
 
-describe("useSnapshot()", () => {
-  it("should return an object with the same properties", () => {
-    const props = { name: "Adam", count: 42 };
-    const { result } = renderHook(() => useSnapshot(props));
+type Model = { value: string | null };
 
-    expect(result.current.name).toBe("Adam");
-    expect(result.current.count).toBe(42);
-  });
+class Actions {
+  static Update = Action<string>("Update");
+}
 
-  it("should make properties enumerable", () => {
-    const props = { a: 1, b: 2, c: 3 };
-    const { result } = renderHook(() => useSnapshot(props));
+const model: Model = { value: null };
 
-    expect(Object.keys(result.current)).toEqual(["a", "b", "c"]);
-  });
+describe("useActions() snapshot callback", () => {
+  it("should provide snapshot values via context.snapshot", async () => {
+    const capturedSnapshot: { external?: string } = {};
 
-  it("should update when props change on rerender", () => {
-    const initialProps = { value: "initial" };
-    const { result, rerender } = renderHook(({ props }) => useSnapshot(props), {
-      initialProps: { props: initialProps },
+    const { result } = renderHook(() => {
+      const actions = useActions<Model, typeof Actions, { external: string }>(
+        model,
+        () => ({ external: "test-value" }),
+      );
+
+      actions.useAction(Actions.Update, (context) => {
+        capturedSnapshot.external = context.snapshot.external;
+        context.actions.produce((draft) => {
+          draft.model.value = context.snapshot.external;
+        });
+      });
+
+      return actions;
     });
 
-    expect(result.current.value).toBe("initial");
+    await act(async () => {
+      result.current[1].dispatch(Actions.Update, "payload");
+    });
 
-    rerender({ props: { value: "updated" } });
-
-    expect(result.current.value).toBe("updated");
+    expect(capturedSnapshot.external).toBe("test-value");
+    expect(result.current[0].value).toBe("test-value");
   });
 
-  it("should handle nested objects", () => {
-    const props = { user: { name: "Adam", age: 30 } };
-    const { result } = renderHook(() => useSnapshot(props));
+  it("should provide latest snapshot values even after rerender", async () => {
+    const capturedValues: string[] = [];
+    let externalValue = "initial";
 
-    expect(result.current.user).toEqual({ name: "Adam", age: 30 });
-    expect(result.current.user.name).toBe("Adam");
-  });
+    const { result, rerender } = renderHook(() => {
+      const actions = useActions<Model, typeof Actions, { external: string }>(
+        model,
+        () => ({ external: externalValue }),
+      );
 
-  it("should handle arrays", () => {
-    const props = { items: [1, 2, 3] };
-    const { result } = renderHook(() => useSnapshot(props));
+      actions.useAction(Actions.Update, (context) => {
+        capturedValues.push(context.snapshot.external);
+      });
 
-    expect(result.current.items).toEqual([1, 2, 3]);
-  });
+      return actions;
+    });
 
-  it("should handle null and undefined values", () => {
-    const props = { nullable: null, optional: undefined };
-    const { result } = renderHook(() => useSnapshot(props));
+    // First dispatch with initial value
+    await act(async () => {
+      result.current[1].dispatch(Actions.Update, "first");
+    });
 
-    expect(result.current.nullable).toBeNull();
-    expect(result.current.optional).toBeUndefined();
-  });
+    expect(capturedValues[0]).toBe("initial");
 
-  it("should maintain reference stability for unchanged props", () => {
-    const props = { count: 1 };
-    const { result, rerender } = renderHook(() => useSnapshot(props));
-
-    const firstSnapshot = result.current;
+    // Update external value and rerender
+    externalValue = "updated";
     rerender();
-    const secondSnapshot = result.current;
 
-    expect(firstSnapshot).toBe(secondSnapshot);
-  });
-
-  it("should create new snapshot when props object changes", () => {
-    const { result, rerender } = renderHook(({ props }) => useSnapshot(props), {
-      initialProps: { props: { count: 1 } },
+    // Second dispatch should see updated value
+    await act(async () => {
+      result.current[1].dispatch(Actions.Update, "second");
     });
 
-    const firstSnapshot = result.current;
-    rerender({ props: { count: 2 } });
-    const secondSnapshot = result.current;
+    expect(capturedValues[1]).toBe("updated");
+  });
 
-    expect(firstSnapshot).not.toBe(secondSnapshot);
-    expect(secondSnapshot.count).toBe(2);
+  it("should work without snapshot callback (empty snapshot)", async () => {
+    let snapshotReceived = false;
+
+    const { result } = renderHook(() => {
+      const actions = useActions<Model, typeof Actions>(model);
+
+      actions.useAction(Actions.Update, (context) => {
+        // Snapshot should be an empty object when no callback is provided
+        snapshotReceived = typeof context.snapshot === "object";
+        context.actions.produce((draft) => {
+          draft.model.value = "updated";
+        });
+      });
+
+      return actions;
+    });
+
+    await act(async () => {
+      result.current[1].dispatch(Actions.Update, "payload");
+    });
+
+    expect(snapshotReceived).toBe(true);
+    expect(result.current[0].value).toBe("updated");
+  });
+
+  it("should handle multiple snapshot properties", async () => {
+    const captured: { a?: number; b?: string; c?: boolean } = {};
+
+    const { result } = renderHook(() => {
+      const actions = useActions<
+        Model,
+        typeof Actions,
+        { a: number; b: string; c: boolean }
+      >(model, () => ({ a: 42, b: "hello", c: true }));
+
+      actions.useAction(Actions.Update, (context) => {
+        captured.a = context.snapshot.a;
+        captured.b = context.snapshot.b;
+        captured.c = context.snapshot.c;
+      });
+
+      return actions;
+    });
+
+    await act(async () => {
+      result.current[1].dispatch(Actions.Update, "payload");
+    });
+
+    expect(captured.a).toBe(42);
+    expect(captured.b).toBe("hello");
+    expect(captured.c).toBe(true);
+  });
+
+  it("should provide fresh snapshot values across multiple dispatches", async () => {
+    const capturedValues: string[] = [];
+    let externalValue = "initial";
+
+    const { result, rerender } = renderHook(() => {
+      const actions = useActions<Model, typeof Actions, { external: string }>(
+        model,
+        () => ({ external: externalValue }),
+      );
+
+      actions.useAction(Actions.Update, async (context) => {
+        // Simulate async operation
+        await Promise.resolve();
+
+        // Capture value after async - should be latest due to snapshot proxy
+        capturedValues.push(context.snapshot.external);
+      });
+
+      return actions;
+    });
+
+    // First dispatch
+    await act(async () => {
+      result.current[1].dispatch(Actions.Update, "payload");
+    });
+
+    expect(capturedValues[0]).toBe("initial");
+
+    // Change external value and rerender
+    externalValue = "changed";
+    rerender();
+
+    // Second dispatch should see updated value
+    await act(async () => {
+      result.current[1].dispatch(Actions.Update, "payload");
+    });
+
+    // The snapshot should provide the latest value
+    expect(capturedValues[1]).toBe("changed");
   });
 });

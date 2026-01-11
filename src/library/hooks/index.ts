@@ -16,6 +16,8 @@ import {
   Result,
   ExtractPayload,
 } from "../types/index.ts";
+
+type SnapshotFn<S extends Props> = () => S;
 import { ConsumeRenderer, ConsumerRenderer } from "../consumer/index.tsx";
 import { getReason, normaliseError } from "../utils/index.ts";
 import EventEmitter from "eventemitter3";
@@ -25,16 +27,20 @@ import { useError } from "../error/index.tsx";
 import { State, Operation, Process } from "immertation";
 import { Regulator, useRegulators } from "../regulator/utils.ts";
 
-function useRegisterHandler<M extends Model, AC extends ActionsClass>(
+function useRegisterHandler<
+  M extends Model,
+  AC extends ActionsClass,
+  S extends Props,
+>(
   scope: React.RefObject<ActionsScope>,
   action: symbol,
   handler: (
-    context: ReactiveInterface<M, AC>,
+    context: ReactiveInterface<M, AC, S>,
     payload: unknown,
   ) => void | Promise<void> | AsyncGenerator | Generator,
 ): void {
   const stableHandler = React.useEffectEvent(
-    async (context: ReactiveInterface<M, AC>, payload: unknown) => {
+    async (context: ReactiveInterface<M, AC, S>, payload: unknown) => {
       const isGenerator =
         handler.constructor.name === "GeneratorFunction" ||
         handler.constructor.name === "AsyncGeneratorFunction";
@@ -67,7 +73,11 @@ function useRegisterHandler<M extends Model, AC extends ActionsClass>(
  *
  * @template M The model type representing the component's state.
  * @template AC The actions class containing action definitions.
+ * @template S The snapshot type for reactive external values.
  * @param initialModel The initial model state.
+ * @param snapshotFn Optional function that returns reactive values to snapshot.
+ *   Values returned are accessible via `context.snapshot` in action handlers,
+ *   always reflecting the latest values even after await operations.
  * @returns A tuple `[model, actions]` with pre-typed `useAction` method.
  *
  * @example
@@ -100,6 +110,22 @@ function useRegisterHandler<M extends Model, AC extends ActionsClass>(
  *   return actions;
  * }
  *
+ * // With snapshot for reactive external values
+ * function useSearchActions(props: { query: string }) {
+ *   const actions = useActions<Model, typeof Actions, { query: string }>(
+ *     model,
+ *     () => ({ query: props.query })
+ *   );
+ *
+ *   actions.useAction(Actions.Search, async (context) => {
+ *     await fetch("/search");
+ *     // context.snapshot.query is always the latest value
+ *     console.log(context.snapshot.query);
+ *   });
+ *
+ *   return actions;
+ * }
+ *
  * // Component usage
  * function Visitor() {
  *   const [model, actions] = useVisitorActions();
@@ -107,9 +133,12 @@ function useRegisterHandler<M extends Model, AC extends ActionsClass>(
  * }
  * ```
  */
-export function useActions<M extends Model, AC extends ActionsClass>(
-  initialModel: M,
-): UseActions<M, AC> {
+// eslint-disable-next-line import/prefer-default-export
+export function useActions<
+  M extends Model,
+  AC extends ActionsClass,
+  S extends Props = Props,
+>(initialModel: M, snapshotFn?: SnapshotFn<S>): UseActions<M, AC, S> {
   const broadcast = useBroadcast();
   const handleError = useError();
   const regulators = useRegulators();
@@ -122,7 +151,12 @@ export function useActions<M extends Model, AC extends ActionsClass>(
       return state;
     })(),
   );
-  const snapshot = useSnapshot({ model, inspect: state.current.inspect });
+  const internalSnapshot = useSnapshot({
+    model,
+    inspect: state.current.inspect,
+  });
+  const userSnapshotValues = snapshotFn?.() ?? <S>{};
+  const userSnapshot = useSnapshot(userSnapshotValues);
   const unicast = React.useMemo(() => new EventEmitter(), []);
   const scope = React.useRef<ActionsScope>({
     handlers: new Map(),
@@ -140,9 +174,10 @@ export function useActions<M extends Model, AC extends ActionsClass>(
     (action: Action, result: Result) => {
       const controller = regulator.current.controller(action);
 
-      return <ReactiveInterface<M, AC>>{
+      return <ReactiveInterface<M, AC, S>>{
         model,
         signal: controller.signal,
+        snapshot: userSnapshot,
         regulator: {
           abort: {
             own: () => regulator.current.abort.own(),
@@ -196,7 +231,7 @@ export function useActions<M extends Model, AC extends ActionsClass>(
         },
       };
     },
-    [snapshot.model],
+    [internalSnapshot.model],
   );
 
   React.useLayoutEffect(() => {
@@ -245,11 +280,15 @@ export function useActions<M extends Model, AC extends ActionsClass>(
   const useActionMethod = <Act extends symbol>(
     action: Act,
     handler: (
-      context: ReactiveInterface<M, AC>,
+      context: ReactiveInterface<M, AC, S>,
       payload: ExtractPayload<Act>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void => {
-    useRegisterHandler<M, AC>(scope, action, <ActionHandler<M, AC>>handler);
+    useRegisterHandler<M, AC, S>(
+      scope,
+      action,
+      <ActionHandler<M, AC, S>>handler,
+    );
   };
 
   const useReactiveMethod = (
@@ -294,7 +333,7 @@ export function useActions<M extends Model, AC extends ActionsClass>(
     return <[M, typeof actionsObj]>[model, actionsObj];
   }, [model, unicast]);
 
-  return <UseActions<M, AC>>Object.assign(baseTuple, {
+  return <UseActions<M, AC, S>>Object.assign(baseTuple, {
     useAction: useActionMethod,
     useReactive: useReactiveMethod,
   });
@@ -305,11 +344,14 @@ export function useActions<M extends Model, AC extends ActionsClass>(
  * The snapshot provides stable access to the object's properties,
  * even as the original object changes across renders.
  *
+ * This is an internal utility used by useActions to provide stable
+ * access to reactive values in async action handlers.
+ *
  * @template T The type of the object.
  * @param {T} props The object to create a snapshot of.
  * @returns {T} A memoized snapshot of the object.
  */
-export function useSnapshot<P extends Props>(props: P): P {
+function useSnapshot<P extends Props>(props: P): P {
   const ref = React.useRef<P>(props);
 
   React.useLayoutEffect((): void => {

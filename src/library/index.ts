@@ -7,7 +7,7 @@ export { Broadcaster } from "./broadcast/index.tsx";
 export { Consumer } from "./consumer/index.tsx";
 export { Regulators } from "./regulator/index.tsx";
 
-export { useActions, useSnapshot } from "./hooks/index.ts";
+export { useActions } from "./hooks/index.ts";
 export * as utils from "./utils/index.ts";
 
 export type { Box } from "immertation";

@@ -180,9 +180,30 @@ export type Result = {
   processes: Set<Process>;
 };
 
-export type ReactiveInterface<M extends Model, AC extends ActionsClass> = {
+export type ReactiveInterface<
+  M extends Model,
+  AC extends ActionsClass,
+  S extends Props = Props,
+> = {
   model: M;
   signal: AbortSignal;
+  /**
+   * Snapshot of reactive values passed to useActions.
+   * Always returns the latest values, even after awaits in async handlers.
+   *
+   * @example
+   * ```ts
+   * const [name, setName] = useState("Adam");
+   * const actions = useActions<Model, typeof Actions>(model, () => ({ name }));
+   *
+   * actions.useAction(Actions.Fetch, async (context) => {
+   *   await fetch("/api");
+   *   // context.snapshot.name is always the latest value
+   *   console.log(context.snapshot.name);
+   * });
+   * ```
+   */
+  snapshot: S;
   regulator: {
     abort: Regulator["abort"] & { self(): void };
     policy: {
@@ -259,7 +280,11 @@ export type ReactiveContext<AC extends ActionsClass> = {
   dispatch(action: AC[keyof AC], payload?: unknown): void;
 };
 
-export type UseActions<M extends Model, AC extends ActionsClass> = [
+export type UseActions<
+  M extends Model,
+  AC extends ActionsClass,
+  S extends Props = Props,
+> = [
   M,
   {
     dispatch(action: Action, payload?: Payload): void;
@@ -323,7 +348,7 @@ export type UseActions<M extends Model, AC extends ActionsClass> = [
   useAction<Act extends symbol>(
     action: Act,
     handler: (
-      context: ReactiveInterface<M, AC>,
+      context: ReactiveInterface<M, AC, S>,
       payload: ExtractPayload<Act>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void;
