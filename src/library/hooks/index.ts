@@ -1,16 +1,6 @@
 import * as React from "react";
-import {
-  withGetters,
-  useLifecycle,
-  useReactives,
-  usePollings,
-} from "./utils.ts";
-import type {
-  ActionHandler,
-  ActionsScope,
-  ReactiveEntry,
-  PollEntry,
-} from "./types.ts";
+import { withGetters, useLifecycle } from "./utils.ts";
+import type { ActionHandler, ActionsScope } from "./types.ts";
 import {
   meta,
   ReactiveInterface,
@@ -25,7 +15,6 @@ import {
   UseActions,
   Result,
   ExtractPayload,
-  Middleware,
 } from "../types/index.ts";
 import { ConsumeRenderer, ConsumerRenderer } from "../consumer/index.tsx";
 import { getReason, normaliseError } from "../utils/index.ts";
@@ -36,11 +25,6 @@ import { useError } from "../error/index.tsx";
 import { State, Operation, Process } from "immertation";
 import { Regulator, useRegulators } from "../regulator/utils.ts";
 
-type ExtendedMiddleware = Middleware & {
-  reactive?: Omit<ReactiveEntry, "action">;
-  poll?: Omit<PollEntry, "action">;
-};
-
 function useRegisterHandler<M extends Model, AC extends ActionsClass>(
   scope: React.RefObject<ActionsScope>,
   action: symbol,
@@ -48,36 +32,18 @@ function useRegisterHandler<M extends Model, AC extends ActionsClass>(
     context: ReactiveInterface<M, AC>,
     payload: unknown,
   ) => void | Promise<void> | AsyncGenerator | Generator,
-  middleware: ExtendedMiddleware[] = [],
 ): void {
-  for (const mw of middleware) {
-    if (mw.reactive) {
-      scope.current.reactives.add(<ReactiveEntry>{ action, ...mw.reactive });
-    }
-    if (mw.poll) {
-      scope.current.polls.add(<PollEntry>{ action, ...mw.poll });
-    }
-  }
-
-  const wrappedHandler = middleware.reduceRight(
-    (currentHandler, currentMiddleware) =>
-      currentMiddleware.wrap(currentHandler, action),
-    handler,
-  );
-
   const stableHandler = React.useEffectEvent(
     async (context: ReactiveInterface<M, AC>, payload: unknown) => {
       const isGenerator =
-        wrappedHandler.constructor.name === "GeneratorFunction" ||
-        wrappedHandler.constructor.name === "AsyncGeneratorFunction";
+        handler.constructor.name === "GeneratorFunction" ||
+        handler.constructor.name === "AsyncGeneratorFunction";
 
       if (isGenerator) {
-        const generator = <Generator | AsyncGenerator>(
-          wrappedHandler(context, payload)
-        );
+        const generator = <Generator | AsyncGenerator>handler(context, payload);
         for await (const _ of generator) void 0;
       } else {
-        await wrappedHandler(context, payload);
+        await handler(context, payload);
       }
     },
   );
@@ -160,11 +126,8 @@ export function useActions<M extends Model, AC extends ActionsClass>(
   const unicast = React.useMemo(() => new EventEmitter(), []);
   const scope = React.useRef<ActionsScope>({
     handlers: new Map(),
-    reactives: new Set(),
-    polls: new Set(),
   });
   const regulator = React.useRef<Regulator>(new Regulator(regulators));
-  const checksums = React.useRef<Map<symbol, string | null>>(new Map());
 
   /**
    * Creates the context object passed to action handlers during dispatch.
@@ -272,10 +235,6 @@ export function useActions<M extends Model, AC extends ActionsClass>(
 
   useLifecycle({ unicast, regulator });
 
-  useReactives({ model, state, checksums, scope, unicast });
-
-  usePollings({ state, scope, unicast });
-
   React.useEffect(() => {
     regulators.add(regulator.current);
     return () => {
@@ -289,14 +248,8 @@ export function useActions<M extends Model, AC extends ActionsClass>(
       context: ReactiveInterface<M, AC>,
       payload: ExtractPayload<Act>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
-    ...middleware: Middleware[]
   ): void => {
-    useRegisterHandler<M, AC>(
-      scope,
-      action,
-      <ActionHandler<M, AC>>handler,
-      middleware,
-    );
+    useRegisterHandler<M, AC>(scope, action, <ActionHandler<M, AC>>handler);
   };
 
   const useReactiveMethod = (

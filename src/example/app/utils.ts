@@ -20,11 +20,6 @@ export const features = [
     desc: "Cross-component communication via pub/sub",
   },
   {
-    icon: "🎨",
-    title: "Powerful Decorators",
-    desc: "@use.supplant(), @use.reactive(), @use.timeout()",
-  },
-  {
     icon: "🚫",
     title: "No Referential Equality",
     desc: "Reactive dependencies use primitives only",

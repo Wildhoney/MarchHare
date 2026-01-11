@@ -79,17 +79,7 @@ export default function Profile(): React.ReactElement {
 }
 ```
 
-`useAction` can be both a regular synchronous function, an asynchronous function, or even a generator function. Next we'll fetch the actual user from the API instead of hard-coding to `Wildhoney` an also attempt to fetch the profile on mount of the component as well:
-
-```tsx
-actions.useAction(Lifecycle.Mount, async (context) => {
-  const name = await fetch(api.user());
-
-  context.actions.produce((draft) => {
-    draft.model.name = name;
-  });
-});
-```
+`useAction` can be both a regular synchronous function, an asynchronous function, or even a generator function. Next we'll fetch the actual user from the API instead of hard-coding to `Wildhoney`:
 
 ```tsx
 actions.useAction(Actions.Name, async (context) => {
@@ -150,8 +140,10 @@ However if we want to listen for it and perform another operation in it in our l
 
 ```tsx
 actions.useAction(DistributedActions.Name, async (context, name) => {
+  const friends = await fetch(api.friends(name));
+
   context.actions.produce((draft) => {
-    draft.model.name = `${name}!`;
+    draft.model.friends = `${name}!`;
   });
 });
 ```

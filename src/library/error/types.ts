@@ -4,22 +4,22 @@ import { ReactNode } from "react";
  * Reasons why an action error occurred.
  */
 export enum Reason {
-  /** Action exceeded its timeout limit (from `@use.timeout()`). */
+  /** Action exceeded its timeout limit. */
   Timedout,
-  /** Action was cancelled, e.g., by `@use.supplant()` aborting a previous run. */
+  /** Action was cancelled by a newer dispatch. */
   Supplanted,
   /** Action was blocked by the regulator's `allow` function returning `false`. */
   Disallowed,
-  /** A generic error thrown in the user's action handler (not timeout, supplant, or disallowed). */
+  /** A generic error thrown in the user's action handler. */
   Errored,
   /** Action was aborted because the component unmounted. */
   Unmounted,
 }
 
 /**
- * Error thrown when an action is aborted, e.g., by `@use.supplant()` cancelling
- * a previous run. Works across all platforms including React Native where
- * `DOMException` is unavailable.
+ * Error thrown when an action is aborted, e.g., when a component unmounts
+ * or when a newer dispatch cancels a previous run. Works across all platforms
+ * including React Native where `DOMException` is unavailable.
  *
  * @example
  * ```ts
@@ -34,7 +34,7 @@ export class AbortError extends Error {
 }
 
 /**
- * Error thrown when an action exceeds its timeout limit set via `@use.timeout()`.
+ * Error thrown when an action exceeds its timeout limit.
  * Works across all platforms including React Native where `DOMException` is unavailable.
  *
  * @example

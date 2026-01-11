@@ -1,8 +1,7 @@
 export { Action } from "./action/index.ts";
-export { Abort, Distribution, Lifecycle, Status } from "./types/index.ts";
+export { Abort, Distribution, Lifecycle } from "./types/index.ts";
 export { Error, Reason } from "./error/index.tsx";
 export { Operation, Op, State } from "immertation";
-export { Use } from "./middleware/index.ts";
 
 export { Broadcaster } from "./broadcast/index.tsx";
 export { Consumer } from "./consumer/index.tsx";

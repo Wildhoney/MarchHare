@@ -37,6 +37,8 @@ export function useVisitorActions() {
     });
   });
 
+  actions.useAction(Lifecycle.Node, () => {});
+
   actions.useAction(Actions.Visitor, (context, country) => {
     context.actions.produce((draft) => {
       draft.model.visitor = country;

@@ -1,14 +1,8 @@
 import * as React from "react";
 import { RefObject } from "react";
-import { G } from "@mobily/ts-belt";
-import { Props, Lifecycle, Status, Model } from "../types/index.ts";
-import * as utils from "../utils/index.ts";
+import { Props, Lifecycle } from "../types/index.ts";
 import { Reason } from "../error/types.ts";
-import type {
-  ReactivesConfig,
-  PollingsConfig,
-  LifecycleConfig,
-} from "./types.ts";
+import type { LifecycleConfig } from "./types.ts";
 
 /**
  * Creates a new object with getters for each property of the input object.
@@ -43,35 +37,6 @@ export function isGenerator(
 }
 
 /**
- * Tracks reactive dependencies and dispatches actions when dependencies change.
- */
-export function useReactives<M extends Model>({
-  model,
-  state,
-  checksums,
-  scope,
-  unicast,
-}: ReactivesConfig<M>): void {
-  const run = React.useEffectEvent(() => {
-    scope.current.reactives.forEach((entry) => {
-      const context = { model, inspect: state.current.inspect };
-      const dependencies = entry.getDependencies(context);
-      const checksum = utils.checksum(dependencies);
-      if (G.isNullable(checksum)) return;
-      const previous = checksums.current.get(entry.action) ?? null;
-      if (checksum === previous) return;
-      checksums.current.set(entry.action, checksum);
-      const payload = entry.getPayload?.(context);
-      unicast.emit(entry.action, payload);
-    });
-  });
-
-  React.useEffect(() => {
-    run();
-  });
-}
-
-/**
  * Emits lifecycle events for component mount/unmount and DOM attachment.
  */
 export function useLifecycle({ unicast, regulator }: LifecycleConfig): void {
@@ -84,36 +49,4 @@ export function useLifecycle({ unicast, regulator }: LifecycleConfig): void {
   }, []);
 
   React.useEffect(() => void unicast.emit(Lifecycle.Node), []);
-}
-
-/**
- * Sets up polling intervals for actions registered with Use.Poll().
- */
-export function usePollings<M extends Model>({
-  state,
-  scope,
-  unicast,
-}: PollingsConfig<M>): void {
-  React.useEffect(() => {
-    if (scope.current.polls.size === 0) return;
-
-    const intervals: ReturnType<typeof setInterval>[] = [];
-
-    scope.current.polls.forEach((entry) => {
-      const intervalId = setInterval(() => {
-        const snapshot = {
-          model: state.current.model,
-          inspect: state.current.inspect,
-        };
-        if (entry.getStatus(snapshot) === Status.Pause) return;
-        const payload = entry.getPayload?.(snapshot);
-        unicast.emit(entry.action, payload);
-      }, entry.interval);
-      intervals.push(intervalId);
-    });
-
-    return () => {
-      intervals.forEach((id) => clearInterval(id));
-    };
-  }, [unicast]);
 }

@@ -61,27 +61,6 @@ export enum Distribution {
 }
 
 /**
- * Status enum for controlling poll behavior.
- * Use with `@use.poll()` to pause and resume polling.
- *
- * @example
- * ```ts
- * const [isPaused, setIsPaused] = useState(false);
- *
- * class {
- *   @use.poll(5000, () => ({ userId }), () => isPaused ? Status.Pause : Status.Play)
- *   [Actions.RefreshData] = refreshAction;
- * }
- * ```
- */
-export enum Status {
-  /** Polling is active and will continue at the specified interval. */
-  Play = "play",
-  /** Polling is paused and will not execute until status returns to Play. */
-  Pause = "pause",
-}
-
-/**
  * Abort modes for controlling which actions to abort.
  *
  * @example
@@ -323,11 +302,8 @@ export type UseActions<M extends Model, AC extends ActionsClass> = [
    * Registers an action handler with the current scope.
    * Types are pre-baked from the useActions call, so no type parameter is needed.
    *
-   * Optionally accepts middleware to modify handler behavior (supplant, debounce, etc.).
-   *
    * @param action - The action symbol to bind (e.g., Lifecycle.Mount, Actions.Visitor)
    * @param handler - The handler function receiving context and optional payload
-   * @param middleware - Optional middleware to apply (Use.Supplant(), Use.Debounce(300), etc.)
    *
    * @example
    * ```ts
@@ -337,16 +313,11 @@ export type UseActions<M extends Model, AC extends ActionsClass> = [
    *   // Setup logic
    * });
    *
-   * actions.useAction(
-   *   Actions.Visitor,
-   *   (context, country) => {
-   *     context.actions.produce((draft) => {
-   *       draft.model.visitor = country;
-   *     });
-   *   },
-   *   Use.Supplant(),
-   *   Use.Retry([500, 1000]),
-   * );
+   * actions.useAction(Actions.Visitor, (context, country) => {
+   *   context.actions.produce((draft) => {
+   *     draft.model.visitor = country;
+   *   });
+   * });
    * ```
    */
   useAction<Act extends symbol>(
@@ -355,7 +326,6 @@ export type UseActions<M extends Model, AC extends ActionsClass> = [
       context: ReactiveInterface<M, AC>,
       payload: ExtractPayload<Act>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
-    ...middleware: Middleware[]
   ): void;
 
   /**
@@ -378,39 +348,4 @@ export type UseActions<M extends Model, AC extends ActionsClass> = [
     dependencies: Primitive[],
     callback: (context: ReactiveContext<AC>) => void,
   ): void;
-};
-
-/**
- * Handler function signature for action handlers used by middleware.
- */
-export type MiddlewareHandler<
-  M extends Model = Model,
-  AC extends ActionsClass = ActionsClass,
-> = (
-  context: ReactiveInterface<M, AC>,
-  payload: unknown,
-) => void | Promise<void> | AsyncGenerator | Generator;
-
-/**
- * Middleware that wraps action handlers to add behavior like
- * supplant, debounce, throttle, retry, and timeout.
- *
- * @example
- * ```ts
- * actions.useAction(
- *   Actions.Visitor,
- *   (context, country) => { ... },
- *   Use.Supplant(),
- *   Use.Retry(3),
- * );
- * ```
- */
-export type Middleware = {
-  /** Unique identifier for the middleware type. */
-  name: string;
-  /** Wraps a handler to add the middleware's behavior. */
-  wrap: <M extends Model, AC extends ActionsClass>(
-    handler: MiddlewareHandler<M, AC>,
-    action: symbol,
-  ) => MiddlewareHandler<M, AC>;
 };
