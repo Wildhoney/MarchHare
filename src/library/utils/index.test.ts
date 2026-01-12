@@ -1,6 +1,9 @@
 import { describe, expect, it, jest } from "@jest/globals";
+import { render, act } from "@testing-library/react";
+import * as React from "react";
 import { Inspect } from "immertation";
 import { pk, sleep, set, checksum, Σ } from "./index.ts";
+import { useRerender } from "./utils.ts";
 import { ActionsClass, Context, Payload } from "../types/index.ts";
 
 describe("pk()", () => {
@@ -77,5 +80,31 @@ describe("checksum()", () => {
 
   it("should be aliased as Σ", () => {
     expect(Σ).toBe(checksum);
+  });
+});
+
+describe("useRerender()", () => {
+  it("should trigger a re-render when called", () => {
+    let renderCount = 0;
+    let triggerRerender: () => void;
+
+    function TestComponent() {
+      renderCount++;
+      triggerRerender = useRerender();
+      return null;
+    }
+
+    render(React.createElement(TestComponent));
+    expect(renderCount).toBe(1);
+
+    act(() => {
+      triggerRerender();
+    });
+    expect(renderCount).toBe(2);
+
+    act(() => {
+      triggerRerender();
+    });
+    expect(renderCount).toBe(3);
   });
 });

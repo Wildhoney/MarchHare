@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useLifecycles, useSnapshot } from "./utils.ts";
+import { useRerender } from "../utils/utils.ts";
 import type { Handler, Scope } from "./types.ts";
 import {
   ReactiveInterface,
@@ -143,7 +144,7 @@ export default function useActions<
   const error = useError();
   const tasks = useTasks();
   const [model, setModel] = React.useState<M>(initialModel);
-  const [, rerender] = React.useReducer((x: number) => x + 1, 0);
+  const rerender = useRerender();
   const hydration = React.useRef<Process | null>(null);
   const state = React.useRef<State<M>>(
     (() => {

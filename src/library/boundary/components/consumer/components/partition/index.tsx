@@ -3,6 +3,7 @@ import { State, Inspect } from "immertation";
 import { G } from "@mobily/ts-belt";
 import { useBroadcast } from "../../../broadcast/index.tsx";
 import { useConsumer } from "../../utils.ts";
+import { useRerender } from "../../../../../utils/utils.ts";
 import { Entry, Model } from "../../types.ts";
 import { Props } from "./types.ts";
 
@@ -36,7 +37,7 @@ export default function Partition<T extends object>({
 }: Props<T>): React.ReactNode {
   const broadcast = useBroadcast();
   const consumer = useConsumer();
-  const [, rerender] = React.useReducer((x: number) => x + 1, 0);
+  const rerender = useRerender();
 
   const entry = React.useMemo(() => {
     const existing = consumer.get(action);
