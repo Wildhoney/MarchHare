@@ -6,7 +6,7 @@ import {
   Pk,
 } from "../types/index.ts";
 import { AbortError, Reason } from "../error/types.ts";
-import fnv1a from "./utils.ts";
+import { fnv1a } from "./utils.ts";
 
 /**
  * Configuration constants for Chizu action symbols.

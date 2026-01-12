@@ -21,7 +21,7 @@ export function useRerender(): () => void {
  *
  * @see {@link https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function}
  */
-export default function fnv1a(str: string): string {
+export function fnv1a(str: string): string {
   let hash = 2166136261;
   for (let i = 0; i < str.length; i++) {
     hash ^= str.charCodeAt(i);

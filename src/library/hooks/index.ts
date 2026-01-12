@@ -135,7 +135,7 @@ function useRegisterHandler<
  * }
  * ```
  */
-export default function useActions<
+export function useActions<
   M extends Model,
   AC extends ActionsClass,
   S extends Props = Props,

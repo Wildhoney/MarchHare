@@ -21,7 +21,7 @@ import type { Props } from "./types.ts";
  * </Boundary>
  * ```
  */
-export default function Boundary({ children }: Props): React.ReactNode {
+export function Boundary({ children }: Props): React.ReactNode {
   return (
     <Broadcaster>
       <Consumer>

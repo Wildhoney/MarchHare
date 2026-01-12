@@ -3,7 +3,7 @@ import { Context } from "./utils.ts";
 import * as React from "react";
 
 export { useConsumer } from "./utils.ts";
-export { default as Partition } from "./components/partition/index.tsx";
+export { Partition } from "./components/partition/index.tsx";
 export type { Props as PartitionProps } from "./components/partition/types.ts";
 export type { ConsumerRenderer, Entry, ConsumerContext } from "./types.ts";
 

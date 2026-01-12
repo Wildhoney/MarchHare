@@ -31,7 +31,7 @@ import { Props } from "./types.ts";
  * @returns The result of calling renderer with the Box, or null if no value exists
  * @internal
  */
-export default function Partition<T extends object>({
+export function Partition<T extends object>({
   action,
   renderer,
 }: Props<T>): React.ReactNode {

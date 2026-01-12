@@ -37,8 +37,8 @@ export default defineConfig([
       ],
       "@typescript-eslint/consistent-type-definitions": ["error", "type"],
       complexity: ["warn", { max: 20 }],
-      "import/prefer-default-export": "error",
-      "import/no-default-export": "off",
+      "import/prefer-default-export": "off",
+      "import/no-default-export": "error",
       "fp/no-let": "error",
       "fp/no-mutation": ["error", { commonjs: true }],
       "fp/no-mutating-assign": "error",
@@ -48,9 +48,10 @@ export default defineConfig([
     },
   },
   {
-    files: ["src/example/**/*.{ts,tsx}"],
+    files: ["src/example/**/*.{ts,tsx,d.ts}"],
     rules: {
       "import/prefer-default-export": "off",
+      "import/no-default-export": "off",
       "fp/no-mutation": "off",
       "fp/no-let": "off",
       "fp/no-loops": "off",
@@ -72,7 +73,7 @@ export default defineConfig([
       "src/library/utils/index.ts",
       "src/library/hooks/index.ts",
       "src/library/hooks/utils.ts",
-      "src/library/boundary/components/consumer/components/renderer/index.tsx",
+      "src/library/boundary/components/consumer/components/partition/index.tsx",
     ],
     rules: {
       "fp/no-mutation": "off",
