@@ -26,6 +26,7 @@ For advanced topics, see the [recipes directory](./recipes/).
 - Reduces context proliferation &ndash; events replace many contexts.
 - No need to memoize callbacks &ndash; handlers are stable via [`useEffectEvent`](https://react.dev/reference/react/experimental_useEffectEvent).
 - Clear separation between business logic and markup.
+- Complements [Feature Slice Design](https://feature-sliced.design/) architecture.
 - Strongly typed dispatches, models, payloads, etc.
 - Built-in request cancellation with `AbortController`.
 - Granular async state tracking per model field.
