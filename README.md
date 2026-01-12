@@ -18,18 +18,19 @@ For advanced topics, see the [recipes directory](./recipes/).
 
 ## Benefits
 
-- Finely tuned and thoughtful event-driven architecture superset of [React](https://react.dev/).
-- Super efficient with views only re-rendering when absolutely necessary.
-- Built-in support for [optimistic updates](https://medium.com/@kyledeguzmanx/what-are-optimistic-updates-483662c3e171) within components.
-- Mostly standard JavaScript without quirky rules and exceptions.
-- Clear separation of concerns between business logic and markup.
-- Strongly typed throughout &ndash; dispatches, models, etc&hellip;
-- Easily communicate between actions using distributed actions.
-- No need to worry about referential equality &ndash; reactive dependencies use checksum comparison.
-- Built-in request cancellation with `AbortController` integration.
-- Granular async state tracking per model field (pending, draft, operation type).
-- Declarative lifecycle hooks without manual `useEffect` management.
-- Centralised error handling for actions via the `Error` component.
+- Event-driven architecture superset of [React](https://react.dev/).
+- Views only re-render when the model changes.
+- Built-in [optimistic updates](https://medium.com/@kyledeguzmanx/what-are-optimistic-updates-483662c3e171) via [Immertation](https://github.com/Wildhoney/Immertation).
+- No stale closures &ndash; `context.snapshot` stays current after `await`.
+- No need to lift state &ndash; siblings communicate via events.
+- Reduces context proliferation &ndash; events replace many contexts.
+- No need to memoize callbacks &ndash; handlers are stable via [`useEffectEvent`](https://react.dev/reference/react/experimental_useEffectEvent).
+- Clear separation between business logic and markup.
+- Strongly typed dispatches, models, payloads, etc.
+- Built-in request cancellation with `AbortController`.
+- Granular async state tracking per model field.
+- Declarative lifecycle hooks without `useEffect`.
+- Centralised error handling via the `Error` component.
 
 ## Getting started
 
