@@ -8,7 +8,7 @@ import {
   Payload,
   Props,
   ActionsClass,
-  Action,
+  ActionId,
   UseActions,
   Result,
   ExtractPayload,
@@ -16,14 +16,17 @@ import {
 } from "../types/index.ts";
 
 type SnapshotFn<S extends Props> = () => S;
-import { ConsumeRenderer, ConsumerRenderer } from "../consumer/index.tsx";
+import {
+  ConsumeRenderer,
+  ConsumerRenderer,
+} from "../boundary/components/consumer/index.tsx";
 import { getReason, normaliseError } from "../utils/index.ts";
 import EventEmitter from "eventemitter3";
-import { useBroadcast } from "../broadcast/index.tsx";
+import { useBroadcast } from "../boundary/components/broadcast/index.tsx";
 import { isDistributedAction, getActionName } from "../action/index.ts";
 import { useError } from "../error/index.tsx";
 import { State, Operation, Process } from "immertation";
-import { useTasks } from "../tasks/utils.ts";
+import { useTasks } from "../boundary/components/tasks/utils.ts";
 
 function useRegisterHandler<
   M extends Model,
@@ -169,7 +172,7 @@ export function useActions<
    * @returns A fully-typed Context object for the action handler.
    */
   const getContext = React.useCallback(
-    (action: Action, payload: unknown, result: Result) => {
+    (action: ActionId, payload: unknown, result: Result) => {
       const controller = new AbortController();
       const task: Task = { task: controller, action, payload };
       tasks.add(task);
@@ -192,7 +195,9 @@ export function useActions<
               hydration.current = null;
             }
           },
-          dispatch(...[action, payload]: [action: Action, payload?: Payload]) {
+          dispatch(
+            ...[action, payload]: [action: ActionId, payload?: Payload]
+          ) {
             if (controller.signal.aborted) return;
             isDistributedAction(action)
               ? broadcast.emit(action, payload)
@@ -267,7 +272,7 @@ export function useActions<
 
   const baseTuple = React.useMemo(() => {
     const actionsObj = {
-      dispatch(...[action, payload]: [action: Action, payload?: Payload]) {
+      dispatch(...[action, payload]: [action: ActionId, payload?: Payload]) {
         isDistributedAction(action)
           ? broadcast.emit(action, payload)
           : unicast.emit(action, payload);

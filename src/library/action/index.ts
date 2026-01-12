@@ -1,5 +1,5 @@
 import { Payload, DistributedPayload, Distribution } from "../types/index.ts";
-import type { Action as ActionType } from "../tasks/types.ts";
+import type { ActionId } from "../boundary/components/tasks/types.ts";
 import { G } from "@mobily/ts-belt";
 
 /**
@@ -78,7 +78,7 @@ export const Action = <ActionFactory>(<unknown>(<T = never>(
  * @param action The action to check.
  * @returns True if the action is a distributed action, false otherwise.
  */
-export function isDistributedAction(action: ActionType): boolean {
+export function isDistributedAction(action: ActionId): boolean {
   if (G.isString(action)) return action.startsWith("chizu.action/distributed/");
   return action.description?.startsWith("chizu.action/distributed/") ?? false;
 }
@@ -102,7 +102,7 @@ export function isDistributedAction(action: ActionType): boolean {
  * getActionName(SignedOut); // "SignedOut"
  * ```
  */
-export function getActionName(action: ActionType): string {
+export function getActionName(action: ActionId): string {
   const description = G.isString(action) ? action : (action.description ?? "");
   if (!description.startsWith("chizu.action/")) return "unknown";
   const name = description.slice(description.lastIndexOf("/") + 1);

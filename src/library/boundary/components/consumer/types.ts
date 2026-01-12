@@ -1,5 +1,5 @@
 import type { Box } from "immertation";
-import type { Action } from "../tasks/types.ts";
+import type { ActionId } from "../tasks/types.ts";
 import * as React from "react";
 
 /**
@@ -22,7 +22,7 @@ export type Entry<T = unknown> = {
 /**
  * The consumer context is a Map storing entries keyed by action.
  */
-export type ConsumerContext = Map<Action, Entry>;
+export type ConsumerContext = Map<ActionId, Entry>;
 
 /**
  * Props for the Consumer provider component.

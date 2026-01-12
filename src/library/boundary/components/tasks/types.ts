@@ -3,7 +3,7 @@ import * as React from "react";
 /**
  * An action identifier - either a symbol (preferred) or string.
  */
-export type Action = symbol | string;
+export type ActionId = symbol | string;
 
 /**
  * Represents a running task with its associated metadata.
@@ -30,7 +30,7 @@ export type Action = symbol | string;
  */
 export type Task<P = unknown> = {
   task: AbortController;
-  action: Action;
+  action: ActionId;
   payload: P;
 };
 

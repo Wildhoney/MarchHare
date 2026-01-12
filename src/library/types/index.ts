@@ -1,10 +1,10 @@
 import { Operation } from "immertation";
 import { Process, Inspect, Box } from "immertation";
-import type { Action, Task } from "../tasks/types.ts";
-import type { ConsumerRenderer } from "../consumer/index.tsx";
+import type { ActionId, Task } from "../boundary/components/tasks/types.ts";
+import type { ConsumerRenderer } from "../boundary/components/consumer/index.tsx";
 import type * as React from "react";
 
-export type { Action, Box, Task };
+export type { ActionId, Box, Task };
 export type { ConsumerRenderer };
 
 /**
@@ -247,6 +247,53 @@ export type ReactiveInterface<
  */
 export type ExtractPayload<A> = A extends Payload<infer P> ? P : never;
 
+/**
+ * Utility type for defining action handler functions.
+ * Use this when defining handlers in separate files that will be passed to useAction.
+ *
+ * Similar to how React exports `React.FC` for typing functional components,
+ * `Handler` provides full type safety for action handlers.
+ *
+ * @template M - The model type
+ * @template AC - The actions class type
+ * @template A - The specific action type (determines payload type)
+ * @template S - Optional snapshot/props type (defaults to Props)
+ *
+ * @example
+ * ```ts
+ * import { Action, Handler } from "chizu";
+ *
+ * // Create actions with the Action factory
+ * class Actions {
+ *   static Name = Action<string>("Name");
+ * }
+ *
+ * // Define handler externally with full type inference
+ * const nameHandler: Handler<Model, typeof Actions, typeof Actions["Name"]> =
+ *   (context, name) => {
+ *     context.actions.produce((draft) => {
+ *       draft.model.name = name;
+ *     });
+ *   };
+ *
+ * // Use in component
+ * export default function useNameActions() {
+ *   const actions = useActions<Model, typeof Actions>(model);
+ *   actions.useAction(Actions.Name, nameHandler);
+ *   return actions;
+ * }
+ * ```
+ */
+export type Handler<
+  M extends Model,
+  AC extends ActionsClass,
+  A extends Payload<unknown>,
+  S extends Props = Props,
+> = (
+  context: ReactiveInterface<M, AC, S>,
+  payload: ExtractPayload<A>,
+) => void | Promise<void> | AsyncGenerator | Generator;
+
 export type UseActions<
   M extends Model,
   AC extends ActionsClass,
@@ -254,7 +301,7 @@ export type UseActions<
 > = [
   M,
   {
-    dispatch(action: Action, payload?: Payload): void;
+    dispatch(action: ActionId, payload?: Payload): void;
     /**
      * Subscribes to a distributed action's values and renders based on the callback.
      * The callback receives a Box with `value` (the payload) and `inspect` (for annotation status).

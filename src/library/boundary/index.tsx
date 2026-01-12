@@ -1,7 +1,7 @@
 import * as React from "react";
-import { Broadcaster } from "../broadcast/index.tsx";
-import { Consumer } from "../consumer/index.tsx";
-import { Tasks } from "../tasks/index.tsx";
+import { Broadcaster } from "./components/broadcast/index.tsx";
+import { Consumer } from "./components/consumer/index.tsx";
+import { Tasks } from "./components/tasks/index.tsx";
 
 type Props = {
   children: React.ReactNode;
