@@ -8,7 +8,15 @@ import type {
   ActionId,
 } from "../types/index.ts";
 
-export type ActionHandler<
+/**
+ * Function signature for action handlers registered via `useAction`.
+ * Receives the reactive context and payload, returning void or a promise/generator.
+ *
+ * @template M - The model type
+ * @template AC - The actions class type
+ * @template S - The snapshot props type
+ */
+export type Handler<
   M extends Model = Model,
   AC extends ActionsClass = ActionsClass,
   S extends Props = Props,
@@ -17,12 +25,20 @@ export type ActionHandler<
   payload: unknown,
 ) => void | Promise<void> | AsyncGenerator | Generator;
 
-export type ActionsScope<
+/**
+ * Internal scope for tracking registered action handlers.
+ * Stores a map of action IDs to their handler functions.
+ *
+ * @template M - The model type
+ * @template AC - The actions class type
+ * @template S - The snapshot props type
+ */
+export type Scope<
   M extends Model = Model,
   AC extends ActionsClass = ActionsClass,
   S extends Props = Props,
 > = {
-  handlers: Map<ActionId, ActionHandler<M, AC, S>>;
+  handlers: Map<ActionId, Handler<M, AC, S>>;
 };
 
 /**

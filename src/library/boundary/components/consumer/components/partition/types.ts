@@ -1,7 +1,7 @@
 import { ConsumerRenderer } from "../../types.ts";
 
 /**
- * Props for the ConsumeRenderer component.
+ * Props for the Partition component.
  * @internal
  */
 export type Props<T> = {

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useLifecycles, useSnapshot } from "./utils.ts";
-import type { ActionHandler, ActionsScope } from "./types.ts";
+import type { Handler, Scope } from "./types.ts";
 import {
   ReactiveInterface,
   Lifecycle,
@@ -17,7 +17,7 @@ import {
 
 type SnapshotFn<S extends Props> = () => S;
 import {
-  ConsumeRenderer,
+  Partition,
   ConsumerRenderer,
 } from "../boundary/components/consumer/index.tsx";
 import { getReason, normaliseError } from "../utils/index.ts";
@@ -33,7 +33,7 @@ function useRegisterHandler<
   AC extends ActionsClass,
   S extends Props,
 >(
-  scope: React.RefObject<ActionsScope>,
+  scope: React.RefObject<Scope>,
   action: ActionId,
   handler: (
     context: ReactiveInterface<M, AC, S>,
@@ -55,7 +55,7 @@ function useRegisterHandler<
     },
   );
 
-  scope.current.handlers.set(action, <ActionHandler>stableHandler);
+  scope.current.handlers.set(action, <Handler>stableHandler);
 }
 
 /**
@@ -65,7 +65,7 @@ function useRegisterHandler<
  * to action symbols. Types are pre-baked from the generic parameters, so
  * no additional type annotations are needed on handler calls.
  *
- * The hook returns a tuple containing:
+ * The hook returns a result containing:
  * 1. The current model state
  * 2. An actions object with `dispatch`, `consume`, `inspect`, and `useAction`
  *
@@ -79,7 +79,7 @@ function useRegisterHandler<
  * @param ƒ Optional function that returns reactive values to snapshot.
  *   Values returned are accessible via `context.snapshot` in action handlers,
  *   always reflecting the latest values even after await operations.
- * @returns A tuple `[model, actions]` with pre-typed `useAction` method.
+ * @returns A result `[model, actions]` with pre-typed `useAction` method.
  *
  * @example
  * ```typescript
@@ -140,7 +140,7 @@ export default function useActions<
   S extends Props = Props,
 >(initialModel: M, ƒ?: SnapshotFn<S>): UseActions<M, AC, S> {
   const broadcast = useBroadcast();
-  const handleError = useError();
+  const error = useError();
   const tasks = useTasks();
   const [model, setModel] = React.useState<M>(initialModel);
   const hydration = React.useRef<Process | null>(null);
@@ -151,13 +151,9 @@ export default function useActions<
       return state;
     })(),
   );
-  const internalSnapshot = useSnapshot({
-    model,
-    inspect: state.current.inspect,
-  });
   const snapshot = useSnapshot(ƒ?.() ?? <S>{});
   const unicast = React.useMemo(() => new EventEmitter(), []);
-  const scope = React.useRef<ActionsScope>({
+  const scope = React.useRef<Scope>({
     handlers: new Map(),
   });
 
@@ -207,26 +203,26 @@ export default function useActions<
         },
       };
     },
-    [internalSnapshot.model],
+    [model],
   );
 
   React.useLayoutEffect(() => {
-    function createHandler(action: ActionId, actionHandler: ActionHandler) {
+    function createHandler(action: ActionId, actionHandler: Handler) {
       return async function handler(payload: Payload) {
         const result = <Result>{ processes: new Set<Process>() };
         const completion = Promise.withResolvers<void>();
         const context = getContext(action, payload, result);
         try {
           await actionHandler(context, payload);
-        } catch (error) {
+        } catch (caught) {
           const hasErrorHandler = scope.current.handlers.has(Lifecycle.Error);
           const details = {
-            reason: getReason(error),
-            error: normaliseError(error),
+            reason: getReason(caught),
+            error: normaliseError(caught),
             action: getActionName(action),
             handled: hasErrorHandler,
           };
-          handleError?.(details);
+          error?.(details);
           if (hasErrorHandler) unicast.emit(Lifecycle.Error, details);
         } finally {
           for (const task of tasks) {
@@ -253,7 +249,7 @@ export default function useActions<
 
   useLifecycles({ unicast, tasks });
 
-  const tuple = React.useMemo(
+  const result = React.useMemo(
     () =>
       <UseActions<M, AC, S>>[
         model,
@@ -269,7 +265,7 @@ export default function useActions<
             action: symbol,
             renderer: ConsumerRenderer<unknown>,
           ): React.ReactNode {
-            return React.createElement(ConsumeRenderer, {
+            return React.createElement(Partition, {
               action,
               renderer,
             });
@@ -282,19 +278,15 @@ export default function useActions<
     [model, unicast],
   );
 
-  (<UseActions<M, AC, S>>tuple).useAction = <A extends ActionId>(
+  (<UseActions<M, AC, S>>result).useAction = <A extends ActionId>(
     action: A,
     handler: (
       context: ReactiveInterface<M, AC, S>,
       payload: ExtractPayload<A>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void => {
-    useRegisterHandler<M, AC, S>(
-      scope,
-      action,
-      <ActionHandler<M, AC, S>>handler,
-    );
+    useRegisterHandler<M, AC, S>(scope, action, <Handler<M, AC, S>>handler);
   };
 
-  return <UseActions<M, AC, S>>tuple;
+  return <UseActions<M, AC, S>>result;
 }

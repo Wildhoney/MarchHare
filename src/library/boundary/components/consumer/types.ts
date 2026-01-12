@@ -1,4 +1,5 @@
 import type { Box } from "immertation";
+import { State } from "immertation";
 import type { ActionId } from "../tasks/types.ts";
 import * as React from "react";
 
@@ -11,11 +12,19 @@ import * as React from "react";
 export type ConsumerRenderer<T> = (box: Box<T>) => React.ReactNode;
 
 /**
+ * Model for consumed values.
+ * Allows Immertation's State to manage the value with real inspect capabilities.
+ * @template T - The payload type
+ */
+export type Model<T> = { value: T };
+
+/**
  * Entry storing the latest value and listeners for an action.
+ * Uses Immertation's State to provide real inspect functionality for consumed values.
  * @template T - The payload type
  */
 export type Entry<T = unknown> = {
-  value: T | undefined;
+  state: State<Model<T>>;
   listeners: Set<() => void>;
 };
 
