@@ -3,6 +3,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 import pluginReact from "eslint-plugin-react";
 import pluginImport from "eslint-plugin-import";
+import pluginFp from "eslint-plugin-fp";
 import { defineConfig } from "eslint/config";
 
 export default defineConfig([
@@ -20,6 +21,7 @@ export default defineConfig([
   {
     plugins: {
       import: pluginImport,
+      fp: pluginFp,
     },
     settings: {
       react: {
@@ -37,12 +39,46 @@ export default defineConfig([
       complexity: ["warn", { max: 20 }],
       "import/prefer-default-export": "error",
       "import/no-default-export": "off",
+      "fp/no-let": "error",
+      "fp/no-mutation": ["error", { commonjs: true }],
+      "fp/no-mutating-assign": "error",
+      "fp/no-mutating-methods": "error",
+      "fp/no-delete": "error",
+      "fp/no-loops": "error",
     },
   },
   {
     files: ["src/example/**/*.{ts,tsx}"],
     rules: {
       "import/prefer-default-export": "off",
+      "fp/no-mutation": "off",
+      "fp/no-let": "off",
+      "fp/no-loops": "off",
+      "fp/no-mutating-methods": "off",
+    },
+  },
+  {
+    files: ["**/*.test.{ts,tsx}"],
+    rules: {
+      "fp/no-mutation": "off",
+      "fp/no-let": "off",
+      "fp/no-loops": "off",
+      "fp/no-mutating-methods": "off",
+    },
+  },
+  {
+    files: [
+      "src/library/utils/utils.ts",
+      "src/library/utils/index.ts",
+      "src/library/hooks/index.ts",
+      "src/library/hooks/utils.ts",
+      "src/library/boundary/components/consumer/components/renderer/index.tsx",
+    ],
+    rules: {
+      "fp/no-mutation": "off",
+      "fp/no-let": "off",
+      "fp/no-loops": "off",
+      "fp/no-mutating-methods": "off",
     },
   },
   {
