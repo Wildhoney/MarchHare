@@ -17,9 +17,9 @@ export type ActionId = symbol | string;
  * @example
  * ```ts
  * // Abort all tasks for a specific action
- * for (const t of context.tasks) {
- *   if (t.action === Actions.Fetch) {
- *     t.task.abort();
+ * for (const runningTask of context.tasks) {
+ *   if (runningTask.action === Actions.Fetch) {
+ *     runningTask.task.abort();
  *   }
  * }
  *

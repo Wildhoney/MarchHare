@@ -35,7 +35,7 @@ export default defineConfig([
       ],
       "@typescript-eslint/consistent-type-definitions": ["error", "type"],
       complexity: ["warn", { max: 20 }],
-      "import/prefer-default-export": "warn",
+      "import/prefer-default-export": "error",
       "import/no-default-export": "off",
     },
   },

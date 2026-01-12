@@ -2,10 +2,7 @@ import * as React from "react";
 import { Broadcaster } from "./components/broadcast/index.tsx";
 import { Consumer } from "./components/consumer/index.tsx";
 import { Tasks } from "./components/tasks/index.tsx";
-
-type Props = {
-  children: React.ReactNode;
-};
+import type { Props } from "./types.ts";
 
 /**
  * Creates a unified context boundary for all Chizu features.
@@ -24,7 +21,7 @@ type Props = {
  * </Boundary>
  * ```
  */
-export function Boundary({ children }: Props): React.ReactNode {
+export default function Boundary({ children }: Props): React.ReactNode {
   return (
     <Broadcaster>
       <Consumer>

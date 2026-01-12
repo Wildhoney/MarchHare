@@ -1,5 +1,6 @@
 import { Payload, DistributedPayload, Distribution } from "../types/index.ts";
 import type { ActionId } from "../boundary/components/tasks/types.ts";
+import { config } from "../utils/index.ts";
 import { G } from "@mobily/ts-belt";
 
 /**
@@ -62,13 +63,11 @@ type ActionFactory = {
  */
 export const Action = <ActionFactory>(<unknown>(<T = never>(
   name: string,
-  distribution?: Distribution,
+  distribution: Distribution = Distribution.Unicast,
 ): Payload<T> | DistributedPayload<T> => {
-  const resolvedDistribution = distribution ?? Distribution.Unicast;
-
-  return resolvedDistribution === Distribution.Broadcast
-    ? <DistributedPayload<T>>Symbol(`chizu.action/distributed/${name}`)
-    : <Payload<T>>Symbol(`chizu.action/${name}`);
+  return distribution === Distribution.Broadcast
+    ? <DistributedPayload<T>>Symbol(`${config.distributedActionPrefix}${name}`)
+    : <Payload<T>>Symbol(`${config.actionPrefix}${name}`);
 }));
 
 /**
@@ -79,8 +78,11 @@ export const Action = <ActionFactory>(<unknown>(<T = never>(
  * @returns True if the action is a distributed action, false otherwise.
  */
 export function isDistributedAction(action: ActionId): boolean {
-  if (G.isString(action)) return action.startsWith("chizu.action/distributed/");
-  return action.description?.startsWith("chizu.action/distributed/") ?? false;
+  if (G.isString(action))
+    return action.startsWith(config.distributedActionPrefix);
+  return (
+    action.description?.startsWith(config.distributedActionPrefix) ?? false
+  );
 }
 
 /**
@@ -104,7 +106,7 @@ export function isDistributedAction(action: ActionId): boolean {
  */
 export function getActionName(action: ActionId): string {
   const description = G.isString(action) ? action : (action.description ?? "");
-  if (!description.startsWith("chizu.action/")) return "unknown";
+  if (!description.startsWith(config.actionPrefix)) return "unknown";
   const name = description.slice(description.lastIndexOf("/") + 1);
   return name || "unknown";
 }

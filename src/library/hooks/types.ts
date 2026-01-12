@@ -5,6 +5,7 @@ import type {
   ActionsClass,
   Props,
   Task,
+  ActionId,
 } from "../types/index.ts";
 
 export type ActionHandler<
@@ -21,7 +22,7 @@ export type ActionsScope<
   AC extends ActionsClass = ActionsClass,
   S extends Props = Props,
 > = {
-  handlers: Map<symbol, ActionHandler<M, AC, S>>;
+  handlers: Map<ActionId, ActionHandler<M, AC, S>>;
 };
 
 /**

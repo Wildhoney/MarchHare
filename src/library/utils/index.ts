@@ -9,6 +9,16 @@ import { AbortError, Reason } from "../error/types.ts";
 import fnv1a from "./utils.ts";
 
 /**
+ * Configuration constants for Chizu action symbols.
+ */
+export const config = {
+  /** Prefix for all Chizu action symbols. */
+  actionPrefix: "chizu.action/",
+  /** Prefix for distributed (broadcast) action symbols. */
+  distributedActionPrefix: "chizu.action/distributed/",
+};
+
+/**
  * Determines the error reason based on what was thrown.
  *
  * @param error - The value that was thrown.

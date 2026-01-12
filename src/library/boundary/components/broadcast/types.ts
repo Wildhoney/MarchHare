@@ -6,8 +6,15 @@ import * as React from "react";
  */
 export type BroadcastContext = EventEmitter;
 
+/**
+ * Return type for the useBroadcast hook.
+ * Provides access to the shared EventEmitter for emitting and subscribing to distributed actions.
+ */
 export type UseBroadcast = BroadcastContext;
 
+/**
+ * Props for the Broadcaster provider component.
+ */
 export type Props = {
   children: React.ReactNode;
 };

@@ -1,5 +1,6 @@
 import * as React from "react";
 import { Box, Inspect } from "immertation";
+import { G } from "@mobily/ts-belt";
 import { useBroadcast } from "../../../broadcast/index.tsx";
 import { useConsumer } from "../../utils.ts";
 import { Entry } from "../../types.ts";
@@ -58,7 +59,7 @@ export default function ConsumeRenderer<T>({
     };
   }, [action, broadcast, entry]);
 
-  if (entry.value === undefined) return null;
+  if (G.isNullable(entry.value)) return null;
 
   const box: Box<T> = {
     value: entry.value,

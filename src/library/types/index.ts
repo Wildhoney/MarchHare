@@ -57,12 +57,34 @@ export enum Distribution {
   Broadcast = "broadcast",
 }
 
+/**
+ * Primary key type for identifying entities in collections.
+ * Can be undefined (not yet assigned), a symbol (temporary/local), or a concrete value T.
+ *
+ * @template T - The concrete primary key type (e.g., string, number)
+ */
 export type Pk<T> = undefined | symbol | T;
 
+/**
+ * Base constraint type for model state objects.
+ * Models must be plain objects with string keys.
+ *
+ * @template M - The specific model shape
+ */
 export type Model<M = Record<string, unknown>> = M;
 
+/**
+ * Internal symbol used as a brand key for the Payload type.
+ * Enables TypeScript to distinguish Payload from plain symbols.
+ * @internal
+ */
 export const PayloadKey = Symbol("payload");
 
+/**
+ * Internal symbol used as a brand key for the DistributedPayload type.
+ * Enables TypeScript to distinguish distributed actions from local actions.
+ * @internal
+ */
 export const DistributedKey = Symbol("distributed");
 
 /**
@@ -154,7 +176,29 @@ export type ReactiveInterface<
   S extends Props = Props,
 > = {
   model: M;
-  task: AbortController;
+  /**
+   * The current task for the executing action handler.
+   * Contains the AbortController, action identifier, and payload for this specific invocation.
+   *
+   * Use `task.task.signal` to check if the action was aborted, or `task.task.abort()` to cancel it.
+   * The `task.action` and `task.payload` properties identify which action triggered this handler.
+   *
+   * @example
+   * ```ts
+   * actions.useAction(Actions.Fetch, async (context) => {
+   *   const response = await fetch("/api", {
+   *     signal: context.task.task.signal,
+   *   });
+   *
+   *   if (context.task.task.signal.aborted) return;
+   *
+   *   context.actions.produce((draft) => {
+   *     draft.model.data = response;
+   *   });
+   * });
+   * ```
+   */
+  task: Task;
   /**
    * Snapshot of reactive values passed to useActions.
    * Always returns the latest values, even after awaits in async handlers.
@@ -184,9 +228,9 @@ export type ReactiveInterface<
    * @example
    * ```ts
    * // Abort all tasks for a specific action
-   * for (const t of context.tasks) {
-   *   if (t.action === Actions.Fetch) {
-   *     t.task.abort();
+   * for (const runningTask of context.tasks) {
+   *   if (runningTask.action === Actions.Fetch) {
+   *     runningTask.task.abort();
    *   }
    * }
    *
@@ -195,9 +239,9 @@ export type ReactiveInterface<
    * oldest?.task.abort();
    *
    * // Abort all tasks except the current one
-   * for (const t of context.tasks) {
-   *   if (t.task !== context.task) {
-   *     t.task.abort();
+   * for (const runningTask of context.tasks) {
+   *   if (runningTask !== context.task) {
+   *     runningTask.task.abort();
    *   }
    * }
    * ```
@@ -359,11 +403,11 @@ export type UseActions<
    * });
    * ```
    */
-  useAction<Act extends symbol>(
-    action: Act,
+  useAction<A extends ActionId>(
+    action: A,
     handler: (
       context: ReactiveInterface<M, AC, S>,
-      payload: ExtractPayload<Act>,
+      payload: ExtractPayload<A>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void;
 };

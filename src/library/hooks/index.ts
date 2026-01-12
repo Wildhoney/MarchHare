@@ -1,5 +1,5 @@
 import * as React from "react";
-import { withGetters, useLifecycles } from "./utils.ts";
+import { useLifecycles, useSnapshot } from "./utils.ts";
 import type { ActionHandler, ActionsScope } from "./types.ts";
 import {
   ReactiveInterface,
@@ -34,7 +34,7 @@ function useRegisterHandler<
   S extends Props,
 >(
   scope: React.RefObject<ActionsScope>,
-  action: symbol,
+  action: ActionId,
   handler: (
     context: ReactiveInterface<M, AC, S>,
     payload: unknown,
@@ -76,7 +76,7 @@ function useRegisterHandler<
  * @template AC The actions class containing action definitions.
  * @template S The snapshot type for reactive external values.
  * @param initialModel The initial model state.
- * @param snapshotFn Optional function that returns reactive values to snapshot.
+ * @param ƒ Optional function that returns reactive values to snapshot.
  *   Values returned are accessible via `context.snapshot` in action handlers,
  *   always reflecting the latest values even after await operations.
  * @returns A tuple `[model, actions]` with pre-typed `useAction` method.
@@ -134,12 +134,11 @@ function useRegisterHandler<
  * }
  * ```
  */
-// eslint-disable-next-line import/prefer-default-export
-export function useActions<
+export default function useActions<
   M extends Model,
   AC extends ActionsClass,
   S extends Props = Props,
->(initialModel: M, snapshotFn?: SnapshotFn<S>): UseActions<M, AC, S> {
+>(initialModel: M, ƒ?: SnapshotFn<S>): UseActions<M, AC, S> {
   const broadcast = useBroadcast();
   const handleError = useError();
   const tasks = useTasks();
@@ -156,8 +155,7 @@ export function useActions<
     model,
     inspect: state.current.inspect,
   });
-  const userSnapshotValues = snapshotFn?.() ?? <S>{};
-  const userSnapshot = useSnapshot(userSnapshotValues);
+  const snapshot = useSnapshot(ƒ?.() ?? <S>{});
   const unicast = React.useMemo(() => new EventEmitter(), []);
   const scope = React.useRef<ActionsScope>({
     handlers: new Map(),
@@ -179,8 +177,8 @@ export function useActions<
 
       return <ReactiveInterface<M, AC, S>>{
         model,
-        task: controller,
-        snapshot: userSnapshot,
+        task,
+        snapshot: snapshot,
         tasks,
         actions: {
           produce(f) {
@@ -213,10 +211,10 @@ export function useActions<
   );
 
   React.useLayoutEffect(() => {
-    function createHandler(action: symbol, actionHandler: ActionHandler) {
+    function createHandler(action: ActionId, actionHandler: ActionHandler) {
       return async function handler(payload: Payload) {
         const result = <Result>{ processes: new Set<Process>() };
-        const promiseTask = Promise.withResolvers<void>();
+        const completion = Promise.withResolvers<void>();
         const context = getContext(action, payload, result);
         try {
           await actionHandler(context, payload);
@@ -231,16 +229,15 @@ export function useActions<
           handleError?.(details);
           if (hasErrorHandler) unicast.emit(Lifecycle.Error, details);
         } finally {
-          // Clean up task from shared Set
-          for (const t of tasks) {
-            if (t.task === context.task) {
-              tasks.delete(t);
+          for (const task of tasks) {
+            if (task === context.task) {
+              tasks.delete(task);
               break;
             }
           }
           result.processes.forEach((process) => state.current.prune(process));
           setModel({ ...state.current.model });
-          promiseTask.resolve();
+          completion.resolve();
         }
       };
     }
@@ -256,11 +253,40 @@ export function useActions<
 
   useLifecycles({ unicast, tasks });
 
-  const useActionMethod = <Act extends symbol>(
-    action: Act,
+  const tuple = React.useMemo(
+    () =>
+      <UseActions<M, AC, S>>[
+        model,
+        {
+          dispatch(
+            ...[action, payload]: [action: ActionId, payload?: Payload]
+          ) {
+            isDistributedAction(action)
+              ? broadcast.emit(action, payload)
+              : unicast.emit(action, payload);
+          },
+          consume(
+            action: symbol,
+            renderer: ConsumerRenderer<unknown>,
+          ): React.ReactNode {
+            return React.createElement(ConsumeRenderer, {
+              action,
+              renderer,
+            });
+          },
+          get inspect() {
+            return state.current.inspect;
+          },
+        },
+      ],
+    [model, unicast],
+  );
+
+  (<UseActions<M, AC, S>>tuple).useAction = <A extends ActionId>(
+    action: A,
     handler: (
       context: ReactiveInterface<M, AC, S>,
-      payload: ExtractPayload<Act>,
+      payload: ExtractPayload<A>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void => {
     useRegisterHandler<M, AC, S>(
@@ -270,52 +296,5 @@ export function useActions<
     );
   };
 
-  const baseTuple = React.useMemo(() => {
-    const actionsObj = {
-      dispatch(...[action, payload]: [action: ActionId, payload?: Payload]) {
-        isDistributedAction(action)
-          ? broadcast.emit(action, payload)
-          : unicast.emit(action, payload);
-      },
-      consume(
-        action: symbol,
-        renderer: ConsumerRenderer<unknown>,
-      ): React.ReactNode {
-        return React.createElement(ConsumeRenderer, {
-          action,
-          renderer,
-        });
-      },
-      get inspect() {
-        return state.current.inspect;
-      },
-    };
-    return <[M, typeof actionsObj]>[model, actionsObj];
-  }, [model, unicast]);
-
-  return <UseActions<M, AC, S>>Object.assign(baseTuple, {
-    useAction: useActionMethod,
-  });
-}
-
-/**
- * Creates a snapshot of a given object, returning a memoized version.
- * The snapshot provides stable access to the object's properties,
- * even as the original object changes across renders.
- *
- * This is an internal utility used by useActions to provide stable
- * access to reactive values in async action handlers.
- *
- * @template T The type of the object.
- * @param {T} props The object to create a snapshot of.
- * @returns {T} A memoized snapshot of the object.
- */
-function useSnapshot<P extends Props>(props: P): P {
-  const ref = React.useRef<P>(props);
-
-  React.useLayoutEffect((): void => {
-    ref.current = props;
-  }, [props]);
-
-  return React.useMemo(() => withGetters<P>(props, ref), [props]);
+  return <UseActions<M, AC, S>>tuple;
 }

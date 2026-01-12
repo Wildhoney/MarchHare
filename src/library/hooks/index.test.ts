@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import { renderHook, act } from "@testing-library/react";
-import { useActions } from "./index.ts";
+import useActions from "./index.ts";
 import { Action } from "../action/index.ts";
 
 type Model = { value: string | null };
