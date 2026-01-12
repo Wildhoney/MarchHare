@@ -2,9 +2,9 @@ import { describe, expect, it, jest } from "@jest/globals";
 import { render, act } from "@testing-library/react";
 import * as React from "react";
 import { Inspect } from "immertation";
-import { pk, sleep, set, checksum, Σ } from "./index.ts";
+import { pk, sleep, set } from "./index.ts";
 import { useRerender } from "./utils.ts";
-import { ActionsClass, Context, Payload } from "../types/index.ts";
+import { Actions, Context, Payload } from "../types/index.ts";
 
 describe("pk()", () => {
   it("should generate a unique symbol when called without arguments", () => {
@@ -43,9 +43,9 @@ describe("sleep()", () => {
 describe("set()", () => {
   it("should create a setter action for a property", () => {
     type TestModel = { name: string };
-    const setter = set<TestModel, ActionsClass>("name");
+    const setter = set<TestModel, Actions>("name");
     const model: TestModel = { name: "initial" };
-    const context: Pick<Context<TestModel, ActionsClass>, "actions"> = {
+    const context: Pick<Context<TestModel, Actions>, "actions"> = {
       actions: {
         produce: (fn) => {
           fn({ model, inspect: <Inspect<TestModel>>{} });
@@ -56,30 +56,9 @@ describe("set()", () => {
       },
     };
 
-    setter(<Context<TestModel, ActionsClass>>context, <Payload>"updated");
+    setter(<Context<TestModel, Actions>>context, <Payload>"updated");
 
     expect(model.name).toBe("updated");
-  });
-});
-
-describe("checksum()", () => {
-  it("should return a string for valid objects", () => {
-    expect(typeof checksum({ name: "Adam" })).toBe("string");
-  });
-
-  it("should generate different hashes for different values", () => {
-    expect(checksum({ a: 1 })).not.toBe(checksum({ a: 2 }));
-  });
-
-  it("should return null for circular references", () => {
-    const obj: Record<string, unknown> = {};
-    obj.self = obj;
-
-    expect(checksum(obj)).toBeNull();
-  });
-
-  it("should be aliased as Σ", () => {
-    expect(Σ).toBe(checksum);
   });
 });
 

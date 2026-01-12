@@ -1,11 +1,11 @@
-import { Task } from "./types.ts";
+import { Tasks } from "./types.ts";
 import * as React from "react";
 
 /**
  * React context for the shared tasks Set.
  * Tasks are ordered by creation time (oldest first) since Sets maintain insertion order.
  */
-export const Context = React.createContext<Set<Task>>(new Set());
+export const Context = React.createContext<Tasks>(new Set());
 
 /**
  * Hook to access the shared tasks Set from context.
@@ -25,6 +25,6 @@ export const Context = React.createContext<Set<Task>>(new Set());
  * }
  * ```
  */
-export function useTasks(): Set<Task> {
+export function useTasks(): Tasks {
   return React.useContext(Context);
 }

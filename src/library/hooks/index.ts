@@ -8,7 +8,7 @@ import {
   Model,
   Payload,
   Props,
-  ActionsClass,
+  Actions,
   ActionId,
   UseActions,
   Result,
@@ -31,7 +31,7 @@ import { useTasks } from "../boundary/components/tasks/utils.ts";
 
 function useRegisterHandler<
   M extends Model,
-  AC extends ActionsClass,
+  AC extends Actions,
   S extends Props,
 >(
   scope: React.RefObject<Scope>,
@@ -137,7 +137,7 @@ function useRegisterHandler<
  */
 export function useActions<
   M extends Model,
-  AC extends ActionsClass,
+  AC extends Actions,
   S extends Props = Props,
 >(initialModel: M, ƒ?: SnapshotFn<S>): UseActions<M, AC, S> {
   const broadcast = useBroadcast();

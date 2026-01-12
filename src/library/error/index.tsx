@@ -3,7 +3,7 @@ import { ErrorContext } from "./utils";
 
 export { useError } from "./utils";
 export { Reason, AbortError, TimeoutError } from "./types";
-export type { ErrorDetails, ErrorHandler } from "./types";
+export type { Fault, Catcher } from "./types";
 
 /**
  * Error boundary component for catching and handling errors from actions.

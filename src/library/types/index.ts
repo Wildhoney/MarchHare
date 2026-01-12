@@ -1,10 +1,14 @@
 import { Operation } from "immertation";
 import { Process, Inspect, Box } from "immertation";
-import type { ActionId, Task } from "../boundary/components/tasks/types.ts";
+import type {
+  ActionId,
+  Task,
+  Tasks,
+} from "../boundary/components/tasks/types.ts";
 import type { ConsumerRenderer } from "../boundary/components/consumer/index.tsx";
 import type * as React from "react";
 
-export type { ActionId, Box, Task };
+export type { ActionId, Box, Task, Tasks };
 export type { ConsumerRenderer };
 
 /**
@@ -120,42 +124,60 @@ export type DistributedPayload<T = unknown> = Payload<T> & {
   [DistributedKey]: true;
 };
 
+/**
+ * Extracts the payload type from a Payload-branded symbol.
+ * @internal
+ */
 type PayloadType<A> = A extends Payload<infer P> ? P : never;
 
+/**
+ * Checks if a function type returns a Promise.
+ * @internal
+ */
 type IsAsync<F> = F extends (...args: unknown[]) => Promise<unknown>
   ? true
   : false;
 
+/**
+ * Type guard that produces a compile-time error if an async function is passed.
+ * Used to enforce synchronous callbacks in `produce()`.
+ * @internal
+ */
 type AssertSync<F> =
   IsAsync<F> extends true
     ? "Error: async functions are not allowed in produce"
     : F;
 
+/**
+ * Base type for snapshot props passed to useActions.
+ * Represents any object that can be captured as a reactive snapshot.
+ */
 export type Props = Record<string, unknown>;
 
-export type ActionsClass<AC = object> = {
-  new (): unknown;
-} & AC;
+/**
+ * Constraint type for action containers.
+ * Actions are symbols grouped in an object (typically a class with static properties).
+ *
+ * @template AC - The shape of the actions object
+ */
+export type Actions<AC = Record<string, symbol>> = AC;
 
 /**
  * Helper type to extract the Model from an ActionPair tuple.
  * If T is a tuple [M, AC], returns M. Otherwise returns T directly.
  */
-export type InferModel<T> = T extends [infer M, ActionsClass] ? M : T;
+export type InferModel<T> = T extends [infer M, Actions] ? M : T;
 
 /**
- * Helper type to extract the ActionsClass from an ActionPair tuple.
+ * Helper type to extract the Actions from an ActionPair tuple.
  * If T is a tuple [M, AC], returns AC. Otherwise returns the Fallback.
  */
-export type InferActionsClass<T, Fallback = ActionsClass> = T extends [
-  Model,
-  infer AC,
-]
+export type InferActions<T, Fallback = Actions> = T extends [Model, infer AC]
   ? AC
   : Fallback;
 
 /**
- * Type alias for the [Model, ActionsClass] tuple pattern.
+ * Type alias for the [Model, Actions] tuple pattern.
  * Use this to define a single type that captures both model and actions.
  *
  * @example
@@ -164,15 +186,19 @@ export type InferActionsClass<T, Fallback = ActionsClass> = T extends [
  * const handler = useAction<Action>((context) => { ... });
  * ```
  */
-export type ActionPair = [Model, ActionsClass];
+export type ActionPair = [Model, Actions];
 
+/**
+ * Internal result container for tracking Immertation processes during action execution.
+ * @internal
+ */
 export type Result = {
   processes: Set<Process>;
 };
 
 export type ReactiveInterface<
   M extends Model,
-  AC extends ActionsClass,
+  AC extends Actions,
   S extends Props = Props,
 > = {
   model: M;
@@ -246,7 +272,7 @@ export type ReactiveInterface<
    * }
    * ```
    */
-  tasks: Set<Task>;
+  tasks: Tasks;
   actions: {
     produce<F extends (draft: { model: M; inspect: Inspect<M> }) => void>(
       ƒ: F & AssertSync<F>,
@@ -330,7 +356,7 @@ export type ExtractPayload<A> = A extends Payload<infer P> ? P : never;
  */
 export type Handler<
   M extends Model,
-  AC extends ActionsClass,
+  AC extends Actions,
   A extends Payload<unknown>,
   S extends Props = Props,
 > = (
@@ -340,7 +366,7 @@ export type Handler<
 
 export type UseActions<
   M extends Model,
-  AC extends ActionsClass,
+  AC extends Actions,
   S extends Props = Props,
 > = [
   M,

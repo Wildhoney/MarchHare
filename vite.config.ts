@@ -156,6 +156,7 @@ export default defineConfig(({ mode }) => {
                 "@mobily/ts-belt": "TsBelt",
                 immer: "Immer",
                 react: "React",
+                "react/jsx-runtime": "jsxRuntime",
               },
             },
           },

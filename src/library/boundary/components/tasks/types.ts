@@ -35,6 +35,11 @@ export type Task<P = unknown> = {
 };
 
 /**
+ * A set of running tasks ordered by creation time (oldest first).
+ */
+export type Tasks = Set<Task>;
+
+/**
  * Props for the Tasks provider component.
  */
 export type Props = {

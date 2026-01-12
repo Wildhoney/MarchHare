@@ -1,4 +1,4 @@
-import { Task } from "./types.ts";
+import { Task, Tasks } from "./types.ts";
 import { describe, expect, it } from "@jest/globals";
 
 describe("Task", () => {
@@ -20,7 +20,7 @@ describe("Task", () => {
   });
 
   it("should maintain insertion order in Set (oldest first)", () => {
-    const tasks = new Set<Task>();
+    const tasks = <Tasks>new Set();
 
     const task1: Task = {
       task: new AbortController(),
@@ -49,7 +49,7 @@ describe("Task", () => {
   });
 
   it("should allow filtering tasks by action", () => {
-    const tasks = new Set<Task>();
+    const tasks = <Tasks>new Set();
 
     tasks.add({ task: new AbortController(), action: actionA, payload: 1 });
     tasks.add({ task: new AbortController(), action: actionB, payload: 2 });
@@ -62,7 +62,7 @@ describe("Task", () => {
   });
 
   it("should allow aborting tasks by iterating and filtering", () => {
-    const tasks = new Set<Task>();
+    const tasks = <Tasks>new Set();
 
     const task1: Task = {
       task: new AbortController(),
@@ -90,7 +90,7 @@ describe("Task", () => {
   });
 
   it("should allow removing tasks from Set", () => {
-    const tasks = new Set<Task>();
+    const tasks = <Tasks>new Set();
 
     const task1: Task = {
       task: new AbortController(),
@@ -114,7 +114,7 @@ describe("Task", () => {
   });
 
   it("should allow aborting oldest task first", () => {
-    const tasks = new Set<Task>();
+    const tasks = <Tasks>new Set();
 
     const task1: Task = {
       task: new AbortController(),

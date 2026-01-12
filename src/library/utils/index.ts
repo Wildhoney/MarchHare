@@ -1,12 +1,11 @@
 import {
-  ActionsClass,
+  Actions,
   ReactiveInterface,
   Model,
   Payload,
   Pk,
 } from "../types/index.ts";
 import { AbortError, Reason } from "../error/types.ts";
-import { fnv1a } from "./utils.ts";
 
 /**
  * Configuration constants for Chizu action symbols.
@@ -106,9 +105,7 @@ export const κ = pk;
  * @param property The name of the property in the state to update.
  * @returns An action function that takes the context and a payload, and updates the state.
  */
-export function set<M extends Model, AC extends ActionsClass>(
-  property: string,
-) {
+export function set<M extends Model, AC extends Actions>(property: string) {
   return (context: ReactiveInterface<M, AC>, payload: Payload): void => {
     context.actions.produce(({ model }) => {
       (<Record<string, Payload>>model)[property] = payload;
@@ -118,23 +115,3 @@ export function set<M extends Model, AC extends ActionsClass>(
 
 /** Shorthand alias for {@link set}. */
 export const λ = set;
-
-/**
- * Generates a deterministic hash string from any value.
- * Useful for creating cache keys, comparing object equality, or tracking changes.
- *
- * Returns `null` if the value cannot be serialised (e.g., circular references).
- *
- * @param value - The value to hash (objects, arrays, primitives, etc.).
- * @returns The hash string, or `null` if serialisation fails.
- */
-export function checksum(value: unknown): string | null {
-  try {
-    return fnv1a(JSON.stringify(value));
-  } catch {
-    return null;
-  }
-}
-
-/** Shorthand alias for {@link checksum}. */
-export const Σ = checksum;

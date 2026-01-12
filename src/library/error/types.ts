@@ -53,33 +53,31 @@ export class TimeoutError extends Error {
  * Details about an error that occurred during action execution.
  * @template E Custom error types to include in the union with Error.
  */
-export type ErrorDetails<E extends Error = never> = {
+export type Fault<E extends Error = never> = {
   /** The reason for the error. */
   reason: Reason;
   /** The Error object that was thrown. */
   error: Error | E;
   /** The name of the action that caused the error (e.g., "Increment"). */
   action: string;
-  /** Whether the error was handled locally via `Lifecycle.Error`. */
+  /** Whether the component has a `Lifecycle.Error` handler registered. */
   handled: boolean;
 };
 
 /**
- * Handler function called when an action error occurs.
+ * Catcher function called when an action error occurs.
  * @template E Custom error types to include in the union with Error.
  * @param details Information about the error.
  */
-export type ErrorHandler<E extends Error = never> = (
-  details: ErrorDetails<E>,
-) => void;
+export type Catcher<E extends Error = never> = (details: Fault<E>) => void;
 
 /**
  * Props for the Error boundary component.
  * @template E Custom error types to include in the union with Error.
  */
 export type Props<E extends Error = never> = {
-  /** Handler function called when an action error occurs. */
-  handler: ErrorHandler<E>;
+  /** Catcher function called when an action error occurs. */
+  handler: Catcher<E>;
   /** Child components to wrap with error handling. */
   children?: ReactNode;
 };

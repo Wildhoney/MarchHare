@@ -1,5 +1,5 @@
 import { Context } from "./utils.ts";
-import { Props, Task } from "./types.ts";
+import type { Props, Tasks } from "./types.ts";
 import * as React from "react";
 
 export type { Task } from "./types.ts";
@@ -15,7 +15,7 @@ export type { Task } from "./types.ts";
  * @returns The children wrapped in a tasks context provider.
  */
 export function Tasks({ children }: Props): React.ReactNode {
-  const tasks = React.useMemo<Set<Task>>(() => new Set(), []);
+  const tasks = React.useMemo<Tasks>(() => new Set(), []);
 
   return <Context.Provider value={tasks}>{children}</Context.Provider>;
 }
