@@ -143,6 +143,7 @@ export default function useActions<
   const error = useError();
   const tasks = useTasks();
   const [model, setModel] = React.useState<M>(initialModel);
+  const [, rerender] = React.useReducer((x: number) => x + 1, 0);
   const hydration = React.useRef<Process | null>(null);
   const state = React.useRef<State<M>>(
     (() => {
@@ -232,7 +233,7 @@ export default function useActions<
             }
           }
           result.processes.forEach((process) => state.current.prune(process));
-          setModel({ ...state.current.model });
+          rerender();
           completion.resolve();
         }
       };
