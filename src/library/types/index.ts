@@ -31,7 +31,7 @@ export class Lifecycle {
   static Node = Symbol("chizu.action.lifecycle/Node");
   /** Triggered when the component unmounts. */
   static Unmount = Symbol("chizu.action.lifecycle/Unmount");
-  /** Triggered when an action throws an error. Receives `ErrorDetails` as payload. */
+  /** Triggered when an action throws an error. Receives `Fault` as payload. */
   static Error = Symbol("chizu.action.lifecycle/Error");
 }
 

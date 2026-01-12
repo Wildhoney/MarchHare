@@ -37,20 +37,6 @@ context.actions.produce((draft) => {
 });
 ```
 
-## `utils.checksum(value)` / `utils.Σ`
-
-Generates a deterministic hash string from any value. Returns `null` if the value cannot be serialised (e.g., circular references). Useful for creating cache keys, comparing object equality, or tracking changes:
-
-```ts
-const hash = utils.checksum({ userId: 123, filters: { active: true } });
-// Returns a stable hash string like "1a2b3c4d"
-
-// Use for cache keys or change detection
-if (utils.checksum(currentData) !== utils.checksum(previousData)) {
-  // Data has changed...
-}
-```
-
 ## `utils.sleep(ms, signal?)` / `utils.ζ`
 
 Returns a promise that resolves after the specified milliseconds. Useful for simulating delays in actions during development or adding intentional pauses. Optionally accepts an `AbortSignal` to cancel the sleep early:

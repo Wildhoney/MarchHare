@@ -28,12 +28,12 @@ function App(): ReactElement {
 }
 ```
 
-The `ErrorDetails` object passed to the handler contains:
+The `Fault` object passed to the handler contains:
 
 - **`reason`** &ndash; One of `Reason.Timedout`, `Reason.Supplanted`, `Reason.Disallowed`, or `Reason.Errored`.
 - **`error`** &ndash; The `Error` object that was thrown.
 - **`action`** &ndash; The name of the action that caused the error.
-- **`handled`** &ndash; Whether the error was handled locally via `Lifecycle.Error`.
+- **`handled`** &ndash; Whether the component has a `Lifecycle.Error` handler registered.
 
 ## Error reasons
 

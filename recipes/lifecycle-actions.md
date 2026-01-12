@@ -26,7 +26,7 @@ export function useMyActions() {
 
 - **`Lifecycle.Mount`** &ndash; Triggered once when the component mounts (`useLayoutEffect`).
 - **`Lifecycle.Node`** &ndash; Triggered after the component renders (`useEffect`).
-- **`Lifecycle.Error`** &ndash; Triggered when an action throws an error. Receives `ErrorDetails` as payload.
+- **`Lifecycle.Error`** &ndash; Triggered when an action throws an error. Receives `Fault` as payload.
 - **`Lifecycle.Unmount`** &ndash; Triggered when the component unmounts. All in-flight actions are automatically aborted before this handler runs.
 
 **Note:** Actions should ideally be self-contained and handle expected errors internally using patterns like [Option](https://mobily.github.io/ts-belt/api/option) or [Result](https://mobily.github.io/ts-belt/api/result) types to update the model accordingly. `Lifecycle.Error` is intended for timeouts, aborts, and uncaught catastrophic errors &ndash; not routine error handling.
