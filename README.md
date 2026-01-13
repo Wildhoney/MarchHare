@@ -21,7 +21,7 @@ For advanced topics, see the [recipes directory](./recipes/).
 - Event-driven architecture superset of [React](https://react.dev/).
 - Views only re-render when the model changes.
 - Built-in [optimistic updates](https://medium.com/@kyledeguzmanx/what-are-optimistic-updates-483662c3e171) via [Immertation](https://github.com/Wildhoney/Immertation).
-- No stale closures &ndash; `context.snapshot` stays current after `await`.
+- No stale closures &ndash; `context.data` stays current after `await`.
 - No need to lift state &ndash; siblings communicate via events.
 - Reduces context proliferation &ndash; events replace many contexts.
 - No need to memoize callbacks &ndash; handlers are stable via [`useEffectEvent`](https://react.dev/reference/react/experimental_useEffectEvent).
@@ -99,7 +99,7 @@ actions.useAction(Actions.Name, async (context) => {
 
 Notice we're using `annotate` which you can read more about in the [Immertation documentation](https://github.com/Wildhoney/Immertation). Nevertheless once the request is finished we update the model again with the `name` fetched from the response and update our React component again.
 
-If you need to access external reactive values (like props or `useState` from parent components) that always reflect the latest value even after `await` operations, pass a snapshot callback to `useActions`:
+If you need to access external reactive values (like props or `useState` from parent components) that always reflect the latest value even after `await` operations, pass a data callback to `useActions`:
 
 ```tsx
 const actions = useActions<Model, typeof Actions, { query: string }>(
@@ -109,8 +109,8 @@ const actions = useActions<Model, typeof Actions, { query: string }>(
 
 actions.useAction(Actions.Search, async (context) => {
   await fetch("/search");
-  // context.snapshot.query is always the latest value
-  console.log(context.snapshot.query);
+  // context.data.query is always the latest value
+  console.log(context.data.query);
 });
 ```
 

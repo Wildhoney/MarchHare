@@ -1,7 +1,7 @@
 import * as React from "react";
-import { useLifecycles, useSnapshot } from "./utils.ts";
+import { useLifecycles, useData } from "./utils.ts";
 import { useRerender } from "../utils/utils.ts";
-import type { Handler, Scope } from "./types.ts";
+import type { Data, Handler, Scope } from "./types.ts";
 import {
   ReactiveInterface,
   Lifecycle,
@@ -16,7 +16,6 @@ import {
   Task,
 } from "../types/index.ts";
 
-type SnapshotFn<S extends Props> = () => S;
 import {
   Partition,
   ConsumerRenderer,
@@ -32,17 +31,17 @@ import { useTasks } from "../boundary/components/tasks/utils.ts";
 function useRegisterHandler<
   M extends Model,
   AC extends Actions,
-  S extends Props,
+  D extends Props,
 >(
   scope: React.RefObject<Scope>,
   action: ActionId,
   handler: (
-    context: ReactiveInterface<M, AC, S>,
+    context: ReactiveInterface<M, AC, D>,
     payload: unknown,
   ) => void | Promise<void> | AsyncGenerator | Generator,
 ): void {
   const stableHandler = React.useEffectEvent(
-    async (context: ReactiveInterface<M, AC, S>, payload: unknown) => {
+    async (context: ReactiveInterface<M, AC, D>, payload: unknown) => {
       const isGenerator =
         handler.constructor.name === "GeneratorFunction" ||
         handler.constructor.name === "AsyncGeneratorFunction";
@@ -75,10 +74,10 @@ function useRegisterHandler<
  *
  * @template M The model type representing the component's state.
  * @template AC The actions class containing action definitions.
- * @template S The snapshot type for reactive external values.
+ * @template S The data type for reactive external values.
  * @param initialModel The initial model state.
- * @param ƒ Optional function that returns reactive values to snapshot.
- *   Values returned are accessible via `context.snapshot` in action handlers,
+ * @param ƒ Optional function that returns reactive values as data.
+ *   Values returned are accessible via `context.data` in action handlers,
  *   always reflecting the latest values even after await operations.
  * @returns A result `[model, actions]` with pre-typed `useAction` method.
  *
@@ -112,7 +111,7 @@ function useRegisterHandler<
  *   return actions;
  * }
  *
- * // With snapshot for reactive external values
+ * // With data for reactive external values
  * function useSearchActions(props: { query: string }) {
  *   const actions = useActions<Model, typeof Actions, { query: string }>(
  *     model,
@@ -121,8 +120,8 @@ function useRegisterHandler<
  *
  *   actions.useAction(Actions.Search, async (context) => {
  *     await fetch("/search");
- *     // context.snapshot.query is always the latest value
- *     console.log(context.snapshot.query);
+ *     // context.data.query is always the latest value
+ *     console.log(context.data.query);
  *   });
  *
  *   return actions;
@@ -138,8 +137,8 @@ function useRegisterHandler<
 export function useActions<
   M extends Model,
   AC extends Actions,
-  S extends Props = Props,
->(initialModel: M, ƒ?: SnapshotFn<S>): UseActions<M, AC, S> {
+  D extends Props = Props,
+>(initialModel: M, getData: Data<D> = () => <D>{}): UseActions<M, AC, D> {
   const broadcast = useBroadcast();
   const error = useError();
   const tasks = useTasks();
@@ -153,11 +152,9 @@ export function useActions<
       return state;
     })(),
   );
-  const snapshot = useSnapshot(ƒ?.() ?? <S>{});
+  const data = useData(getData());
   const unicast = React.useMemo(() => new EventEmitter(), []);
-  const scope = React.useRef<Scope>({
-    handlers: new Map(),
-  });
+  const scope = React.useRef<Scope>({ handlers: new Map() });
 
   /**
    * Creates the context object passed to action handlers during dispatch.
@@ -170,13 +167,13 @@ export function useActions<
   const getContext = React.useCallback(
     (action: ActionId, payload: unknown, result: Result) => {
       const controller = new AbortController();
-      const task: Task = { task: controller, action, payload };
+      const task: Task = { controller, action, payload };
       tasks.add(task);
 
-      return <ReactiveInterface<M, AC, S>>{
+      return <ReactiveInterface<M, AC, D>>{
         model,
         task,
-        snapshot: snapshot,
+        data,
         tasks,
         actions: {
           produce(f) {
@@ -253,7 +250,7 @@ export function useActions<
 
   const result = React.useMemo(
     () =>
-      <UseActions<M, AC, S>>[
+      <UseActions<M, AC, D>>[
         model,
         {
           dispatch(
@@ -280,15 +277,15 @@ export function useActions<
     [model, unicast],
   );
 
-  (<UseActions<M, AC, S>>result).useAction = <A extends ActionId>(
+  (<UseActions<M, AC, D>>result).useAction = <A extends ActionId>(
     action: A,
     handler: (
-      context: ReactiveInterface<M, AC, S>,
+      context: ReactiveInterface<M, AC, D>,
       payload: ExtractPayload<A>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void => {
-    useRegisterHandler<M, AC, S>(scope, action, <Handler<M, AC, S>>handler);
+    useRegisterHandler<M, AC, D>(scope, action, <Handler<M, AC, D>>handler);
   };
 
-  return <UseActions<M, AC, S>>result;
+  return <UseActions<M, AC, D>>result;
 }

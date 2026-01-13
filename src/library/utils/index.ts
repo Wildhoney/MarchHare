@@ -1,9 +1,9 @@
 import {
-  Actions,
   ReactiveInterface,
   Model,
   Payload,
   Pk,
+  Actions,
 } from "../types/index.ts";
 import { AbortError, Reason } from "../error/types.ts";
 

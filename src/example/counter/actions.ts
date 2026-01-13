@@ -18,7 +18,7 @@ export function useCounterActions() {
       );
     });
 
-    await sleep(1_000, context.task.task.signal);
+    await sleep(1_000, context.task.controller.signal);
 
     context.actions.produce((draft) => {
       draft.model.count = draft.model.count + 1;

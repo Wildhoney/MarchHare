@@ -10,7 +10,7 @@ export type ActionId = symbol | string;
  * Tasks are stored in a Set ordered by creation time (oldest first).
  *
  * @template P - The payload type for this task
- * @property task - The AbortController to cancel this task
+ * @property controller - The AbortController to cancel this task
  * @property action - The action identifier that triggered this task
  * @property payload - The payload passed when the action was dispatched
  *
@@ -19,17 +19,17 @@ export type ActionId = symbol | string;
  * // Abort all tasks for a specific action
  * for (const runningTask of context.tasks) {
  *   if (runningTask.action === Actions.Fetch) {
- *     runningTask.task.abort();
+ *     runningTask.controller.abort();
  *   }
  * }
  *
  * // Abort the oldest task
  * const oldest = context.tasks.values().next().value;
- * oldest?.task.abort();
+ * oldest?.controller.abort();
  * ```
  */
 export type Task<P = unknown> = {
-  task: AbortController;
+  controller: AbortController;
   action: ActionId;
   payload: P;
 };

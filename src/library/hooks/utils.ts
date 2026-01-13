@@ -48,23 +48,19 @@ export function useLifecycles({ unicast }: LifecycleConfig): void {
 }
 
 /**
- * Creates a snapshot of a given object, returning a memoized version.
- * The snapshot provides stable access to the object's properties,
+ * Creates a data proxy for a given object, returning a memoized version.
+ * The proxy provides stable access to the object's properties,
  * even as the original object changes across renders.
  *
  * This is an internal utility used by useActions to provide stable
- * access to reactive values in async action handlers.
+ * access to reactive values in async action handlers via `context.data`.
  *
  * @template P The type of the object.
- * @param props The object to create a snapshot of.
- * @returns A memoized snapshot of the object.
+ * @param props The object to create a data proxy for.
+ * @returns A memoized data proxy of the object.
  */
-export function useSnapshot<P extends Props>(props: P): P {
+export function useData<P extends Props>(props: P): P {
   const ref = React.useRef<P>(props);
-
-  React.useLayoutEffect((): void => {
-    ref.current = props;
-  }, [props]);
-
+  React.useLayoutEffect((): void => void (ref.current = props), [props]);
   return React.useMemo(() => withGetters<P>(props, ref), [props]);
 }

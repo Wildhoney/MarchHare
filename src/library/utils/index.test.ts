@@ -4,7 +4,7 @@ import * as React from "react";
 import { Inspect } from "immertation";
 import { pk, sleep, set } from "./index.ts";
 import { useRerender } from "./utils.ts";
-import { Actions, Context, Payload } from "../types/index.ts";
+import { ReactiveInterface, Payload, Actions } from "../types/index.ts";
 
 describe("pk()", () => {
   it("should generate a unique symbol when called without arguments", () => {
@@ -45,7 +45,7 @@ describe("set()", () => {
     type TestModel = { name: string };
     const setter = set<TestModel, Actions>("name");
     const model: TestModel = { name: "initial" };
-    const context: Pick<Context<TestModel, Actions>, "actions"> = {
+    const context: Pick<ReactiveInterface<TestModel, Actions>, "actions"> = {
       actions: {
         produce: (fn) => {
           fn({ model, inspect: <Inspect<TestModel>>{} });
@@ -56,7 +56,7 @@ describe("set()", () => {
       },
     };
 
-    setter(<Context<TestModel, Actions>>context, <Payload>"updated");
+    setter(<ReactiveInterface<TestModel, Actions>>context, <Payload>"updated");
 
     expect(model.name).toBe("updated");
   });

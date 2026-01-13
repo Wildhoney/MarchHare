@@ -14,14 +14,14 @@ import type {
  *
  * @template M - The model type
  * @template AC - The actions class type
- * @template S - The snapshot props type
+ * @template D - The data props type
  */
 export type Handler<
   M extends Model = Model,
   AC extends Actions = Actions,
-  S extends Props = Props,
+  D extends Props = Props,
 > = (
-  context: ReactiveInterface<M, AC, S>,
+  context: ReactiveInterface<M, AC, D>,
   payload: unknown,
 ) => void | Promise<void> | AsyncGenerator | Generator;
 
@@ -31,15 +31,23 @@ export type Handler<
  *
  * @template M - The model type
  * @template AC - The actions class type
- * @template S - The snapshot props type
+ * @template D - The data props type
  */
 export type Scope<
   M extends Model = Model,
   AC extends Actions = Actions,
-  S extends Props = Props,
+  D extends Props = Props,
 > = {
-  handlers: Map<ActionId, Handler<M, AC, S>>;
+  handlers: Map<ActionId, Handler<M, AC, D>>;
 };
+
+/**
+ * Function type for the data snapshot passed to useActions.
+ * Returns the current reactive values to be captured in the context.
+ *
+ * @template D - The data props type
+ */
+export type Data<D extends Props = Props> = () => D;
 
 /**
  * Configuration for {@link useLifecycles}.

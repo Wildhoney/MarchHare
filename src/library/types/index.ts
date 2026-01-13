@@ -149,18 +149,16 @@ type AssertSync<F> =
     : F;
 
 /**
- * Base type for snapshot props passed to useActions.
- * Represents any object that can be captured as a reactive snapshot.
+ * Base type for data props passed to useActions.
+ * Represents any object that can be captured as reactive data.
  */
 export type Props = Record<string, unknown>;
 
 /**
  * Constraint type for action containers.
  * Actions are symbols grouped in an object (typically a class with static properties).
- *
- * @template AC - The shape of the actions object
  */
-export type Actions<AC = Record<string, symbol>> = AC;
+export type Actions = object;
 
 /**
  * Helper type to extract the Model from an ActionPair tuple.
@@ -199,24 +197,24 @@ export type Result = {
 export type ReactiveInterface<
   M extends Model,
   AC extends Actions,
-  S extends Props = Props,
+  D extends Props = Props,
 > = {
   model: M;
   /**
    * The current task for the executing action handler.
    * Contains the AbortController, action identifier, and payload for this specific invocation.
    *
-   * Use `task.task.signal` to check if the action was aborted, or `task.task.abort()` to cancel it.
+   * Use `task.controller.signal` to check if the action was aborted, or `task.controller.abort()` to cancel it.
    * The `task.action` and `task.payload` properties identify which action triggered this handler.
    *
    * @example
    * ```ts
    * actions.useAction(Actions.Fetch, async (context) => {
    *   const response = await fetch("/api", {
-   *     signal: context.task.task.signal,
+   *     signal: context.task.controller.signal,
    *   });
    *
-   *   if (context.task.task.signal.aborted) return;
+   *   if (context.task.controller.signal.aborted) return;
    *
    *   context.actions.produce((draft) => {
    *     draft.model.data = response;
@@ -226,7 +224,7 @@ export type ReactiveInterface<
    */
   task: Task;
   /**
-   * Snapshot of reactive values passed to useActions.
+   * Reactive data values passed to useActions.
    * Always returns the latest values, even after awaits in async handlers.
    *
    * @example
@@ -236,12 +234,12 @@ export type ReactiveInterface<
    *
    * actions.useAction(Actions.Fetch, async (context) => {
    *   await fetch("/api");
-   *   // context.snapshot.name is always the latest value
-   *   console.log(context.snapshot.name);
+   *   // context.data.name is always the latest value
+   *   console.log(context.data.name);
    * });
    * ```
    */
-  snapshot: S;
+  data: D;
   /**
    * Set of all running tasks across all components in the context.
    * Tasks are ordered by creation time (oldest first).
@@ -256,18 +254,18 @@ export type ReactiveInterface<
    * // Abort all tasks for a specific action
    * for (const runningTask of context.tasks) {
    *   if (runningTask.action === Actions.Fetch) {
-   *     runningTask.task.abort();
+   *     runningTask.controller.abort();
    *   }
    * }
    *
    * // Abort the oldest task
    * const oldest = context.tasks.values().next().value;
-   * oldest?.task.abort();
+   * oldest?.controller.abort();
    *
    * // Abort all tasks except the current one
    * for (const runningTask of context.tasks) {
    *   if (runningTask !== context.task) {
-   *     runningTask.task.abort();
+   *     runningTask.controller.abort();
    *   }
    * }
    * ```
@@ -327,7 +325,7 @@ export type ExtractPayload<A> = A extends Payload<infer P> ? P : never;
  * @template M - The model type
  * @template AC - The actions class type
  * @template A - The specific action type (determines payload type)
- * @template S - Optional snapshot/props type (defaults to Props)
+ * @template D - Optional data/props type (defaults to Props)
  *
  * @example
  * ```ts
@@ -358,16 +356,16 @@ export type Handler<
   M extends Model,
   AC extends Actions,
   A extends Payload<unknown>,
-  S extends Props = Props,
+  D extends Props = Props,
 > = (
-  context: ReactiveInterface<M, AC, S>,
+  context: ReactiveInterface<M, AC, D>,
   payload: ExtractPayload<A>,
 ) => void | Promise<void> | AsyncGenerator | Generator;
 
 export type UseActions<
   M extends Model,
   AC extends Actions,
-  S extends Props = Props,
+  D extends Props = Props,
 > = [
   M,
   {
@@ -432,7 +430,7 @@ export type UseActions<
   useAction<A extends ActionId>(
     action: A,
     handler: (
-      context: ReactiveInterface<M, AC, S>,
+      context: ReactiveInterface<M, AC, D>,
       payload: ExtractPayload<A>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void;

@@ -11,9 +11,9 @@ class Actions {
 
 const model: Model = { value: null };
 
-describe("useActions() snapshot callback", () => {
-  it("should provide snapshot values via context.snapshot", async () => {
-    const capturedSnapshot: { external?: string } = {};
+describe("useActions() data callback", () => {
+  it("should provide data values via context.data", async () => {
+    const capturedData: { external?: string } = {};
 
     const { result } = renderHook(() => {
       const actions = useActions<Model, typeof Actions, { external: string }>(
@@ -22,9 +22,9 @@ describe("useActions() snapshot callback", () => {
       );
 
       actions.useAction(Actions.Update, (context) => {
-        capturedSnapshot.external = context.snapshot.external;
+        capturedData.external = context.data.external;
         context.actions.produce((draft) => {
-          draft.model.value = context.snapshot.external;
+          draft.model.value = context.data.external;
         });
       });
 
@@ -35,11 +35,11 @@ describe("useActions() snapshot callback", () => {
       result.current[1].dispatch(Actions.Update, "payload");
     });
 
-    expect(capturedSnapshot.external).toBe("test-value");
+    expect(capturedData.external).toBe("test-value");
     expect(result.current[0].value).toBe("test-value");
   });
 
-  it("should provide latest snapshot values even after rerender", async () => {
+  it("should provide latest data values even after rerender", async () => {
     const capturedValues: string[] = [];
     let externalValue = "initial";
 
@@ -50,7 +50,7 @@ describe("useActions() snapshot callback", () => {
       );
 
       actions.useAction(Actions.Update, (context) => {
-        capturedValues.push(context.snapshot.external);
+        capturedValues.push(context.data.external);
       });
 
       return actions;
@@ -75,15 +75,15 @@ describe("useActions() snapshot callback", () => {
     expect(capturedValues[1]).toBe("updated");
   });
 
-  it("should work without snapshot callback (empty snapshot)", async () => {
-    let snapshotReceived = false;
+  it("should work without data callback (empty data)", async () => {
+    let dataReceived = false;
 
     const { result } = renderHook(() => {
       const actions = useActions<Model, typeof Actions>(model);
 
       actions.useAction(Actions.Update, (context) => {
-        // Snapshot should be an empty object when no callback is provided
-        snapshotReceived = typeof context.snapshot === "object";
+        // Data should be an empty object when no callback is provided
+        dataReceived = typeof context.data === "object";
         context.actions.produce((draft) => {
           draft.model.value = "updated";
         });
@@ -96,11 +96,11 @@ describe("useActions() snapshot callback", () => {
       result.current[1].dispatch(Actions.Update, "payload");
     });
 
-    expect(snapshotReceived).toBe(true);
+    expect(dataReceived).toBe(true);
     expect(result.current[0].value).toBe("updated");
   });
 
-  it("should handle multiple snapshot properties", async () => {
+  it("should handle multiple data properties", async () => {
     const captured: { a?: number; b?: string; c?: boolean } = {};
 
     const { result } = renderHook(() => {
@@ -111,9 +111,9 @@ describe("useActions() snapshot callback", () => {
       >(model, () => ({ a: 42, b: "hello", c: true }));
 
       actions.useAction(Actions.Update, (context) => {
-        captured.a = context.snapshot.a;
-        captured.b = context.snapshot.b;
-        captured.c = context.snapshot.c;
+        captured.a = context.data.a;
+        captured.b = context.data.b;
+        captured.c = context.data.c;
       });
 
       return actions;
@@ -128,7 +128,7 @@ describe("useActions() snapshot callback", () => {
     expect(captured.c).toBe(true);
   });
 
-  it("should provide fresh snapshot values across multiple dispatches", async () => {
+  it("should provide fresh data values across multiple dispatches", async () => {
     const capturedValues: string[] = [];
     let externalValue = "initial";
 
@@ -142,8 +142,8 @@ describe("useActions() snapshot callback", () => {
         // Simulate async operation
         await Promise.resolve();
 
-        // Capture value after async - should be latest due to snapshot proxy
-        capturedValues.push(context.snapshot.external);
+        // Capture value after async - should be latest due to data proxy
+        capturedValues.push(context.data.external);
       });
 
       return actions;
@@ -165,7 +165,7 @@ describe("useActions() snapshot callback", () => {
       result.current[1].dispatch(Actions.Update, "payload");
     });
 
-    // The snapshot should provide the latest value
+    // The data should provide the latest value
     expect(capturedValues[1]).toBe("changed");
   });
 });
