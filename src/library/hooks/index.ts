@@ -1,18 +1,20 @@
 import * as React from "react";
-import { useLifecycles, useData } from "./utils.ts";
+import { useLifecycles, useData, Bound } from "./utils.ts";
+
+export { Bound };
 import { useRerender } from "../utils/utils.ts";
 import type { Data, Handler, Scope } from "./types.ts";
 import {
-  ReactiveInterface,
+  HandlerContext,
   Lifecycle,
   Model,
+  HandlerPayload,
   Payload,
   Props,
   Actions,
   ActionId,
   UseActions,
   Result,
-  ExtractPayload,
   Task,
 } from "../types/index.ts";
 
@@ -36,12 +38,12 @@ function useRegisterHandler<
   scope: React.RefObject<Scope>,
   action: ActionId,
   handler: (
-    context: ReactiveInterface<M, AC, D>,
+    context: HandlerContext<M, AC, D>,
     payload: unknown,
   ) => void | Promise<void> | AsyncGenerator | Generator,
 ): void {
   const stableHandler = React.useEffectEvent(
-    async (context: ReactiveInterface<M, AC, D>, payload: unknown) => {
+    async (context: HandlerContext<M, AC, D>, payload: unknown) => {
       const isGenerator =
         handler.constructor.name === "GeneratorFunction" ||
         handler.constructor.name === "AsyncGeneratorFunction";
@@ -170,7 +172,7 @@ export function useActions<
       const task: Task = { controller, action, payload };
       tasks.add(task);
 
-      return <ReactiveInterface<M, AC, D>>{
+      return <HandlerContext<M, AC, D>>{
         model,
         task,
         data,
@@ -189,7 +191,7 @@ export function useActions<
             }
           },
           dispatch(
-            ...[action, payload]: [action: ActionId, payload?: Payload]
+            ...[action, payload]: [action: ActionId, payload?: HandlerPayload]
           ) {
             if (controller.signal.aborted) return;
             isDistributedAction(action)
@@ -207,7 +209,7 @@ export function useActions<
 
   React.useLayoutEffect(() => {
     function createHandler(action: ActionId, actionHandler: Handler) {
-      return async function handler(payload: Payload) {
+      return async function handler(payload: HandlerPayload) {
         const result = <Result>{ processes: new Set<Process>() };
         const completion = Promise.withResolvers<void>();
         const context = getContext(action, payload, result);
@@ -254,7 +256,7 @@ export function useActions<
         model,
         {
           dispatch(
-            ...[action, payload]: [action: ActionId, payload?: Payload]
+            ...[action, payload]: [action: ActionId, payload?: HandlerPayload]
           ) {
             isDistributedAction(action)
               ? broadcast.emit(action, payload)
@@ -280,8 +282,8 @@ export function useActions<
   (<UseActions<M, AC, D>>result).useAction = <A extends ActionId>(
     action: A,
     handler: (
-      context: ReactiveInterface<M, AC, D>,
-      payload: ExtractPayload<A>,
+      context: HandlerContext<M, AC, D>,
+      payload: Payload<A>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void => {
     useRegisterHandler<M, AC, D>(scope, action, <Handler<M, AC, D>>handler);

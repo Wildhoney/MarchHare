@@ -1,7 +1,8 @@
-import { describe, expect, it } from "@jest/globals";
-import { withGetters, isGenerator } from "./utils.ts";
+import { describe, expect, it, jest } from "@jest/globals";
+import { withGetters, isGenerator, Bound } from "./utils.ts";
 import { getReason, normaliseError } from "../utils/index.ts";
 import { Reason, AbortError, TimeoutError } from "../error/index.tsx";
+import type { HandlerContext } from "../types/index.ts";
 
 describe("withGetters()", () => {
   it("should create getters that access ref values", () => {
@@ -127,5 +128,103 @@ describe("normaliseError()", () => {
     const result = normaliseError(undefined);
     expect(result).toBeInstanceOf(Error);
     expect(result.message).toBe("undefined");
+  });
+});
+
+describe("Bound()", () => {
+  function createMockContext<M>(model: M) {
+    const capturedModel = { ...model };
+    const produce = jest.fn((fn: (draft: { model: M }) => void) => {
+      fn({ model: capturedModel });
+    });
+
+    return {
+      context: <HandlerContext<M, object, object>>(<unknown>{
+        model,
+        actions: { produce },
+      }),
+      getModel: () => capturedModel,
+      produce,
+    };
+  }
+
+  it("should return a handler function", () => {
+    const handler = Bound("name");
+    expect(typeof handler).toBe("function");
+  });
+
+  it("should update the specified model property with the payload", () => {
+    type Model = { name: string; count: number };
+    const { context, produce } = createMockContext<Model>({
+      name: "initial",
+      count: 0,
+    });
+
+    const handler = Bound("name");
+    handler(context, "updated");
+
+    expect(produce).toHaveBeenCalledTimes(1);
+    expect(produce).toHaveBeenCalledWith(expect.any(Function));
+  });
+
+  it("should update a different property based on the key", () => {
+    type Model = { name: string; count: number };
+    const model: Model = { name: "test", count: 0 };
+    const updatedModel = { ...model };
+
+    const context = <HandlerContext<Model, object, object>>(<unknown>{
+      model,
+      actions: {
+        produce: (fn: (draft: { model: Model }) => void) => {
+          fn({ model: updatedModel });
+        },
+      },
+    });
+
+    const handler = Bound("count");
+    handler(context, 42);
+
+    expect(updatedModel.count).toBe(42);
+  });
+
+  it("should work with complex payload types", () => {
+    type Country = { name: string; code: string };
+    type Model = { visitor: Country | null };
+    const model: Model = { visitor: null };
+    const updatedModel = { ...model };
+
+    const context = <HandlerContext<Model, object, object>>(<unknown>{
+      model,
+      actions: {
+        produce: (fn: (draft: { model: Model }) => void) => {
+          fn({ model: updatedModel });
+        },
+      },
+    });
+
+    const handler = Bound("visitor");
+    handler(context, { name: "Japan", code: "JP" });
+
+    expect(updatedModel.visitor).toEqual({ name: "Japan", code: "JP" });
+  });
+
+  it("should handle array properties", () => {
+    type Model = { items: string[] };
+    const model: Model = { items: [] };
+    const updatedModel = { ...model };
+
+    const context = <HandlerContext<Model, object, object>>(<unknown>{
+      model,
+      actions: {
+        produce: (fn: (draft: { model: Model }) => void) => {
+          fn({ model: updatedModel });
+        },
+      },
+    });
+
+    const handler = Bound("items");
+    handler(context, ["a", "b", "c"]);
+
+    expect(updatedModel.items).toEqual(["a", "b", "c"]);
   });
 });

@@ -78,8 +78,8 @@ export type Pk<T> = undefined | symbol | T;
 export type Model<M = Record<string, unknown>> = M;
 
 /**
- * Internal symbol used as a brand key for the Payload type.
- * Enables TypeScript to distinguish Payload from plain symbols.
+ * Internal symbol used as a brand key for the HandlerPayload type.
+ * Enables TypeScript to distinguish HandlerPayload from plain symbols.
  * @internal
  */
 export const PayloadKey = Symbol("payload");
@@ -92,18 +92,18 @@ export const PayloadKey = Symbol("payload");
 export const DistributedKey = Symbol("distributed");
 
 /**
- * Branded type for action payloads created with `createAction()`.
+ * Branded type for action symbols created with `Action()`.
  * The phantom type parameter `T` carries the payload type at the type level.
  *
  * @template T - The payload type for the action
  */
-export type Payload<T = unknown> = symbol & { [PayloadKey]: T };
+export type HandlerPayload<T = unknown> = symbol & { [PayloadKey]: T };
 
 /**
- * Branded type for distributed action payloads created with `createDistributedAction()`.
+ * Branded type for distributed action symbols created with `Action()` and `Distribution.Broadcast`.
  * Distributed actions are broadcast to all mounted components and can be consumed with `actions.consume()`.
  *
- * This type extends `Payload<T>` with an additional brand to enforce at compile-time
+ * This type extends `HandlerPayload<T>` with an additional brand to enforce at compile-time
  * that only distributed actions can be passed to `consume()`. Attempting to consume
  * a local action will result in a TypeScript error.
  *
@@ -112,23 +112,25 @@ export type Payload<T = unknown> = symbol & { [PayloadKey]: T };
  * @example
  * ```ts
  * // This compiles - SignedOut is a distributed action
- * const SignedOut = createDistributedAction<User>("SignedOut");
+ * const SignedOut = Action<User>("SignedOut", Distribution.Broadcast);
  * actions.consume(SignedOut, (box) => <div>{box.value.name}</div>);
  *
  * // This fails to compile - Increment is a local action
- * const Increment = createAction<number>("Increment");
+ * const Increment = Action<number>("Increment");
  * actions.consume(Increment, ...); // Type error!
  * ```
  */
-export type DistributedPayload<T = unknown> = Payload<T> & {
+export type DistributedPayload<T = unknown> = HandlerPayload<T> & {
   [DistributedKey]: true;
 };
 
 /**
- * Extracts the payload type from a Payload-branded symbol.
- * @internal
+ * Extracts the payload type `T` from a `HandlerPayload<T>`.
+ * Use this in handler signatures to get the action's payload type.
+ *
+ * @template A - The action type (HandlerPayload<T>)
  */
-type PayloadType<A> = A extends Payload<infer P> ? P : never;
+export type Payload<A> = A extends HandlerPayload<infer P> ? P : never;
 
 /**
  * Checks if a function type returns a Promise.
@@ -194,7 +196,7 @@ export type Result = {
   processes: Set<Process>;
 };
 
-export type ReactiveInterface<
+export type HandlerContext<
   M extends Model,
   AC extends Actions,
   D extends Props = Props,
@@ -275,8 +277,8 @@ export type ReactiveInterface<
     produce<F extends (draft: { model: M; inspect: Inspect<M> }) => void>(
       ƒ: F & AssertSync<F>,
     ): M;
-    dispatch<A extends AC[keyof AC] & Payload<unknown>>(
-      ...args: [PayloadType<A>] extends [never] ? [A] : [A, PayloadType<A>]
+    dispatch<A extends AC[keyof AC] & HandlerPayload<unknown>>(
+      ...args: [Payload<A>] extends [never] ? [A] : [A, Payload<A>]
     ): void;
     annotate<T>(operation: Operation, value: T): T;
   };
@@ -309,12 +311,6 @@ export type ReactiveInterface<
  * actions.inspect.count.pending();
  * ```
  */
-/**
- * Helper type to extract payload type from an action symbol.
- * If the action is Payload<T>, returns T. Otherwise returns never.
- */
-export type ExtractPayload<A> = A extends Payload<infer P> ? P : never;
-
 /**
  * Utility type for defining action handler functions.
  * Use this when defining handlers in separate files that will be passed to useAction.
@@ -358,8 +354,8 @@ export type Handler<
   A extends Payload<unknown>,
   D extends Props = Props,
 > = (
-  context: ReactiveInterface<M, AC, D>,
-  payload: ExtractPayload<A>,
+  context: HandlerContext<M, AC, D>,
+  payload: Payload<A>,
 ) => void | Promise<void> | AsyncGenerator | Generator;
 
 export type UseActions<
@@ -369,7 +365,7 @@ export type UseActions<
 > = [
   M,
   {
-    dispatch(action: ActionId, payload?: Payload): void;
+    dispatch(action: ActionId, payload?: HandlerPayload): void;
     /**
      * Subscribes to a distributed action's values and renders based on the callback.
      * The callback receives a Box with `value` (the payload) and `inspect` (for annotation status).
@@ -400,7 +396,7 @@ export type UseActions<
     ): React.ReactNode;
     consume<K extends keyof AC>(
       action: AC[K] & DistributedPayload<unknown>,
-      renderer: ConsumerRenderer<PayloadType<AC[K]>>,
+      renderer: ConsumerRenderer<Payload<AC[K]>>,
     ): React.ReactNode;
     inspect: Inspect<M>;
   },
@@ -430,8 +426,8 @@ export type UseActions<
   useAction<A extends ActionId>(
     action: A,
     handler: (
-      context: ReactiveInterface<M, AC, D>,
-      payload: ExtractPayload<A>,
+      context: HandlerContext<M, AC, D>,
+      payload: Payload<A>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void;
 };

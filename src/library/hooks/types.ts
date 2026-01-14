@@ -1,7 +1,7 @@
 import type EventEmitter from "eventemitter3";
 import type {
   Model,
-  ReactiveInterface,
+  HandlerContext,
   Actions,
   Props,
   Tasks,
@@ -21,7 +21,7 @@ export type Handler<
   AC extends Actions = Actions,
   D extends Props = Props,
 > = (
-  context: ReactiveInterface<M, AC, D>,
+  context: HandlerContext<M, AC, D>,
   payload: unknown,
 ) => void | Promise<void> | AsyncGenerator | Generator;
 

@@ -5,7 +5,7 @@ export { Operation, Op, State } from "immertation";
 
 export { Boundary } from "./boundary/index.tsx";
 
-export { useActions } from "./hooks/index.ts";
+export { useActions, Bound } from "./hooks/index.ts";
 export * as utils from "./utils/index.ts";
 
 export type { Box } from "immertation";

@@ -1,4 +1,8 @@
-import { Payload, DistributedPayload, Distribution } from "../types/index.ts";
+import {
+  HandlerPayload,
+  DistributedPayload,
+  Distribution,
+} from "../types/index.ts";
 import type { ActionId } from "../boundary/components/tasks/types.ts";
 import { config } from "../utils/index.ts";
 import { G } from "@mobily/ts-belt";
@@ -13,7 +17,7 @@ type ActionFactory = {
    * @param name The action name, used for debugging purposes.
    * @returns A typed action symbol.
    */
-  <T = never>(name: string): Payload<T>;
+  <T = never>(name: string): HandlerPayload<T>;
 
   /**
    * Creates a new action with the specified distribution mode.
@@ -26,11 +30,14 @@ type ActionFactory = {
     name: string,
     distribution: Distribution.Broadcast,
   ): DistributedPayload<T>;
-  <T = never>(name: string, distribution: Distribution.Unicast): Payload<T>;
+  <T = never>(
+    name: string,
+    distribution: Distribution.Unicast,
+  ): HandlerPayload<T>;
   <T = never>(
     name: string,
     distribution: Distribution,
-  ): Payload<T> | DistributedPayload<T>;
+  ): HandlerPayload<T> | DistributedPayload<T>;
 };
 
 /**
@@ -64,10 +71,10 @@ type ActionFactory = {
 export const Action = <ActionFactory>(<unknown>(<T = never>(
   name: string,
   distribution: Distribution = Distribution.Unicast,
-): Payload<T> | DistributedPayload<T> => {
+): HandlerPayload<T> | DistributedPayload<T> => {
   return distribution === Distribution.Broadcast
     ? <DistributedPayload<T>>Symbol(`${config.distributedActionPrefix}${name}`)
-    : <Payload<T>>Symbol(`${config.actionPrefix}${name}`);
+    : <HandlerPayload<T>>Symbol(`${config.actionPrefix}${name}`);
 }));
 
 /**

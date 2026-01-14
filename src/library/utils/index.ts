@@ -1,7 +1,7 @@
 import {
-  ReactiveInterface,
+  HandlerContext,
   Model,
-  Payload,
+  HandlerPayload,
   Pk,
   Actions,
 } from "../types/index.ts";
@@ -106,9 +106,9 @@ export const κ = pk;
  * @returns An action function that takes the context and a payload, and updates the state.
  */
 export function set<M extends Model, AC extends Actions>(property: string) {
-  return (context: ReactiveInterface<M, AC>, payload: Payload): void => {
+  return (context: HandlerContext<M, AC>, payload: HandlerPayload): void => {
     context.actions.produce(({ model }) => {
-      (<Record<string, Payload>>model)[property] = payload;
+      (<Record<string, HandlerPayload>>model)[property] = payload;
     });
   };
 }

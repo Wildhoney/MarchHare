@@ -1,7 +1,8 @@
 import * as React from "react";
 import { RefObject } from "react";
-import { Props, Lifecycle } from "../types/index.ts";
+import { Props, Lifecycle, Model, Actions } from "../types/index.ts";
 import type { LifecycleConfig } from "./types.ts";
+import type { HandlerContext } from "../types/index.ts";
 
 /**
  * Creates a new object with getters for each property of the input object.
@@ -63,4 +64,50 @@ export function useData<P extends Props>(props: P): P {
   const ref = React.useRef<P>(props);
   React.useLayoutEffect((): void => void (ref.current = props), [props]);
   return React.useMemo(() => withGetters<P>(props, ref), [props]);
+}
+
+/**
+ * Creates a handler that binds an action's payload directly to a model property.
+ *
+ * The returned handler updates `model[key]` with the payload when the action is dispatched.
+ * Type safety is enforced at the call site: the payload type must be assignable to
+ * the model property's type.
+ *
+ * @template K The property key type (inferred from the argument)
+ * @param key The model property key to bind the payload to
+ * @returns A handler function compatible with `useAction`
+ *
+ * @example
+ * ```ts
+ * type Model = { name: string; count: number };
+ *
+ * class Actions {
+ *   static SetName = Action<string>("SetName");
+ *   static SetCount = Action<number>("SetCount");
+ * }
+ *
+ * // These work - payload types match model property types
+ * actions.useAction(Actions.SetName, Bound("name"));   // string -> string ✓
+ * actions.useAction(Actions.SetCount, Bound("count")); // number -> number ✓
+ *
+ * // This would error - Country is not assignable to string
+ * actions.useAction(Actions.Visitor, Bound("name")); // Country -> string ✗
+ * ```
+ */
+export function Bound<K extends string>(
+  key: K,
+): <
+  M extends Model,
+  AC extends Actions,
+  D extends Props,
+  P extends K extends keyof M ? M[K] : never,
+>(
+  context: HandlerContext<M, AC, D>,
+  payload: P,
+) => void {
+  return (context, payload) => {
+    context.actions.produce((draft) => {
+      draft.model[<keyof typeof draft.model>key] = payload;
+    });
+  };
 }

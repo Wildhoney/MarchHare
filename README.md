@@ -35,10 +35,10 @@ For advanced topics, see the [recipes directory](./recipes/).
 
 ## Getting started
 
-We dispatch the `Actions.Name` event upon clicking the "Sign in" button and within `useNameActions` we subscribe to that same event so that when it's triggered it updates the model with the hard-coded name of `Wildhoney` &ndash; in the React component we render `model.name`.
+We dispatch the `Actions.Name` event upon clicking the "Sign in" button and within `useNameActions` we subscribe to that same event so that when it's triggered it updates the model with the payload &ndash; in the React component we render `model.name`. The `Bound` helper binds the action's payload directly to a model property.
 
 ```tsx
-import { useActions, Action } from "chizu";
+import { useActions, Action, Bound } from "chizu";
 
 type Model = {
   name: string | null;
@@ -49,17 +49,13 @@ const model: Model = {
 };
 
 export class Actions {
-  static Name = Action();
+  static Name = Action<string>("Name");
 }
 
 export default function useNameActions() {
   const actions = useActions<Model, typeof Actions>(model);
 
-  actions.useAction(Actions.Name, (context, name) => {
-    context.actions.produce((draft) => {
-      draft.model.name = "Wildhoney";
-    });
-  });
+  actions.useAction(Actions.Name, Bound("name"));
 
   return actions;
 }
@@ -81,7 +77,7 @@ export default function Profile(): React.ReactElement {
 }
 ```
 
-`useAction` can be both a regular synchronous function, an asynchronous function, or even a generator function. Next we'll fetch the actual user from the API instead of hard-coding to `Wildhoney`:
+When you need to do more than just assign the payload &ndash; such as making an API request &ndash; expand `useAction` to a full function. It can be synchronous, asynchronous, or even a generator:
 
 ```tsx
 actions.useAction(Actions.Name, async (context) => {

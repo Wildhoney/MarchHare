@@ -1,4 +1,4 @@
-import { Lifecycle, Pk, Payload, PayloadKey } from ".";
+import { Lifecycle, Pk, HandlerPayload, PayloadKey } from ".";
 import { describe, expect, it } from "@jest/globals";
 
 describe("Lifecycle", () => {
@@ -21,9 +21,9 @@ describe("Pk", () => {
   });
 });
 
-describe("Payload", () => {
+describe("HandlerPayload", () => {
   it("should be a symbol", () => {
-    const payload = <Payload<unknown>>Symbol("test");
+    const payload = <HandlerPayload<unknown>>Symbol("test");
     expect(typeof payload).toBe("symbol");
   });
 });
