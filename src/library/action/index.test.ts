@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { Action, isDistributedAction, getActionName } from "./index.ts";
+import { Action, isDistributedAction, getName } from "./index.ts";
 import { Distribution } from "../types/index.ts";
 
 describe("Action (unicast)", () => {
@@ -32,24 +32,24 @@ describe("isDistributedAction()", () => {
   });
 });
 
-describe("getActionName()", () => {
+describe("getName()", () => {
   it("should extract name from regular action", () => {
     const action = Action("Increment");
-    expect(getActionName(action)).toBe("Increment");
+    expect(getName(action)).toBe("Increment");
   });
 
   it("should extract name from distributed action", () => {
     const action = Action("SignedOut", Distribution.Broadcast);
-    expect(getActionName(action)).toBe("SignedOut");
+    expect(getName(action)).toBe("SignedOut");
   });
 
   it("should handle hyphenated names", () => {
     const action = Action("fetch-user-data");
-    expect(getActionName(action)).toBe("fetch-user-data");
+    expect(getName(action)).toBe("fetch-user-data");
   });
 
   it("should return unknown for malformed symbols", () => {
     const malformed = <symbol>(<unknown>Symbol("not-a-chizu-action"));
-    expect(getActionName(malformed)).toBe("unknown");
+    expect(getName(malformed)).toBe("unknown");
   });
 });

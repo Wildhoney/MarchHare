@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="/media/logo.png" width="475" />
+  <img src="/media/logo-v2.png" width="475" />
 
 [![Checks](https://github.com/Wildhoney/Chizu/actions/workflows/checks.yml/badge.svg)](https://github.com/Wildhoney/Chizu/actions/workflows/checks.yml)
 
@@ -35,10 +35,10 @@ For advanced topics, see the [recipes directory](./recipes/).
 
 ## Getting started
 
-We dispatch the `Actions.Name` event upon clicking the "Sign in" button and within `useNameActions` we subscribe to that same event so that when it's triggered it updates the model with the payload &ndash; in the React component we render `model.name`. The `Bound` helper binds the action's payload directly to a model property.
+We dispatch the `Actions.Name` event upon clicking the "Sign in" button and within `useNameActions` we subscribe to that same event so that when it's triggered it updates the model with the payload &ndash; in the React component we render `model.name`. The `With.Bound` helper binds the action's payload directly to a model property.
 
 ```tsx
-import { useActions, Action, Bound } from "chizu";
+import { useActions, Action, With } from "chizu";
 
 type Model = {
   name: string | null;
@@ -55,7 +55,7 @@ export class Actions {
 export default function useNameActions() {
   const actions = useActions<Model, typeof Actions>(model);
 
-  actions.useAction(Actions.Name, Bound("name"));
+  actions.useAction(Actions.Name, With.Bound("name"));
 
   return actions;
 }
@@ -116,12 +116,16 @@ Each action should be responsible for managing its own data &ndash; in this case
 
 ```tsx
 class DistributedActions {
-  static Name = Action("Name", Distribution.Broadcast);
+  static Name = Action<string>("Name", Distribution.Broadcast);
+}
+
+class Actions extends DistributedActions {
+  static Profile = Action<string>("Profile");
 }
 ```
 
 ```tsx
-actions.useAction(Actions.Name, async (context) => {
+actions.useAction(Actions.Profile, async (context) => {
   context.actions.produce((draft) => {
     draft.model.name = context.actions.annotate(Op.Update, null);
   });
@@ -132,11 +136,9 @@ actions.useAction(Actions.Name, async (context) => {
     draft.model.name = name;
   });
 
-  context.actions.dispatch(DistributedActions.Name, name);
+  context.actions.dispatch(Actions.Name, name);
 });
 ```
-
-Note that in practice it'd be recommended to keep your `Actions` for local events and then have a single application-wide `DistributedActions` that defines all of the distributed events &ndash; in your `Actions` just have `class Actions extends DistributedActions`
 
 Once we have the distributed action if we simply want to read the `name` when it's updated we can use consume:
 
@@ -145,20 +147,20 @@ export default function Subscriptions(): React.ReactElement {
   return (
     <>
       Manage your subscriptions for your{" "}
-      {actions.consume(DistributedActions.Name, (name) => name.value)} account.
+      {actions.consume(Actions.Name, (name) => name.value)} account.
     </>
   );
 }
 ```
 
-However if we want to listen for it and perform another operation in it in our local component we can do that via `useActions`:
+However if we want to listen for it and perform another operation in our local component we can do that via `useAction`:
 
 ```tsx
-actions.useAction(DistributedActions.Name, async (context, name) => {
+actions.useAction(Actions.Name, async (context, name) => {
   const friends = await fetch(api.friends(name));
 
   context.actions.produce((draft) => {
-    draft.model.friends = `${name}!`;
+    draft.model.friends = friends;
   });
 });
 ```

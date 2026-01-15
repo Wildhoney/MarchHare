@@ -105,13 +105,13 @@ export function isDistributedAction(action: ActionId): boolean {
  * @example
  * ```typescript
  * const Increment = Action("Increment");
- * getActionName(Increment); // "Increment"
+ * getName(Increment); // "Increment"
  *
  * const SignedOut = Action("SignedOut", Distribution.Broadcast);
- * getActionName(SignedOut); // "SignedOut"
+ * getName(SignedOut); // "SignedOut"
  * ```
  */
-export function getActionName(action: ActionId): string {
+export function getName(action: ActionId): string {
   const description = G.isString(action) ? action : (action.description ?? "");
   if (!description.startsWith(config.actionPrefix)) return "unknown";
   const name = description.slice(description.lastIndexOf("/") + 1);

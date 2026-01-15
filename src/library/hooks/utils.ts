@@ -73,6 +73,8 @@ export function useData<P extends Props>(props: P): P {
  * Type safety is enforced at the call site: the payload type must be assignable to
  * the model property's type.
  *
+ * Also available as `With.Bound`.
+ *
  * @template K The property key type (inferred from the argument)
  * @param key The model property key to bind the payload to
  * @returns A handler function compatible with `useAction`
@@ -87,11 +89,11 @@ export function useData<P extends Props>(props: P): P {
  * }
  *
  * // These work - payload types match model property types
- * actions.useAction(Actions.SetName, Bound("name"));   // string -> string ✓
- * actions.useAction(Actions.SetCount, Bound("count")); // number -> number ✓
+ * actions.useAction(Actions.SetName, With.Bound("name"));   // string -> string ✓
+ * actions.useAction(Actions.SetCount, With.Bound("count")); // number -> number ✓
  *
  * // This would error - Country is not assignable to string
- * actions.useAction(Actions.Visitor, Bound("name")); // Country -> string ✗
+ * actions.useAction(Actions.Visitor, With.Bound("name")); // Country -> string ✗
  * ```
  */
 export function Bound<K extends string>(
@@ -111,3 +113,72 @@ export function Bound<K extends string>(
     });
   };
 }
+
+/**
+ * Wraps a handler with a predicate filter that prevents execution when the condition fails.
+ *
+ * Useful for distributed actions where multiple components subscribe but only some
+ * should respond based on the payload or component-specific data. The predicate receives
+ * the context (for access to `context.data`) and the fully-typed payload, returning true
+ * to allow the handler to execute.
+ *
+ * Also available as `With.Filter`.
+ *
+ * @template M The model type (inferred from handler context)
+ * @template AC The actions class type (inferred from handler context)
+ * @template D The data props type (inferred from handler context)
+ * @template P The payload type (inferred from handler)
+ * @param predicate Function that receives context and payload, returns true to execute
+ * @param handler The action handler to wrap
+ * @returns A wrapped handler that only executes when predicate returns true
+ *
+ * @example
+ * ```ts
+ * actions.useAction(
+ *   Actions.Person,
+ *   With.Filter(
+ *     (context, person) => person.id === context.data.personId,
+ *     async (context, person) => {
+ *       const details = await fetch(`/person/${person.id}`);
+ *       context.actions.produce((draft) => {
+ *         draft.model.person = details;
+ *       });
+ *     },
+ *   ),
+ * );
+ * ```
+ */
+export function Filter<M extends Model, AC extends Actions, D extends Props, P>(
+  predicate: (context: HandlerContext<M, AC, D>, payload: P) => boolean,
+  handler: (
+    context: HandlerContext<M, AC, D>,
+    payload: P,
+  ) => void | Promise<void> | AsyncGenerator | Generator,
+): (
+  context: HandlerContext<M, AC, D>,
+  payload: P,
+) => void | Promise<void> | AsyncGenerator | Generator {
+  return (context, payload) => {
+    if (!predicate(context, payload)) return;
+    return handler(context, payload);
+  };
+}
+
+/**
+ * Namespace for handler utilities that wrap action handlers.
+ *
+ * @example
+ * ```ts
+ * import { With } from "chizu";
+ *
+ * actions.useAction(Actions.Name, With.Bound("name"));
+ * actions.useAction(Actions.Person, With.Filter(
+ *   (context, person) => person.id === context.data.personId,
+ *   async (context, person) => { ... },
+ * ));
+ * ```
+ */
+export const With = <const>{
+  Bound,
+  Filter,
+};

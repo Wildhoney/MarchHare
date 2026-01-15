@@ -1,6 +1,6 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import { withGetters, isGenerator, Bound } from "./utils.ts";
-import { getReason, normaliseError } from "../utils/index.ts";
+import { getReason, getError } from "../utils/index.ts";
 import { Reason, AbortError, TimeoutError } from "../error/index.tsx";
 import type { HandlerContext } from "../types/index.ts";
 
@@ -89,43 +89,43 @@ describe("getReason()", () => {
   });
 });
 
-describe("normaliseError()", () => {
+describe("getError()", () => {
   it("should return the same Error if already an Error", () => {
     const error = new Error("original");
-    expect(normaliseError(error)).toBe(error);
+    expect(getError(error)).toBe(error);
   });
 
   it("should preserve custom error instances", () => {
     const error = new TimeoutError();
-    expect(normaliseError(error)).toBe(error);
+    expect(getError(error)).toBe(error);
   });
 
   it("should wrap thrown strings", () => {
-    const result = normaliseError("oops");
+    const result = getError("oops");
     expect(result).toBeInstanceOf(Error);
     expect(result.message).toBe("oops");
   });
 
   it("should wrap thrown numbers", () => {
-    const result = normaliseError(42);
+    const result = getError(42);
     expect(result).toBeInstanceOf(Error);
     expect(result.message).toBe("42");
   });
 
   it("should wrap thrown objects", () => {
-    const result = normaliseError({ code: 500 });
+    const result = getError({ code: 500 });
     expect(result).toBeInstanceOf(Error);
     expect(result.message).toBe("[object Object]");
   });
 
   it("should wrap null", () => {
-    const result = normaliseError(null);
+    const result = getError(null);
     expect(result).toBeInstanceOf(Error);
     expect(result.message).toBe("null");
   });
 
   it("should wrap undefined", () => {
-    const result = normaliseError(undefined);
+    const result = getError(undefined);
     expect(result).toBeInstanceOf(Error);
     expect(result.message).toBe("undefined");
   });

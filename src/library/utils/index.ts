@@ -32,12 +32,12 @@ export function getReason(error: unknown): Reason {
 }
 
 /**
- * Normalises a thrown value into an Error instance.
+ * Gets an Error instance from a thrown value.
  *
  * @param error - The value that was thrown.
  * @returns An Error instance (original if already Error, wrapped otherwise).
  */
-export function normaliseError(error: unknown): Error {
+export function getError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 

@@ -18,7 +18,34 @@ export class Actions extends DistributedActions {
 
 Distributed actions return a `DistributedPayload<T>` type, which is distinct from the `Payload<T>` returned by unicast actions. This enables compile-time enforcement &ndash; only distributed actions can be passed to `actions.consume()`.
 
-Any component that defines a handler for `DistributedActions.SignedOut` will receive the action when it's dispatched from any other component. For direct access to the broadcast emitter, use `useBroadcast()`:
+Any component that defines a handler for `DistributedActions.SignedOut` will receive the action when it's dispatched from any other component.
+
+## Filtering distributed actions
+
+When multiple components subscribe to the same distributed action, all handlers execute on dispatch. Use `With.Filter` to conditionally execute handlers based on the payload or component-specific data:
+
+```ts
+import { With } from "chizu";
+
+actions.useAction(
+  Actions.Person,
+  With.Filter(
+    (context, person) => person.id === context.data.personId,
+    async (context, person) => {
+      const details = await fetch(`/person/${person.id}`);
+      context.actions.produce((draft) => {
+        draft.model.person = details;
+      });
+    },
+  ),
+);
+```
+
+The predicate receives the context and the fully-typed payload. When it returns `false`, the handler never executes &ndash; preventing unnecessary API calls or state updates. This is useful when many components listen for the same action type but should only respond to specific instances.
+
+## Direct broadcast access
+
+For direct access to the broadcast emitter, use `useBroadcast()`:
 
 ```ts
 import { useBroadcast } from "chizu";

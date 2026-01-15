@@ -1,4 +1,4 @@
-import { useActions, Lifecycle, Bound } from "../../library/index.ts";
+import { useActions, Lifecycle, With } from "../../library/index.ts";
 import { Model, Actions, Country } from "./types.ts";
 
 const model: Model = {
@@ -36,7 +36,7 @@ export function useVisitorActions() {
     });
   });
 
-  actions.useAction(Actions.Visitor, Bound("visitor"));
+  actions.useAction(Actions.Visitor, With.Bound("visitor"));
 
   // actions.useAction(Actions.Visitor, (context, country) => {
   //   context.actions.produce((draft) => {

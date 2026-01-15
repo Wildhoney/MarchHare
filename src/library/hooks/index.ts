@@ -1,7 +1,7 @@
 import * as React from "react";
-import { useLifecycles, useData, Bound } from "./utils.ts";
+import { useLifecycles, useData, With } from "./utils.ts";
 
-export { Bound };
+export { With };
 import { useRerender } from "../utils/utils.ts";
 import type { Data, Handler, Scope } from "./types.ts";
 import {
@@ -22,10 +22,10 @@ import {
   Partition,
   ConsumerRenderer,
 } from "../boundary/components/consumer/index.tsx";
-import { getReason, normaliseError } from "../utils/index.ts";
+import { getReason, getError } from "../utils/index.ts";
 import EventEmitter from "eventemitter3";
 import { useBroadcast } from "../boundary/components/broadcast/index.tsx";
-import { isDistributedAction, getActionName } from "../action/index.ts";
+import { isDistributedAction, getName } from "../action/index.ts";
 import { useError } from "../error/index.tsx";
 import { State, Operation, Process } from "immertation";
 import { useTasks } from "../boundary/components/tasks/utils.ts";
@@ -219,8 +219,8 @@ export function useActions<
           const hasErrorHandler = scope.current.handlers.has(Lifecycle.Error);
           const details = {
             reason: getReason(caught),
-            error: normaliseError(caught),
-            action: getActionName(action),
+            error: getError(caught),
+            action: getName(action),
             handled: hasErrorHandler,
           };
           error?.(details);
