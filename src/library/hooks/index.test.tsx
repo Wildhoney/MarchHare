@@ -1,12 +1,20 @@
 import { describe, expect, it } from "@jest/globals";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, render, screen } from "@testing-library/react";
 import { useActions } from "./index.ts";
 import { Action } from "../action/index.ts";
+import { Distribution } from "../types/index.ts";
+import { Broadcaster } from "../boundary/components/broadcast/index.tsx";
+import { Consumer } from "../boundary/components/consumer/index.tsx";
+import * as React from "react";
 
 type Model = { value: string | null };
 
 class Actions {
   static Update = Action<string>("Update");
+}
+
+class DistributedActions {
+  static Counter = Action<number>("Counter", Distribution.Broadcast);
 }
 
 const model: Model = { value: null };
@@ -167,5 +175,83 @@ describe("useActions() data callback", () => {
 
     // The data should provide the latest value
     expect(capturedValues[1]).toBe("changed");
+  });
+});
+
+describe("useActions() distributed action mount behavior", () => {
+  it("should invoke distributed action handler with cached value on mount", async () => {
+    const capturedPayloads: number[] = [];
+
+    type CounterModel = { count: number };
+    const counterModel: CounterModel = { count: 0 };
+
+    function ProducerComponent({ onShowLate }: { onShowLate: () => void }) {
+      const actions = useActions<CounterModel, typeof DistributedActions>(
+        counterModel,
+      );
+
+      actions.useAction(DistributedActions.Counter, (context, payload) => {
+        context.actions.produce((draft) => {
+          draft.model.count = payload;
+        });
+      });
+
+      return (
+        <>
+          {/* consume() creates a Partition that stores dispatched values in consumer Map */}
+          {actions[1].consume(DistributedActions.Counter, () => null)}
+          <button
+            data-testid="dispatch"
+            onClick={() => {
+              actions[1].dispatch(DistributedActions.Counter, 42);
+              onShowLate();
+            }}
+          >
+            Dispatch
+          </button>
+        </>
+      );
+    }
+
+    function LateComponent() {
+      const actions = useActions<CounterModel, typeof DistributedActions>(
+        counterModel,
+      );
+
+      actions.useAction(DistributedActions.Counter, (_context, payload) => {
+        capturedPayloads.push(payload);
+      });
+
+      return <div data-testid="late">Late Component</div>;
+    }
+
+    function App() {
+      const [show, setShow] = React.useState(false);
+
+      return (
+        <Broadcaster>
+          <Consumer>
+            <ProducerComponent onShowLate={() => setShow(true)} />
+            {show && <LateComponent />}
+          </Consumer>
+        </Broadcaster>
+      );
+    }
+
+    render(<App />);
+
+    // Dispatch from producer and mount late component
+    await act(async () => {
+      screen.getByTestId("dispatch").click();
+    });
+
+    // Wait for effects to complete
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    // The late component should have received the cached value on mount
+    // (excluding the dispatch that occurred when both were mounted)
+    expect(capturedPayloads).toContain(42);
   });
 });

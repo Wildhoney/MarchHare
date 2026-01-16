@@ -157,6 +157,7 @@ export function useActions<
   const data = useData(getData());
   const unicast = React.useMemo(() => new EventEmitter(), []);
   const scope = React.useRef<Scope>({ handlers: new Map() });
+  const distributedActions = React.useRef<Set<ActionId>>(new Set());
 
   /**
    * Creates the context object passed to action handlers during dispatch.
@@ -242,13 +243,21 @@ export function useActions<
     scope.current.handlers.forEach((actionHandler, action) => {
       const handler = createHandler(action, actionHandler);
 
-      isDistributedAction(action)
-        ? broadcast.on(action, handler)
-        : unicast.on(action, handler);
+      if (isDistributedAction(action)) {
+        broadcast.on(action, handler);
+        unicast.on(action, handler);
+        distributedActions.current.add(action);
+      } else {
+        unicast.on(action, handler);
+      }
     });
   }, [unicast]);
 
-  useLifecycles({ unicast, tasks });
+  useLifecycles({
+    unicast,
+    tasks,
+    distributedActions: distributedActions.current,
+  });
 
   const result = React.useMemo(
     () =>

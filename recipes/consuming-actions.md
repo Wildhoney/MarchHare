@@ -19,3 +19,29 @@ export default function Visitor(): React.ReactElement {
 > **Important:** The `consume()` method only accepts distributed actions created with `Distribution.Broadcast`. Attempting to pass a local (unicast) action will result in a TypeScript error. This is enforced at compile-time to prevent confusion &ndash; local actions are scoped to a single component and cannot be consumed across the application.
 
 > **Note:** When a component mounts, `consume()` displays the most recent value for that action, even if it was dispatched before the component mounted. This is managed by the `Consumer` context provider. If no value has been dispatched yet, `consume()` renders `null` until the first dispatch occurs.
+
+## Cached values for useAction handlers
+
+Components using `useAction()` for distributed actions also receive cached values on mount. When a component mounts with a handler for a distributed action, the handler is automatically invoked with the most recent value that was stored by any `consume()` call.
+
+```tsx
+// This component stores dispatched values in the cache
+function ConsumerComponent() {
+  const [model, actions] = useActions<Model, typeof Actions>(model);
+  return <>{actions.consume(Actions.Name, (box) => box.value)}</>;
+}
+
+// This component's handler receives cached values on mount
+function LateComponent() {
+  const actions = useActions<Model, typeof Actions>(model);
+
+  actions.useAction(Actions.Name, (context, name) => {
+    // Called with the cached value when component mounts
+    console.log("Received:", name);
+  });
+
+  return <div>Late Component</div>;
+}
+```
+
+This enables late-mounting components to synchronize with previously dispatched state. See the [distributed actions recipe](./distributed-actions.md#cached-values-on-mount) for more details.

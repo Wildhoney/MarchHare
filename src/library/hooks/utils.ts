@@ -3,6 +3,8 @@ import { RefObject } from "react";
 import { Props, Lifecycle, Model, Actions } from "../types/index.ts";
 import type { LifecycleConfig } from "./types.ts";
 import type { HandlerContext } from "../types/index.ts";
+import { G } from "@mobily/ts-belt";
+import { useConsumer } from "../boundary/components/consumer/utils.ts";
 
 /**
  * Creates a new object with getters for each property of the input object.
@@ -38,10 +40,23 @@ export function isGenerator(
 
 /**
  * Emits lifecycle events for component mount/unmount and DOM attachment.
+ * Also invokes distributed action handlers with cached values on mount.
  */
-export function useLifecycles({ unicast }: LifecycleConfig): void {
+export function useLifecycles({
+  unicast,
+  distributedActions,
+}: LifecycleConfig): void {
+  const consumer = useConsumer();
+
   React.useLayoutEffect(() => {
     unicast.emit(Lifecycle.Mount);
+
+    distributedActions.forEach((action) => {
+      const entry = consumer.get(action);
+      const value = entry?.state.model?.value;
+      if (!G.isNullable(value)) unicast.emit(action, value);
+    });
+
     return () => void unicast.emit(Lifecycle.Unmount);
   }, []);
 

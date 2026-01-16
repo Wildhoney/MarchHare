@@ -55,4 +55,5 @@ export type Data<D extends Props = Props> = () => D;
 export type LifecycleConfig = {
   unicast: EventEmitter;
   tasks: Tasks;
+  distributedActions: Set<ActionId>;
 };

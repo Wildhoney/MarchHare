@@ -43,6 +43,45 @@ actions.useAction(
 
 The predicate receives the context and the fully-typed payload. When it returns `false`, the handler never executes &ndash; preventing unnecessary API calls or state updates. This is useful when many components listen for the same action type but should only respond to specific instances.
 
+## Cached values on mount
+
+When a component mounts with a `useAction()` handler for a distributed action, the handler is automatically invoked with the most recent cached value (if one exists). This mirrors the behavior of `consume()` and enables late-mounting components to receive historical state.
+
+```tsx
+// Component A uses consume() which stores values in the cache
+function ComponentA() {
+  const [model, actions] = useActions<Model, typeof Actions>(model);
+
+  return <div>{actions.consume(Actions.Counter, (box) => box.value)}</div>;
+}
+
+// Component B dispatches the action
+function ComponentB() {
+  const [model, actions] = useActions<Model, typeof Actions>(model);
+
+  return (
+    <button onClick={() => actions.dispatch(Actions.Counter, 42)}>
+      Update Counter
+    </button>
+  );
+}
+
+// Component C mounts later and receives the cached value
+function ComponentC() {
+  const actions = useActions<Model, typeof Actions>(model);
+
+  // This handler is invoked with 42 when the component mounts
+  // (assuming ComponentB dispatched before ComponentC mounted)
+  actions.useAction(Actions.Counter, (context, value) => {
+    console.log("Received cached value:", value);
+  });
+
+  return <div>Late Component</div>;
+}
+```
+
+> **Note:** The cache is populated by `consume()` calls (which create internal `Partition` components). For cached values to be available, at least one component must use `consume()` for that action. If no component has ever consumed the action, late-mounting handlers won't receive a cached value.
+
 ## Direct broadcast access
 
 For direct access to the broadcast emitter, use `useBroadcast()`:
