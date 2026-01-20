@@ -1,10 +1,8 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import { render, act } from "@testing-library/react";
 import * as React from "react";
-import { Inspect } from "immertation";
-import { pk, sleep, set } from "./index.ts";
+import { pk, sleep } from "./index.ts";
 import { useRerender } from "./utils.ts";
-import { HandlerContext, HandlerPayload, Actions } from "../types/index.ts";
 
 describe("pk()", () => {
   it("should generate a unique symbol when called without arguments", () => {
@@ -37,31 +35,6 @@ describe("sleep()", () => {
     await expect(promise).resolves.toBeUndefined();
 
     jest.useRealTimers();
-  });
-});
-
-describe("set()", () => {
-  it("should create a setter action for a property", () => {
-    type TestModel = { name: string };
-    const setter = set<TestModel, Actions>("name");
-    const model: TestModel = { name: "initial" };
-    const context: Pick<HandlerContext<TestModel, Actions>, "actions"> = {
-      actions: {
-        produce: (fn) => {
-          fn({ model, inspect: <Inspect<TestModel>>{} });
-          return model;
-        },
-        dispatch: () => {},
-        annotate: <T>(_, value: T) => value,
-      },
-    };
-
-    setter(
-      <HandlerContext<TestModel, Actions>>context,
-      <HandlerPayload>"updated",
-    );
-
-    expect(model.name).toBe("updated");
   });
 });
 

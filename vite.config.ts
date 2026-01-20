@@ -145,6 +145,18 @@ export default defineConfig(({ mode }) => {
             fileName: "chizu",
             formats: ["es", "umd"],
           },
+          minify: "terser",
+          terserOptions: {
+            compress: {
+              drop_console: true,
+              drop_debugger: true,
+              passes: 2,
+            },
+            format: {
+              comments: false,
+            },
+            mangle: true,
+          },
           rollupOptions: {
             external(id) {
               return ["@mobily/ts-belt", "immer", "react"].some(

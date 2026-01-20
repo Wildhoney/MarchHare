@@ -1,11 +1,5 @@
-import {
-  HandlerContext,
-  Model,
-  HandlerPayload,
-  Pk,
-  Actions,
-} from "../types/index.ts";
-import { AbortError, Reason } from "../error/types.ts";
+import { Pk } from "../types/index.ts";
+import { AbortError } from "../error/types.ts";
 
 /**
  * Configuration constants for Chizu action symbols.
@@ -16,30 +10,6 @@ export const config = {
   /** Prefix for distributed (broadcast) action symbols. */
   distributedActionPrefix: "chizu.action/distributed/",
 };
-
-/**
- * Determines the error reason based on what was thrown.
- *
- * @param error - The value that was thrown.
- * @returns The appropriate Reason enum value.
- */
-export function getReason(error: unknown): Reason {
-  if (error instanceof Error) {
-    if (error.name === "TimeoutError") return Reason.Timedout;
-    if (error.name === "AbortError") return Reason.Supplanted;
-  }
-  return Reason.Errored;
-}
-
-/**
- * Gets an Error instance from a thrown value.
- *
- * @param error - The value that was thrown.
- * @returns An Error instance (original if already Error, wrapped otherwise).
- */
-export function getError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
-}
 
 /**
  * Returns a promise that resolves after the specified number of milliseconds.
@@ -93,25 +63,3 @@ export function pk<T>(id?: Pk<T>): boolean | symbol {
 
 /** Shorthand alias for {@link pk}. */
 export const κ = pk;
-
-/**
- * Creates a generic "setter" action that updates a specific property in the state.
- * This is a higher-order function that takes a property name and returns an action function.
- * The returned action, when called, will update the state with the provided payload for the specified property.
- * It uses `produce` to handle immutable state updates.
- *
- * @template M The model (state) type.
- * @template A The actions type.
- * @param property The name of the property in the state to update.
- * @returns An action function that takes the context and a payload, and updates the state.
- */
-export function set<M extends Model, AC extends Actions>(property: string) {
-  return (context: HandlerContext<M, AC>, payload: HandlerPayload): void => {
-    context.actions.produce(({ model }) => {
-      (<Record<string, HandlerPayload>>model)[property] = payload;
-    });
-  };
-}
-
-/** Shorthand alias for {@link set}. */
-export const λ = set;

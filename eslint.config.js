@@ -36,6 +36,7 @@ export default defineConfig([
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
       "@typescript-eslint/consistent-type-definitions": ["error", "type"],
+      "@typescript-eslint/no-non-null-assertion": "error",
       complexity: ["warn", { max: 20 }],
       "import/prefer-default-export": "off",
       "import/no-default-export": "error",

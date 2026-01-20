@@ -62,6 +62,33 @@ export enum Distribution {
 }
 
 /**
+ * Lifecycle phase of a component using useActions.
+ * Tracks whether the component is in the process of mounting, fully mounted,
+ * unmounting, or completely unmounted.
+ *
+ * @example
+ * ```ts
+ * actions.useAction(Actions.Counter, (context, payload) => {
+ *   if (context.phase === Phase.Mounting) {
+ *     // Handler called during mount (e.g., cached distributed action value)
+ *   } else if (context.phase === Phase.Mounted) {
+ *     // Handler called after component is fully mounted
+ *   }
+ * });
+ * ```
+ */
+export enum Phase {
+  /** Component is in the process of mounting (before useLayoutEffect completes). */
+  Mounting = "mounting",
+  /** Component has fully mounted (after useLayoutEffect). */
+  Mounted = "mounted",
+  /** Component is in the process of unmounting. */
+  Unmounting = "unmounting",
+  /** Component has fully unmounted. */
+  Unmounted = "unmounted",
+}
+
+/**
  * Primary key type for identifying entities in collections.
  * Can be undefined (not yet assigned), a symbol (temporary/local), or a concrete value T.
  *
@@ -125,12 +152,111 @@ export type DistributedPayload<T = unknown> = HandlerPayload<T> & {
 };
 
 /**
- * Extracts the payload type `T` from a `HandlerPayload<T>`.
+ * Extracts the payload type `T` from a `HandlerPayload<T>` or `ActionFilter<HandlerPayload<T>>`.
  * Use this in handler signatures to get the action's payload type.
  *
- * @template A - The action type (HandlerPayload<T>)
+ * Works with both plain actions and filtered action tuples:
+ * - `Payload<Action<User>>` → `User`
+ * - `Payload<[Action<User>, { UserId: number }]>` → `User`
+ *
+ * @template A - The action type (HandlerPayload<T> or ActionFilter)
  */
-export type Payload<A> = A extends HandlerPayload<infer P> ? P : never;
+export type Payload<A> = A extends readonly [HandlerPayload<infer P>, Filter]
+  ? P
+  : A extends HandlerPayload<infer P>
+    ? P
+    : never;
+
+/**
+ * JavaScript primitive types.
+ * Includes all primitive values: `string`, `number`, `bigint`, `boolean`, `symbol`, `null`, and `undefined`.
+ */
+export type Primitive =
+  | string
+  | number
+  | bigint
+  | boolean
+  | symbol
+  | null
+  | undefined;
+
+/**
+ * Non-nullable primitive type for filter values.
+ * Includes `string`, `number`, `bigint`, `boolean`, and `symbol`.
+ */
+export type FilterValue = NonNullable<Primitive>;
+
+/**
+ * Filter object for channeled actions.
+ * Must be an object where each value is a non-nullable primitive.
+ *
+ * By convention, use uppercase keys (e.g., `{UserId: 4}` not `{userId: 4}`)
+ * to distinguish filter keys from payload properties.
+ *
+ * When dispatching, handlers are invoked if ALL properties in the dispatch filter
+ * match the corresponding properties in the registered filter.
+ *
+ * @example
+ * ```ts
+ * // Register a handler for a specific user
+ * actions.useAction([Actions.User, { UserId: 1 }], handler);
+ *
+ * // Dispatch matches if all dispatch properties match registered properties
+ * dispatch([Actions.User, { UserId: 1 }], payload);              // Matches
+ * dispatch([Actions.User, { UserId: 2 }], payload);              // No match
+ * dispatch([Actions.User, { UserId: 1, Role: "admin" }], payload); // Matches
+ * dispatch([Actions.User, {}], payload);                         // Matches all
+ * dispatch(Actions.User, payload);                               // Matches ALL handlers
+ * ```
+ */
+export type Filter = Record<string, FilterValue>;
+
+/**
+ * Tuple type for subscribing to filtered events within an action.
+ * Used with `useAction` to listen for actions dispatched with matching filter properties.
+ *
+ * The filter is an object where dispatch properties must match registered properties:
+ * - Register: `[Action, { UserId: 1, Role: "admin" }]`
+ * - Dispatch `[Action, { UserId: 1 }]` → matches handlers where `UserId === 1`
+ * - Dispatch `[Action, {}]` → matches ALL filtered handlers
+ * - Dispatch `Action` (plain) → matches ALL handlers (plain + filtered)
+ *
+ * @template A - The action type (must be a HandlerPayload)
+ *
+ * @example
+ * ```ts
+ * class Actions {
+ *   static UserUpdated = Action<User>("UserUpdated", Distribution.Broadcast);
+ * }
+ *
+ * // Subscribe to updates for a specific user
+ * actions.useAction([Actions.UserUpdated, { UserId: props.userId }], (context, user) => {
+ *   context.actions.produce((draft) => {
+ *     draft.model.user = user;
+ *   });
+ * });
+ *
+ * // Dispatch to specific user
+ * actions.dispatch([Actions.UserUpdated, { UserId: user.id }], user);
+ *
+ * // Dispatch to ALL handlers (plain + filtered)
+ * actions.dispatch(Actions.UserUpdated, user);
+ * ```
+ */
+export type ActionFilter<A extends HandlerPayload = HandlerPayload> = readonly [
+  A,
+  Filter,
+];
+
+/**
+ * Union type representing either a plain action or a filtered action tuple.
+ * Used in `useAction` and `dispatch` signatures to accept both forms.
+ *
+ * @template A - The action type
+ */
+export type ActionOrFilter<A extends HandlerPayload = HandlerPayload> =
+  | A
+  | ActionFilter<A>;
 
 /**
  * Checks if a function type returns a Promise.
@@ -201,7 +327,23 @@ export type HandlerContext<
   AC extends Actions,
   D extends Props = Props,
 > = {
-  model: M;
+  readonly model: Readonly<M>;
+  /**
+   * The current lifecycle phase of the component.
+   * Useful for determining if the handler was called during mount (e.g., from a cached
+   * distributed action value) vs after the component is fully mounted.
+   *
+   * @example
+   * ```ts
+   * actions.useAction(DistributedActions.Counter, (context, payload) => {
+   *   if (context.phase === Phase.Mounting) {
+   *     // Called with cached value during mount
+   *     console.log("Received cached value:", payload);
+   *   }
+   * });
+   * ```
+   */
+  readonly phase: Phase;
   /**
    * The current task for the executing action handler.
    * Contains the AbortController, action identifier, and payload for this specific invocation.
@@ -224,7 +366,7 @@ export type HandlerContext<
    * });
    * ```
    */
-  task: Task;
+  readonly task: Task;
   /**
    * Reactive data values passed to useActions.
    * Always returns the latest values, even after awaits in async handlers.
@@ -241,7 +383,7 @@ export type HandlerContext<
    * });
    * ```
    */
-  data: D;
+  readonly data: D;
   /**
    * Set of all running tasks across all components in the context.
    * Tasks are ordered by creation time (oldest first).
@@ -272,9 +414,14 @@ export type HandlerContext<
    * }
    * ```
    */
-  tasks: Tasks;
-  actions: {
-    produce<F extends (draft: { model: M; inspect: Inspect<M> }) => void>(
+  readonly tasks: Tasks;
+  readonly actions: {
+    produce<
+      F extends (draft: {
+        model: M;
+        readonly inspect: Readonly<Inspect<M>>;
+      }) => void,
+    >(
       ƒ: F & AssertSync<F>,
     ): M;
     dispatch<A extends AC[keyof AC] & HandlerPayload<unknown>>(
@@ -312,58 +459,88 @@ export type HandlerContext<
  * ```
  */
 /**
- * Utility type for defining action handler functions.
- * Use this when defining handlers in separate files that will be passed to useAction.
- *
- * Similar to how React exports `React.FC` for typing functional components,
- * `Handler` provides full type safety for action handlers.
+ * Utility type for defining a single action handler function.
+ * Use this when you need to type a specific handler directly.
  *
  * @template M - The model type
  * @template AC - The actions class type
- * @template A - The specific action type (determines payload type)
+ * @template K - The action key (keyof AC) — determines payload type via lookup
  * @template D - Optional data/props type (defaults to Props)
  *
- * @example
- * ```ts
- * import { Action, Handler } from "chizu";
- *
- * // Create actions with the Action factory
- * class Actions {
- *   static Name = Action<string>("Name");
- * }
- *
- * // Define handler externally with full type inference
- * const nameHandler: Handler<Model, typeof Actions, typeof Actions["Name"]> =
- *   (context, name) => {
- *     context.actions.produce((draft) => {
- *       draft.model.name = name;
- *     });
- *   };
- *
- * // Use in component
- * export default function useNameActions() {
- *   const actions = useActions<Model, typeof Actions>(model);
- *   actions.useAction(Actions.Name, nameHandler);
- *   return actions;
- * }
- * ```
+ * @see {@link HandlerMap} for the recommended HKT pattern
  */
 export type Handler<
   M extends Model,
   AC extends Actions,
-  A extends Payload<unknown>,
+  K extends keyof AC,
   D extends Props = Props,
 > = (
   context: HandlerContext<M, AC, D>,
-  payload: Payload<A>,
+  payload: Payload<AC[K] & HandlerPayload<unknown>>,
 ) => void | Promise<void> | AsyncGenerator | Generator;
+
+/**
+ * Higher-Kinded Type (HKT) emulation for action handlers.
+ * Creates a mapped type where each action key maps to its fully-typed handler.
+ *
+ * TypeScript doesn't natively support HKTs (types that return types), but this
+ * pattern emulates them using mapped types with indexed access.
+ *
+ * @template M - The model type
+ * @template AC - The actions class type
+ * @template D - Optional data/props type (defaults to Props)
+ *
+ * @example
+ * ```ts
+ * import { Action, HandlerMap } from "chizu";
+ *
+ * class Actions {
+ *   static SetName = Action<string>("SetName");
+ *   static SetAge = Action<number>("SetAge");
+ * }
+ *
+ * // Define the HKT once for this module
+ * type H = HandlerMap<Model, typeof Actions>;
+ *
+ * // "Apply" the HKT via indexed access — H["SetName"] is the handler type
+ * export const handleSetName: H["SetName"] = (context, name) => {
+ *   context.actions.produce((draft) => {
+ *     draft.model.name = name;
+ *   });
+ * };
+ *
+ * export const handleSetAge: H["SetAge"] = (context, age) => {
+ *   context.actions.produce((draft) => {
+ *     draft.model.age = age;
+ *   });
+ * };
+ *
+ * // Use in component
+ * export default function useUserActions() {
+ *   const actions = useActions<Model, typeof Actions>(model);
+ *   actions.useAction(Actions.SetName, handleSetName);
+ *   actions.useAction(Actions.SetAge, handleSetAge);
+ *   return actions;
+ * }
+ * ```
+ */
+export type HandlerMap<
+  M extends Model,
+  AC extends Actions,
+  D extends Props = Props,
+> = {
+  [K in keyof AC]: (
+    context: HandlerContext<M, AC, D>,
+    payload: Payload<AC[K] & HandlerPayload<unknown>>,
+  ) => void | Promise<void> | AsyncGenerator | Generator;
+};
 
 export type UseActions<
   M extends Model,
   AC extends Actions,
   D extends Props = Props,
 > = [
-  M,
+  Readonly<M>,
   {
     dispatch(action: ActionId, payload?: HandlerPayload): void;
     /**
@@ -405,25 +582,29 @@ export type UseActions<
    * Registers an action handler with the current scope.
    * Types are pre-baked from the useActions call, so no type parameter is needed.
    *
-   * @param action - The action symbol to bind (e.g., Lifecycle.Mount, Actions.Visitor)
-   * @param handler - The handler function receiving context and optional payload
+   * Supports two subscription patterns:
+   * 1. **Plain action** - Receives ALL dispatches for that action (including filtered ones)
+   * 2. **Filtered action** `[Action, filter]` - Receives only dispatches matching the filter
+   *
+   * @param action - The action symbol or `[action, filter]` tuple to bind
+   * @param handler - The handler function receiving context and payload
    *
    * @example
    * ```ts
    * const actions = useActions<typeof Actions>(model);
    *
-   * actions.useAction(Lifecycle.Mount, (context) => {
-   *   // Setup logic
+   * // Subscribe to ALL UserUpdated events
+   * actions.useAction(Actions.UserUpdated, (context, user) => {
+   *   // Fires for any UserUpdated dispatch
    * });
    *
-   * actions.useAction(Actions.Visitor, (context, country) => {
-   *   context.actions.produce((draft) => {
-   *     draft.model.visitor = country;
-   *   });
+   * // Subscribe to UserUpdated for a specific user only
+   * actions.useAction([Actions.UserUpdated, { UserId: props.userId }], (context, user) => {
+   *   // Only fires when dispatched with matching filter
    * });
    * ```
    */
-  useAction<A extends ActionId>(
+  useAction<A extends ActionId | ActionFilter>(
     action: A,
     handler: (
       context: HandlerContext<M, AC, D>,

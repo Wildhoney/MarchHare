@@ -36,7 +36,7 @@ export function useVisitorActions() {
     });
   });
 
-  actions.useAction(Actions.Visitor, With.Bound("visitor"));
+  actions.useAction(Actions.Visitor, With("visitor"));
 
   // actions.useAction(Actions.Visitor, (context, country) => {
   //   context.actions.produce((draft) => {

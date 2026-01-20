@@ -1,12 +1,18 @@
 import * as React from "react";
-import { useLifecycles, useData, With } from "./utils.ts";
+import {
+  useLifecycles,
+  useData,
+  isFilteredAction,
+  matchesFilter,
+} from "./utils.ts";
 
-export { With };
+export { With } from "./utils.ts";
 import { useRerender } from "../utils/utils.ts";
 import type { Data, Handler, Scope } from "./types.ts";
 import {
   HandlerContext,
   Lifecycle,
+  Phase,
   Model,
   HandlerPayload,
   Payload,
@@ -16,13 +22,15 @@ import {
   UseActions,
   Result,
   Task,
+  Filter,
+  ActionFilter,
 } from "../types/index.ts";
 
 import {
   Partition,
   ConsumerRenderer,
 } from "../boundary/components/consumer/index.tsx";
-import { getReason, getError } from "../utils/index.ts";
+import { getReason, getError } from "../error/utils.ts";
 import EventEmitter from "eventemitter3";
 import { useBroadcast } from "../boundary/components/broadcast/index.tsx";
 import { isDistributedAction, getName } from "../action/index.ts";
@@ -36,7 +44,7 @@ function useRegisterHandler<
   D extends Props,
 >(
   scope: React.RefObject<Scope>,
-  action: ActionId,
+  action: ActionId | ActionFilter,
   handler: (
     context: HandlerContext<M, AC, D>,
     payload: unknown,
@@ -57,7 +65,14 @@ function useRegisterHandler<
     },
   );
 
-  scope.current.handlers.set(action, <Handler>stableHandler);
+  const getFilter = React.useEffectEvent(() =>
+    isFilteredAction(action) ? action[1] : undefined,
+  );
+
+  const base = isFilteredAction(action) ? action[0] : action;
+  const entries = scope.current.handlers.get(base) ?? new Set();
+  if (entries.size === 0) scope.current.handlers.set(base, entries);
+  entries.add({ getFilter, handler: <Handler>stableHandler });
 }
 
 /**
@@ -158,6 +173,7 @@ export function useActions<
   const unicast = React.useMemo(() => new EventEmitter(), []);
   const scope = React.useRef<Scope>({ handlers: new Map() });
   const distributedActions = React.useRef<Set<ActionId>>(new Set());
+  const phase = React.useRef<Phase>(Phase.Mounting);
 
   /**
    * Creates the context object passed to action handlers during dispatch.
@@ -175,6 +191,9 @@ export function useActions<
 
       return <HandlerContext<M, AC, D>>{
         model,
+        get phase() {
+          return phase.current;
+        },
         task,
         data,
         tasks,
@@ -191,13 +210,12 @@ export function useActions<
               hydration.current = null;
             }
           },
-          dispatch(
-            ...[action, payload]: [action: ActionId, payload?: HandlerPayload]
-          ) {
+          dispatch(action: ActionId | ActionFilter, payload?: HandlerPayload) {
             if (controller.signal.aborted) return;
-            isDistributedAction(action)
-              ? broadcast.emit(action, payload)
-              : unicast.emit(action, payload);
+            const base = isFilteredAction(action) ? action[0] : action;
+            const filter = isFilteredAction(action) ? action[1] : undefined;
+            const emitter = isDistributedAction(base) ? broadcast : unicast;
+            emitter.emit(base, payload, filter);
           },
           annotate<T>(operation: Operation, value: T): T {
             return state.current.annotate(operation, value);
@@ -209,8 +227,23 @@ export function useActions<
   );
 
   React.useLayoutEffect(() => {
-    function createHandler(action: ActionId, actionHandler: Handler) {
-      return async function handler(payload: HandlerPayload) {
+    function createHandler(
+      action: ActionId,
+      actionHandler: Handler,
+      getFilter: () => Filter | undefined,
+    ) {
+      return async function handler(
+        payload: HandlerPayload,
+        dispatchFilter?: Filter,
+      ) {
+        const registeredFilter = getFilter();
+        if (
+          registeredFilter &&
+          dispatchFilter &&
+          !matchesFilter(dispatchFilter, registeredFilter)
+        )
+          return;
+
         const result = <Result>{ processes: new Set<Process>() };
         const completion = Promise.withResolvers<void>();
         const context = getContext(action, payload, result);
@@ -240,15 +273,17 @@ export function useActions<
       };
     }
 
-    scope.current.handlers.forEach((actionHandler, action) => {
-      const handler = createHandler(action, actionHandler);
+    scope.current.handlers.forEach((entries, action) => {
+      for (const { getFilter, handler: actionHandler } of entries) {
+        const handler = createHandler(action, actionHandler, getFilter);
 
-      if (isDistributedAction(action)) {
-        broadcast.on(action, handler);
-        unicast.on(action, handler);
-        distributedActions.current.add(action);
-      } else {
-        unicast.on(action, handler);
+        if (isDistributedAction(action)) {
+          broadcast.on(action, handler);
+          unicast.on(action, handler);
+          distributedActions.current.add(action);
+        } else {
+          unicast.on(action, handler);
+        }
       }
     });
   }, [unicast]);
@@ -257,6 +292,7 @@ export function useActions<
     unicast,
     tasks,
     distributedActions: distributedActions.current,
+    phase,
   });
 
   const result = React.useMemo(
@@ -264,12 +300,11 @@ export function useActions<
       <UseActions<M, AC, D>>[
         model,
         {
-          dispatch(
-            ...[action, payload]: [action: ActionId, payload?: HandlerPayload]
-          ) {
-            isDistributedAction(action)
-              ? broadcast.emit(action, payload)
-              : unicast.emit(action, payload);
+          dispatch(action: ActionId | ActionFilter, payload?: HandlerPayload) {
+            const base = isFilteredAction(action) ? action[0] : action;
+            const filter = isFilteredAction(action) ? action[1] : undefined;
+            const emitter = isDistributedAction(base) ? broadcast : unicast;
+            emitter.emit(base, payload, filter);
           },
           consume(
             action: symbol,
@@ -288,7 +323,9 @@ export function useActions<
     [model, unicast],
   );
 
-  (<UseActions<M, AC, D>>result).useAction = <A extends ActionId>(
+  (<UseActions<M, AC, D>>result).useAction = <
+    A extends ActionId | ActionFilter,
+  >(
     action: A,
     handler: (
       context: HandlerContext<M, AC, D>,

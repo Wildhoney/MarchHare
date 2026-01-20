@@ -1,7 +1,7 @@
 import * as React from "react";
 
 /**
- * An action identifier - either a symbol (preferred) or string.
+ * An action identifier - either a symbol (including branded HandlerPayload) or string.
  */
 export type ActionId = symbol | string;
 

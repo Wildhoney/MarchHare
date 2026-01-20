@@ -35,7 +35,7 @@ For advanced topics, see the [recipes directory](./recipes/).
 
 ## Getting started
 
-We dispatch the `Actions.Name` event upon clicking the "Sign in" button and within `useNameActions` we subscribe to that same event so that when it's triggered it updates the model with the payload &ndash; in the React component we render `model.name`. The `With.Bound` helper binds the action's payload directly to a model property.
+We dispatch the `Actions.Name` event upon clicking the "Sign in" button and within `useNameActions` we subscribe to that same event so that when it's triggered it updates the model with the payload &ndash; in the React component we render `model.name`. The `With` helper binds the action's payload directly to a model property.
 
 ```tsx
 import { useActions, Action, With } from "chizu";
@@ -55,7 +55,7 @@ export class Actions {
 export default function useNameActions() {
   const actions = useActions<Model, typeof Actions>(model);
 
-  actions.useAction(Actions.Name, With.Bound("name"));
+  actions.useAction(Actions.Name, With("name"));
 
   return actions;
 }
@@ -164,3 +164,42 @@ actions.useAction(Actions.Name, async (context, name) => {
   });
 });
 ```
+
+For targeted event delivery, use filtered actions. Subscribe with a filter object `[Action, { Key: value }]` &ndash; handlers fire when the dispatch filter matches:
+
+```tsx
+// Subscribe to updates for a specific user
+actions.useAction(
+  [Actions.UserUpdated, { UserId: props.userId }],
+  (context, user) => {
+    // Only fires when dispatched with matching UserId
+  },
+);
+
+// Subscribe to all admin user updates
+actions.useAction(
+  [Actions.UserUpdated, { Role: Role.Admin }],
+  (context, user) => {
+    // Fires for {Role: Role.Admin}, {Role: Role.Admin, UserId: 5}, etc.
+  },
+);
+
+// Dispatch to specific user
+actions.dispatch([Actions.UserUpdated, { UserId: user.id }], user);
+
+// Dispatch to all admin handlers
+actions.dispatch([Actions.UserUpdated, { Role: Role.Admin }], user);
+
+// Dispatch to plain action - ALL handlers fire (plain + all filtered)
+actions.dispatch(Actions.UserUpdated, user);
+```
+
+Filter values support non-nullable primitives: `string`, `number`, `boolean`, or `symbol`. By convention, use uppercase keys like `{UserId: 4}` to distinguish filter keys from payload properties.
+
+make actions.useActions add their own listeners
+have an <actions.context> - perhaps a .context() function
+change useActions to be context-aware with useActions(Mode.Create) (useActions(Mode.Read)) (maybe even obj { phase: ..., etc... })
+Have a phase (mounting, mounted, unmounting, unmounted)
+Ensure same event can listen multiple times - including lifecycles
+Ensure listeners are being cleared up
+Ensure sub-components can subscribe to the events as well

@@ -1,9 +1,18 @@
 import * as React from "react";
 import { RefObject } from "react";
-import { Props, Lifecycle, Model, Actions } from "../types/index.ts";
+import {
+  Props,
+  Lifecycle,
+  Phase,
+  Model,
+  Actions,
+  Filter,
+  ActionFilter,
+  ActionId,
+} from "../types/index.ts";
 import type { LifecycleConfig } from "./types.ts";
 import type { HandlerContext } from "../types/index.ts";
-import { G } from "@mobily/ts-belt";
+import { A, G } from "@mobily/ts-belt";
 import { useConsumer } from "../boundary/components/consumer/utils.ts";
 
 /**
@@ -41,14 +50,22 @@ export function isGenerator(
 /**
  * Emits lifecycle events for component mount/unmount and DOM attachment.
  * Also invokes distributed action handlers with cached values on mount.
+ * Updates the phase ref to track the component's current lifecycle state.
+ *
+ * Note: The phase transitions are:
+ * - Mounting → (cached distributed action values emitted here) → Mounted
+ * - Mounted → Unmounting → Unmounted
  */
 export function useLifecycles({
   unicast,
   distributedActions,
+  phase,
 }: LifecycleConfig): void {
   const consumer = useConsumer();
 
   React.useLayoutEffect(() => {
+    // Phase is already Mounting when this runs (set in useActions)
+    // Emit Mount lifecycle and cached distributed action values while still mounting
     unicast.emit(Lifecycle.Mount);
 
     distributedActions.forEach((action) => {
@@ -57,7 +74,14 @@ export function useLifecycles({
       if (!G.isNullable(value)) unicast.emit(action, value);
     });
 
-    return () => void unicast.emit(Lifecycle.Unmount);
+    // Transition to Mounted after all mount-time emissions complete
+    phase.current = Phase.Mounted;
+
+    return () => {
+      phase.current = Phase.Unmounting;
+      unicast.emit(Lifecycle.Unmount);
+      phase.current = Phase.Unmounted;
+    };
   }, []);
 
   React.useEffect(() => void unicast.emit(Lifecycle.Node), []);
@@ -88,14 +112,14 @@ export function useData<P extends Props>(props: P): P {
  * Type safety is enforced at the call site: the payload type must be assignable to
  * the model property's type.
  *
- * Also available as `With.Bound`.
- *
  * @template K The property key type (inferred from the argument)
  * @param key The model property key to bind the payload to
  * @returns A handler function compatible with `useAction`
  *
  * @example
  * ```ts
+ * import { With } from "chizu";
+ *
  * type Model = { name: string; count: number };
  *
  * class Actions {
@@ -104,14 +128,14 @@ export function useData<P extends Props>(props: P): P {
  * }
  *
  * // These work - payload types match model property types
- * actions.useAction(Actions.SetName, With.Bound("name"));   // string -> string ✓
- * actions.useAction(Actions.SetCount, With.Bound("count")); // number -> number ✓
+ * actions.useAction(Actions.SetName, With("name"));   // string -> string ✓
+ * actions.useAction(Actions.SetCount, With("count")); // number -> number ✓
  *
  * // This would error - Country is not assignable to string
- * actions.useAction(Actions.Visitor, With.Bound("name")); // Country -> string ✗
+ * actions.useAction(Actions.Visitor, With("name")); // Country -> string ✗
  * ```
  */
-export function Bound<K extends string>(
+export function With<K extends string>(
   key: K,
 ): <
   M extends Model,
@@ -130,70 +154,45 @@ export function Bound<K extends string>(
 }
 
 /**
- * Wraps a handler with a predicate filter that prevents execution when the condition fails.
+ * Checks if the given action is a filtered action tuple `[Action, Filter]`.
  *
- * Useful for distributed actions where multiple components subscribe but only some
- * should respond based on the payload or component-specific data. The predicate receives
- * the context (for access to `context.data`) and the fully-typed payload, returning true
- * to allow the handler to execute.
- *
- * Also available as `With.Filter`.
- *
- * @template M The model type (inferred from handler context)
- * @template AC The actions class type (inferred from handler context)
- * @template D The data props type (inferred from handler context)
- * @template P The payload type (inferred from handler)
- * @param predicate Function that receives context and payload, returns true to execute
- * @param handler The action handler to wrap
- * @returns A wrapped handler that only executes when predicate returns true
+ * @param action - The action to check (either a plain ActionId or an ActionFilter tuple)
+ * @returns `true` if the action is a filtered action tuple, `false` otherwise
  *
  * @example
  * ```ts
- * actions.useAction(
- *   Actions.Person,
- *   With.Filter(
- *     (context, person) => person.id === context.data.personId,
- *     async (context, person) => {
- *       const details = await fetch(`/person/${person.id}`);
- *       context.actions.produce((draft) => {
- *         draft.model.person = details;
- *       });
- *     },
- *   ),
- * );
+ * isFilteredAction(Actions.Click); // false
+ * isFilteredAction([Actions.Click, { UserId: 1 }]); // true
  * ```
  */
-export function Filter<M extends Model, AC extends Actions, D extends Props, P>(
-  predicate: (context: HandlerContext<M, AC, D>, payload: P) => boolean,
-  handler: (
-    context: HandlerContext<M, AC, D>,
-    payload: P,
-  ) => void | Promise<void> | AsyncGenerator | Generator,
-): (
-  context: HandlerContext<M, AC, D>,
-  payload: P,
-) => void | Promise<void> | AsyncGenerator | Generator {
-  return (context, payload) => {
-    if (!predicate(context, payload)) return;
-    return handler(context, payload);
-  };
+export function isFilteredAction(
+  action: ActionId | ActionFilter,
+): action is ActionFilter {
+  return G.isArray(action) && A.length(action) === 2 && G.isObject(action[1]);
 }
 
 /**
- * Namespace for handler utilities that wrap action handlers.
+ * Checks if a dispatch filter matches a registered handler filter.
+ * All properties in the dispatch filter must match the corresponding properties in the registered filter.
+ *
+ * @param dispatchFilter - The filter from the dispatch call
+ * @param registeredFilter - The filter registered with useAction
+ * @returns `true` if all dispatch filter properties match the registered filter
  *
  * @example
  * ```ts
- * import { With } from "chizu";
- *
- * actions.useAction(Actions.Name, With.Bound("name"));
- * actions.useAction(Actions.Person, With.Filter(
- *   (context, person) => person.id === context.data.personId,
- *   async (context, person) => { ... },
- * ));
+ * matchesFilter({ UserId: 1 }, { UserId: 1 }); // true
+ * matchesFilter({ UserId: 1 }, { UserId: 2 }); // false
+ * matchesFilter({ UserId: 1 }, { UserId: 1, Role: "admin" }); // true (subset match)
+ * matchesFilter({ UserId: 1, Role: "admin" }, { UserId: 1 }); // false (missing Role)
  * ```
  */
-export const With = <const>{
-  Bound,
-  Filter,
-};
+export function matchesFilter(
+  dispatchFilter: Filter,
+  registeredFilter: Filter,
+): boolean {
+  for (const key of Object.keys(dispatchFilter)) {
+    if (registeredFilter[key] !== dispatchFilter[key]) return false;
+  }
+  return true;
+}

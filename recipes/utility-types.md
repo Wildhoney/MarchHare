@@ -1,23 +1,24 @@
 # Utility Types
 
-Similar to how React exports `React.FC` for typing functional components, Chizu exports `Handler` for typing action handlers. This allows you to define handlers in separate files with full type safety.
+Chizu exports `Handler` for typing action handlers when you need to define them in separate files with full type safety.
 
 ## Handler
 
-The `Handler` type provides full type inference for both context and payload:
+Use `Handler` to type extracted handlers:
 
 ```tsx
 import { useActions, Action, Handler } from "chizu";
 
-type Model = { name: string | null };
-const model: Model = { name: null };
+type Model = { name: string | null; age: number | null };
+const model: Model = { name: null, age: null };
 
 export class Actions {
-  static Name = Action<string>("Name");
+  static SetName = Action<string>("SetName");
+  static SetAge = Action<number>("SetAge");
 }
 
-// Define handler externally with full type inference for context and payload
-const nameHandler: Handler<Model, typeof Actions, (typeof Actions)["Name"]> = (
+// Type handlers using Handler<Model, Actions, ActionKey>
+export const handleSetName: Handler<Model, typeof Actions, "SetName"> = (
   context,
   name,
 ) => {
@@ -26,16 +27,56 @@ const nameHandler: Handler<Model, typeof Actions, (typeof Actions)["Name"]> = (
   });
 };
 
-export default function useNameActions() {
+export const handleSetAge: Handler<Model, typeof Actions, "SetAge"> = (
+  context,
+  age,
+) => {
+  context.actions.produce((draft) => {
+    draft.model.age = age;
+  });
+};
+
+// Use in component
+export default function useUserActions() {
   const actions = useActions<Model, typeof Actions>(model);
-  actions.useAction(Actions.Name, nameHandler);
+  actions.useAction(Actions.SetName, handleSetName);
+  actions.useAction(Actions.SetAge, handleSetAge);
   return actions;
 }
 ```
 
-## Benefits
+## Type Parameters
 
-- **Type safety**: Full inference for `context` and `payload` parameters
-- **Code organization**: Define handlers in separate files
+| Parameter | Description                                    |
+| --------- | ---------------------------------------------- |
+| `M`       | The model type                                 |
+| `AC`      | The actions class type (`typeof Actions`)      |
+| `K`       | The action key (`keyof AC`)                    |
+| `D`       | Optional data/props type (defaults to `Props`) |
+
+## Inline Handlers (Recommended)
+
+For most cases, inline handlers with full type inference are simpler:
+
+```tsx
+export default function useUserActions() {
+  const actions = useActions<Model, typeof Actions>(model);
+
+  // Types are fully inferred - no explicit typing needed
+  actions.useAction(Actions.SetName, (context, name) => {
+    context.actions.produce((draft) => {
+      draft.model.name = name;
+    });
+  });
+
+  return actions;
+}
+```
+
+## When to Extract Handlers
+
+Extract handlers when you need:
+
+- **Unit testing**: Test handlers in isolation
 - **Reusability**: Share handlers across components
-- **IDE support**: Autocomplete and error checking work correctly
+- **Code organization**: Separate handler logic from component code

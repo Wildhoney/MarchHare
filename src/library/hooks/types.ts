@@ -1,4 +1,5 @@
 import type EventEmitter from "eventemitter3";
+import type { RefObject } from "react";
 import type {
   Model,
   HandlerContext,
@@ -6,6 +7,8 @@ import type {
   Props,
   Tasks,
   ActionId,
+  Phase,
+  Filter,
 } from "../types/index.ts";
 
 /**
@@ -26,8 +29,22 @@ export type Handler<
 ) => void | Promise<void> | AsyncGenerator | Generator;
 
 /**
+ * Entry for an action handler with a reactive filter getter.
+ * When getFilter returns undefined, the handler fires for all dispatches.
+ * When getFilter returns a filter, dispatches must match.
+ */
+export type HandlerEntry<
+  M extends Model = Model,
+  AC extends Actions = Actions,
+  D extends Props = Props,
+> = {
+  handler: Handler<M, AC, D>;
+  getFilter: () => Filter | undefined;
+};
+
+/**
  * Internal scope for tracking registered action handlers.
- * Stores a map of action IDs to their handler functions.
+ * Maps action IDs to sets of handler entries (with optional filters).
  *
  * @template M - The model type
  * @template AC - The actions class type
@@ -38,7 +55,8 @@ export type Scope<
   AC extends Actions = Actions,
   D extends Props = Props,
 > = {
-  handlers: Map<ActionId, Handler<M, AC, D>>;
+  /** All handlers for each action, with optional filters */
+  handlers: Map<ActionId, Set<HandlerEntry<M, AC, D>>>;
 };
 
 /**
@@ -56,4 +74,5 @@ export type LifecycleConfig = {
   unicast: EventEmitter;
   tasks: Tasks;
   distributedActions: Set<ActionId>;
+  phase: RefObject<Phase>;
 };

@@ -1,7 +1,14 @@
 import { describe, expect, it, jest } from "@jest/globals";
-import { withGetters, isGenerator, Bound } from "./utils.ts";
-import { getReason, getError } from "../utils/index.ts";
+import {
+  withGetters,
+  isGenerator,
+  With,
+  isFilteredAction,
+  matchesFilter,
+} from "./utils.ts";
+import { getReason, getError } from "../error/utils.ts";
 import { Reason, AbortError, TimeoutError } from "../error/index.tsx";
+import { Action } from "../action/index.ts";
 import type { HandlerContext } from "../types/index.ts";
 
 describe("withGetters()", () => {
@@ -131,7 +138,7 @@ describe("getError()", () => {
   });
 });
 
-describe("Bound()", () => {
+describe("With()", () => {
   function createMockContext<M>(model: M) {
     const capturedModel = { ...model };
     const produce = jest.fn((fn: (draft: { model: M }) => void) => {
@@ -149,7 +156,7 @@ describe("Bound()", () => {
   }
 
   it("should return a handler function", () => {
-    const handler = Bound("name");
+    const handler = With("name");
     expect(typeof handler).toBe("function");
   });
 
@@ -160,7 +167,7 @@ describe("Bound()", () => {
       count: 0,
     });
 
-    const handler = Bound("name");
+    const handler = With("name");
     handler(context, "updated");
 
     expect(produce).toHaveBeenCalledTimes(1);
@@ -181,7 +188,7 @@ describe("Bound()", () => {
       },
     });
 
-    const handler = Bound("count");
+    const handler = With("count");
     handler(context, 42);
 
     expect(updatedModel.count).toBe(42);
@@ -202,7 +209,7 @@ describe("Bound()", () => {
       },
     });
 
-    const handler = Bound("visitor");
+    const handler = With("visitor");
     handler(context, { name: "Japan", code: "JP" });
 
     expect(updatedModel.visitor).toEqual({ name: "Japan", code: "JP" });
@@ -222,9 +229,75 @@ describe("Bound()", () => {
       },
     });
 
-    const handler = Bound("items");
+    const handler = With("items");
     handler(context, ["a", "b", "c"]);
 
     expect(updatedModel.items).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("isFilteredAction()", () => {
+  const TestAction = Action<string>("Test");
+
+  it("should return false for plain action symbols", () => {
+    expect(isFilteredAction(TestAction)).toBe(false);
+  });
+
+  it("should return true for valid filtered action tuples", () => {
+    expect(isFilteredAction([TestAction, { UserId: 1 }])).toBe(true);
+    expect(isFilteredAction([TestAction, { Key: "value" }])).toBe(true);
+    expect(isFilteredAction([TestAction, {}])).toBe(true);
+  });
+
+  it("should return false for arrays that are not valid action filters", () => {
+    expect(isFilteredAction(<[symbol, object]>(<unknown>[TestAction]))).toBe(
+      false,
+    );
+    expect(
+      isFilteredAction(<[symbol, object]>(
+        (<unknown>[TestAction, "not-an-object"])
+      )),
+    ).toBe(false);
+    expect(
+      isFilteredAction(<[symbol, object]>(<unknown>[TestAction, null])),
+    ).toBe(false);
+    expect(
+      isFilteredAction(<[symbol, object]>(
+        (<unknown>[TestAction, { a: 1 }, "extra"])
+      )),
+    ).toBe(false);
+  });
+});
+
+describe("matchesFilter()", () => {
+  it("should return true when dispatch filter matches registered filter exactly", () => {
+    expect(matchesFilter({ UserId: 1 }, { UserId: 1 })).toBe(true);
+    expect(matchesFilter({ Key: "value" }, { Key: "value" })).toBe(true);
+  });
+
+  it("should return true when dispatch filter is a subset of registered filter", () => {
+    expect(matchesFilter({ UserId: 1 }, { UserId: 1, Role: "admin" })).toBe(
+      true,
+    );
+    expect(matchesFilter({}, { UserId: 1 })).toBe(true);
+  });
+
+  it("should return false when dispatch filter has properties not matching registered filter", () => {
+    expect(matchesFilter({ UserId: 1 }, { UserId: 2 })).toBe(false);
+    expect(matchesFilter({ UserId: 1, Role: "admin" }, { UserId: 1 })).toBe(
+      false,
+    );
+  });
+
+  it("should return true for empty dispatch filter (matches all)", () => {
+    expect(matchesFilter({}, {})).toBe(true);
+    expect(matchesFilter({}, { Any: "value" })).toBe(true);
+  });
+
+  it("should handle different primitive types correctly", () => {
+    expect(matchesFilter({ Flag: true }, { Flag: true })).toBe(true);
+    expect(matchesFilter({ Flag: true }, { Flag: false })).toBe(false);
+    const sym = Symbol("test");
+    expect(matchesFilter({ Id: sym }, { Id: sym })).toBe(true);
   });
 });
