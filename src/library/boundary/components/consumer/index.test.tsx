@@ -1,4 +1,4 @@
-import { describe, expect, it } from "@jest/globals";
+import { describe, expect, it } from "vitest";
 import { render, screen, act } from "@testing-library/react";
 import { Consumer, useConsumer, Partition } from "./index";
 import { Broadcaster, useBroadcast } from "../broadcast/index";

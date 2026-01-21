@@ -1,4 +1,4 @@
-import { describe, expect, it } from "@jest/globals";
+import { describe, expect, it } from "vitest";
 import { Action, isDistributedAction, getName } from "./index.ts";
 import { Distribution } from "../types/index.ts";
 

@@ -32,6 +32,7 @@ For advanced topics, see the [recipes directory](./recipes/).
 - Granular async state tracking per model field.
 - Declarative lifecycle hooks without `useEffect`.
 - Centralised error handling via the `Error` component.
+- React Native compatible &ndash; uses [eventemitter3](https://github.com/primus/eventemitter3) for cross-platform pub/sub.
 
 ## Getting started
 
@@ -195,11 +196,3 @@ actions.dispatch(Actions.UserUpdated, user);
 ```
 
 Filter values support non-nullable primitives: `string`, `number`, `boolean`, or `symbol`. By convention, use uppercase keys like `{UserId: 4}` to distinguish filter keys from payload properties.
-
-make actions.useActions add their own listeners
-have an <actions.context> - perhaps a .context() function
-change useActions to be context-aware with useActions(Mode.Create) (useActions(Mode.Read)) (maybe even obj { phase: ..., etc... })
-Have a phase (mounting, mounted, unmounting, unmounted)
-Ensure same event can listen multiple times - including lifecycles
-Ensure listeners are being cleared up
-Ensure sub-components can subscribe to the events as well

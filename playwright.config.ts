@@ -4,6 +4,11 @@ export default defineConfig({
   testDir: "./tests",
   testMatch: "*.integration.ts",
   use: {
-    baseURL: process.env.BASE_URL ?? "http://localhost:5173",
+    baseURL: "http://localhost:5999",
+  },
+  webServer: {
+    command: "npx vite dev --port 5999",
+    port: 5999,
+    reuseExistingServer: !process.env.CI,
   },
 });

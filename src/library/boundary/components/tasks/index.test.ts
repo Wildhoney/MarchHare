@@ -1,5 +1,5 @@
 import { Task, Tasks } from "./types.ts";
-import { describe, expect, it } from "@jest/globals";
+import { describe, expect, it } from "vitest";
 
 describe("Task", () => {
   const actionA = Symbol("ActionA");

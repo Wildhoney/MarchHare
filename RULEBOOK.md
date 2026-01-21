@@ -38,14 +38,24 @@ Unicast actions are local to the component. Broadcast actions propagate to all c
 
 ```ts
 // Correct: extend for mixed usage
-class AppActions extends DistributedActions {
+class Actions extends DistributedActions {
   static LocalFetch = Action<Query>("LocalFetch");
 }
 ```
 
-### Rule 4: Action names must be unique within their scope
+### Rule 4: Action names should be descriptive for error tracing
 
-The framework uses symbol descriptions for identification. Duplicate names cause handler collisions.
+Action names appear in the `<Error>` boundary's `fault.action` property, making them essential for debugging. Use descriptive, unique names so errors can be traced back to their source.
+
+```ts
+// Good — descriptive names for debugging
+static FetchUserProfile = Action<UserId>("FetchUserProfile");
+static UpdateCartQuantity = Action<CartUpdate>("UpdateCartQuantity");
+
+// Bad — generic names make debugging harder
+static Fetch = Action<UserId>("Fetch");
+static Update = Action<CartUpdate>("Update");
+```
 
 ---
 
@@ -62,6 +72,8 @@ context.actions.produce((draft) => {
 Never mutate the model directly outside of `produce()`.
 
 ### Rule 6: Use annotations for trackable state changes
+
+Annotations are powered by [Immertation](https://www.npmjs.com/package/immertation), which extends Immer with metadata tracking.
 
 ```ts
 context.actions.produce((draft) => {
@@ -94,7 +106,7 @@ actions.useAction(Actions.Fetch, async (context) => {
 
 ## Handlers
 
-### Rule 8: Three handler signatures are supported
+### Rule 8: Four handler signatures are supported
 
 **Synchronous:**
 
@@ -117,7 +129,7 @@ actions.useAction(Actions.Fetch, async (context, query) => {
 });
 ```
 
-**Generator:**
+**Finite Generator:**
 
 ```ts
 actions.useAction(Actions.Stream, function* (context) {
@@ -126,6 +138,23 @@ actions.useAction(Actions.Stream, function* (context) {
   }
 });
 ```
+
+**Infinite Generator:**
+
+```ts
+actions.useAction(Actions.Poll, function* (context) {
+  const { signal } = context.task.controller;
+  while (!signal.aborted) {
+    const data = yield fetch("/api/status", { signal });
+    context.actions.produce((draft) => {
+      draft.model.status = data;
+    });
+    yield utils.sleep(5000, signal);
+  }
+});
+```
+
+Infinite generators should check `signal.aborted` to exit cleanly when the task is aborted.
 
 ### Rule 9: Use `With()` for simple property assignments
 
@@ -168,14 +197,14 @@ actions.dispatch(Actions.UserUpdated, user);
 
 Filter values must be non-nullable primitives: `string`, `number`, `boolean`, or `symbol`. By convention, use uppercase keys like `{UserId: 4}` to distinguish filter keys from payload properties.
 
-### Rule 11: Extract handlers for testability using `HandlerMap`
+### Rule 11: Extract handlers for testability using `Handler`
 
-Define handlers as standalone functions for easier unit testing. Use `HandlerMap` — a Higher-Kinded Type (HKT) emulation that creates a mapped type where each action key maps to its handler type.
+Define handlers as standalone functions for easier unit testing. Use `Handler` — a Higher-Kinded Type (HKT) emulation that creates a mapped type where each action key maps to its handler type.
 
-TypeScript doesn't natively support HKTs (types that return types), but `HandlerMap` emulates them using mapped types with indexed access.
+TypeScript doesn't natively support HKTs (types that return types), but `Handler` emulates them using mapped types with indexed access.
 
 ```ts
-import { Action, HandlerMap } from "chizu";
+import { Action, Handler } from "chizu";
 
 class Actions {
   static SetName = Action<string>("SetName");
@@ -183,7 +212,7 @@ class Actions {
 }
 
 // Define the HKT once for this module
-type H = HandlerMap<Model, typeof Actions>;
+type H = Handler<Model, typeof Actions>;
 
 // "Apply" the HKT via indexed access — H["SetName"] is the handler type
 export const handleSetName: H["SetName"] = (context, name) => {
@@ -207,7 +236,7 @@ function useUserActions() {
 }
 ```
 
-The `HandlerMap` type parameters are:
+The `Handler` type parameters are:
 
 | Parameter | Description                                    |
 | --------- | ---------------------------------------------- |
@@ -229,7 +258,7 @@ actions.useAction(Actions.Fetch, async (context) => {
 });
 ```
 
-Closures capture values at dispatch time. `context.data` provides reactive access.
+Closures capture values at dispatch time. `context.data` provides **reactive access** — it always returns the current value of props/state at the moment you read it, not the value captured when the handler started. This prevents bugs where async operations complete after props have changed.
 
 ---
 
@@ -247,7 +276,7 @@ actions.useAction(Lifecycle.Unmount, (context) => {
 });
 
 actions.useAction(Lifecycle.Node, (context) => {
-  // Runs after every render (like useEffect with no deps)
+  // Runs once on mount (like useEffect with [] deps)
 });
 
 actions.useAction(Lifecycle.Error, (context, fault) => {
@@ -345,7 +374,7 @@ actions.consume(Actions.Data, (box) => (
 
 ### Rule 18: Late-mounting components receive cached values
 
-When a component mounts after a broadcast, it automatically receives the last emitted value during `Phase.Mounting`.
+When a component mounts after a broadcast, it automatically receives the last emitted value during `Phase.Mounting` (see Rule 15 for phase details).
 
 ```tsx
 // Component A dispatches a broadcast action
@@ -403,7 +432,9 @@ actions.useAction(Actions.Fetch, async (context) => {
 });
 ```
 
-### Rule 21: Cancel competing tasks explicitly <!-- TODO: needs more work -->
+### Rule 21: Cancel competing tasks explicitly
+
+Each task has `controller`, `action`, and `payload` properties. Use these to selectively cancel tasks.
 
 ```ts
 // Abort all other tasks for this action
@@ -412,11 +443,34 @@ for (const task of context.tasks) {
     task.controller.abort();
   }
 }
+
+// Abort tasks for a specific action type
+for (const task of context.tasks) {
+  if (task.action === Actions.Fetch) {
+    task.controller.abort();
+  }
+}
 ```
 
-### Rule 22: In-flight tasks auto-abort on unmount
+### Rule 22: State updates are blocked after unmount
 
-No manual cleanup required for pending async work.
+When a component unmounts, `produce()` and `dispatch()` calls become no-ops. Always pass the abort signal to async operations so they can be cancelled.
+
+```ts
+actions.useAction(Actions.Fetch, async (context) => {
+  const { signal } = context.task.controller;
+
+  // Pass signal to abort the fetch if component unmounts
+  const response = await fetch(url, { signal });
+
+  // This produce() is a no-op if the component has unmounted
+  context.actions.produce((draft) => {
+    draft.model.data = response;
+  });
+});
+```
+
+The abort signal propagates to any async operation that accepts it (fetch, `utils.sleep`, etc.).
 
 ---
 
@@ -434,17 +488,24 @@ actions.useAction(Lifecycle.Error, (context, fault) => {
 
 ### Rule 24: Use the `<Error>` boundary for global error handling
 
+The `<Error>` boundary catches all unhandled errors from action handlers across your application. Use it for observability by reporting to your error tracking service.
+
 ```tsx
 <Error
   handler={({ reason, error, action }) => {
-    reportToService(error);
+    // Report to observability service (Sentry, DataDog, etc.)
+    Sentry.captureException(error, {
+      tags: { action, reason },
+    });
   }}
 >
   <App />
 </Error>
 ```
 
-### Rule 25: Know the error reasons <!-- TODO: needs more work -->
+The handler receives structured error details including the action name that failed, enabling targeted debugging.
+
+### Rule 25: Know the error reasons
 
 - `Reason.Timedout` — action exceeded timeout
 - `Reason.Supplanted` — newer dispatch cancelled this one
@@ -617,17 +678,21 @@ type Box<T> = {
 A `Box` bundles a value with its inspection capabilities:
 
 ```tsx
-function UserCard({ box }: { box: Box<User> }) {
+type Props = {
+  user: Box<User>;
+};
+
+function UserCard({ user }: Props) {
   return (
-    <div className={box.inspect.pending() ? "loading" : ""}>
-      <h2>{box.value.name}</h2>
-      <p>{box.value.email}</p>
+    <div className={user.inspect.pending() ? "loading" : ""}>
+      <h2>{user.value.name}</h2>
+      <p>{user.value.email}</p>
     </div>
   );
 }
 
 // Parent passes a box slice
-<UserCard box={actions.box((model) => model.user)} />;
+<UserCard user={actions.box((model) => model.user)} />;
 ```
 
 Use `actions.box()` to create a `Box` from a model selector. The child receives both the value and the ability to inspect its annotations.
@@ -658,7 +723,7 @@ Multiple calls create separate, unconnected state instances.
 ### Rule 34: Use `.box()` to pass slice state to child components
 
 ```tsx
-<UserProfile box={actions.box((model) => model.user)} />
+<UserProfile user={actions.box((model) => model.user)} />
 ```
 
 The child receives a `Box` with reactive access to that slice of state, including `inspect` for annotations.
@@ -725,7 +790,7 @@ See `recipes/ky-http-client.md` for advanced patterns (configured instances, err
 
 ### Rule 39: Use distributed actions for SSE (Server-Sent Events)
 
-Broadcast SSE events to all listening components using distributed actions. Connect on mount, dispatch broadcasts on message, and let Chizu handle cleanup.
+Broadcast SSE events to all listening components using distributed actions. Connect on mount, dispatch broadcasts on message, and use the abort signal to close the connection on unmount.
 
 ```ts
 class Actions {

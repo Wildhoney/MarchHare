@@ -1,4 +1,4 @@
-import { expect, it } from "@jest/globals";
+import { expect, it } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import Counter from "../example/counter";
 

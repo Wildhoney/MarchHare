@@ -1,20 +1,14 @@
 unit:
-	npx jest
+	npx vitest run
 
 integration:
-	npx vite dev --port 5999 & echo $$! > .vite.pid
-	npx wait-on http://localhost:5999
-	BASE_URL=http://localhost:5999 npx playwright test || (kill `cat .vite.pid` 2>/dev/null; rm -f .vite.pid; exit 1)
-	kill `cat .vite.pid` 2>/dev/null; rm -f .vite.pid
+	npx playwright test
 
 circular:
 	npx madge --circular src/library/index.ts
 
 browser:
-	$(eval port := $(shell npx get-port-cli --port 50000-59999))
-	npx vite dev --port $(port)	&
-	npx wait-on http://localhost:$(port)
-	npx playwright test
+	npx playwright test --headed
 
 typecheck:
 	npx tsc --noEmit
@@ -26,7 +20,7 @@ build:
 	npx vite build
 
 fslint:
-	npx fslint --files=dist/**/*.js --limit-kb=22
+	npx fslint --files=dist/**/*.js --limit-kb=15
 
 checks:
 	make fmt

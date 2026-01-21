@@ -46,7 +46,10 @@ function ssePlugin(): Plugin {
         const hasExtension = /\.\w+($|\?)/.test(url);
         const isApi = url.startsWith("/visitors") || url.startsWith("/@");
 
-        if (!hasExtension && !isApi) {
+        // Route to test fixtures when ?fixture= query param is present
+        if (url.includes("?fixture=") || url === "/e2e") {
+          req.url = "/tests/fixtures/index.html";
+        } else if (!hasExtension && !isApi) {
           req.url = "/src/example/index.html";
         }
         next();
@@ -150,7 +153,10 @@ export default defineConfig(({ mode }) => {
             compress: {
               drop_console: true,
               drop_debugger: true,
-              passes: 2,
+              passes: 3,
+              pure_getters: true,
+              toplevel: true,
+              ecma: 2020,
             },
             format: {
               comments: false,
