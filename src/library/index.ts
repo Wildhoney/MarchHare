@@ -10,4 +10,4 @@ export * as utils from "./utils/index.ts";
 
 export type { Box } from "immertation";
 export type { Fault, Catcher } from "./error/index.tsx";
-export type { Pk, Task, Tasks, Handler } from "./types/index.ts";
+export type { Pk, Task, Tasks, HandlerMap as Handler } from "./types/index.ts";

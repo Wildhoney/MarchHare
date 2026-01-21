@@ -1,5 +1,5 @@
 import { Lifecycle, Pk, HandlerPayload, PayloadKey } from ".";
-import { describe, expect, it } from "@jest/globals";
+import { describe, expect, it } from "vitest";
 
 describe("Lifecycle", () => {
   it("should have unique symbols", () => {

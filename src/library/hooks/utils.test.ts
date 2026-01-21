@@ -1,4 +1,4 @@
-import { describe, expect, it, jest } from "@jest/globals";
+import { describe, expect, it, vi } from "vitest";
 import {
   withGetters,
   isGenerator,
@@ -141,7 +141,7 @@ describe("getError()", () => {
 describe("With()", () => {
   function createMockContext<M>(model: M) {
     const capturedModel = { ...model };
-    const produce = jest.fn((fn: (draft: { model: M }) => void) => {
+    const produce = vi.fn((fn: (draft: { model: M }) => void) => {
       fn({ model: capturedModel });
     });
 

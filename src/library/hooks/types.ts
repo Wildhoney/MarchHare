@@ -75,4 +75,5 @@ export type LifecycleConfig = {
   tasks: Tasks;
   distributedActions: Set<ActionId>;
   phase: RefObject<Phase>;
+  data: Props;
 };

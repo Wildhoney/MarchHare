@@ -27,12 +27,14 @@ export type { ConsumerRenderer };
 export class Lifecycle {
   /** Triggered once when the component mounts (`useLayoutEffect`). */
   static Mount = Symbol("chizu.action.lifecycle/Mount");
-  /** Triggered after the component renders (`useEffect`). */
+  /** Triggered once after the component mounts (`useEffect` with empty deps `[]`). */
   static Node = Symbol("chizu.action.lifecycle/Node");
   /** Triggered when the component unmounts. */
   static Unmount = Symbol("chizu.action.lifecycle/Unmount");
   /** Triggered when an action throws an error. Receives `Fault` as payload. */
   static Error = Symbol("chizu.action.lifecycle/Error");
+  /** Triggered when `context.data` has changed. Not fired on initial mount. Receives `Record<string, unknown>` payload with changed keys. */
+  static Update = Symbol("chizu.action.lifecycle/Update");
 }
 
 /**
@@ -542,7 +544,7 @@ export type UseActions<
 > = [
   Readonly<M>,
   {
-    dispatch(action: ActionId, payload?: HandlerPayload): void;
+    dispatch(action: ActionOrFilter, payload?: HandlerPayload): void;
     /**
      * Subscribes to a distributed action's values and renders based on the callback.
      * The callback receives a Box with `value` (the payload) and `inspect` (for annotation status).

@@ -14,6 +14,7 @@ import type { LifecycleConfig } from "./types.ts";
 import type { HandlerContext } from "../types/index.ts";
 import { A, G } from "@mobily/ts-belt";
 import { useConsumer } from "../boundary/components/consumer/utils.ts";
+import { changes } from "../utils.ts";
 
 /**
  * Creates a new object with getters for each property of the input object.
@@ -60,12 +61,12 @@ export function useLifecycles({
   unicast,
   distributedActions,
   phase,
+  data,
 }: LifecycleConfig): void {
   const consumer = useConsumer();
+  const previous = React.useRef<Props | null>(null);
 
   React.useLayoutEffect(() => {
-    // Phase is already Mounting when this runs (set in useActions)
-    // Emit Mount lifecycle and cached distributed action values while still mounting
     unicast.emit(Lifecycle.Mount);
 
     distributedActions.forEach((action) => {
@@ -74,7 +75,6 @@ export function useLifecycles({
       if (!G.isNullable(value)) unicast.emit(action, value);
     });
 
-    // Transition to Mounted after all mount-time emissions complete
     phase.current = Phase.Mounted;
 
     return () => {
@@ -85,6 +85,16 @@ export function useLifecycles({
   }, []);
 
   React.useEffect(() => void unicast.emit(Lifecycle.Node), []);
+
+  React.useLayoutEffect(() => {
+    if (G.isNotNullable(previous.current)) {
+      const differences = changes(previous.current, data);
+      if (A.isNotEmpty(Object.keys(differences)))
+        unicast.emit(Lifecycle.Update, differences);
+    }
+
+    previous.current = data;
+  }, [data, unicast]);
 }
 
 /**

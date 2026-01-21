@@ -37,6 +37,7 @@ import { isDistributedAction, getName } from "../action/index.ts";
 import { useError } from "../error/index.tsx";
 import { State, Operation, Process } from "immertation";
 import { useTasks } from "../boundary/components/tasks/utils.ts";
+import { G } from "@mobily/ts-belt";
 
 function useRegisterHandler<
   M extends Model,
@@ -237,12 +238,11 @@ export function useActions<
         dispatchFilter?: Filter,
       ) {
         const registeredFilter = getFilter();
-        if (
-          registeredFilter &&
-          dispatchFilter &&
-          !matchesFilter(dispatchFilter, registeredFilter)
-        )
-          return;
+
+        if (G.isNotNullable(dispatchFilter)) {
+          if (!registeredFilter) return;
+          if (!matchesFilter(dispatchFilter, registeredFilter)) return;
+        }
 
         const result = <Result>{ processes: new Set<Process>() };
         const completion = Promise.withResolvers<void>();
@@ -250,15 +250,15 @@ export function useActions<
         try {
           await actionHandler(context, payload);
         } catch (caught) {
-          const hasErrorHandler = scope.current.handlers.has(Lifecycle.Error);
+          const handled = scope.current.handlers.has(Lifecycle.Error);
           const details = {
             reason: getReason(caught),
             error: getError(caught),
             action: getName(action),
-            handled: hasErrorHandler,
+            handled,
           };
           error?.(details);
-          if (hasErrorHandler) unicast.emit(Lifecycle.Error, details);
+          if (handled) unicast.emit(Lifecycle.Error, details);
         } finally {
           for (const task of tasks) {
             if (task === context.task) {
@@ -293,6 +293,7 @@ export function useActions<
     tasks,
     distributedActions: distributedActions.current,
     phase,
+    data: getData(),
   });
 
   const result = React.useMemo(

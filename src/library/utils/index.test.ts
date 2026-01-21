@@ -1,4 +1,4 @@
-import { describe, expect, it, jest } from "@jest/globals";
+import { describe, expect, it, vi } from "vitest";
 import { render, act } from "@testing-library/react";
 import * as React from "react";
 import { pk, sleep } from "./index.ts";
@@ -27,14 +27,14 @@ describe("pk()", () => {
 
 describe("sleep()", () => {
   it("should resolve after the specified time", async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
 
     const promise = sleep(1_000);
-    jest.advanceTimersByTime(1_000);
+    vi.advanceTimersByTime(1_000);
 
     await expect(promise).resolves.toBeUndefined();
 
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 });
 
