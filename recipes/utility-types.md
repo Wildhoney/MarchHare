@@ -79,4 +79,4 @@ Extract handlers when you need:
 
 - **Unit testing**: Test handlers in isolation
 - **Reusability**: Share handlers across components
-- **Code organization**: Separate handler logic from component code
+- **Code organisation**: Separate handler logic from component code

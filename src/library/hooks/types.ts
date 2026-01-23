@@ -29,9 +29,9 @@ export type Handler<
 ) => void | Promise<void> | AsyncGenerator | Generator;
 
 /**
- * Entry for an action handler with a reactive filter getter.
- * When getFilter returns undefined, the handler fires for all dispatches.
- * When getFilter returns a filter, dispatches must match.
+ * Entry for an action handler with a reactive channel getter.
+ * When getChannel returns undefined, the handler fires for all dispatches.
+ * When getChannel returns a channel, dispatches must match.
  */
 export type HandlerEntry<
   M extends Model = Model,
@@ -39,12 +39,12 @@ export type HandlerEntry<
   D extends Props = Props,
 > = {
   handler: Handler<M, AC, D>;
-  getFilter: () => Filter | undefined;
+  getChannel: () => Filter | undefined;
 };
 
 /**
  * Internal scope for tracking registered action handlers.
- * Maps action IDs to sets of handler entries (with optional filters).
+ * Maps action IDs to sets of handler entries (with optional channels).
  *
  * @template M - The model type
  * @template AC - The actions class type
@@ -55,7 +55,7 @@ export type Scope<
   AC extends Actions = Actions,
   D extends Props = Props,
 > = {
-  /** All handlers for each action, with optional filters */
+  /** All handlers for each action, with optional channels */
   handlers: Map<ActionId, Set<HandlerEntry<M, AC, D>>>;
 };
 

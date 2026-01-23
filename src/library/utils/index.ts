@@ -9,6 +9,8 @@ export const config = {
   actionPrefix: "chizu.action/",
   /** Prefix for distributed (broadcast) action symbols. */
   distributedActionPrefix: "chizu.action/distributed/",
+  /** Prefix for channeled action symbols. */
+  channelPrefix: "chizu.channel/",
 };
 
 /**

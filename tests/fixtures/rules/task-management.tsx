@@ -11,6 +11,7 @@ import {
   useActions,
   utils,
   Lifecycle,
+  getActionSymbol,
 } from "../../../src/library/index.ts";
 
 class TaskActions {
@@ -80,8 +81,9 @@ function useRule20Actions() {
 
   // Action to manually cancel
   actions.useAction(TaskActions.CancelOthers, (context) => {
+    const fetchSymbol = getActionSymbol(TaskActions.FetchWithSignal);
     for (const task of context.tasks) {
-      if (task.action === TaskActions.FetchWithSignal) {
+      if (task.action === fetchSymbol) {
         task.controller.abort();
       }
     }
@@ -108,9 +110,10 @@ function useRule21Actions() {
   actions.useAction(TaskActions.CompetingFetch, async (context, id) => {
     // Cancel all other tasks for this action type and log their cancellation
     // (aborted tasks can't log their own cancellation since produce() is blocked)
+    const competingSymbol = getActionSymbol(TaskActions.CompetingFetch);
     const cancelledIds: number[] = [];
     for (const task of context.tasks) {
-      if (task !== context.task && task.action === TaskActions.CompetingFetch) {
+      if (task !== context.task && task.action === competingSymbol) {
         // Extract the id from the task's payload
         const taskId = task.payload as number;
         cancelledIds.push(taskId);
@@ -192,8 +195,9 @@ function useUnmountableChildActions(onLog: (msg: string) => void) {
   // Rule 22: Abort running tasks on unmount to properly cancel them
   // Without this, tasks continue running but can't update state
   actions.useAction(Lifecycle.Unmount, (context) => {
+    const slowOpSymbol = getActionSymbol(TaskActions.SlowOperation);
     for (const task of context.tasks) {
-      if (task.action === TaskActions.SlowOperation) {
+      if (task.action === slowOpSymbol) {
         task.controller.abort();
       }
     }

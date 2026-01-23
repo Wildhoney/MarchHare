@@ -41,7 +41,7 @@ export class Lifecycle {
  * Distribution modes for actions.
  *
  * - **Unicast** &ndash; Action is scoped to the component that defines it and cannot be
- *   consumed by other components. This is the default behavior.
+ *   consumed by other components. This is the default behaviour.
  * - **Broadcast** &ndash; Action is distributed to all mounted components that have defined
  *   a handler for it. Can be consumed with `actions.consume()`.
  *
@@ -121,22 +121,82 @@ export const PayloadKey = Symbol("payload");
 export const DistributedKey = Symbol("distributed");
 
 /**
- * Branded type for action symbols created with `Action()`.
- * The phantom type parameter `T` carries the payload type at the type level.
- *
- * @template T - The payload type for the action
+ * Internal symbol used to access the underlying symbol from an action.
+ * Actions wrap symbols in callable objects for channeled dispatch support.
+ * @internal
  */
-export type HandlerPayload<T = unknown> = symbol & { [PayloadKey]: T };
+export const ActionSymbol = Symbol("actionSymbol");
 
 /**
- * Branded type for distributed action symbols created with `Action()` and `Distribution.Broadcast`.
+ * Internal symbol used to identify channeled actions (result of calling Action(channel)).
+ * @internal
+ */
+export const ChannelKey = Symbol("channel");
+
+/**
+ * Branded type for action objects created with `Action()`.
+ * The phantom type parameters carry the payload and channel types at the type level.
+ *
+ * Actions wrap an internal symbol (used as event emitter keys) in a callable object.
+ * When a channel type is specified, the action can be called to create a channeled dispatch.
+ *
+ * @template P - The payload type for the action
+ * @template C - The channel type for channeled dispatches (defaults to never = no channel)
+ *
+ * @example
+ * ```ts
+ * // Action without channel support
+ * const Increment = Action<number>("Increment");
+ * dispatch(Increment, 5);
+ *
+ * // Action with channel support
+ * const UserUpdated = Action<User, { UserId: number }>("UserUpdated");
+ * dispatch(UserUpdated, user);                    // broadcast to all handlers
+ * dispatch(UserUpdated({ UserId: 5 }), user);     // channeled dispatch
+ * ```
+ */
+export type HandlerPayload<P = unknown, C extends Filter = never> = {
+  readonly [ActionSymbol]: symbol;
+  readonly [PayloadKey]: P;
+  readonly [DistributedKey]?: boolean;
+} & ([C] extends [never]
+  ? unknown
+  : {
+      (channel: C): ChanneledAction<P, C>;
+    });
+
+/**
+ * Result of calling an action with a channel argument.
+ * Contains the action reference and the channel data for filtered dispatch.
+ *
+ * @template P - The payload type for the action
+ * @template C - The channel type
+ *
+ * @example
+ * ```ts
+ * const UserUpdated = Action<User, { UserId: number }>("UserUpdated");
+ *
+ * // UserUpdated({ UserId: 5 }) returns ChanneledAction<User, { UserId: number }>
+ * dispatch(UserUpdated({ UserId: 5 }), user);
+ * ```
+ */
+export type ChanneledAction<P = unknown, C = unknown> = {
+  readonly [ActionSymbol]: symbol;
+  readonly [PayloadKey]: P;
+  readonly [ChannelKey]: C;
+  readonly channel: C;
+};
+
+/**
+ * Branded type for distributed action objects created with `Action()` and `Distribution.Broadcast`.
  * Distributed actions are broadcast to all mounted components and can be consumed with `actions.consume()`.
  *
- * This type extends `HandlerPayload<T>` with an additional brand to enforce at compile-time
+ * This type extends `HandlerPayload<P, C>` with an additional brand to enforce at compile-time
  * that only distributed actions can be passed to `consume()`. Attempting to consume
  * a local action will result in a TypeScript error.
  *
- * @template T - The payload type for the action
+ * @template P - The payload type for the action
+ * @template C - The channel type for channeled dispatches (defaults to never)
  *
  * @example
  * ```ts
@@ -149,25 +209,32 @@ export type HandlerPayload<T = unknown> = symbol & { [PayloadKey]: T };
  * actions.consume(Increment, ...); // Type error!
  * ```
  */
-export type DistributedPayload<T = unknown> = HandlerPayload<T> & {
-  [DistributedKey]: true;
+export type DistributedPayload<
+  P = unknown,
+  C extends Filter = never,
+> = HandlerPayload<P, C> & {
+  readonly [DistributedKey]: true;
 };
 
 /**
- * Extracts the payload type `T` from a `HandlerPayload<T>` or `ActionFilter<HandlerPayload<T>>`.
+ * Extracts the payload type `P` from a `HandlerPayload<P>` or `ChanneledAction<P, C>`.
  * Use this in handler signatures to get the action's payload type.
  *
- * Works with both plain actions and filtered action tuples:
+ * Works with both plain actions and channeled actions:
  * - `Payload<Action<User>>` → `User`
- * - `Payload<[Action<User>, { UserId: number }]>` → `User`
+ * - `Payload<ChanneledAction<User, { UserId: number }>>` → `User`
  *
- * @template A - The action type (HandlerPayload<T> or ActionFilter)
+ * @template A - The action type (HandlerPayload or ChanneledAction)
  */
-export type Payload<A> = A extends readonly [HandlerPayload<infer P>, Filter]
-  ? P
-  : A extends HandlerPayload<infer P>
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export type Payload<A> =
+  A extends ChanneledAction<infer P, any>
     ? P
-    : never;
+    : A extends HandlerPayload<infer P, any>
+      ? P
+      : never;
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 /**
  * JavaScript primitive types.
@@ -183,10 +250,10 @@ export type Primitive =
   | undefined;
 
 /**
- * Non-nullable primitive type for filter values.
+ * Primitive type for filter values, excluding null and undefined.
  * Includes `string`, `number`, `bigint`, `boolean`, and `symbol`.
  */
-export type FilterValue = NonNullable<Primitive>;
+export type FilterValue = Exclude<Primitive, null | undefined>;
 
 /**
  * Filter object for channeled actions.
@@ -214,51 +281,34 @@ export type FilterValue = NonNullable<Primitive>;
 export type Filter = Record<string, FilterValue>;
 
 /**
- * Tuple type for subscribing to filtered events within an action.
- * Used with `useAction` to listen for actions dispatched with matching filter properties.
+ * Union type representing either a plain action or a channeled action.
+ * Used in `useAction` and `dispatch` signatures to accept both forms.
  *
- * The filter is an object where dispatch properties must match registered properties:
- * - Register: `[Action, { UserId: 1, Role: "admin" }]`
- * - Dispatch `[Action, { UserId: 1 }]` → matches handlers where `UserId === 1`
- * - Dispatch `[Action, {}]` → matches ALL filtered handlers
- * - Dispatch `Action` (plain) → matches ALL handlers (plain + filtered)
- *
- * @template A - The action type (must be a HandlerPayload)
+ * @template A - The action type
  *
  * @example
  * ```ts
  * class Actions {
- *   static UserUpdated = Action<User>("UserUpdated", Distribution.Broadcast);
+ *   static UserUpdated = Action<User, { UserId: number }>("UserUpdated", Distribution.Broadcast);
  * }
  *
- * // Subscribe to updates for a specific user
- * actions.useAction([Actions.UserUpdated, { UserId: props.userId }], (context, user) => {
+ * // Subscribe to updates for a specific user (channeled)
+ * actions.useAction(Actions.UserUpdated({ UserId: props.userId }), (context, user) => {
  *   context.actions.produce((draft) => {
  *     draft.model.user = user;
  *   });
  * });
  *
- * // Dispatch to specific user
- * actions.dispatch([Actions.UserUpdated, { UserId: user.id }], user);
+ * // Dispatch to specific user (channeled)
+ * actions.dispatch(Actions.UserUpdated({ UserId: user.id }), user);
  *
- * // Dispatch to ALL handlers (plain + filtered)
+ * // Dispatch to ALL handlers (plain)
  * actions.dispatch(Actions.UserUpdated, user);
  * ```
  */
-export type ActionFilter<A extends HandlerPayload = HandlerPayload> = readonly [
-  A,
-  Filter,
-];
-
-/**
- * Union type representing either a plain action or a filtered action tuple.
- * Used in `useAction` and `dispatch` signatures to accept both forms.
- *
- * @template A - The action type
- */
-export type ActionOrFilter<A extends HandlerPayload = HandlerPayload> =
+export type ActionOrChanneled<A extends HandlerPayload = HandlerPayload> =
   | A
-  | ActionFilter<A>;
+  | ChanneledAction;
 
 /**
  * Checks if a function type returns a Promise.
@@ -326,7 +376,7 @@ export type Result = {
 
 export type HandlerContext<
   M extends Model,
-  AC extends Actions,
+  _AC extends Actions,
   D extends Props = Props,
 > = {
   readonly model: Readonly<M>;
@@ -426,9 +476,7 @@ export type HandlerContext<
     >(
       ƒ: F & AssertSync<F>,
     ): M;
-    dispatch<A extends AC[keyof AC] & HandlerPayload<unknown>>(
-      ...args: [Payload<A>] extends [never] ? [A] : [A, Payload<A>]
-    ): void;
+    dispatch(action: ActionOrChanneled, payload?: unknown): void;
     annotate<T>(operation: Operation, value: T): T;
   };
 };
@@ -544,7 +592,7 @@ export type UseActions<
 > = [
   Readonly<M>,
   {
-    dispatch(action: ActionOrFilter, payload?: HandlerPayload): void;
+    dispatch(action: ActionOrChanneled, payload?: HandlerPayload): void;
     /**
      * Subscribes to a distributed action's values and renders based on the callback.
      * The callback receives a Box with `value` (the payload) and `inspect` (for annotation status).
@@ -585,10 +633,10 @@ export type UseActions<
    * Types are pre-baked from the useActions call, so no type parameter is needed.
    *
    * Supports two subscription patterns:
-   * 1. **Plain action** - Receives ALL dispatches for that action (including filtered ones)
-   * 2. **Filtered action** `[Action, filter]` - Receives only dispatches matching the filter
+   * 1. **Plain action** - Receives ALL dispatches for that action (including channeled ones)
+   * 2. **Channeled action** `Action(channel)` - Receives only dispatches matching the channel
    *
-   * @param action - The action symbol or `[action, filter]` tuple to bind
+   * @param action - The action or channeled action (e.g., `Action({ UserId: 1 })`)
    * @param handler - The handler function receiving context and payload
    *
    * @example
@@ -600,13 +648,13 @@ export type UseActions<
    *   // Fires for any UserUpdated dispatch
    * });
    *
-   * // Subscribe to UserUpdated for a specific user only
-   * actions.useAction([Actions.UserUpdated, { UserId: props.userId }], (context, user) => {
-   *   // Only fires when dispatched with matching filter
+   * // Subscribe to UserUpdated for a specific user only (channeled)
+   * actions.useAction(Actions.UserUpdated({ UserId: props.userId }), (context, user) => {
+   *   // Only fires when dispatched with matching channel
    * });
    * ```
    */
-  useAction<A extends ActionId | ActionFilter>(
+  useAction<A extends ActionId | HandlerPayload | ChanneledAction>(
     action: A,
     handler: (
       context: HandlerContext<M, AC, D>,

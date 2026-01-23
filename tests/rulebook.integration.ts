@@ -246,7 +246,7 @@ test.describe("Chizu Rulebook", () => {
       await expect(active).toHaveText("active");
     });
 
-    it("Rule 10: Use filtered actions for targeted event delivery - should deliver to matching handlers only", async ({
+    it("Rule 10: Use channeled actions for targeted event delivery - should deliver to matching handlers only", async ({
       page,
     }) => {
       const user1 = page.getByTestId("rule-10-user1");
@@ -468,7 +468,7 @@ test.describe("Chizu Rulebook", () => {
       await expect(phase1).toHaveText("mounted");
     });
 
-    it("Rule 19: Use filtered actions for targeted broadcast delivery - should deliver to matching handlers only", async ({
+    it("Rule 19: Use channeled actions for targeted broadcast delivery - should deliver to matching handlers only", async ({
       page,
     }) => {
       const user1 = page.getByTestId("rule-19-user1");
@@ -485,7 +485,7 @@ test.describe("Chizu Rulebook", () => {
       await expect(user2).toHaveText("Bob Updated <bob@example.com>");
     });
 
-    it("Rule 19: Use filtered actions for targeted broadcast delivery - should deliver to all when dispatching without filter", async ({
+    it("Rule 19: Use channeled actions for targeted broadcast delivery - should deliver to all when dispatching without channel", async ({
       page,
     }) => {
       const user1 = page.getByTestId("rule-19-user1");

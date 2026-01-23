@@ -45,7 +45,7 @@ The predicate receives the context and the fully-typed payload. When it returns 
 
 ## Cached values on mount
 
-When a component mounts with a `useAction()` handler for a distributed action, the handler is automatically invoked with the most recent cached value (if one exists). This mirrors the behavior of `consume()` and enables late-mounting components to receive historical state.
+When a component mounts with a `useAction()` handler for a distributed action, the handler is automatically invoked with the most recent cached value (if one exists). This mirrors the behaviour of `consume()` and enables late-mounting components to receive historical state.
 
 ```tsx
 // Component A uses consume() which stores values in the cache

@@ -166,12 +166,17 @@ actions.useAction(Actions.Name, async (context, name) => {
 });
 ```
 
-For targeted event delivery, use filtered actions. Subscribe with a filter object `[Action, { Key: value }]` &ndash; handlers fire when the dispatch filter matches:
+For targeted event delivery, use channeled actions. Define a channel type as the second generic argument and call the action with a channel object &ndash; handlers fire when the dispatch channel matches:
 
 ```tsx
+class Actions {
+  // Second generic arg defines the channel type
+  static UserUpdated = Action<User, { UserId: number }>("UserUpdated");
+}
+
 // Subscribe to updates for a specific user
 actions.useAction(
-  [Actions.UserUpdated, { UserId: props.userId }],
+  Actions.UserUpdated({ UserId: props.userId }),
   (context, user) => {
     // Only fires when dispatched with matching UserId
   },
@@ -179,20 +184,20 @@ actions.useAction(
 
 // Subscribe to all admin user updates
 actions.useAction(
-  [Actions.UserUpdated, { Role: Role.Admin }],
+  Actions.UserUpdated({ Role: Role.Admin }),
   (context, user) => {
     // Fires for {Role: Role.Admin}, {Role: Role.Admin, UserId: 5}, etc.
   },
 );
 
 // Dispatch to specific user
-actions.dispatch([Actions.UserUpdated, { UserId: user.id }], user);
+actions.dispatch(Actions.UserUpdated({ UserId: user.id }), user);
 
 // Dispatch to all admin handlers
-actions.dispatch([Actions.UserUpdated, { Role: Role.Admin }], user);
+actions.dispatch(Actions.UserUpdated({ Role: Role.Admin }), user);
 
-// Dispatch to plain action - ALL handlers fire (plain + all filtered)
+// Dispatch to plain action - ALL handlers fire (plain + all channeled)
 actions.dispatch(Actions.UserUpdated, user);
 ```
 
-Filter values support non-nullable primitives: `string`, `number`, `boolean`, or `symbol`. By convention, use uppercase keys like `{UserId: 4}` to distinguish filter keys from payload properties.
+Channel values support non-nullable primitives: `string`, `number`, `boolean`, or `symbol`. By convention, use uppercase keys like `{UserId: 4}` to distinguish channel keys from payload properties.

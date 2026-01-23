@@ -3,8 +3,8 @@ import {
   withGetters,
   isGenerator,
   With,
-  isFilteredAction,
-  matchesFilter,
+  isChanneledAction,
+  matchesChannel,
 } from "./utils.ts";
 import { getReason, getError } from "../error/utils.ts";
 import { Reason, AbortError, TimeoutError } from "../error/index.tsx";
@@ -236,68 +236,56 @@ describe("With()", () => {
   });
 });
 
-describe("isFilteredAction()", () => {
-  const TestAction = Action<string>("Test");
+describe("isChanneledAction()", () => {
+  const TestAction = Action<string, { UserId: number }>("Test");
 
-  it("should return false for plain action symbols", () => {
-    expect(isFilteredAction(TestAction)).toBe(false);
+  it("should return false for plain actions", () => {
+    expect(isChanneledAction(TestAction)).toBe(false);
   });
 
-  it("should return true for valid filtered action tuples", () => {
-    expect(isFilteredAction([TestAction, { UserId: 1 }])).toBe(true);
-    expect(isFilteredAction([TestAction, { Key: "value" }])).toBe(true);
-    expect(isFilteredAction([TestAction, {}])).toBe(true);
+  it("should return true for channeled actions created by calling Action(channel)", () => {
+    const channeled = TestAction({ UserId: 1 });
+    expect(isChanneledAction(channeled)).toBe(true);
+    expect(channeled.channel).toEqual({ UserId: 1 });
   });
 
-  it("should return false for arrays that are not valid action filters", () => {
-    expect(isFilteredAction(<[symbol, object]>(<unknown>[TestAction]))).toBe(
-      false,
-    );
-    expect(
-      isFilteredAction(<[symbol, object]>(
-        (<unknown>[TestAction, "not-an-object"])
-      )),
-    ).toBe(false);
-    expect(
-      isFilteredAction(<[symbol, object]>(<unknown>[TestAction, null])),
-    ).toBe(false);
-    expect(
-      isFilteredAction(<[symbol, object]>(
-        (<unknown>[TestAction, { a: 1 }, "extra"])
-      )),
-    ).toBe(false);
+  it("should return false for non-channeled values", () => {
+    expect(isChanneledAction({})).toBe(false);
+    expect(isChanneledAction({ channel: 1 })).toBe(false);
+    expect(isChanneledAction(<object>(<unknown>null))).toBe(false);
+    expect(isChanneledAction(Symbol("test"))).toBe(false);
   });
 });
 
-describe("matchesFilter()", () => {
-  it("should return true when dispatch filter matches registered filter exactly", () => {
-    expect(matchesFilter({ UserId: 1 }, { UserId: 1 })).toBe(true);
-    expect(matchesFilter({ Key: "value" }, { Key: "value" })).toBe(true);
+describe("matchesChannel()", () => {
+  it("should return true when dispatch channel matches registered channel exactly", () => {
+    expect(matchesChannel({ UserId: 1 }, { UserId: 1 })).toBe(true);
+    expect(matchesChannel({ Key: "value" }, { Key: "value" })).toBe(true);
   });
 
-  it("should return true when dispatch filter is a subset of registered filter", () => {
-    expect(matchesFilter({ UserId: 1 }, { UserId: 1, Role: "admin" })).toBe(
+  it("should return true when dispatch channel is a subset of registered channel", () => {
+    expect(matchesChannel({ UserId: 1 }, { UserId: 1, Role: "admin" })).toBe(
       true,
     );
-    expect(matchesFilter({}, { UserId: 1 })).toBe(true);
+    expect(matchesChannel({}, { UserId: 1 })).toBe(true);
   });
 
-  it("should return false when dispatch filter has properties not matching registered filter", () => {
-    expect(matchesFilter({ UserId: 1 }, { UserId: 2 })).toBe(false);
-    expect(matchesFilter({ UserId: 1, Role: "admin" }, { UserId: 1 })).toBe(
+  it("should return false when dispatch channel has properties not matching registered channel", () => {
+    expect(matchesChannel({ UserId: 1 }, { UserId: 2 })).toBe(false);
+    expect(matchesChannel({ UserId: 1, Role: "admin" }, { UserId: 1 })).toBe(
       false,
     );
   });
 
-  it("should return true for empty dispatch filter (matches all)", () => {
-    expect(matchesFilter({}, {})).toBe(true);
-    expect(matchesFilter({}, { Any: "value" })).toBe(true);
+  it("should return true for empty dispatch channel (matches all)", () => {
+    expect(matchesChannel({}, {})).toBe(true);
+    expect(matchesChannel({}, { Any: "value" })).toBe(true);
   });
 
   it("should handle different primitive types correctly", () => {
-    expect(matchesFilter({ Flag: true }, { Flag: true })).toBe(true);
-    expect(matchesFilter({ Flag: true }, { Flag: false })).toBe(false);
+    expect(matchesChannel({ Flag: true }, { Flag: true })).toBe(true);
+    expect(matchesChannel({ Flag: true }, { Flag: false })).toBe(false);
     const sym = Symbol("test");
-    expect(matchesFilter({ Id: sym }, { Id: sym })).toBe(true);
+    expect(matchesChannel({ Id: sym }, { Id: sym })).toBe(true);
   });
 });

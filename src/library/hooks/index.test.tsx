@@ -178,7 +178,7 @@ describe("useActions() data callback", () => {
   });
 });
 
-describe("useActions() distributed action mount behavior", () => {
+describe("useActions() distributed action mount behaviour", () => {
   it("should invoke distributed action handler with cached value on mount", async () => {
     const capturedPayloads: number[] = [];
 
@@ -351,31 +351,39 @@ describe("useActions() distributed action mount behavior", () => {
   });
 });
 
-describe("useActions() filtered actions", () => {
+describe("useActions() channeled actions", () => {
   type UserModel = { lastPayload: string | null };
   const userModel: UserModel = { lastPayload: null };
 
+  // Channel type for UserUpdated action - supports various filter properties
+  type UserChannel = {
+    UserId?: number;
+    Role?: string;
+    Slug?: string;
+    Active?: boolean;
+  };
+
   class UserActions {
-    static UserUpdated = Action<string>("UserUpdated");
+    static UserUpdated = Action<string, UserChannel>("UserUpdated");
   }
 
-  it("should only invoke filtered handler when matching filter is dispatched", async () => {
+  it("should only invoke channeled handler when matching channel is dispatched", async () => {
     const handlerCalls: { userId: number; payload: string }[] = [];
 
     const { result } = renderHook(() => {
       const actions = useActions<UserModel, typeof UserActions>(userModel);
 
-      // Subscribe with filter for UserId: 1
+      // Subscribe with channel for UserId: 1
       actions.useAction(
-        [UserActions.UserUpdated, { UserId: 1 }],
+        UserActions.UserUpdated({ UserId: 1 }),
         (_context, payload) => {
           handlerCalls.push({ userId: 1, payload });
         },
       );
 
-      // Subscribe with filter for UserId: 2
+      // Subscribe with channel for UserId: 2
       actions.useAction(
-        [UserActions.UserUpdated, { UserId: 2 }],
+        UserActions.UserUpdated({ UserId: 2 }),
         (_context, payload) => {
           handlerCalls.push({ userId: 2, payload });
         },
@@ -384,10 +392,10 @@ describe("useActions() filtered actions", () => {
       return actions;
     });
 
-    // Dispatch with filter UserId: 1 only
+    // Dispatch with channel UserId: 1 only
     await act(async () => {
       result.current[1].dispatch(
-        [UserActions.UserUpdated, { UserId: 1 }],
+        UserActions.UserUpdated({ UserId: 1 }),
         "payload-1",
       );
     });
@@ -395,10 +403,10 @@ describe("useActions() filtered actions", () => {
     // Only UserId: 1 handler should have been called
     expect(handlerCalls).toEqual([{ userId: 1, payload: "payload-1" }]);
 
-    // Dispatch with filter UserId: 2 only
+    // Dispatch with channel UserId: 2 only
     await act(async () => {
       result.current[1].dispatch(
-        [UserActions.UserUpdated, { UserId: 2 }],
+        UserActions.UserUpdated({ UserId: 2 }),
         "payload-2",
       );
     });
@@ -410,7 +418,7 @@ describe("useActions() filtered actions", () => {
     ]);
   });
 
-  it("should invoke ALL handlers (plain and filtered) when plain action is dispatched", async () => {
+  it("should invoke ALL handlers (plain and channeled) when plain action is dispatched", async () => {
     const handlerCalls: string[] = [];
 
     const { result } = renderHook(() => {
@@ -421,17 +429,17 @@ describe("useActions() filtered actions", () => {
         handlerCalls.push(`plain:${payload}`);
       });
 
-      // Subscribe with filter UserId: 1
+      // Subscribe with channel UserId: 1
       actions.useAction(
-        [UserActions.UserUpdated, { UserId: 1 }],
+        UserActions.UserUpdated({ UserId: 1 }),
         (_context, payload) => {
           handlerCalls.push(`user-1:${payload}`);
         },
       );
 
-      // Subscribe with filter UserId: 2
+      // Subscribe with channel UserId: 2
       actions.useAction(
-        [UserActions.UserUpdated, { UserId: 2 }],
+        UserActions.UserUpdated({ UserId: 2 }),
         (_context, payload) => {
           handlerCalls.push(`user-2:${payload}`);
         },
@@ -452,31 +460,31 @@ describe("useActions() filtered actions", () => {
     expect(handlerCalls.length).toBe(3);
   });
 
-  it("should support different primitive types in filter values", async () => {
+  it("should support different primitive types in channel values", async () => {
     const handlerCalls: string[] = [];
 
     const { result } = renderHook(() => {
       const actions = useActions<UserModel, typeof UserActions>(userModel);
 
-      // Number filter value
+      // Number channel value
       actions.useAction(
-        [UserActions.UserUpdated, { UserId: 42 }],
+        UserActions.UserUpdated({ UserId: 42 }),
         (_context, payload) => {
           handlerCalls.push(`number:${payload}`);
         },
       );
 
-      // String filter value
+      // String channel value
       actions.useAction(
-        [UserActions.UserUpdated, { Slug: "user-abc" }],
+        UserActions.UserUpdated({ Slug: "user-abc" }),
         (_context, payload) => {
           handlerCalls.push(`string:${payload}`);
         },
       );
 
-      // Boolean filter value
+      // Boolean channel value
       actions.useAction(
-        [UserActions.UserUpdated, { Active: true }],
+        UserActions.UserUpdated({ Active: true }),
         (_context, payload) => {
           handlerCalls.push(`boolean:${payload}`);
         },
@@ -485,30 +493,30 @@ describe("useActions() filtered actions", () => {
       return actions;
     });
 
-    // Dispatch to number filter
+    // Dispatch to number channel
     await act(async () => {
       result.current[1].dispatch(
-        [UserActions.UserUpdated, { UserId: 42 }],
+        UserActions.UserUpdated({ UserId: 42 }),
         "to-number",
       );
     });
 
     expect(handlerCalls).toEqual(["number:to-number"]);
 
-    // Dispatch to string filter
+    // Dispatch to string channel
     await act(async () => {
       result.current[1].dispatch(
-        [UserActions.UserUpdated, { Slug: "user-abc" }],
+        UserActions.UserUpdated({ Slug: "user-abc" }),
         "to-string",
       );
     });
 
     expect(handlerCalls).toEqual(["number:to-number", "string:to-string"]);
 
-    // Dispatch to boolean filter
+    // Dispatch to boolean channel
     await act(async () => {
       result.current[1].dispatch(
-        [UserActions.UserUpdated, { Active: true }],
+        UserActions.UserUpdated({ Active: true }),
         "to-boolean",
       );
     });
@@ -520,12 +528,12 @@ describe("useActions() filtered actions", () => {
     ]);
   });
 
-  it("should update model state via filtered action handler", async () => {
+  it("should update model state via channeled action handler", async () => {
     const { result } = renderHook(() => {
       const actions = useActions<UserModel, typeof UserActions>(userModel);
 
       actions.useAction(
-        [UserActions.UserUpdated, { UserId: 1 }],
+        UserActions.UserUpdated({ UserId: 1 }),
         (context, payload) => {
           context.actions.produce((draft) => {
             draft.model.lastPayload = payload;
@@ -540,7 +548,7 @@ describe("useActions() filtered actions", () => {
 
     await act(async () => {
       result.current[1].dispatch(
-        [UserActions.UserUpdated, { UserId: 1 }],
+        UserActions.UserUpdated({ UserId: 1 }),
         "updated-value",
       );
     });
@@ -548,24 +556,24 @@ describe("useActions() filtered actions", () => {
     expect(result.current[0].lastPayload).toBe("updated-value");
   });
 
-  it("should not invoke filtered handler when different filter is dispatched", async () => {
+  it("should not invoke channeled handler when different channel is dispatched", async () => {
     const handlerCalls: number[] = [];
 
     const { result } = renderHook(() => {
       const actions = useActions<UserModel, typeof UserActions>(userModel);
 
-      // Subscribe with filter UserId: 1
-      actions.useAction([UserActions.UserUpdated, { UserId: 1 }], () => {
+      // Subscribe with channel UserId: 1
+      actions.useAction(UserActions.UserUpdated({ UserId: 1 }), () => {
         handlerCalls.push(1);
       });
 
       return actions;
     });
 
-    // Dispatch with filter UserId: 2 (not subscribed)
+    // Dispatch with channel UserId: 2 (not subscribed)
     await act(async () => {
       result.current[1].dispatch(
-        [UserActions.UserUpdated, { UserId: 2 }],
+        UserActions.UserUpdated({ UserId: 2 }),
         "payload",
       );
     });
@@ -574,23 +582,23 @@ describe("useActions() filtered actions", () => {
     expect(handlerCalls).toEqual([]);
   });
 
-  it("should support multi-property filters", async () => {
+  it("should support multi-property channels", async () => {
     const handlerCalls: string[] = [];
 
     const { result } = renderHook(() => {
       const actions = useActions<UserModel, typeof UserActions>(userModel);
 
-      // Subscribe with filter {Role: "admin", UserId: 5}
+      // Subscribe with channel {Role: "admin", UserId: 5}
       actions.useAction(
-        [UserActions.UserUpdated, { Role: "admin", UserId: 5 }],
+        UserActions.UserUpdated({ Role: "admin", UserId: 5 }),
         (_context, payload) => {
           handlerCalls.push(`admin-5:${payload}`);
         },
       );
 
-      // Subscribe with filter {Role: "admin", UserId: 10}
+      // Subscribe with channel {Role: "admin", UserId: 10}
       actions.useAction(
-        [UserActions.UserUpdated, { Role: "admin", UserId: 10 }],
+        UserActions.UserUpdated({ Role: "admin", UserId: 10 }),
         (_context, payload) => {
           handlerCalls.push(`admin-10:${payload}`);
         },
@@ -602,7 +610,7 @@ describe("useActions() filtered actions", () => {
     // Dispatch with exact match
     await act(async () => {
       result.current[1].dispatch(
-        [UserActions.UserUpdated, { Role: "admin", UserId: 5 }],
+        UserActions.UserUpdated({ Role: "admin", UserId: 5 }),
         "specific",
       );
     });
@@ -611,39 +619,39 @@ describe("useActions() filtered actions", () => {
     expect(handlerCalls).toEqual(["admin-5:specific"]);
   });
 
-  it("should match handlers when dispatch filter is subset of registered filter", async () => {
+  it("should match handlers when dispatch channel is subset of registered channel", async () => {
     const handlerCalls: string[] = [];
 
     const { result } = renderHook(() => {
       const actions = useActions<UserModel, typeof UserActions>(userModel);
 
-      // Subscribe with filter {Role: "admin"} - should fire for all admin dispatches
+      // Subscribe with channel {Role: "admin"} - should fire for all admin dispatches
       actions.useAction(
-        [UserActions.UserUpdated, { Role: "admin" }],
+        UserActions.UserUpdated({ Role: "admin" }),
         (_context, payload) => {
           handlerCalls.push(`admin:${payload}`);
         },
       );
 
-      // Subscribe with filter {Role: "admin", UserId: 5}
+      // Subscribe with channel {Role: "admin", UserId: 5}
       actions.useAction(
-        [UserActions.UserUpdated, { Role: "admin", UserId: 5 }],
+        UserActions.UserUpdated({ Role: "admin", UserId: 5 }),
         (_context, payload) => {
           handlerCalls.push(`admin-5:${payload}`);
         },
       );
 
-      // Subscribe with filter {Role: "admin", UserId: 10}
+      // Subscribe with channel {Role: "admin", UserId: 10}
       actions.useAction(
-        [UserActions.UserUpdated, { Role: "admin", UserId: 10 }],
+        UserActions.UserUpdated({ Role: "admin", UserId: 10 }),
         (_context, payload) => {
           handlerCalls.push(`admin-10:${payload}`);
         },
       );
 
-      // Subscribe with filter {Role: "user", UserId: 1} - should NOT fire for admin dispatches
+      // Subscribe with channel {Role: "user", UserId: 1} - should NOT fire for admin dispatches
       actions.useAction(
-        [UserActions.UserUpdated, { Role: "user", UserId: 1 }],
+        UserActions.UserUpdated({ Role: "user", UserId: 1 }),
         (_context, payload) => {
           handlerCalls.push(`user-1:${payload}`);
         },
@@ -655,7 +663,7 @@ describe("useActions() filtered actions", () => {
     // Dispatch with {Role: "admin"} - should match all admin handlers
     await act(async () => {
       result.current[1].dispatch(
-        [UserActions.UserUpdated, { Role: "admin" }],
+        UserActions.UserUpdated({ Role: "admin" }),
         "fanout",
       );
     });
@@ -668,7 +676,7 @@ describe("useActions() filtered actions", () => {
     expect(handlerCalls.length).toBe(3);
   });
 
-  it("should fire all handlers when dispatching plain action with filtered subscriptions", async () => {
+  it("should fire all handlers when dispatching plain action with channeled subscriptions", async () => {
     const handlerCalls: string[] = [];
 
     const { result } = renderHook(() => {
@@ -679,16 +687,16 @@ describe("useActions() filtered actions", () => {
         handlerCalls.push(`plain:${payload}`);
       });
 
-      // Filtered handlers
+      // Channeled handlers
       actions.useAction(
-        [UserActions.UserUpdated, { Role: "admin", UserId: 5 }],
+        UserActions.UserUpdated({ Role: "admin", UserId: 5 }),
         (_context, payload) => {
           handlerCalls.push(`admin-5:${payload}`);
         },
       );
 
       actions.useAction(
-        [UserActions.UserUpdated, { Role: "user", UserId: 1 }],
+        UserActions.UserUpdated({ Role: "user", UserId: 1 }),
         (_context, payload) => {
           handlerCalls.push(`user-1:${payload}`);
         },
@@ -708,23 +716,23 @@ describe("useActions() filtered actions", () => {
     expect(handlerCalls.length).toBe(3);
   });
 
-  it("should match all filtered handlers when dispatching with empty filter", async () => {
+  it("should match all channeled handlers when dispatching with empty channel", async () => {
     const handlerCalls: string[] = [];
 
     const { result } = renderHook(() => {
       const actions = useActions<UserModel, typeof UserActions>(userModel);
 
-      // Subscribe with filter UserId: 1
+      // Subscribe with channel UserId: 1
       actions.useAction(
-        [UserActions.UserUpdated, { UserId: 1 }],
+        UserActions.UserUpdated({ UserId: 1 }),
         (_context, payload) => {
           handlerCalls.push(`user-1:${payload}`);
         },
       );
 
-      // Subscribe with filter UserId: 2
+      // Subscribe with channel UserId: 2
       actions.useAction(
-        [UserActions.UserUpdated, { UserId: 2 }],
+        UserActions.UserUpdated({ UserId: 2 }),
         (_context, payload) => {
           handlerCalls.push(`user-2:${payload}`);
         },
@@ -733,9 +741,9 @@ describe("useActions() filtered actions", () => {
       return actions;
     });
 
-    // Dispatch with empty filter {} - should match ALL filtered handlers
+    // Dispatch with empty channel {} - should match ALL channeled handlers
     await act(async () => {
-      result.current[1].dispatch([UserActions.UserUpdated, {}], "to-all");
+      result.current[1].dispatch(UserActions.UserUpdated({}), "to-all");
     });
 
     expect(handlerCalls).toContain("user-1:to-all");
@@ -743,7 +751,7 @@ describe("useActions() filtered actions", () => {
     expect(handlerCalls.length).toBe(2);
   });
 
-  it("should use reactive filter values when props change", async () => {
+  it("should use reactive channel values when props change", async () => {
     const handlerCalls: { userId: number; payload: string }[] = [];
     let currentUserId = 5;
 
@@ -751,7 +759,7 @@ describe("useActions() filtered actions", () => {
       const actions = useActions<UserModel, typeof UserActions>(userModel);
 
       actions.useAction(
-        [UserActions.UserUpdated, { UserId: currentUserId }],
+        UserActions.UserUpdated({ UserId: currentUserId }),
         (_context, payload) => {
           handlerCalls.push({ userId: currentUserId, payload });
         },
@@ -763,21 +771,21 @@ describe("useActions() filtered actions", () => {
     // Dispatch with UserId: 5 - should match
     await act(async () => {
       result.current[1].dispatch(
-        [UserActions.UserUpdated, { UserId: 5 }],
+        UserActions.UserUpdated({ UserId: 5 }),
         "first",
       );
     });
 
     expect(handlerCalls).toEqual([{ userId: 5, payload: "first" }]);
 
-    // Change the filter value and rerender
+    // Change the channel value and rerender
     currentUserId = 10;
     rerender();
 
     // Dispatch with UserId: 5 - should NOT match anymore
     await act(async () => {
       result.current[1].dispatch(
-        [UserActions.UserUpdated, { UserId: 5 }],
+        UserActions.UserUpdated({ UserId: 5 }),
         "second",
       );
     });
@@ -788,7 +796,7 @@ describe("useActions() filtered actions", () => {
     // Dispatch with UserId: 10 - should match now
     await act(async () => {
       result.current[1].dispatch(
-        [UserActions.UserUpdated, { UserId: 10 }],
+        UserActions.UserUpdated({ UserId: 10 }),
         "third",
       );
     });

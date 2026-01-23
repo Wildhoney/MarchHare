@@ -44,4 +44,4 @@ function LateComponent() {
 }
 ```
 
-This enables late-mounting components to synchronize with previously dispatched state. See the [distributed actions recipe](./distributed-actions.md#cached-values-on-mount) for more details.
+This enables late-mounting components to synchronise with previously dispatched state. See the [distributed actions recipe](./distributed-actions.md#cached-values-on-mount) for more details.

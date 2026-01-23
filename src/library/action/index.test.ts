@@ -1,20 +1,38 @@
 import { describe, expect, it } from "vitest";
-import { Action, isDistributedAction, getName } from "./index.ts";
-import { Distribution } from "../types/index.ts";
+import {
+  Action,
+  isDistributedAction,
+  getName,
+  getActionSymbol,
+  isChanneledAction,
+} from "./index.ts";
+import { Distribution, ActionSymbol } from "../types/index.ts";
 
 describe("Action (unicast)", () => {
-  it("should create a symbol with custom name", () => {
+  it("should create a callable action with an internal symbol", () => {
     const action = Action("increment");
-    expect(typeof action).toBe("symbol");
-    expect(action.toString()).toBe("Symbol(chizu.action/increment)");
+    expect(typeof action).toBe("function");
+    expect(ActionSymbol in action).toBe(true);
+    expect(getActionSymbol(action).toString()).toBe(
+      "Symbol(chizu.action/increment)",
+    );
+  });
+
+  it("should be callable to create a channeled action", () => {
+    const action = Action<number, { UserId: number }>("user-update");
+    const channeled = action({ UserId: 5 });
+    expect(isChanneledAction(channeled)).toBe(true);
+    expect(channeled.channel).toEqual({ UserId: 5 });
+    expect(getActionSymbol(channeled)).toBe(getActionSymbol(action));
   });
 });
 
 describe("Action (broadcast)", () => {
-  it("should create a distributed symbol with custom name", () => {
+  it("should create a distributed callable action with an internal symbol", () => {
     const action = Action("signed-out", Distribution.Broadcast);
-    expect(typeof action).toBe("symbol");
-    expect(action.toString()).toBe(
+    expect(typeof action).toBe("function");
+    expect(ActionSymbol in action).toBe(true);
+    expect(getActionSymbol(action).toString()).toBe(
       "Symbol(chizu.action/distributed/signed-out)",
     );
   });

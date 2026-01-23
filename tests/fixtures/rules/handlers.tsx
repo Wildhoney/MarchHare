@@ -3,7 +3,7 @@
  *
  * Rule 8: Four handler signatures (sync, async, finite generator, infinite generator)
  * Rule 9: Use With() for simple property assignments
- * Rule 10: Use filtered actions for targeted event delivery
+ * Rule 10: Use channeled actions for targeted event delivery
  * Rule 11: Extract handlers for testability using Handler type
  * Rule 12: Access external values via context.data after await
  */
@@ -32,9 +32,9 @@ class WithActions {
   static SetActive = Action<boolean>("SetActive");
 }
 
-// Actions for filtered delivery
-class FilteredActions {
-  static UserUpdated = Action<{ id: number; name: string }>(
+// Actions for channeled delivery
+class ChanneledActions {
+  static UserUpdated = Action<{ id: number; name: string }, { UserId: number }>(
     "UserUpdated",
     Distribution.Broadcast,
   );
@@ -59,7 +59,7 @@ type WithModel = {
   active: boolean;
 };
 
-type FilteredModel = {
+type ChanneledModel = {
   user1Name: string;
   user2Name: string;
   allUsersUpdates: number;
@@ -167,7 +167,7 @@ function useRule9Actions() {
 }
 
 function useRule10Actions() {
-  const actions = useActions<FilteredModel, typeof FilteredActions>({
+  const actions = useActions<ChanneledModel, typeof ChanneledActions>({
     user1Name: "",
     user2Name: "",
     allUsersUpdates: 0,
@@ -175,7 +175,7 @@ function useRule10Actions() {
 
   // Handler for user 1 only
   actions.useAction(
-    [FilteredActions.UserUpdated, { UserId: 1 }],
+    ChanneledActions.UserUpdated({ UserId: 1 }),
     (context, user) => {
       context.actions.produce((draft) => {
         draft.model.user1Name = user.name;
@@ -185,7 +185,7 @@ function useRule10Actions() {
 
   // Handler for user 2 only
   actions.useAction(
-    [FilteredActions.UserUpdated, { UserId: 2 }],
+    ChanneledActions.UserUpdated({ UserId: 2 }),
     (context, user) => {
       context.actions.produce((draft) => {
         draft.model.user2Name = user.name;
@@ -194,7 +194,7 @@ function useRule10Actions() {
   );
 
   // Handler for ALL UserUpdated dispatches (plain action)
-  actions.useAction(FilteredActions.UserUpdated, (context) => {
+  actions.useAction(ChanneledActions.UserUpdated, (context) => {
     context.actions.produce((draft) => {
       draft.model.allUsersUpdates += 1;
     });
@@ -327,21 +327,21 @@ function Rule9WithHelper() {
 }
 
 /**
- * Rule 10 Test: Filtered actions for targeted delivery
+ * Rule 10 Test: Channeled actions for targeted delivery
  */
-function Rule10FilteredActions() {
+function Rule10ChanneledActions() {
   const [model, actions] = useRule10Actions();
 
   return (
     <section data-testid="rule-10">
-      <h3>Rule 10: Filtered Actions</h3>
+      <h3>Rule 10: Channeled Actions</h3>
       <div data-testid="rule-10-user1">{model.user1Name}</div>
       <div data-testid="rule-10-user2">{model.user2Name}</div>
       <div data-testid="rule-10-all-updates">{model.allUsersUpdates}</div>
       <button
         data-testid="rule-10-update-user1"
         onClick={() =>
-          actions.dispatch([FilteredActions.UserUpdated, { UserId: 1 }], {
+          actions.dispatch(ChanneledActions.UserUpdated({ UserId: 1 }), {
             id: 1,
             name: "Alice",
           })
@@ -352,7 +352,7 @@ function Rule10FilteredActions() {
       <button
         data-testid="rule-10-update-user2"
         onClick={() =>
-          actions.dispatch([FilteredActions.UserUpdated, { UserId: 2 }], {
+          actions.dispatch(ChanneledActions.UserUpdated({ UserId: 2 }), {
             id: 2,
             name: "Bob",
           })
@@ -363,7 +363,7 @@ function Rule10FilteredActions() {
       <button
         data-testid="rule-10-update-all"
         onClick={() =>
-          actions.dispatch(FilteredActions.UserUpdated, {
+          actions.dispatch(ChanneledActions.UserUpdated, {
             id: 3,
             name: "Charlie",
           })
@@ -409,13 +409,13 @@ export function HandlersFixture() {
       <h2>Rules 8-12: Handlers</h2>
       <Rule8HandlerSignatures />
       <Rule9WithHelper />
-      <Rule10FilteredActions />
-      {/* Rule 11 is about code organization (Handler type) - tested via type checking */}
+      <Rule10ChanneledActions />
+      {/* Rule 11 is about code organisation (Handler type) - tested via type checking */}
       <section data-testid="rule-11">
         <h3>Rule 11: Handler Type</h3>
         <p>
           Rule 11 is about using the Handler type for testability. This is a
-          compile-time feature verified by TypeScript, not a runtime behavior.
+          compile-time feature verified by TypeScript, not a runtime behaviour.
         </p>
       </section>
       <Rule12ContextData />

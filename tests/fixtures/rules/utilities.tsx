@@ -363,7 +363,7 @@ function useRule39Actions() {
 
 /**
  * Rule 39 Test: SSE with distributed actions
- * (Simulates SSE behavior without actual EventSource)
+ * (Simulates SSE behaviour without actual EventSource)
  */
 function Rule39SSE() {
   const [model, actions] = useRule39Actions();

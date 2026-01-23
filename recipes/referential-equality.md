@@ -15,7 +15,7 @@ function useSearchActions(props: Props) {
   }));
 
   actions.useAction(Actions.Search, async (context, query) => {
-    // Before await: props.filters is current (useEffectEvent-like behavior)
+    // Before await: props.filters is current (useEffectEvent-like behaviour)
     console.log(props.filters);
 
     const results = await fetch(`/search?q=${query}`);

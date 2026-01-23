@@ -4,7 +4,7 @@
  * Rule 16: Only broadcast actions can be consumed
  * Rule 17: Use consume() for reactive UI from broadcast actions
  * Rule 18: Late-mounting components receive cached values
- * Rule 19: Use filtered actions for targeted broadcast delivery
+ * Rule 19: Use channeled actions for targeted broadcast delivery
  */
 import * as React from "react";
 import {
@@ -26,16 +26,16 @@ class BroadcastActions {
   );
 }
 
-// Filtered broadcast actions
-class FilteredBroadcastActions {
-  static UserUpdated = Action<{ id: number; name: string; email: string }>(
-    "UserUpdated",
-    Distribution.Broadcast,
-  );
-  static ChannelMessage = Action<{ channel: string; message: string }>(
-    "ChannelMessage",
-    Distribution.Broadcast,
-  );
+// Channeled broadcast actions
+class ChanneledBroadcastActions {
+  static UserUpdated = Action<
+    { id: number; name: string; email: string },
+    { UserId: number }
+  >("UserUpdated", Distribution.Broadcast);
+  static ChannelMessage = Action<
+    { channel: string; message: string },
+    { Channel: string }
+  >("ChannelMessage", Distribution.Broadcast);
 }
 
 type EmptyModel = Record<string, never>;
@@ -44,7 +44,7 @@ type ConsumeModel = {
   traditionalUser: string;
 };
 
-type FilteredModel = {
+type ChanneledModel = {
   user1Data: string;
   user2Data: string;
   generalChannel: string;
@@ -93,13 +93,13 @@ function useLateMountingSubscriberActions(
   return actions;
 }
 
-function useFilteredPublisherActions() {
-  const actions = useActions<EmptyModel, typeof FilteredBroadcastActions>({});
+function useChanneledPublisherActions() {
+  const actions = useActions<EmptyModel, typeof ChanneledBroadcastActions>({});
   return actions;
 }
 
-function useFilteredSubscriberActions() {
-  const actions = useActions<FilteredModel, typeof FilteredBroadcastActions>({
+function useChanneledSubscriberActions() {
+  const actions = useActions<ChanneledModel, typeof ChanneledBroadcastActions>({
     user1Data: "",
     user2Data: "",
     generalChannel: "",
@@ -107,9 +107,9 @@ function useFilteredSubscriberActions() {
     allMessages: 0,
   });
 
-  // Filtered handler for user 1 only
+  // Channeled handler for user 1 only
   actions.useAction(
-    [FilteredBroadcastActions.UserUpdated, { UserId: 1 }],
+    ChanneledBroadcastActions.UserUpdated({ UserId: 1 }),
     (context, user) => {
       context.actions.produce((draft) => {
         draft.model.user1Data = `${user.name} <${user.email}>`;
@@ -117,9 +117,9 @@ function useFilteredSubscriberActions() {
     },
   );
 
-  // Filtered handler for user 2 only
+  // Channeled handler for user 2 only
   actions.useAction(
-    [FilteredBroadcastActions.UserUpdated, { UserId: 2 }],
+    ChanneledBroadcastActions.UserUpdated({ UserId: 2 }),
     (context, user) => {
       context.actions.produce((draft) => {
         draft.model.user2Data = `${user.name} <${user.email}>`;
@@ -129,7 +129,7 @@ function useFilteredSubscriberActions() {
 
   // Handler for general channel
   actions.useAction(
-    [FilteredBroadcastActions.ChannelMessage, { Channel: "general" }],
+    ChanneledBroadcastActions.ChannelMessage({ Channel: "general" }),
     (context, msg) => {
       context.actions.produce((draft) => {
         draft.model.generalChannel = msg.message;
@@ -139,7 +139,7 @@ function useFilteredSubscriberActions() {
 
   // Handler for tech channel
   actions.useAction(
-    [FilteredBroadcastActions.ChannelMessage, { Channel: "tech" }],
+    ChanneledBroadcastActions.ChannelMessage({ Channel: "tech" }),
     (context, msg) => {
       context.actions.produce((draft) => {
         draft.model.techChannel = msg.message;
@@ -148,7 +148,7 @@ function useFilteredSubscriberActions() {
   );
 
   // Plain handler receives ALL dispatches
-  actions.useAction(FilteredBroadcastActions.ChannelMessage, (context) => {
+  actions.useAction(ChanneledBroadcastActions.ChannelMessage, (context) => {
     context.actions.produce((draft) => {
       draft.model.allMessages += 1;
     });
@@ -312,10 +312,10 @@ function Rule18LateMounting() {
 }
 
 /**
- * Rule 19 Test: Filtered actions for targeted broadcast delivery
+ * Rule 19 Test: Channeled actions for targeted broadcast delivery
  */
-function FilteredBroadcastPublisher() {
-  const [, actions] = useFilteredPublisherActions();
+function ChanneledBroadcastPublisher() {
+  const [, actions] = useChanneledPublisherActions();
 
   return (
     <div data-testid="rule-19-publisher">
@@ -323,7 +323,7 @@ function FilteredBroadcastPublisher() {
         data-testid="rule-19-update-user1"
         onClick={() =>
           actions.dispatch(
-            [FilteredBroadcastActions.UserUpdated, { UserId: 1 }],
+            ChanneledBroadcastActions.UserUpdated({ UserId: 1 }),
             {
               id: 1,
               name: "Alice Updated",
@@ -338,7 +338,7 @@ function FilteredBroadcastPublisher() {
         data-testid="rule-19-update-user2"
         onClick={() =>
           actions.dispatch(
-            [FilteredBroadcastActions.UserUpdated, { UserId: 2 }],
+            ChanneledBroadcastActions.UserUpdated({ UserId: 2 }),
             {
               id: 2,
               name: "Bob Updated",
@@ -352,7 +352,7 @@ function FilteredBroadcastPublisher() {
       <button
         data-testid="rule-19-update-all-users"
         onClick={() =>
-          actions.dispatch(FilteredBroadcastActions.UserUpdated, {
+          actions.dispatch(ChanneledBroadcastActions.UserUpdated, {
             id: 0,
             name: "Broadcast to All",
             email: "all@example.com",
@@ -365,7 +365,7 @@ function FilteredBroadcastPublisher() {
         data-testid="rule-19-msg-general"
         onClick={() =>
           actions.dispatch(
-            [FilteredBroadcastActions.ChannelMessage, { Channel: "general" }],
+            ChanneledBroadcastActions.ChannelMessage({ Channel: "general" }),
             { channel: "general", message: "Hello general!" },
           )
         }
@@ -376,7 +376,7 @@ function FilteredBroadcastPublisher() {
         data-testid="rule-19-msg-tech"
         onClick={() =>
           actions.dispatch(
-            [FilteredBroadcastActions.ChannelMessage, { Channel: "tech" }],
+            ChanneledBroadcastActions.ChannelMessage({ Channel: "tech" }),
             { channel: "tech", message: "Hello tech!" },
           )
         }
@@ -387,8 +387,8 @@ function FilteredBroadcastPublisher() {
   );
 }
 
-function FilteredBroadcastSubscriber() {
-  const [model] = useFilteredSubscriberActions();
+function ChanneledBroadcastSubscriber() {
+  const [model] = useChanneledSubscriberActions();
 
   return (
     <div data-testid="rule-19-subscriber">
@@ -401,12 +401,12 @@ function FilteredBroadcastSubscriber() {
   );
 }
 
-function Rule19FilteredBroadcast() {
+function Rule19ChanneledBroadcast() {
   return (
     <section data-testid="rule-19">
-      <h3>Rule 19: Filtered Broadcast Delivery</h3>
-      <FilteredBroadcastPublisher />
-      <FilteredBroadcastSubscriber />
+      <h3>Rule 19: Channeled Broadcast Delivery</h3>
+      <ChanneledBroadcastPublisher />
+      <ChanneledBroadcastSubscriber />
     </section>
   );
 }
@@ -417,7 +417,7 @@ export function DistributedActionsFixture() {
       <h2>Rules 16-19: Distributed Actions</h2>
       <Rule16And17Consume />
       <Rule18LateMounting />
-      <Rule19FilteredBroadcast />
+      <Rule19ChanneledBroadcast />
     </div>
   );
 }

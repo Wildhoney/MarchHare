@@ -2,8 +2,9 @@ import * as React from "react";
 import {
   useLifecycles,
   useData,
-  isFilteredAction,
-  matchesFilter,
+  isChanneledAction,
+  getActionSymbol,
+  matchesChannel,
 } from "./utils.ts";
 
 export { With } from "./utils.ts";
@@ -23,7 +24,8 @@ import {
   Result,
   Task,
   Filter,
-  ActionFilter,
+  ChanneledAction,
+  ActionOrChanneled,
 } from "../types/index.ts";
 
 import {
@@ -45,7 +47,7 @@ function useRegisterHandler<
   D extends Props,
 >(
   scope: React.RefObject<Scope>,
-  action: ActionId | ActionFilter,
+  action: ActionId | HandlerPayload | ChanneledAction,
   handler: (
     context: HandlerContext<M, AC, D>,
     payload: unknown,
@@ -66,14 +68,14 @@ function useRegisterHandler<
     },
   );
 
-  const getFilter = React.useEffectEvent(() =>
-    isFilteredAction(action) ? action[1] : undefined,
+  const getChannel = React.useEffectEvent((): Filter | undefined =>
+    isChanneledAction(action) ? <Filter>action.channel : undefined,
   );
 
-  const base = isFilteredAction(action) ? action[0] : action;
+  const base = getActionSymbol(action);
   const entries = scope.current.handlers.get(base) ?? new Set();
   if (entries.size === 0) scope.current.handlers.set(base, entries);
-  entries.add({ getFilter, handler: <Handler>stableHandler });
+  entries.add({ getChannel, handler: <Handler>stableHandler });
 }
 
 /**
@@ -211,12 +213,14 @@ export function useActions<
               hydration.current = null;
             }
           },
-          dispatch(action: ActionId | ActionFilter, payload?: HandlerPayload) {
+          dispatch(action: ActionOrChanneled, payload?: HandlerPayload) {
             if (controller.signal.aborted) return;
-            const base = isFilteredAction(action) ? action[0] : action;
-            const filter = isFilteredAction(action) ? action[1] : undefined;
-            const emitter = isDistributedAction(base) ? broadcast : unicast;
-            emitter.emit(base, payload, filter);
+            const base = getActionSymbol(action);
+            const channel = isChanneledAction(action)
+              ? action.channel
+              : undefined;
+            const emitter = isDistributedAction(action) ? broadcast : unicast;
+            emitter.emit(base, payload, channel);
           },
           annotate<T>(operation: Operation, value: T): T {
             return state.current.annotate(operation, value);
@@ -231,17 +235,19 @@ export function useActions<
     function createHandler(
       action: ActionId,
       actionHandler: Handler,
-      getFilter: () => Filter | undefined,
+      getChannel: () => Filter | undefined,
     ) {
       return async function handler(
         payload: HandlerPayload,
-        dispatchFilter?: Filter,
+        dispatchChannel?: Filter,
       ) {
-        const registeredFilter = getFilter();
+        const registeredChannel = getChannel();
 
-        if (G.isNotNullable(dispatchFilter)) {
-          if (!registeredFilter) return;
-          if (!matchesFilter(dispatchFilter, registeredFilter)) return;
+        if (
+          G.isNotNullable(dispatchChannel) &&
+          G.isNotNullable(registeredChannel)
+        ) {
+          if (!matchesChannel(dispatchChannel, registeredChannel)) return;
         }
 
         const result = <Result>{ processes: new Set<Process>() };
@@ -274,8 +280,8 @@ export function useActions<
     }
 
     scope.current.handlers.forEach((entries, action) => {
-      for (const { getFilter, handler: actionHandler } of entries) {
-        const handler = createHandler(action, actionHandler, getFilter);
+      for (const { getChannel, handler: actionHandler } of entries) {
+        const handler = createHandler(action, actionHandler, getChannel);
 
         if (isDistributedAction(action)) {
           broadcast.on(action, handler);
@@ -301,18 +307,20 @@ export function useActions<
       <UseActions<M, AC, D>>[
         model,
         {
-          dispatch(action: ActionId | ActionFilter, payload?: HandlerPayload) {
-            const base = isFilteredAction(action) ? action[0] : action;
-            const filter = isFilteredAction(action) ? action[1] : undefined;
-            const emitter = isDistributedAction(base) ? broadcast : unicast;
-            emitter.emit(base, payload, filter);
+          dispatch(action: ActionOrChanneled, payload?: HandlerPayload) {
+            const base = getActionSymbol(action);
+            const channel = isChanneledAction(action)
+              ? action.channel
+              : undefined;
+            const emitter = isDistributedAction(action) ? broadcast : unicast;
+            emitter.emit(base, payload, channel);
           },
           consume(
-            action: symbol,
+            action: symbol | object,
             renderer: ConsumerRenderer<unknown>,
           ): React.ReactNode {
             return React.createElement(Partition, {
-              action,
+              action: <symbol>getActionSymbol(action),
               renderer,
             });
           },
@@ -325,7 +333,7 @@ export function useActions<
   );
 
   (<UseActions<M, AC, D>>result).useAction = <
-    A extends ActionId | ActionFilter,
+    A extends ActionId | HandlerPayload | ChanneledAction,
   >(
     action: A,
     handler: (

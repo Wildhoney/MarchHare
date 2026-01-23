@@ -7,14 +7,13 @@ import {
   Model,
   Actions,
   Filter,
-  ActionFilter,
-  ActionId,
 } from "../types/index.ts";
 import type { LifecycleConfig } from "./types.ts";
 import type { HandlerContext } from "../types/index.ts";
 import { A, G } from "@mobily/ts-belt";
 import { useConsumer } from "../boundary/components/consumer/utils.ts";
 import { changes } from "../utils.ts";
+import { isChanneledAction, getActionSymbol } from "../action/index.ts";
 
 /**
  * Creates a new object with getters for each property of the input object.
@@ -163,46 +162,31 @@ export function With<K extends string>(
   };
 }
 
-/**
- * Checks if the given action is a filtered action tuple `[Action, Filter]`.
- *
- * @param action - The action to check (either a plain ActionId or an ActionFilter tuple)
- * @returns `true` if the action is a filtered action tuple, `false` otherwise
- *
- * @example
- * ```ts
- * isFilteredAction(Actions.Click); // false
- * isFilteredAction([Actions.Click, { UserId: 1 }]); // true
- * ```
- */
-export function isFilteredAction(
-  action: ActionId | ActionFilter,
-): action is ActionFilter {
-  return G.isArray(action) && A.length(action) === 2 && G.isObject(action[1]);
-}
+// Re-export isChanneledAction and getActionSymbol for convenience
+export { isChanneledAction, getActionSymbol };
 
 /**
- * Checks if a dispatch filter matches a registered handler filter.
- * All properties in the dispatch filter must match the corresponding properties in the registered filter.
+ * Checks if a dispatch channel matches a registered handler channel.
+ * All properties in the dispatch channel must match the corresponding properties in the registered channel.
  *
- * @param dispatchFilter - The filter from the dispatch call
- * @param registeredFilter - The filter registered with useAction
- * @returns `true` if all dispatch filter properties match the registered filter
+ * @param dispatchChannel - The channel from the dispatch call (from ChanneledAction)
+ * @param registeredChannel - The channel registered with useAction
+ * @returns `true` if all dispatch channel properties match the registered channel
  *
  * @example
  * ```ts
- * matchesFilter({ UserId: 1 }, { UserId: 1 }); // true
- * matchesFilter({ UserId: 1 }, { UserId: 2 }); // false
- * matchesFilter({ UserId: 1 }, { UserId: 1, Role: "admin" }); // true (subset match)
- * matchesFilter({ UserId: 1, Role: "admin" }, { UserId: 1 }); // false (missing Role)
+ * matchesChannel({ UserId: 1 }, { UserId: 1 }); // true
+ * matchesChannel({ UserId: 1 }, { UserId: 2 }); // false
+ * matchesChannel({ UserId: 1 }, { UserId: 1, Role: "admin" }); // true (subset match)
+ * matchesChannel({ UserId: 1, Role: "admin" }, { UserId: 1 }); // false (missing Role)
  * ```
  */
-export function matchesFilter(
-  dispatchFilter: Filter,
-  registeredFilter: Filter,
+export function matchesChannel(
+  dispatchChannel: Filter,
+  registeredChannel: Filter,
 ): boolean {
-  for (const key of Object.keys(dispatchFilter)) {
-    if (registeredFilter[key] !== dispatchFilter[key]) return false;
+  for (const key of Object.keys(dispatchChannel)) {
+    if (registeredChannel[key] !== dispatchChannel[key]) return false;
   }
   return true;
 }

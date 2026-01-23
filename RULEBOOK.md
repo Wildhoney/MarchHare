@@ -165,14 +165,19 @@ actions.useAction(Actions.SetName, With("name"));
 
 The payload type must match the property type.
 
-### Rule 10: Use filtered actions for targeted event delivery
+### Rule 10: Use channeled actions for targeted event delivery
 
-Instead of filtering inside handlers, subscribe with a filter object:
+Instead of filtering inside handlers, define a channel type and subscribe with a channel object:
 
 ```ts
+class Actions {
+  // Second generic arg defines the channel type
+  static UserUpdated = Action<User, { UserId: number }>("UserUpdated");
+}
+
 // Subscribe to updates for a specific user ID
 actions.useAction(
-  [Actions.UserUpdated, { UserId: props.userId }],
+  Actions.UserUpdated({ UserId: props.userId }),
   (context, user) => {
     context.actions.produce((draft) => {
       draft.model.user = user;
@@ -181,21 +186,31 @@ actions.useAction(
 );
 ```
 
-Dispatching with a filter only triggers handlers where the filter matches:
+Dispatching with a channel only triggers handlers where the channel matches:
 
 ```ts
 // Only handlers with matching UserId fire
-actions.dispatch([Actions.UserUpdated, { UserId: user.id }], user);
+actions.dispatch(Actions.UserUpdated({ UserId: user.id }), user);
 ```
 
-Dispatching to the plain action triggers ALL handlers (plain + all filtered):
+Dispatching to the plain action triggers ALL handlers (plain + all channeled):
 
 ```ts
-// All handlers fire: plain handlers AND all filtered handlers
+// All handlers fire: plain handlers AND all channeled handlers
 actions.dispatch(Actions.UserUpdated, user);
 ```
 
-Filter values must be non-nullable primitives: `string`, `number`, `boolean`, or `symbol`. By convention, use uppercase keys like `{UserId: 4}` to distinguish filter keys from payload properties.
+Channel types must be `Record<string, FilterValue>` where `FilterValue` is a non-nullable primitive (`string`, `number`, `bigint`, `boolean`, or `symbol`). Primitive types like `string` or `number` are rejected at compile time:
+
+```ts
+// Valid — object with primitive values
+static UserUpdated = Action<User, { UserId: number }>("UserUpdated");
+
+// Invalid — TypeScript error: Type 'string' does not satisfy the constraint 'Filter'
+static Invalid = Action<User, string>("Invalid");
+```
+
+By convention, use uppercase keys like `{UserId: 4}` to distinguish channel keys from payload properties.
 
 ### Rule 11: Extract handlers for testability using `Handler`
 
@@ -389,32 +404,39 @@ actions.useAction(Actions.UserLoggedIn, (context, user) => {
 });
 ```
 
-### Rule 19: Use filtered actions for targeted broadcast delivery
+### Rule 19: Use channeled actions for targeted broadcast delivery
 
-Use filtered actions to prevent unnecessary handler execution across components.
+Use channeled actions to prevent unnecessary handler execution across components.
 
 ```ts
-// Without filter — every component with this handler executes
+class Actions {
+  static UserUpdated = Action<User, { UserId: number }>(
+    "UserUpdated",
+    Distribution.Broadcast,
+  );
+}
+
+// Without channel — every component with this handler executes
 actions.useAction(Actions.UserUpdated, (context, user) => {
   // Runs for ALL UserUpdated dispatches
 });
 
-// With filter — only executes when the filter matches
+// With channel — only executes when the channel matches
 actions.useAction(
-  [Actions.UserUpdated, { UserId: context.data.userId }],
+  Actions.UserUpdated({ UserId: context.data.userId }),
   (context, user) => {
-    // Only runs when dispatched with matching filter
+    // Only runs when dispatched with matching channel
   },
 );
 ```
 
-Dispatch with a filter when you only want targeted handlers to fire:
+Dispatch with a channel when you only want targeted handlers to fire:
 
 ```ts
 // Only handlers with matching UserId fire
-actions.dispatch([Actions.UserUpdated, { UserId: user.id }], user);
+actions.dispatch(Actions.UserUpdated({ UserId: user.id }), user);
 
-// All handlers fire (plain + all filtered)
+// All handlers fire (plain + all channeled)
 actions.dispatch(Actions.UserUpdated, user);
 ```
 
@@ -578,7 +600,7 @@ import { O, pipe } from "@mobily/ts-belt";
 
 Benefits:
 
-- **Colocated state** — No separate `isError`, `isLoading` booleans to synchronize
+- **Colocated state** — No separate `isError`, `isLoading` booleans to synchronise
 - **Exhaustive handling** — TypeScript enforces you handle both success and failure cases
 - **Composable** — Chain operations with `map`, `flatMap`, `getWithDefault`, etc.
 
@@ -819,9 +841,9 @@ actions.useAction(Lifecycle.Mount, (context) => {
 Consumers receive updates automatically:
 
 ```tsx
-// Listen for updates to a specific symbol using filtered actions
+// Listen for updates to a specific symbol using channeled actions
 actions.useAction(
-  [Actions.PriceUpdate, { Symbol: context.data.symbol }],
+  Actions.PriceUpdate({ Symbol: context.data.symbol }),
   (context, price) => {
     context.actions.produce((draft) => {
       draft.model.currentPrice = price;
@@ -835,14 +857,11 @@ actions.consume(Actions.PriceUpdate, (box) => (
 ));
 ```
 
-When dispatching, use a filter to target specific listeners:
+When dispatching, use a channel to target specific listeners:
 
 ```tsx
-// Dispatch to specific symbol filter
-context.actions.dispatch(
-  [Actions.PriceUpdate, { Symbol: price.symbol }],
-  price,
-);
+// Dispatch to specific symbol channel
+context.actions.dispatch(Actions.PriceUpdate({ Symbol: price.symbol }), price);
 ```
 
 Late-mounting components receive the last cached value during `Phase.Mounting`.
