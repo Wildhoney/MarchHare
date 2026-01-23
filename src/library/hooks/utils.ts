@@ -190,3 +190,34 @@ export function matchesChannel(
   }
   return true;
 }
+
+/**
+ * A hook for defining stable callbacks that always see the latest props/state.
+ *
+ * This hook returns a function (an "Effect Event") that can be called inside
+ * `useEffect` or other hooks without needing to include all referenced values
+ * in the dependency array. This helps avoid stale closures while preventing
+ * unnecessary re-renders or effect executions.
+ *
+ * In React 19.1.0, this was available only as `experimental_useEffectEvent`.
+ * Starting from later versions, it is stable as `useEffectEvent`.
+ *
+ * Example:
+ * ```ts
+ * const handleClick = useEffectEvent(() => {
+ *   console.log(latestState);
+ * });
+ *
+ * useEffect(() => {
+ *   window.addEventListener('click', handleClick);
+ *   return () => window.removeEventListener('click', handleClick);
+ * }, []);
+ * ```
+ *
+ * Fallback:
+ * If `React.useEffectEvent` is undefined (React 19.1.0), it falls back to
+ * `experimental_useEffectEvent`.
+ */
+export const useEffectEvent =
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+  React.useEffectEvent ?? (React as any).experimental_useEffectEvent;

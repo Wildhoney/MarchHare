@@ -2,9 +2,9 @@ Considering a way to make it easier to get DOM nodes, instead of user having to 
 
 ```tsx
 type Elements = {
-    container: HTMLDivElement;
-    input: HTMLInputElement;
-}
+  container: HTMLDivElement;
+  input: HTMLInputElement;
+};
 ```
 
 Then when creating useActions:

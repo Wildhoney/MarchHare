@@ -5,6 +5,7 @@ import {
   isChanneledAction,
   getActionSymbol,
   matchesChannel,
+  useEffectEvent,
 } from "./utils.ts";
 
 export { With } from "./utils.ts";
@@ -53,7 +54,7 @@ function useRegisterHandler<
     payload: unknown,
   ) => void | Promise<void> | AsyncGenerator | Generator,
 ): void {
-  const stableHandler = React.useEffectEvent(
+  const stableHandler = useEffectEvent(
     async (context: HandlerContext<M, AC, D>, payload: unknown) => {
       const isGenerator =
         handler.constructor.name === "GeneratorFunction" ||
@@ -68,7 +69,7 @@ function useRegisterHandler<
     },
   );
 
-  const getChannel = React.useEffectEvent((): Filter | undefined =>
+  const getChannel = useEffectEvent((): Filter | undefined =>
     isChanneledAction(action) ? <Filter>action.channel : undefined,
   );
 
