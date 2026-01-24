@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.2.46](https://github.com/Wildhoney/Chizu/compare/v0.2.43...v0.2.46) (2026-01-23)
+
+### Features
+
+- abort in-flight actions on unmount, add own() methods, unify to array notation ([ca07aea](https://github.com/Wildhoney/Chizu/commit/ca07aea3d6dc8be2ffe169f6837b01202ca9f7b1))
+- add consume() method for subscribing to distributed action values ([76b6984](https://github.com/Wildhoney/Chizu/commit/76b698443abebcbe5e480c002ec844ed0463b834))
+- add tuple type pattern for useAction and useActions hooks ([739677f](https://github.com/Wildhoney/Chizu/commit/739677f6902da72470c296f43d1da624b4d3e1bb))
+- add With.Filter helper and organize utils under With namespace ([a98e436](https://github.com/Wildhoney/Chizu/commit/a98e43600f8657d952849d8823d7309c5691efc7))
+- added actions.useReactive hook ([7998ae6](https://github.com/Wildhoney/Chizu/commit/7998ae634351672933729fc8794c7e23eb6b0ad4))
+- added Bound function for simple assignments ([f4c0a1f](https://github.com/Wildhoney/Chizu/commit/f4c0a1fcac5237828e8a0a43f98acd5d5f467ad1))
+- added late dispatching for useAction(DistributedAction) ([4b0fc83](https://github.com/Wildhoney/Chizu/commit/4b0fc8366c7d2241ef85ca742e938e607f240407))
+- added Lifecycle.Update with diff ([6e465dd](https://github.com/Wildhoney/Chizu/commit/6e465dd7859b1cf950295c36aa8c2f14c23873d3))
+- added rulebook with associated integration tests + rulebook ([277ca0a](https://github.com/Wildhoney/Chizu/commit/277ca0aba3946ff0842f35b56e2469d8574c6ebf))
+- added the ability to dispatch events using partial object matching ([1550b1d](https://github.com/Wildhoney/Chizu/commit/1550b1d2ad56e7b18a130be103525f2848322205))
+- changed the channeled actions approach ([50c2df1](https://github.com/Wildhoney/Chizu/commit/50c2df1981c11091573d2b05390f78523ffbf10c))
+- implement real Immertation inspect for consume() and rename ConsumeRenderer to Partition ([89a032e](https://github.com/Wildhoney/Chizu/commit/89a032eb3fbe9088d85c9331011a0de4802e9935))
+- removed the regulator class in favour of Set<Task> ([1ce0389](https://github.com/Wildhoney/Chizu/commit/1ce0389329e0812360de2128270dd6383ce23d30))
+- simplified the README ([7a5c9a8](https://github.com/Wildhoney/Chizu/commit/7a5c9a8dcd0d5bd003012708d331ae31529ea025))
+- update api to improve readability ([fd71a64](https://github.com/Wildhoney/Chizu/commit/fd71a6454aec40f5b217b94529b541a80e103914))
+
 ## [0.2.45](https://github.com/Wildhoney/Chizu/compare/v0.2.43...v0.2.45) (2026-01-23)
 
 ### Features

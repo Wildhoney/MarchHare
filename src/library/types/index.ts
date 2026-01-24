@@ -517,7 +517,7 @@ export type HandlerContext<
  * @template K - The action key (keyof AC) — determines payload type via lookup
  * @template D - Optional data/props type (defaults to Props)
  *
- * @see {@link HandlerMap} for the recommended HKT pattern
+ * @see {@link Handlers} for the recommended HKT pattern
  */
 export type Handler<
   M extends Model,
@@ -542,7 +542,7 @@ export type Handler<
  *
  * @example
  * ```ts
- * import { Action, HandlerMap } from "chizu";
+ * import { Action, Handlers } from "chizu";
  *
  * class Actions {
  *   static SetName = Action<string>("SetName");
@@ -550,7 +550,7 @@ export type Handler<
  * }
  *
  * // Define the HKT once for this module
- * type H = HandlerMap<Model, typeof Actions>;
+ * type H = Handlers<Model, typeof Actions>;
  *
  * // "Apply" the HKT via indexed access — H["SetName"] is the handler type
  * export const handleSetName: H["SetName"] = (context, name) => {
@@ -574,7 +574,7 @@ export type Handler<
  * }
  * ```
  */
-export type HandlerMap<
+export type Handlers<
   M extends Model,
   AC extends Actions,
   D extends Props = Props,

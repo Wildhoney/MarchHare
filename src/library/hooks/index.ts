@@ -5,7 +5,6 @@ import {
   isChanneledAction,
   getActionSymbol,
   matchesChannel,
-  useEffectEvent,
 } from "./utils.ts";
 
 export { With } from "./utils.ts";
