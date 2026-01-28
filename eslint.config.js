@@ -60,7 +60,7 @@ export default defineConfig([
     },
   },
   {
-    files: ["**/*.test.{ts,tsx}"],
+    files: ["**/*.test.{ts,tsx}", "tests/**/*.{ts,tsx}"],
     rules: {
       "fp/no-mutation": "off",
       "fp/no-let": "off",

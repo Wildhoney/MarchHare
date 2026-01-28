@@ -307,28 +307,12 @@ test.describe("Chizu Rulebook", () => {
       await expect(page.getByTestId("lifecycles-fixture")).toBeVisible();
     });
 
-    it("Rule 13: Use lifecycle actions instead of useEffect - should fire mount and node lifecycle actions", async ({
+    it("Rule 13: Use lifecycle actions instead of useEffect - should fire mount lifecycle action", async ({
       page,
     }) => {
       const events = page.getByTestId("rule-13-events");
 
       await expect(events).toContainText("mount");
-      await expect(events).toContainText("node");
-    });
-
-    it("Rule 13: Use lifecycle actions instead of useEffect - should fire node action once on mount", async ({
-      page,
-    }) => {
-      const nodeCount = page.getByTestId("rule-13-node-count");
-
-      // Lifecycle.Node fires once on mount (like useEffect with [] deps)
-      const initialCount = await nodeCount.textContent();
-      expect(Number(initialCount)).toBe(1);
-
-      await page.getByTestId("rule-13-interact").click();
-
-      // Node count should remain the same - it only fires once on mount
-      await expect(nodeCount).toHaveText("1", { timeout: 500 });
     });
 
     it("Rule 13: Use lifecycle actions instead of useEffect - should handle local errors with Lifecycle.Error", async ({
@@ -349,6 +333,40 @@ test.describe("Chizu Rulebook", () => {
     }) => {
       await page.getByTestId("rule-13-toggle").click();
       await expect(page.getByTestId("rule-13")).not.toBeVisible();
+    });
+
+    it("Rule 13: Lifecycle.Element - should fire once on mount when element is captured", async ({
+      page,
+    }) => {
+      const callCount = page.getByTestId("rule-13-element-call-count");
+      const lastName = page.getByTestId("rule-13-element-last-name");
+
+      // Should have fired once on mount
+      await expect(callCount).toHaveText("1");
+      await expect(lastName).toHaveText("testButton");
+    });
+
+    it("Rule 13: Lifecycle.Element - should not fire when state changes but element stays same", async ({
+      page,
+    }) => {
+      const callCount = page.getByTestId("rule-13-element-call-count");
+      const button = page.getByTestId("rule-13-element-button");
+
+      await expect(callCount).toHaveText("1");
+
+      // Click the button to trigger state change (counter increments)
+      await button.click();
+      await expect(button).toContainText("Click me (1)");
+
+      // Call count should still be 1 - element didn't change
+      await expect(callCount).toHaveText("1");
+
+      // Click again
+      await button.click();
+      await expect(button).toContainText("Click me (2)");
+
+      // Still 1
+      await expect(callCount).toHaveText("1");
     });
 
     it("Rule 14: Understand the Phase context - should have mounting phase during mount", async ({

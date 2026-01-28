@@ -13,6 +13,7 @@ import type { Data, Handler, Scope } from "./types.ts";
 import {
   HandlerContext,
   Lifecycle,
+  Brand,
   Phase,
   Model,
   HandlerPayload,
@@ -26,6 +27,7 @@ import {
   Filter,
   ChanneledAction,
   ActionOrChanneled,
+  ModelElements,
 } from "../types/index.ts";
 
 import {
@@ -53,7 +55,7 @@ function useRegisterHandler<
     payload: unknown,
   ) => void | Promise<void> | AsyncGenerator | Generator,
 ): void {
-  const stableHandler = useEffectEvent(
+  const stableHandler = React.useEffectEvent(
     async (context: HandlerContext<M, AC, D>, payload: unknown) => {
       const isGenerator =
         handler.constructor.name === "GeneratorFunction" ||
@@ -68,7 +70,7 @@ function useRegisterHandler<
     },
   );
 
-  const getChannel = useEffectEvent((): Filter | undefined =>
+  const getChannel = React.useEffectEvent((): Filter | undefined =>
     isChanneledAction(action) ? <Filter>action.channel : undefined,
   );
 
@@ -177,6 +179,16 @@ export function useActions<
   const scope = React.useRef<Scope>({ handlers: new Map() });
   const distributedActions = React.useRef<Set<ActionId>>(new Set());
   const phase = React.useRef<Phase>(Phase.Mounting);
+  type E = ModelElements<M>;
+  const elements = React.useRef<{ [K in keyof E]: E[K] | null }>(
+    <{ [K in keyof E]: E[K] | null }>{},
+  );
+  const pendingCaptures = React.useRef<Map<keyof E, E[keyof E] | null>>(
+    new Map(),
+  );
+  const lastEmittedElements = React.useRef<Map<keyof E, E[keyof E] | null>>(
+    new Map(),
+  );
 
   /**
    * Creates the context object passed to action handlers during dispatch.
@@ -200,6 +212,7 @@ export function useActions<
         task,
         data,
         tasks,
+        elements: elements.current,
         actions: {
           produce(f) {
             if (controller.signal.aborted) return;
@@ -262,6 +275,7 @@ export function useActions<
             error: getError(caught),
             action: getName(action),
             handled,
+            tasks,
           };
           error?.(details);
           if (handled) unicast.emit(Lifecycle.Error, details);
@@ -273,11 +287,14 @@ export function useActions<
             }
           }
           result.processes.forEach((process) => state.current.prune(process));
-          rerender();
+          // Only rerender if state was actually changed (produce was called)
+          if (result.processes.size > 0) rerender();
           completion.resolve();
         }
       };
     }
+
+    const cleanupFns: Array<() => void> = [];
 
     scope.current.handlers.forEach((entries, action) => {
       for (const { getChannel, handler: actionHandler } of entries) {
@@ -287,12 +304,38 @@ export function useActions<
           broadcast.on(action, handler);
           unicast.on(action, handler);
           distributedActions.current.add(action);
+          cleanupFns.push(() => {
+            broadcast.off(action, handler);
+            unicast.off(action, handler);
+          });
         } else {
           unicast.on(action, handler);
+          cleanupFns.push(() => unicast.off(action, handler));
         }
       }
     });
+
+    return () => {
+      // Emit Unmount before removing handlers so they can respond (e.g., abort tasks)
+      phase.current = Phase.Unmounting;
+      unicast.emit(Lifecycle.Unmount);
+      phase.current = Phase.Unmounted;
+      for (const cleanup of cleanupFns) cleanup();
+    };
   }, [unicast]);
+
+  // Process pending element captures after each render
+  // Only emit if the element truly changed (not just React's ref cleanup/setup cycle)
+  React.useLayoutEffect(() => {
+    for (const [name, element] of pendingCaptures.current) {
+      const lastEmitted = lastEmittedElements.current.get(name);
+      if (lastEmitted !== element) {
+        lastEmittedElements.current.set(name, element);
+        unicast.emit(Brand.Element, element, { Name: name });
+      }
+    }
+    pendingCaptures.current.clear();
+  });
 
   useLifecycles({
     unicast,
@@ -326,6 +369,15 @@ export function useActions<
           },
           get inspect() {
             return state.current.inspect;
+          },
+          get elements() {
+            return elements.current;
+          },
+          element<K extends keyof E>(name: K, el: E[K] | null) {
+            elements.current[name] = el;
+            // Always queue - processed in useLayoutEffect after render completes
+            // This handles React's ref cleanup/setup cycle correctly
+            pendingCaptures.current.set(name, el);
           },
         },
       ],

@@ -34,6 +34,7 @@ The `Fault` object passed to the handler contains:
 - **`error`** &ndash; The `Error` object that was thrown.
 - **`action`** &ndash; The name of the action that caused the error.
 - **`handled`** &ndash; Whether the component has a `Lifecycle.Error` handler registered.
+- **`tasks`** &ndash; All currently running tasks across the application, enabling programmatic abort during error recovery.
 
 ## Error reasons
 
@@ -58,3 +59,26 @@ actions.useAction(Lifecycle.Error, (context, error) => {
 ```
 
 > **Note:** Actions should ideally be self-contained and handle expected errors internally using patterns like [Option](https://mobily.github.io/ts-belt/api/option) or [Result](https://mobily.github.io/ts-belt/api/result) types to update the model accordingly. Error handlers are intended for timeouts, aborts, and uncaught catastrophic errors &ndash; not routine error handling.
+
+## Aborting tasks during error recovery
+
+When handling authentication errors (e.g., 401/403), you may want to abort all in-flight tasks to prevent cascading failures. The `tasks` property on the `Fault` object enables this:
+
+```tsx
+<Error
+  handler={({ reason, error, tasks }) => {
+    if (reason === Reason.Errored && isAuthError(error)) {
+      // Abort all in-flight tasks to prevent further errors
+      for (const task of tasks) {
+        task.controller.abort();
+      }
+      // Trigger re-authentication
+      redirectToLogin();
+    }
+  }}
+>
+  <App />
+</Error>
+```
+
+This is particularly useful for session expiration scenarios where multiple API calls might be in progress when authentication fails.

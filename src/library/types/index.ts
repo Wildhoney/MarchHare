@@ -12,6 +12,25 @@ export type { ActionId, Box, Task, Tasks };
 export type { ConsumerRenderer };
 
 /**
+ * Internal symbols used as brand keys to distinguish typed objects at runtime.
+ * These enable TypeScript to differentiate between HandlerPayload, DistributedPayload,
+ * and channeled actions through branded types.
+ * @internal
+ */
+export class Brand {
+  /** Brand key for HandlerPayload type */
+  static Payload = Symbol("chizu.brand/Payload");
+  /** Brand key for DistributedPayload type */
+  static Distributed = Symbol("chizu.brand/Distributed");
+  /** Access the underlying symbol from an action */
+  static Action = Symbol("chizu.brand/Action");
+  /** Identifies channeled actions (result of calling Action(channel)) */
+  static Channel = Symbol("chizu.brand/Channel");
+  /** Element capture events used by Lifecycle.Element */
+  static Element = Symbol("chizu.action.lifecycle/Element");
+}
+
+/**
  * Lifecycle actions that trigger at specific points in a component's lifecycle.
  * Define handlers for these in your actions class to respond to lifecycle events.
  *
@@ -27,14 +46,58 @@ export type { ConsumerRenderer };
 export class Lifecycle {
   /** Triggered once when the component mounts (`useLayoutEffect`). */
   static Mount = Symbol("chizu.action.lifecycle/Mount");
-  /** Triggered once after the component mounts (`useEffect` with empty deps `[]`). */
-  static Node = Symbol("chizu.action.lifecycle/Node");
   /** Triggered when the component unmounts. */
   static Unmount = Symbol("chizu.action.lifecycle/Unmount");
   /** Triggered when an action throws an error. Receives `Fault` as payload. */
   static Error = Symbol("chizu.action.lifecycle/Error");
   /** Triggered when `context.data` has changed. Not fired on initial mount. Receives `Record<string, unknown>` payload with changed keys. */
   static Update = Symbol("chizu.action.lifecycle/Update");
+
+  /**
+   * Triggered when an element is captured or released via `actions.element()`.
+   * Supports channeled subscriptions by element name.
+   *
+   * The payload is the captured element (or `null` when released).
+   *
+   * @example
+   * ```ts
+   * // Subscribe to ALL element changes
+   * actions.useAction(Lifecycle.Element, (context, element) => {
+   *   console.log("Element changed:", element);
+   * });
+   *
+   * // Subscribe to a specific element by name (channeled)
+   * actions.useAction(Lifecycle.Element({ Name: "input" }), (context, element) => {
+   *   if (element) {
+   *     element.focus();
+   *   }
+   * });
+   * ```
+   */
+  static Element = (() => {
+    const symbol = Brand.Element;
+    const action = function (channel: {
+      Name: string;
+    }): ChanneledAction<unknown, { Name: string }> {
+      return {
+        [Brand.Action]: symbol,
+        [Brand.Payload]: <unknown>undefined,
+        [Brand.Channel]: channel,
+        channel,
+      };
+    };
+    // eslint-disable-next-line fp/no-mutating-methods
+    Object.defineProperty(action, Brand.Action, {
+      value: symbol,
+      enumerable: false,
+    });
+    // eslint-disable-next-line fp/no-mutating-methods
+    Object.defineProperty(action, Brand.Payload, {
+      value: undefined,
+      enumerable: false,
+    });
+    return <HandlerPayload<unknown, { Name: string }>>action;
+  })();
 }
 
 /**
@@ -107,33 +170,6 @@ export type Pk<T> = undefined | symbol | T;
 export type Model<M = Record<string, unknown>> = M;
 
 /**
- * Internal symbol used as a brand key for the HandlerPayload type.
- * Enables TypeScript to distinguish HandlerPayload from plain symbols.
- * @internal
- */
-export const PayloadKey = Symbol("payload");
-
-/**
- * Internal symbol used as a brand key for the DistributedPayload type.
- * Enables TypeScript to distinguish distributed actions from local actions.
- * @internal
- */
-export const DistributedKey = Symbol("distributed");
-
-/**
- * Internal symbol used to access the underlying symbol from an action.
- * Actions wrap symbols in callable objects for channeled dispatch support.
- * @internal
- */
-export const ActionSymbol = Symbol("actionSymbol");
-
-/**
- * Internal symbol used to identify channeled actions (result of calling Action(channel)).
- * @internal
- */
-export const ChannelKey = Symbol("channel");
-
-/**
  * Branded type for action objects created with `Action()`.
  * The phantom type parameters carry the payload and channel types at the type level.
  *
@@ -156,9 +192,9 @@ export const ChannelKey = Symbol("channel");
  * ```
  */
 export type HandlerPayload<P = unknown, C extends Filter = never> = {
-  readonly [ActionSymbol]: symbol;
-  readonly [PayloadKey]: P;
-  readonly [DistributedKey]?: boolean;
+  readonly [Brand.Action]: symbol;
+  readonly [Brand.Payload]: P;
+  readonly [Brand.Distributed]?: boolean;
 } & ([C] extends [never]
   ? unknown
   : {
@@ -181,9 +217,9 @@ export type HandlerPayload<P = unknown, C extends Filter = never> = {
  * ```
  */
 export type ChanneledAction<P = unknown, C = unknown> = {
-  readonly [ActionSymbol]: symbol;
-  readonly [PayloadKey]: P;
-  readonly [ChannelKey]: C;
+  readonly [Brand.Action]: symbol;
+  readonly [Brand.Payload]: P;
+  readonly [Brand.Channel]: C;
   readonly channel: C;
 };
 
@@ -213,7 +249,7 @@ export type DistributedPayload<
   P = unknown,
   C extends Filter = never,
 > = HandlerPayload<P, C> & {
-  readonly [DistributedKey]: true;
+  readonly [Brand.Distributed]: true;
 };
 
 /**
@@ -333,6 +369,39 @@ type AssertSync<F> =
  * Represents any object that can be captured as reactive data.
  */
 export type Props = Record<string, unknown>;
+
+/**
+ * Extracts the elements type from a Model.
+ * If the model has an `elements` property, returns its type.
+ * Otherwise returns an empty record.
+ *
+ * @example
+ * ```ts
+ * type Model = {
+ *   count: number;
+ *   elements: { button: HTMLButtonElement | null };
+ * };
+ *
+ * type E = ModelElements<Model>; // { button: HTMLButtonElement | null }
+ * ```
+ */
+export type ModelElements<M> = M extends {
+  elements: infer E extends Record<string, unknown>;
+}
+  ? E
+  : Record<string, never>;
+
+/**
+ * Base type for element mappings in useActions.
+ * @deprecated Define elements directly in your Model type instead:
+ * ```ts
+ * type Model = {
+ *   count: number;
+ *   elements: { button: HTMLButtonElement | null };
+ * };
+ * ```
+ */
+export type Elements = Record<string, unknown>;
 
 /**
  * Constraint type for action containers.
@@ -467,6 +536,20 @@ export type HandlerContext<
    * ```
    */
   readonly tasks: Tasks;
+  /**
+   * Captured DOM elements registered via `actions.element()`.
+   * Elements may be `null` if not yet captured or if the element was unmounted.
+   *
+   * @example
+   * ```ts
+   * actions.useAction(Actions.Focus, (context) => {
+   *   context.elements.input?.focus();
+   * });
+   * ```
+   */
+  readonly elements: {
+    [K in keyof ModelElements<M>]: ModelElements<M>[K] | null;
+  };
   readonly actions: {
     produce<
       F extends (draft: {
@@ -626,6 +709,53 @@ export type UseActions<
       renderer: ConsumerRenderer<Payload<AC[K]>>,
     ): React.ReactNode;
     inspect: Inspect<M>;
+    /**
+     * Captured DOM elements registered via `element()`.
+     * Elements may be `null` if not yet captured or if the element was unmounted.
+     *
+     * @example
+     * ```tsx
+     * type Model = {
+     *   count: number;
+     *   elements: { input: HTMLInputElement };
+     * };
+     * const [model, actions] = useActions<Model, typeof Actions>(model);
+     *
+     * // Access captured elements
+     * actions.elements.input?.focus();
+     * ```
+     */
+    elements: { [K in keyof ModelElements<M>]: ModelElements<M>[K] | null };
+    /**
+     * Captures a DOM element for later access via `elements` or `context.elements`.
+     * Use as a ref callback on JSX elements.
+     *
+     * @param name - The element key (must match a key in Model['elements'])
+     * @param element - The DOM element or null (when unmounting)
+     *
+     * @example
+     * ```tsx
+     * type Model = {
+     *   count: number;
+     *   elements: {
+     *     container: HTMLDivElement;
+     *     input: HTMLInputElement;
+     *   };
+     * };
+     *
+     * const [model, actions] = useActions<Model, typeof Actions>(model);
+     *
+     * return (
+     *   <div ref={element => actions.element('container', element)}>
+     *     <input ref={element => actions.element('input', element)} />
+     *   </div>
+     * );
+     * ```
+     */
+    element<K extends keyof ModelElements<M>>(
+      name: K,
+      element: ModelElements<M>[K] | null,
+    ): void;
   },
 ] & {
   /**

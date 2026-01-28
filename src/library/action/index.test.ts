@@ -6,13 +6,13 @@ import {
   getActionSymbol,
   isChanneledAction,
 } from "./index.ts";
-import { Distribution, ActionSymbol } from "../types/index.ts";
+import { Distribution, Brand } from "../types/index.ts";
 
 describe("Action (unicast)", () => {
   it("should create a callable action with an internal symbol", () => {
     const action = Action("increment");
     expect(typeof action).toBe("function");
-    expect(ActionSymbol in action).toBe(true);
+    expect(Brand.Action in action).toBe(true);
     expect(getActionSymbol(action).toString()).toBe(
       "Symbol(chizu.action/increment)",
     );
@@ -31,7 +31,7 @@ describe("Action (broadcast)", () => {
   it("should create a distributed callable action with an internal symbol", () => {
     const action = Action("signed-out", Distribution.Broadcast);
     expect(typeof action).toBe("function");
-    expect(ActionSymbol in action).toBe(true);
+    expect(Brand.Action in action).toBe(true);
     expect(getActionSymbol(action).toString()).toBe(
       "Symbol(chizu.action/distributed/signed-out)",
     );

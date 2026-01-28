@@ -290,13 +290,33 @@ actions.useAction(Lifecycle.Unmount, (context) => {
   // Cleanup logic — runs on unmount
 });
 
-actions.useAction(Lifecycle.Node, (context) => {
-  // Runs once on mount (like useEffect with [] deps)
-});
-
 actions.useAction(Lifecycle.Error, (context, fault) => {
   // Local error handling
 });
+
+actions.useAction(Lifecycle.Element, (context, element) => {
+  // Fires when any element is captured or released
+});
+
+actions.useAction(Lifecycle.Element({ Name: "input" }), (context, element) => {
+  // Fires only when the "input" element changes (channeled)
+  if (element) element.focus();
+});
+```
+
+Capture DOM elements using `actions.element()` in your JSX:
+
+```tsx
+type Model = {
+  count: number;
+  elements: {
+    input: HTMLInputElement;
+  };
+};
+
+const [model, actions] = useActions<Model, typeof Actions>(model);
+
+return <input ref={(el) => actions.element("input", el)} />;
 ```
 
 ### Rule 14: Understand the Phase context
@@ -930,7 +950,7 @@ console.log(context.data.userId); // Always fresh
 | Broadcast    | `Distribution.Broadcast` for cross-component     |
 | State        | Always via `produce()`, use annotations          |
 | Handlers     | Sync, async, or generator signatures             |
-| Lifecycles   | `Mount`, `Unmount`, `Node`, `Error`              |
+| Lifecycles   | `Mount`, `Unmount`, `Error`, `Element`           |
 | Data access  | Use `context.data` after await                   |
 | Cancellation | Use `context.task.controller.signal`             |
 | Types        | Strict models, `Pk<T>` for optimistic keys       |

@@ -1,4 +1,4 @@
-import { Lifecycle, Pk, HandlerPayload, PayloadKey } from ".";
+import { Lifecycle, Pk, HandlerPayload, Brand } from ".";
 import { describe, expect, it } from "vitest";
 
 describe("Lifecycle", () => {
@@ -28,8 +28,12 @@ describe("HandlerPayload", () => {
   });
 });
 
-describe("PayloadKey", () => {
-  it("should be a symbol", () => {
-    expect(typeof PayloadKey).toBe("symbol");
+describe("Brand", () => {
+  it("should have symbol properties", () => {
+    expect(typeof Brand.Payload).toBe("symbol");
+    expect(typeof Brand.Distributed).toBe("symbol");
+    expect(typeof Brand.Action).toBe("symbol");
+    expect(typeof Brand.Channel).toBe("symbol");
+    expect(typeof Brand.Element).toBe("symbol");
   });
 });

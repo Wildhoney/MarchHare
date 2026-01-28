@@ -75,15 +75,8 @@ export function useLifecycles({
     });
 
     phase.current = Phase.Mounted;
-
-    return () => {
-      phase.current = Phase.Unmounting;
-      unicast.emit(Lifecycle.Unmount);
-      phase.current = Phase.Unmounted;
-    };
+    // Unmount emission handled in handler cleanup (index.ts) to ensure handlers receive it
   }, []);
-
-  React.useEffect(() => void unicast.emit(Lifecycle.Node), []);
 
   React.useLayoutEffect(() => {
     if (G.isNotNullable(previous.current)) {

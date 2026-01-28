@@ -11,6 +11,7 @@ import {
   Distribution,
   useActions,
   Lifecycle,
+  Fault,
 } from "../../../src/library/index.ts";
 
 class LifecycleActions {
@@ -28,9 +29,16 @@ class CachedActions {
 type LifecycleModel = {
   mountTime: number;
   unmountTime: number;
-  nodeCallCount: number;
   lastError: string;
   events: string[];
+};
+
+type ElementModel = {
+  elementCallCount: number;
+  lastElementName: string;
+  elements: {
+    testButton: HTMLButtonElement;
+  };
 };
 
 type PhaseModel = {
@@ -53,7 +61,6 @@ function useRule13Actions() {
   const actions = useActions<LifecycleModel, typeof LifecycleActions>({
     mountTime: 0,
     unmountTime: 0,
-    nodeCallCount: 0,
     lastError: "",
     events: [],
   });
@@ -66,14 +73,6 @@ function useRule13Actions() {
     });
   });
 
-  // Lifecycle.Node - runs once on mount (like useEffect with [] deps)
-  actions.useAction(Lifecycle.Node, (context) => {
-    context.actions.produce((draft) => {
-      draft.model.nodeCallCount += 1;
-      draft.model.events = [...draft.model.events, "node"];
-    });
-  });
-
   // Lifecycle.Unmount - runs on unmount
   actions.useAction(Lifecycle.Unmount, (context) => {
     context.actions.produce((draft) => {
@@ -83,7 +82,7 @@ function useRule13Actions() {
   });
 
   // Lifecycle.Error - local error handling
-  actions.useAction(Lifecycle.Error, (context, fault) => {
+  actions.useAction(Lifecycle.Error, (context, fault: Fault) => {
     context.actions.produce((draft) => {
       draft.model.lastError = fault.error.message;
       draft.model.events = [...draft.model.events, "error"];
@@ -131,6 +130,33 @@ function useRule14Actions() {
   return actions;
 }
 
+function useElementActions() {
+  const actions = useActions<ElementModel, typeof LifecycleActions>({
+    elementCallCount: 0,
+    lastElementName: "",
+    elements: {} as ElementModel["elements"],
+  });
+
+  // Subscribe to all element changes
+  actions.useAction(Lifecycle.Element, (context) => {
+    context.actions.produce((draft) => {
+      draft.model.elementCallCount = draft.model.elementCallCount + 1;
+    });
+  });
+
+  // Subscribe to specific element by name (channeled)
+  actions.useAction(
+    Lifecycle.Element({ Name: "testButton" }),
+    (context, element) => {
+      context.actions.produce((draft) => {
+        draft.model.lastElementName = element ? "testButton" : "null";
+      });
+    },
+  );
+
+  return actions;
+}
+
 function useCacheSenderActions() {
   const actions = useActions<CacheModel, typeof CachedActions>({
     receivedData: "",
@@ -148,13 +174,16 @@ function useCacheReceiverActions() {
     receiveCount: 0,
   });
 
-  actions.useAction(CachedActions.CachedData, (context, data) => {
-    context.actions.produce((draft) => {
-      draft.model.receivedData = data.value;
-      draft.model.phaseWhenReceived = context.phase;
-      draft.model.receiveCount += 1;
-    });
-  });
+  actions.useAction(
+    CachedActions.CachedData,
+    (context, data: { value: string; timestamp: number }) => {
+      context.actions.produce((draft) => {
+        draft.model.receivedData = data.value;
+        draft.model.phaseWhenReceived = context.phase;
+        draft.model.receiveCount += 1;
+      });
+    },
+  );
 
   return actions;
 }
@@ -173,7 +202,6 @@ function Rule13LifecycleActions() {
     <section data-testid="rule-13">
       <h3>Rule 13: Lifecycle Actions</h3>
       <div data-testid="rule-13-mount-time">{model.mountTime}</div>
-      <div data-testid="rule-13-node-count">{model.nodeCallCount}</div>
       <div data-testid="rule-13-last-error">{model.lastError}</div>
       <div data-testid="rule-13-events">{model.events.join(", ")}</div>
       <button
@@ -294,11 +322,36 @@ function Rule15CachedValues() {
 }
 
 /**
+ * Rule 13b Test: Lifecycle.Element for DOM element capture
+ */
+function Rule13ElementCapture() {
+  const [model, actions] = useElementActions();
+  const [counter, setCounter] = React.useState(0);
+
+  return (
+    <section data-testid="rule-13-element">
+      <h3>Rule 13b: Element Capture</h3>
+      <div data-testid="rule-13-element-call-count">
+        {model.elementCallCount}
+      </div>
+      <div data-testid="rule-13-element-last-name">{model.lastElementName}</div>
+      <button
+        ref={(el) => actions.element("testButton", el)}
+        data-testid="rule-13-element-button"
+        onClick={() => setCounter((c) => c + 1)}
+      >
+        Click me ({counter})
+      </button>
+    </section>
+  );
+}
+
+/**
  * Wrapper to test unmount lifecycle
  */
 function UnmountTestWrapper() {
   const [showChild, setShowChild] = React.useState(true);
-  const [unmountEvents, setUnmountEvents] = React.useState<string[]>([]);
+  const [unmountEvents, _setUnmountEvents] = React.useState<string[]>([]);
 
   return (
     <section data-testid="rule-13-unmount-test">
@@ -320,6 +373,7 @@ export function LifecyclesFixture() {
     <div data-testid="lifecycles-fixture">
       <h2>Rules 13-15: Lifecycles</h2>
       <UnmountTestWrapper />
+      <Rule13ElementCapture />
       <Rule14PhaseContext />
       <Rule15CachedValues />
     </div>

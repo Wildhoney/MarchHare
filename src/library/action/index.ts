@@ -3,10 +3,7 @@ import {
   DistributedPayload,
   Distribution,
   ChanneledAction,
-  ActionSymbol,
-  ChannelKey,
-  PayloadKey,
-  DistributedKey,
+  Brand,
   Filter,
 } from "../types/index.ts";
 import type { ActionId } from "../boundary/components/tasks/types.ts";
@@ -101,27 +98,27 @@ export const Action = <ActionFactory>(<unknown>(<
   // Create a callable function that produces channeled actions
   const action = function (channel: C): ChanneledAction<P, C> {
     return {
-      [ActionSymbol]: symbol,
-      [PayloadKey]: <P>undefined,
-      [ChannelKey]: channel,
+      [Brand.Action]: symbol,
+      [Brand.Payload]: <P>undefined,
+      [Brand.Channel]: channel,
       channel,
     };
   };
 
   // Attach the action symbol and brand keys
   // eslint-disable-next-line fp/no-mutating-methods
-  Object.defineProperty(action, ActionSymbol, {
+  Object.defineProperty(action, Brand.Action, {
     value: symbol,
     enumerable: false,
   });
   // eslint-disable-next-line fp/no-mutating-methods
-  Object.defineProperty(action, PayloadKey, {
+  Object.defineProperty(action, Brand.Payload, {
     value: undefined,
     enumerable: false,
   });
   if (distribution === Distribution.Broadcast) {
     // eslint-disable-next-line fp/no-mutating-methods
-    Object.defineProperty(action, DistributedKey, {
+    Object.defineProperty(action, Brand.Distributed, {
       value: true,
       enumerable: false,
     });
@@ -147,12 +144,12 @@ export const Action = <ActionFactory>(<unknown>(<
 export function getActionSymbol(action: ActionId | object): ActionId {
   if (G.isString(action)) return action;
   if (typeof action === "symbol") return action;
-  // Check for ActionSymbol property on objects or functions
+  // Check for Brand.Action property on objects or functions
   if (
     (G.isObject(action) || typeof action === "function") &&
-    ActionSymbol in action
+    Brand.Action in action
   ) {
-    return (<{ [ActionSymbol]: symbol }>action)[ActionSymbol];
+    return (<{ [Brand.Action]: symbol }>action)[Brand.Action];
   }
   return <ActionId>(<unknown>action);
 }
@@ -176,16 +173,16 @@ export function isDistributedAction(action: ActionId | object): boolean {
   // Handle action object, function, or channeled action
   // Note: G.isObject returns false for functions, so we check typeof explicitly
   if (G.isObject(action) || typeof action === "function") {
-    // Check for DistributedKey brand
+    // Check for Brand.Distributed brand
     if (
-      DistributedKey in action &&
-      (<{ [DistributedKey]: boolean }>action)[DistributedKey]
+      Brand.Distributed in action &&
+      (<{ [Brand.Distributed]: boolean }>action)[Brand.Distributed]
     ) {
       return true;
     }
     // Fall back to checking the underlying symbol
-    if (ActionSymbol in action) {
-      const actionSymbol = (<{ [ActionSymbol]: symbol }>action)[ActionSymbol];
+    if (Brand.Action in action) {
+      const actionSymbol = (<{ [Brand.Action]: symbol }>action)[Brand.Action];
       return (
         actionSymbol.description?.startsWith(config.distributedActionPrefix) ??
         false
@@ -240,5 +237,5 @@ export function getName(action: ActionId | object): string {
 export function isChanneledAction(
   action: ActionId | ChanneledAction | object,
 ): action is ChanneledAction {
-  return G.isObject(action) && ChannelKey in action && "channel" in action;
+  return G.isObject(action) && Brand.Channel in action && "channel" in action;
 }

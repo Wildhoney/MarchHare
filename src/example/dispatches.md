@@ -6,9 +6,9 @@ This diagram illustrates the action dispatch flow in the Chizu example applicati
 flowchart TB
     subgraph Lifecycle["🔄 Lifecycle Actions (System)"]
         Mount["Lifecycle.Mount"]
-        Node["Lifecycle.Node"]
         Unmount["Lifecycle.Unmount"]
         Error["Lifecycle.Error"]
+        Element["Lifecycle.Element"]
     end
 
     subgraph CounterComponent["📊 Counter Component"]
@@ -64,12 +64,12 @@ flowchart TB
     %% Lifecycle connections
     Mount -.->|"component mounts"| CounterComponent
     Mount -.->|"component mounts"| VisitorComponent
-    Node -.->|"after render"| CounterComponent
-    Node -.->|"after render"| VisitorComponent
     Unmount -.->|"cleanup"| CounterComponent
     Unmount -.->|"cleanup"| VisitorComponent
     Error -.->|"handler error"| CounterComponent
     Error -.->|"handler error"| VisitorComponent
+    Element -.->|"ref captured"| CounterComponent
+    Element -.->|"ref captured"| VisitorComponent
 
     %% Styling
     classDef unicast fill:#e1f5fe,stroke:#01579b,color:#01579b
@@ -81,7 +81,7 @@ flowchart TB
 
     class Increment,Decrement,Visitor unicast
     class DistributedCounter broadcast
-    class Mount,Node,Unmount,Error lifecycle
+    class Mount,Unmount,Error,Element lifecycle
     class IncrementBtn,DecrementBtn,EventSource interaction
     class CounterModel,VisitorModel model
     class VisitorConsume,PartitionRender consumer

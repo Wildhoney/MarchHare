@@ -11,8 +11,8 @@ import {
   useActions,
   utils,
   Lifecycle,
-  getActionSymbol,
 } from "../../../src/library/index.ts";
+import { getActionSymbol } from "../../../src/library/action/index.ts";
 
 class TaskActions {
   static FetchWithSignal = Action<string>("FetchWithSignal");
@@ -170,6 +170,10 @@ function useUnmountableChildActions(onLog: (msg: string) => void) {
     cancelled: false,
   });
 
+  actions.useAction(Lifecycle.Mount, () => {
+    onLog("mount");
+  });
+
   actions.useAction(TaskActions.SlowOperation, async (context) => {
     const { signal } = context.task.controller;
 
@@ -195,9 +199,12 @@ function useUnmountableChildActions(onLog: (msg: string) => void) {
   // Rule 22: Abort running tasks on unmount to properly cancel them
   // Without this, tasks continue running but can't update state
   actions.useAction(Lifecycle.Unmount, (context) => {
+    onLog(`unmount:tasks=${context.tasks.size}`);
     const slowOpSymbol = getActionSymbol(TaskActions.SlowOperation);
     for (const task of context.tasks) {
+      onLog(`unmount:task=${String(task.action)}`);
       if (task.action === slowOpSymbol) {
+        onLog("unmount:aborting");
         task.controller.abort();
       }
     }

@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+import type { Tasks } from "../boundary/components/tasks/types.ts";
 
 /**
  * Reasons why an action error occurred.
@@ -62,6 +63,27 @@ export type Fault<E extends Error = never> = {
   action: string;
   /** Whether the component has a `Lifecycle.Error` handler registered. */
   handled: boolean;
+  /**
+   * All currently running tasks across the application.
+   * Use this to programmatically abort in-flight actions during error recovery
+   * (e.g., on 403/500 responses to prevent cascading failures).
+   *
+   * @example
+   * ```tsx
+   * <Error handler={({ reason, tasks }) => {
+   *   if (reason === Reason.Errored) {
+   *     // Abort all in-flight tasks to prevent cascading errors
+   *     for (const task of tasks) {
+   *       task.controller.abort();
+   *     }
+   *     // Trigger re-authentication flow
+   *   }
+   * }}>
+   *   {children}
+   * </Error>
+   * ```
+   */
+  tasks: Tasks;
 };
 
 /**
