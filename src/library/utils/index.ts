@@ -7,8 +7,10 @@ import { AbortError } from "../error/types.ts";
 export const config = {
   /** Prefix for all Chizu action symbols. */
   actionPrefix: "chizu.action/",
-  /** Prefix for distributed (broadcast) action symbols. */
-  distributedActionPrefix: "chizu.action/distributed/",
+  /** Prefix for broadcast action symbols. */
+  broadcastActionPrefix: "chizu.action/broadcast/",
+  /** Prefix for multicast action symbols. */
+  multicastActionPrefix: "chizu.action/multicast/",
   /** Prefix for channeled action symbols. */
   channelPrefix: "chizu.channel/",
 };

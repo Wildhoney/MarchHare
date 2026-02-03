@@ -1,5 +1,5 @@
 /**
- * E2E Test Fixtures for Rules 16-19: Distributed Actions
+ * E2E Test Fixtures for Rules 16-19: Broadcast Actions
  *
  * Rule 16: Only broadcast actions can be consumed
  * Rule 17: Use consume() for reactive UI from broadcast actions
@@ -411,10 +411,10 @@ function Rule19ChanneledBroadcast() {
   );
 }
 
-export function DistributedActionsFixture() {
+export function BroadcastActionsFixture() {
   return (
-    <div data-testid="distributed-actions-fixture">
-      <h2>Rules 16-19: Distributed Actions</h2>
+    <div data-testid="broadcast-actions-fixture">
+      <h2>Rules 16-19: Broadcast Actions</h2>
       <Rule16And17Consume />
       <Rule18LateMounting />
       <Rule19ChanneledBroadcast />

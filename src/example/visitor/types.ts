@@ -1,4 +1,5 @@
 import { Action } from "../../library/index.ts";
+import { BroadcastActions } from "../types.ts";
 
 export type Country = {
   name: string;
@@ -15,5 +16,7 @@ export type Model = {
 };
 
 export class Actions {
+  static Broadcast = BroadcastActions;
+
   static Visitor = Action<Country>("Visitor");
 }

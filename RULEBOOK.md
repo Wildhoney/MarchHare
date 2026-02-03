@@ -27,18 +27,19 @@ class Actions {
 ### Rule 2: Use `Distribution.Broadcast` for cross-component communication
 
 ```ts
-class DistributedActions {
+class BroadcastActions {
   static UserUpdated = Action<User>("UserUpdated", Distribution.Broadcast);
 }
 ```
 
 Unicast actions are local to the component. Broadcast actions propagate to all consumers.
 
-### Rule 3: Never mix unicast and broadcast in the same class without inheritance
+### Rule 3: Use static properties to compose broadcast actions
 
 ```ts
-// Correct: extend for mixed usage
-class Actions extends DistributedActions {
+// Correct: reference broadcast actions via static property
+class Actions {
+  static Broadcast = BroadcastActions;
   static LocalFetch = Action<Query>("LocalFetch");
 }
 ```
@@ -294,29 +295,29 @@ actions.useAction(Lifecycle.Error, (context, fault) => {
   // Local error handling
 });
 
-actions.useAction(Lifecycle.Element, (context, element) => {
-  // Fires when any element is captured or released
+actions.useAction(Lifecycle.Node, (context, node) => {
+  // Fires when any node is captured or released
 });
 
-actions.useAction(Lifecycle.Element({ Name: "input" }), (context, element) => {
-  // Fires only when the "input" element changes (channeled)
-  if (element) element.focus();
+actions.useAction(Lifecycle.Node({ Name: "input" }), (context, node) => {
+  // Fires only when the "input" node changes (channeled)
+  if (node) node.focus();
 });
 ```
 
-Capture DOM elements using `actions.element()` in your JSX:
+Capture DOM nodes using `actions.node()` in your JSX:
 
 ```tsx
 type Model = {
   count: number;
-  elements: {
+  nodes: {
     input: HTMLInputElement;
   };
 };
 
 const [model, actions] = useActions<Model, typeof Actions>(model);
 
-return <input ref={(el) => actions.element("input", el)} />;
+return <input ref={(node) => actions.node("input", node)} />;
 ```
 
 ### Rule 14: Understand the Phase context
@@ -329,7 +330,7 @@ return <input ref={(el) => actions.element("input", el)} />;
 Access via `context.phase` to conditionally handle actions.
 
 ```ts
-actions.useAction(DistributedActions.UserUpdated, (context, user) => {
+actions.useAction(Actions.Broadcast.UserUpdated, (context, user) => {
   if (context.phase === Phase.Mounting) {
     // Hydrating from cache — just update state silently
     context.actions.produce((draft) => {
@@ -351,12 +352,12 @@ actions.useAction(DistributedActions.UserUpdated, (context, user) => {
 During mount, handlers receive actions with `Phase.Mounting`:
 
 - **Lifecycle actions** (`Lifecycle.Mount`) are called with `Phase.Mounting`
-- **Cached distributed actions** (dispatched before this component mounted) are replayed with `Phase.Mounting`
+- **Cached broadcast actions** (dispatched before this component mounted) are replayed with `Phase.Mounting`
 
 After mount completes, all subsequent dispatches arrive with `Phase.Mounted`.
 
 ```ts
-actions.useAction(DistributedActions.Data, (context, payload) => {
+actions.useAction(Actions.Broadcast.Data, (context, payload) => {
   if (context.phase === Phase.Mounting) {
     // This is a cached value from before we mounted
     // or this is the initial lifecycle call
@@ -370,7 +371,7 @@ This enables components to distinguish between hydration and live updates.
 
 ---
 
-## Distributed Actions
+## Broadcast Actions
 
 ### Rule 16: Only broadcast actions can be consumed
 
@@ -743,13 +744,13 @@ Use `actions.box()` to create a `Box` from a model selector. The child receives 
 
 ## Component Structure
 
-### Rule 32: Use `<Boundary>` to isolate distributed actions
+### Rule 32: Use `<Boundary>` to isolate broadcast actions
 
-By default, broadcast actions propagate globally. Use `<Boundary>` to create isolated scopes where distributed actions don't leak outside.
+By default, broadcast actions propagate globally. Use `<Boundary>` to create isolated scopes where broadcast actions don't leak outside.
 
 ```tsx
 <Boundary>
-  {/* Distributed actions here won't affect components outside */}
+  {/* Broadcast actions here won't affect components outside */}
   <IsolatedFeature />
 </Boundary>
 ```
@@ -799,7 +800,7 @@ const isConcrete = utils.pk(id); // boolean — true if not a symbol
 
 ### Rule 38: Prefer `ky` over React Query for HTTP requests
 
-Chizu handles caching (via distributed actions), loading states (via `inspect`), and cancellation (via `context.task.controller`). React Query's caching layer is redundant. Use [ky](https://github.com/sindresorhus/ky) — a lightweight fetch wrapper.
+Chizu handles caching (via broadcast actions), loading states (via `inspect`), and cancellation (via `context.task.controller`). React Query's caching layer is redundant. Use [ky](https://github.com/sindresorhus/ky) — a lightweight fetch wrapper.
 
 ```ts
 import ky from "ky";
@@ -824,15 +825,15 @@ actions.useAction(Actions.FetchUser, async (context, userId) => {
 Key benefits:
 
 - **Automatic cancellation** — pass `context.task.controller.signal` to abort on unmount
-- **No duplicate caching** — Chizu's distributed actions handle cross-component data sharing
+- **No duplicate caching** — Chizu's broadcast actions handle cross-component data sharing
 - **Lightweight** — ky is ~3KB vs React Query's ~40KB
 - **Typed responses** — `.json<T>()` provides type-safe parsing
 
 See `recipes/ky-http-client.md` for advanced patterns (configured instances, error handling, hooks).
 
-### Rule 39: Use distributed actions for SSE (Server-Sent Events)
+### Rule 39: Use broadcast actions for SSE (Server-Sent Events)
 
-Broadcast SSE events to all listening components using distributed actions. Connect on mount, dispatch broadcasts on message, and use the abort signal to close the connection on unmount.
+Broadcast SSE events to all listening components using broadcast actions. Connect on mount, dispatch broadcasts on message, and use the abort signal to close the connection on unmount.
 
 ```ts
 class Actions {
@@ -950,7 +951,7 @@ console.log(context.data.userId); // Always fresh
 | Broadcast    | `Distribution.Broadcast` for cross-component     |
 | State        | Always via `produce()`, use annotations          |
 | Handlers     | Sync, async, or generator signatures             |
-| Lifecycles   | `Mount`, `Unmount`, `Error`, `Element`           |
+| Lifecycles   | `Mount`, `Unmount`, `Error`, `Node`              |
 | Data access  | Use `context.data` after await                   |
 | Cancellation | Use `context.task.controller.signal`             |
 | Types        | Strict models, `Pk<T>` for optimistic keys       |

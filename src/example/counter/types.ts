@@ -1,11 +1,13 @@
 import { Action } from "../../library/index.ts";
-import { DistributedActions } from "../types.ts";
+import { BroadcastActions } from "../types.ts";
 
 export type Model = {
   count: number;
 };
 
-export class Actions extends DistributedActions {
+export class Actions {
+  static Broadcast = BroadcastActions;
+
   static Increment = Action("Increment");
   static Decrement = Action("Decrement");
 }

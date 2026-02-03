@@ -1,5 +1,5 @@
 import { Action, Distribution } from "../library";
 
-export class DistributedActions {
+export class BroadcastActions {
   static Counter = Action<number>("Counter", Distribution.Broadcast);
 }

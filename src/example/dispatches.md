@@ -8,7 +8,7 @@ flowchart TB
         Mount["Lifecycle.Mount"]
         Unmount["Lifecycle.Unmount"]
         Error["Lifecycle.Error"]
-        Element["Lifecycle.Element"]
+        Node["Lifecycle.Node"]
     end
 
     subgraph CounterComponent["📊 Counter Component"]
@@ -32,7 +32,7 @@ flowchart TB
     end
 
     subgraph Broadcast["📡 Broadcast Channel"]
-        DistributedCounter["DistributedActions.Counter"]
+        BroadcastCounter["Actions.Broadcast.Counter"]
     end
 
     subgraph Consumption["🎯 Consumers"]
@@ -48,9 +48,9 @@ flowchart TB
     Increment -->|"produce()"| CounterModel
     Decrement -->|"produce()"| CounterModel
 
-    %% Counter broadcasts to distributed
-    Increment -->|"dispatch()"| DistributedCounter
-    Decrement -->|"dispatch()"| DistributedCounter
+    %% Counter broadcasts to broadcast channel
+    Increment -->|"dispatch()"| BroadcastCounter
+    Decrement -->|"dispatch()"| BroadcastCounter
 
     %% Lifecycle triggers visitor
     Mount -->|"triggers"| EventSource
@@ -58,7 +58,7 @@ flowchart TB
     Visitor -->|"Bound('visitor')"| VisitorModel
 
     %% Broadcast consumption
-    DistributedCounter -->|"subscribe"| VisitorConsume
+    BroadcastCounter -->|"subscribe"| VisitorConsume
     VisitorConsume --> PartitionRender
 
     %% Lifecycle connections
@@ -68,8 +68,8 @@ flowchart TB
     Unmount -.->|"cleanup"| VisitorComponent
     Error -.->|"handler error"| CounterComponent
     Error -.->|"handler error"| VisitorComponent
-    Element -.->|"ref captured"| CounterComponent
-    Element -.->|"ref captured"| VisitorComponent
+    Node -.->|"ref captured"| CounterComponent
+    Node -.->|"ref captured"| VisitorComponent
 
     %% Styling
     classDef unicast fill:#e1f5fe,stroke:#01579b,color:#01579b
@@ -80,8 +80,8 @@ flowchart TB
     classDef consumer fill:#fff8e1,stroke:#ff8f00,color:#ff8f00
 
     class Increment,Decrement,Visitor unicast
-    class DistributedCounter broadcast
-    class Mount,Unmount,Error,Element lifecycle
+    class BroadcastCounter broadcast
+    class Mount,Unmount,Error,Node lifecycle
     class IncrementBtn,DecrementBtn,EventSource interaction
     class CounterModel,VisitorModel model
     class VisitorConsume,PartitionRender consumer
@@ -98,7 +98,7 @@ flowchart TB
 
 1. **User Interaction** → Button clicks dispatch unicast actions
 2. **Action Handlers** → Update local model state via `produce()`
-3. **Broadcast Dispatch** → Handlers emit `DistributedActions.Counter` to broadcast channel
+3. **Broadcast Dispatch** → Handlers emit `Actions.Broadcast.Counter` to broadcast channel
 4. **Cross-Component Consumption** → Visitor component subscribes via `actions.consume()`
 5. **Reactive Rendering** → `Partition` component re-renders with new counter value
 
@@ -113,6 +113,6 @@ flowchart TB
 
 - `Actions.Visitor` - Updates visitor data from EventSource
 
-### Distributed (`types.ts`)
+### Broadcast (`types.ts`)
 
-- `DistributedActions.Counter` - Broadcasts counter value across components
+- `BroadcastActions.Counter` - Broadcasts counter value across components

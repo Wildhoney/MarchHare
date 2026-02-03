@@ -1,6 +1,6 @@
 # Consuming actions
 
-The `consume()` method subscribes to a distributed action and re-renders content whenever a new value is dispatched, making it ideal for global context scenarios where you want to fetch data once and access it throughout your app without prop drilling. The callback receives a `Box<T>` from [Immertation](https://github.com/Wildhoney/Immertation) containing the `value` and an `inspect` proxy for checking annotation status.
+The `consume()` method subscribes to a broadcast action and re-renders content whenever a new value is dispatched, making it ideal for global context scenarios where you want to fetch data once and access it throughout your app without prop drilling. The callback receives a `Box<T>` from [Immertation](https://github.com/Wildhoney/Immertation) containing the `value` and an `inspect` proxy for checking annotation status.
 
 ```tsx
 export default function Visitor(): React.ReactElement {
@@ -16,13 +16,13 @@ export default function Visitor(): React.ReactElement {
 }
 ```
 
-> **Important:** The `consume()` method only accepts distributed actions created with `Distribution.Broadcast`. Attempting to pass a local (unicast) action will result in a TypeScript error. This is enforced at compile-time to prevent confusion &ndash; local actions are scoped to a single component and cannot be consumed across the application.
+> **Important:** The `consume()` method only accepts broadcast actions created with `Distribution.Broadcast`. Attempting to pass a local (unicast) action will result in a TypeScript error. This is enforced at compile-time to prevent confusion &ndash; local actions are scoped to a single component and cannot be consumed across the application.
 
 > **Note:** When a component mounts, `consume()` displays the most recent value for that action, even if it was dispatched before the component mounted. This is managed by the `Consumer` context provider. If no value has been dispatched yet, `consume()` renders `null` until the first dispatch occurs.
 
 ## Cached values for useAction handlers
 
-Components using `useAction()` for distributed actions also receive cached values on mount. When a component mounts with a handler for a distributed action, the handler is automatically invoked with the most recent value that was stored by any `consume()` call.
+Components using `useAction()` for broadcast actions also receive cached values on mount. When a component mounts with a handler for a broadcast action, the handler is automatically invoked with the most recent value that was stored by any `consume()` call.
 
 ```tsx
 // This component stores dispatched values in the cache
@@ -44,4 +44,4 @@ function LateComponent() {
 }
 ```
 
-This enables late-mounting components to synchronise with previously dispatched state. See the [distributed actions recipe](./distributed-actions.md#cached-values-on-mount) for more details.
+This enables late-mounting components to synchronise with previously dispatched state. See the [broadcast actions recipe](./broadcast-actions.md#cached-values-on-mount) for more details.

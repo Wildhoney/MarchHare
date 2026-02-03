@@ -13,7 +13,7 @@ class Actions {
   static Update = Action<string>("Update");
 }
 
-class DistributedActions {
+class BroadcastActions {
   static Counter = Action<number>("Counter", Distribution.Broadcast);
 }
 
@@ -178,19 +178,19 @@ describe("useActions() data callback", () => {
   });
 });
 
-describe("useActions() distributed action mount behaviour", () => {
-  it("should invoke distributed action handler with cached value on mount", async () => {
+describe("useActions() broadcast action mount behaviour", () => {
+  it("should invoke broadcast action handler with cached value on mount", async () => {
     const capturedPayloads: number[] = [];
 
     type CounterModel = { count: number };
     const counterModel: CounterModel = { count: 0 };
 
     function ProducerComponent({ onShowLate }: { onShowLate: () => void }) {
-      const actions = useActions<CounterModel, typeof DistributedActions>(
+      const actions = useActions<CounterModel, typeof BroadcastActions>(
         counterModel,
       );
 
-      actions.useAction(DistributedActions.Counter, (context, payload) => {
+      actions.useAction(BroadcastActions.Counter, (context, payload) => {
         context.actions.produce((draft) => {
           draft.model.count = payload;
         });
@@ -199,11 +199,11 @@ describe("useActions() distributed action mount behaviour", () => {
       return (
         <>
           {/* consume() creates a Partition that stores dispatched values in consumer Map */}
-          {actions[1].consume(DistributedActions.Counter, () => null)}
+          {actions[1].consume(BroadcastActions.Counter, () => null)}
           <button
             data-testid="dispatch"
             onClick={() => {
-              actions[1].dispatch(DistributedActions.Counter, 42);
+              actions[1].dispatch(BroadcastActions.Counter, 42);
               onShowLate();
             }}
           >
@@ -214,11 +214,11 @@ describe("useActions() distributed action mount behaviour", () => {
     }
 
     function LateComponent() {
-      const actions = useActions<CounterModel, typeof DistributedActions>(
+      const actions = useActions<CounterModel, typeof BroadcastActions>(
         counterModel,
       );
 
-      actions.useAction(DistributedActions.Counter, (_context, payload) => {
+      actions.useAction(BroadcastActions.Counter, (_context, payload) => {
         capturedPayloads.push(payload);
       });
 
@@ -255,18 +255,18 @@ describe("useActions() distributed action mount behaviour", () => {
     expect(capturedPayloads).toContain(42);
   });
 
-  it("should invoke distributed action handler with phase=mounting when receiving cached value, and phase=mounted for subsequent dispatches", async () => {
+  it("should invoke broadcast action handler with phase=mounting when receiving cached value, and phase=mounted for subsequent dispatches", async () => {
     const capturedPhases: Phase[] = [];
 
     type CounterModel = { count: number };
     const counterModel: CounterModel = { count: 0 };
 
     function ProducerComponent({ onShowLate }: { onShowLate: () => void }) {
-      const actions = useActions<CounterModel, typeof DistributedActions>(
+      const actions = useActions<CounterModel, typeof BroadcastActions>(
         counterModel,
       );
 
-      actions.useAction(DistributedActions.Counter, (context, payload) => {
+      actions.useAction(BroadcastActions.Counter, (context, payload) => {
         context.actions.produce((draft) => {
           draft.model.count = payload;
         });
@@ -274,11 +274,11 @@ describe("useActions() distributed action mount behaviour", () => {
 
       return (
         <>
-          {actions[1].consume(DistributedActions.Counter, () => null)}
+          {actions[1].consume(BroadcastActions.Counter, () => null)}
           <button
             data-testid="dispatch"
             onClick={() => {
-              actions[1].dispatch(DistributedActions.Counter, 42);
+              actions[1].dispatch(BroadcastActions.Counter, 42);
               onShowLate();
             }}
           >
@@ -287,7 +287,7 @@ describe("useActions() distributed action mount behaviour", () => {
           <button
             data-testid="dispatch-again"
             onClick={() => {
-              actions[1].dispatch(DistributedActions.Counter, 100);
+              actions[1].dispatch(BroadcastActions.Counter, 100);
             }}
           >
             Dispatch Again
@@ -297,11 +297,11 @@ describe("useActions() distributed action mount behaviour", () => {
     }
 
     function LateComponent() {
-      const actions = useActions<CounterModel, typeof DistributedActions>(
+      const actions = useActions<CounterModel, typeof BroadcastActions>(
         counterModel,
       );
 
-      actions.useAction(DistributedActions.Counter, (context, _payload) => {
+      actions.useAction(BroadcastActions.Counter, (context, _payload) => {
         capturedPhases.push(context.phase);
       });
 

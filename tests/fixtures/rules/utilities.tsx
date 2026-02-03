@@ -4,7 +4,7 @@
  * Rule 36: Use utils.sleep() for delays with cancellation support
  * Rule 37: Use utils.pk() for optimistic update keys
  * Rule 38: Prefer ky over React Query for HTTP requests (conceptual - uses fetch)
- * Rule 39: Use distributed actions for SSE (Server-Sent Events)
+ * Rule 39: Use broadcast actions for SSE (Server-Sent Events)
  */
 import * as React from "react";
 import {
@@ -294,7 +294,7 @@ function Rule38HttpRequests() {
 }
 
 /**
- * Custom hook for Rule 39: SSE with distributed actions
+ * Custom hook for Rule 39: SSE with broadcast actions
  */
 function useRule39Actions() {
   const actions = useActions<UtilityModel, typeof UtilityActions>({
@@ -362,7 +362,7 @@ function useRule39Actions() {
 }
 
 /**
- * Rule 39 Test: SSE with distributed actions
+ * Rule 39 Test: SSE with broadcast actions
  * (Simulates SSE behaviour without actual EventSource)
  */
 function Rule39SSE() {
@@ -370,7 +370,7 @@ function Rule39SSE() {
 
   return (
     <section data-testid="rule-39">
-      <h3>Rule 39: SSE with Distributed Actions</h3>
+      <h3>Rule 39: SSE with Broadcast Actions</h3>
       <div data-testid="rule-39-connected">
         {model.sseConnected ? "connected" : "disconnected"}
       </div>

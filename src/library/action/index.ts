@@ -1,6 +1,7 @@
 import {
   HandlerPayload,
-  DistributedPayload,
+  BroadcastPayload,
+  MulticastPayload,
   Distribution,
   ChanneledAction,
   Brand,
@@ -28,13 +29,17 @@ type ActionFactory = {
    * @template P The payload type for the action.
    * @template C The channel type for channeled dispatches (defaults to never).
    * @param name The action name, used for debugging purposes.
-   * @param distribution The distribution mode (Unicast or Broadcast).
-   * @returns A typed action object (DistributedPayload if Broadcast).
+   * @param distribution The distribution mode (Unicast, Broadcast, or Multicast).
+   * @returns A typed action object (BroadcastPayload if Broadcast, MulticastPayload if Multicast).
    */
   <P = never, C extends Filter = never>(
     name: string,
     distribution: Distribution.Broadcast,
-  ): DistributedPayload<P, C>;
+  ): BroadcastPayload<P, C>;
+  <P = never, C extends Filter = never>(
+    name: string,
+    distribution: Distribution.Multicast,
+  ): MulticastPayload<P, C>;
   <P = never, C extends Filter = never>(
     name: string,
     distribution: Distribution.Unicast,
@@ -42,7 +47,7 @@ type ActionFactory = {
   <P = never, C extends Filter = never>(
     name: string,
     distribution: Distribution,
-  ): HandlerPayload<P, C> | DistributedPayload<P, C>;
+  ): HandlerPayload<P, C> | BroadcastPayload<P, C> | MulticastPayload<P, C>;
 };
 
 /**
@@ -89,11 +94,13 @@ export const Action = <ActionFactory>(<unknown>(<
 >(
   name: string,
   distribution: Distribution = Distribution.Unicast,
-): HandlerPayload<P, C> | DistributedPayload<P, C> => {
+): HandlerPayload<P, C> | BroadcastPayload<P, C> | MulticastPayload<P, C> => {
   const symbol =
     distribution === Distribution.Broadcast
-      ? Symbol(`${config.distributedActionPrefix}${name}`)
-      : Symbol(`${config.actionPrefix}${name}`);
+      ? Symbol(`${config.broadcastActionPrefix}${name}`)
+      : distribution === Distribution.Multicast
+        ? Symbol(`${config.multicastActionPrefix}${name}`)
+        : Symbol(`${config.actionPrefix}${name}`);
 
   // Create a callable function that produces channeled actions
   const action = function (channel: C): ChanneledAction<P, C> {
@@ -118,13 +125,22 @@ export const Action = <ActionFactory>(<unknown>(<
   });
   if (distribution === Distribution.Broadcast) {
     // eslint-disable-next-line fp/no-mutating-methods
-    Object.defineProperty(action, Brand.Distributed, {
+    Object.defineProperty(action, Brand.Broadcast, {
+      value: true,
+      enumerable: false,
+    });
+  }
+  if (distribution === Distribution.Multicast) {
+    // eslint-disable-next-line fp/no-mutating-methods
+    Object.defineProperty(action, Brand.Multicast, {
       value: true,
       enumerable: false,
     });
   }
 
-  return <HandlerPayload<P, C> | DistributedPayload<P, C>>action;
+  return <
+    HandlerPayload<P, C> | BroadcastPayload<P, C> | MulticastPayload<P, C>
+  >action;
 }));
 
 /**
@@ -155,28 +171,28 @@ export function getActionSymbol(action: ActionId | object): ActionId {
 }
 
 /**
- * Checks whether an action is a distributed action.
- * Distributed actions are broadcast to all mounted components that have defined a handler for them.
+ * Checks whether an action is a broadcast action.
+ * Broadcast actions are sent to all mounted components that have defined a handler for them.
  *
  * @param action The action to check.
- * @returns True if the action is a distributed action, false otherwise.
+ * @returns True if the action is a broadcast action, false otherwise.
  */
-export function isDistributedAction(action: ActionId | object): boolean {
+export function isBroadcastAction(action: ActionId | object): boolean {
   // Handle raw string/symbol (legacy or internal)
   if (G.isString(action))
-    return action.startsWith(config.distributedActionPrefix);
+    return action.startsWith(config.broadcastActionPrefix);
   if (typeof action === "symbol")
     return (
-      action.description?.startsWith(config.distributedActionPrefix) ?? false
+      action.description?.startsWith(config.broadcastActionPrefix) ?? false
     );
 
   // Handle action object, function, or channeled action
   // Note: G.isObject returns false for functions, so we check typeof explicitly
   if (G.isObject(action) || typeof action === "function") {
-    // Check for Brand.Distributed brand
+    // Check for Brand.Broadcast brand
     if (
-      Brand.Distributed in action &&
-      (<{ [Brand.Distributed]: boolean }>action)[Brand.Distributed]
+      Brand.Broadcast in action &&
+      (<{ [Brand.Broadcast]: boolean }>action)[Brand.Broadcast]
     ) {
       return true;
     }
@@ -184,7 +200,7 @@ export function isDistributedAction(action: ActionId | object): boolean {
     if (Brand.Action in action) {
       const actionSymbol = (<{ [Brand.Action]: symbol }>action)[Brand.Action];
       return (
-        actionSymbol.description?.startsWith(config.distributedActionPrefix) ??
+        actionSymbol.description?.startsWith(config.broadcastActionPrefix) ??
         false
       );
     }
@@ -238,4 +254,42 @@ export function isChanneledAction(
   action: ActionId | ChanneledAction | object,
 ): action is ChanneledAction {
   return G.isObject(action) && Brand.Channel in action && "channel" in action;
+}
+
+/**
+ * Checks whether an action is a multicast action.
+ * Multicast actions are dispatched to all components within a named scope boundary.
+ *
+ * @param action The action to check.
+ * @returns True if the action is a multicast action, false otherwise.
+ */
+export function isMulticastAction(action: ActionId | object): boolean {
+  // Handle raw string/symbol (legacy or internal)
+  if (G.isString(action))
+    return action.startsWith(config.multicastActionPrefix);
+  if (typeof action === "symbol")
+    return (
+      action.description?.startsWith(config.multicastActionPrefix) ?? false
+    );
+
+  // Handle action object, function, or channeled action
+  if (G.isObject(action) || typeof action === "function") {
+    // Check for Brand.Multicast brand
+    if (
+      Brand.Multicast in action &&
+      (<{ [Brand.Multicast]: boolean }>action)[Brand.Multicast]
+    ) {
+      return true;
+    }
+    // Fall back to checking the underlying symbol
+    if (Brand.Action in action) {
+      const actionSymbol = (<{ [Brand.Action]: symbol }>action)[Brand.Action];
+      return (
+        actionSymbol.description?.startsWith(config.multicastActionPrefix) ??
+        false
+      );
+    }
+  }
+
+  return false;
 }

@@ -16,7 +16,7 @@ export const features = [
   },
   {
     icon: "🔄",
-    title: "Distributed Actions",
+    title: "Broadcast Actions",
     desc: "Cross-component communication via pub/sub",
   },
   {

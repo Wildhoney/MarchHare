@@ -1,7 +1,7 @@
 /**
  * E2E Test Fixtures for Rules 32-35: Component Structure
  *
- * Rule 32: Use <Boundary> to isolate distributed actions
+ * Rule 32: Use <Boundary> to isolate broadcast actions
  * Rule 33: One useActions call per component
  * Rule 34: Use .box() to pass slice state to child components
  * Rule 35: Use .context() to pass the entire context to child components
@@ -15,7 +15,7 @@ import {
   type Box,
 } from "../../../src/library/index.ts";
 
-// Distributed actions for boundary test
+// Broadcast actions for boundary test
 class GlobalActions {
   static GlobalCounter = Action<number>(
     "GlobalCounter",
@@ -106,7 +106,7 @@ function useIsolatedFeatureActions() {
 }
 
 /**
- * Rule 32 Test: <Boundary> for isolating distributed actions
+ * Rule 32 Test: <Boundary> for isolating broadcast actions
  */
 function GlobalPublisher() {
   const [, actions] = useGlobalPublisherActions();
@@ -149,7 +149,7 @@ function GlobalSubscriber({ id }: { id: string }) {
 }
 
 function IsolatedFeature() {
-  // This component is inside a Boundary - its distributed actions are isolated
+  // This component is inside a Boundary - its broadcast actions are isolated
   const [model, actions] = useIsolatedFeatureActions();
 
   return (

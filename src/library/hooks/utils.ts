@@ -7,8 +7,9 @@ import {
   Model,
   Actions,
   Filter,
+  Nodes,
 } from "../types/index.ts";
-import type { LifecycleConfig } from "./types.ts";
+import type { LifecycleConfig, References } from "./types.ts";
 import type { HandlerContext } from "../types/index.ts";
 import { A, G } from "@mobily/ts-belt";
 import { useConsumer } from "../boundary/components/consumer/utils.ts";
@@ -49,16 +50,16 @@ export function isGenerator(
 
 /**
  * Emits lifecycle events for component mount/unmount and DOM attachment.
- * Also invokes distributed action handlers with cached values on mount.
+ * Also invokes broadcast action handlers with cached values on mount.
  * Updates the phase ref to track the component's current lifecycle state.
  *
  * Note: The phase transitions are:
- * - Mounting → (cached distributed action values emitted here) → Mounted
+ * - Mounting → (cached broadcast action values emitted here) → Mounted
  * - Mounted → Unmounting → Unmounted
  */
 export function useLifecycles({
   unicast,
-  distributedActions,
+  broadcastActions,
   phase,
   data,
 }: LifecycleConfig): void {
@@ -68,7 +69,7 @@ export function useLifecycles({
   React.useLayoutEffect(() => {
     unicast.emit(Lifecycle.Mount);
 
-    distributedActions.forEach((action) => {
+    broadcastActions.forEach((action) => {
       const entry = consumer.get(action);
       const value = entry?.state.model?.value;
       if (!G.isNullable(value)) unicast.emit(action, value);
@@ -157,6 +158,23 @@ export function With<K extends string>(
 
 // Re-export isChanneledAction and getActionSymbol for convenience
 export { isChanneledAction, getActionSymbol };
+
+/**
+ * Manages captured DOM nodes for a model type.
+ * Returns refs for nodes, pending captures, and last emitted nodes.
+ *
+ * @template M The model type containing a `nodes` property
+ * @returns Object containing refs for nodes, pending captures, and emitted nodes
+ */
+export function useNodes<M extends Model>(): References<M> {
+  type N = Nodes<M>;
+  const refs = React.useRef<{ [K in keyof N]: N[K] | null }>(
+    <{ [K in keyof N]: N[K] | null }>{},
+  );
+  const pending = React.useRef<Map<keyof N, N[keyof N] | null>>(new Map());
+  const emitted = React.useRef<Map<keyof N, N[keyof N] | null>>(new Map());
+  return React.useMemo(() => ({ refs, pending, emitted }), []);
+}
 
 /**
  * Checks if a dispatch channel matches a registered handler channel.

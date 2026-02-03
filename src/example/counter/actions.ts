@@ -1,6 +1,5 @@
 import { useActions, Operation } from "../../library/index.ts";
 import { sleep } from "../../library/utils/index.ts";
-import { DistributedActions } from "../types.ts";
 import { Model, Actions } from "./types.ts";
 
 const model: Model = {
@@ -22,14 +21,14 @@ export function useCounterActions() {
 
     context.actions.produce((draft) => {
       draft.model.count = draft.model.count + 1;
-      context.actions.dispatch(DistributedActions.Counter, draft.model.count);
+      context.actions.dispatch(Actions.Broadcast.Counter, draft.model.count);
     });
   });
 
   actions.useAction(Actions.Decrement, (context) => {
     context.actions.produce((draft) => {
       draft.model.count = draft.model.count - 1;
-      context.actions.dispatch(DistributedActions.Counter, draft.model.count);
+      context.actions.dispatch(Actions.Broadcast.Counter, draft.model.count);
     });
   });
 

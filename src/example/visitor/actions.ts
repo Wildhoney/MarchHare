@@ -1,4 +1,5 @@
-import { useActions, Lifecycle, With } from "../../library/index.ts";
+import { A } from "@mobily/ts-belt";
+import { useActions, Lifecycle } from "../../library/index.ts";
 import { Model, Actions, Country } from "./types.ts";
 
 const model: Model = {
@@ -36,14 +37,12 @@ export function useVisitorActions() {
     });
   });
 
-  actions.useAction(Actions.Visitor, With("visitor"));
-
-  // actions.useAction(Actions.Visitor, (context, country) => {
-  //   context.actions.produce((draft) => {
-  //     draft.model.visitor = country;
-  //     draft.model.history = [...A.take([country, ...draft.model.history], 20)];
-  //   });
-  // });
+  actions.useAction(Actions.Visitor, (context, country) => {
+    context.actions.produce((draft) => {
+      draft.model.visitor = country;
+      draft.model.history = [...A.take([country, ...draft.model.history], 20)];
+    });
+  });
 
   actions.useAction(Lifecycle.Unmount, (context) => {
     context.model.source?.close();

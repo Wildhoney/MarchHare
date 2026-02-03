@@ -1,5 +1,6 @@
 import * as React from "react";
 import Counter from "../counter/index.tsx";
+import Mood from "../mood/index.tsx";
 import Visitor from "../visitor/index.tsx";
 import { Error, Reason } from "../../library/index.ts";
 import { message } from "antd";
@@ -84,6 +85,8 @@ export default function App(): React.ReactElement {
             <Counter />
           </Error>
         </div>
+
+        <Mood />
       </div>
 
       {contextHolder}

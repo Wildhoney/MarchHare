@@ -335,22 +335,22 @@ test.describe("Chizu Rulebook", () => {
       await expect(page.getByTestId("rule-13")).not.toBeVisible();
     });
 
-    it("Rule 13: Lifecycle.Element - should fire once on mount when element is captured", async ({
+    it("Rule 13: Lifecycle.Node - should fire once on mount when node is captured", async ({
       page,
     }) => {
-      const callCount = page.getByTestId("rule-13-element-call-count");
-      const lastName = page.getByTestId("rule-13-element-last-name");
+      const callCount = page.getByTestId("rule-13-node-call-count");
+      const lastName = page.getByTestId("rule-13-node-last-name");
 
       // Should have fired once on mount
       await expect(callCount).toHaveText("1");
       await expect(lastName).toHaveText("testButton");
     });
 
-    it("Rule 13: Lifecycle.Element - should not fire when state changes but element stays same", async ({
+    it("Rule 13: Lifecycle.Node - should not fire when state changes but node stays same", async ({
       page,
     }) => {
-      const callCount = page.getByTestId("rule-13-element-call-count");
-      const button = page.getByTestId("rule-13-element-button");
+      const callCount = page.getByTestId("rule-13-node-call-count");
+      const button = page.getByTestId("rule-13-node-button");
 
       await expect(callCount).toHaveText("1");
 
@@ -358,7 +358,7 @@ test.describe("Chizu Rulebook", () => {
       await button.click();
       await expect(button).toContainText("Click me (1)");
 
-      // Call count should still be 1 - element didn't change
+      // Call count should still be 1 - node didn't change
       await expect(callCount).toHaveText("1");
 
       // Click again
@@ -405,13 +405,11 @@ test.describe("Chizu Rulebook", () => {
     });
   });
 
-  // Distributed Actions (Rules 16-19)
-  test.describe("Distributed Actions", () => {
+  // Broadcast Actions (Rules 16-19)
+  test.describe("Broadcast Actions", () => {
     test.beforeEach(async ({ page }) => {
-      await page.goto("/?fixture=distributed-actions");
-      await expect(
-        page.getByTestId("distributed-actions-fixture"),
-      ).toBeVisible();
+      await page.goto("/?fixture=broadcast-actions");
+      await expect(page.getByTestId("broadcast-actions-fixture")).toBeVisible();
     });
 
     it("Rule 16: Only broadcast actions can be consumed - should update traditional handler on broadcast", async ({
@@ -854,7 +852,7 @@ test.describe("Chizu Rulebook", () => {
       ).toBeVisible();
     });
 
-    it("Rule 32: Use <Boundary> to isolate distributed actions - should deliver broadcasts to subscribers outside boundary", async ({
+    it("Rule 32: Use <Boundary> to isolate broadcast actions - should deliver broadcasts to subscribers outside boundary", async ({
       page,
     }) => {
       const counterOutside = page.getByTestId("rule-32-counter-outside");
@@ -870,7 +868,7 @@ test.describe("Chizu Rulebook", () => {
       expect(Number(counterText)).toBeGreaterThan(0);
     });
 
-    it("Rule 32: Use <Boundary> to isolate distributed actions - should isolate broadcasts inside boundary", async ({
+    it("Rule 32: Use <Boundary> to isolate broadcast actions - should isolate broadcasts inside boundary", async ({
       page,
     }) => {
       const isolatedCounter = page.getByTestId("rule-32-isolated-counter");
@@ -885,7 +883,7 @@ test.describe("Chizu Rulebook", () => {
       await expect(outsideCounter).toHaveText("0");
     });
 
-    it("Rule 32: Use <Boundary> to isolate distributed actions - should not leak outside broadcasts into boundary", async ({
+    it("Rule 32: Use <Boundary> to isolate broadcast actions - should not leak outside broadcasts into boundary", async ({
       page,
     }) => {
       const isolatedCount = page.getByTestId("rule-32-isolated-count");
@@ -1082,7 +1080,7 @@ test.describe("Chizu Rulebook", () => {
       expect(resultText).toContain("timestamp");
     });
 
-    it("Rule 39: Use distributed actions for SSE - should start and stop SSE connection", async ({
+    it("Rule 39: Use broadcast actions for SSE - should start and stop SSE connection", async ({
       page,
     }) => {
       const connected = page.getByTestId("rule-39-connected");
@@ -1096,7 +1094,7 @@ test.describe("Chizu Rulebook", () => {
       await expect(connected).toHaveText("disconnected", { timeout: 1500 });
     });
 
-    it("Rule 39: Use distributed actions for SSE - should receive SSE messages via broadcast", async ({
+    it("Rule 39: Use broadcast actions for SSE - should receive SSE messages via broadcast", async ({
       page,
     }) => {
       const messageCount = page.getByTestId("rule-39-message-count");
@@ -1114,7 +1112,7 @@ test.describe("Chizu Rulebook", () => {
       await page.getByTestId("rule-39-stop").click();
     });
 
-    it("Rule 39: Use distributed actions for SSE - should deliver SSE broadcasts to late-mounting subscribers", async ({
+    it("Rule 39: Use broadcast actions for SSE - should deliver SSE broadcasts to late-mounting subscribers", async ({
       page,
     }) => {
       const messageCount = page.getByTestId("rule-39-message-count");

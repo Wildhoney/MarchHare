@@ -22,8 +22,8 @@ import { HandlersFixture } from "./rules/handlers.tsx";
 // Fixture imports - Rules 13-15: Lifecycles
 import { LifecyclesFixture } from "./rules/lifecycles.tsx";
 
-// Fixture imports - Rules 16-19: Distributed Actions
-import { DistributedActionsFixture } from "./rules/distributed-actions.tsx";
+// Fixture imports - Rules 16-19: Broadcast Actions
+import { BroadcastActionsFixture } from "./rules/broadcast-actions.tsx";
 
 // Fixture imports - Rules 20-22: Task Management
 import { TaskManagementFixture } from "./rules/task-management.tsx";
@@ -45,7 +45,7 @@ const fixtures: Record<string, React.ComponentType> = {
   "state-updates": StateUpdatesFixture,
   handlers: HandlersFixture,
   lifecycles: LifecyclesFixture,
-  "distributed-actions": DistributedActionsFixture,
+  "broadcast-actions": BroadcastActionsFixture,
   "task-management": TaskManagementFixture,
   "error-handling": ErrorHandlingFixture,
   "type-safety": TypeSafetyFixture,

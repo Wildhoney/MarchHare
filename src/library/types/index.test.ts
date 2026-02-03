@@ -31,9 +31,10 @@ describe("HandlerPayload", () => {
 describe("Brand", () => {
   it("should have symbol properties", () => {
     expect(typeof Brand.Payload).toBe("symbol");
-    expect(typeof Brand.Distributed).toBe("symbol");
+    expect(typeof Brand.Broadcast).toBe("symbol");
+    expect(typeof Brand.Multicast).toBe("symbol");
     expect(typeof Brand.Action).toBe("symbol");
     expect(typeof Brand.Channel).toBe("symbol");
-    expect(typeof Brand.Element).toBe("symbol");
+    expect(typeof Brand.Node).toBe("symbol");
   });
 });

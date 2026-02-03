@@ -33,10 +33,10 @@ type LifecycleModel = {
   events: string[];
 };
 
-type ElementModel = {
-  elementCallCount: number;
-  lastElementName: string;
-  elements: {
+type NodeModel = {
+  nodeCallCount: number;
+  lastNodeName: string;
+  nodes: {
     testButton: HTMLButtonElement;
   };
 };
@@ -130,29 +130,26 @@ function useRule14Actions() {
   return actions;
 }
 
-function useElementActions() {
-  const actions = useActions<ElementModel, typeof LifecycleActions>({
-    elementCallCount: 0,
-    lastElementName: "",
-    elements: {} as ElementModel["elements"],
+function useNodeActions() {
+  const actions = useActions<NodeModel, typeof LifecycleActions>({
+    nodeCallCount: 0,
+    lastNodeName: "",
+    nodes: {} as NodeModel["nodes"],
   });
 
-  // Subscribe to all element changes
-  actions.useAction(Lifecycle.Element, (context) => {
+  // Subscribe to all node changes
+  actions.useAction(Lifecycle.Node, (context) => {
     context.actions.produce((draft) => {
-      draft.model.elementCallCount = draft.model.elementCallCount + 1;
+      draft.model.nodeCallCount = draft.model.nodeCallCount + 1;
     });
   });
 
-  // Subscribe to specific element by name (channeled)
-  actions.useAction(
-    Lifecycle.Element({ Name: "testButton" }),
-    (context, element) => {
-      context.actions.produce((draft) => {
-        draft.model.lastElementName = element ? "testButton" : "null";
-      });
-    },
-  );
+  // Subscribe to specific node by name (channeled)
+  actions.useAction(Lifecycle.Node({ Name: "testButton" }), (context, node) => {
+    context.actions.produce((draft) => {
+      draft.model.lastNodeName = node ? "testButton" : "null";
+    });
+  });
 
   return actions;
 }
@@ -322,22 +319,20 @@ function Rule15CachedValues() {
 }
 
 /**
- * Rule 13b Test: Lifecycle.Element for DOM element capture
+ * Rule 13b Test: Lifecycle.Node for DOM node capture
  */
-function Rule13ElementCapture() {
-  const [model, actions] = useElementActions();
+function Rule13NodeCapture() {
+  const [model, actions] = useNodeActions();
   const [counter, setCounter] = React.useState(0);
 
   return (
-    <section data-testid="rule-13-element">
-      <h3>Rule 13b: Element Capture</h3>
-      <div data-testid="rule-13-element-call-count">
-        {model.elementCallCount}
-      </div>
-      <div data-testid="rule-13-element-last-name">{model.lastElementName}</div>
+    <section data-testid="rule-13-node">
+      <h3>Rule 13b: Node Capture</h3>
+      <div data-testid="rule-13-node-call-count">{model.nodeCallCount}</div>
+      <div data-testid="rule-13-node-last-name">{model.lastNodeName}</div>
       <button
-        ref={(el) => actions.element("testButton", el)}
-        data-testid="rule-13-element-button"
+        ref={(node) => actions.node("testButton", node)}
+        data-testid="rule-13-node-button"
         onClick={() => setCounter((c) => c + 1)}
       >
         Click me ({counter})
@@ -373,7 +368,7 @@ export function LifecyclesFixture() {
     <div data-testid="lifecycles-fixture">
       <h2>Rules 13-15: Lifecycles</h2>
       <UnmountTestWrapper />
-      <Rule13ElementCapture />
+      <Rule13NodeCapture />
       <Rule14PhaseContext />
       <Rule15CachedValues />
     </div>

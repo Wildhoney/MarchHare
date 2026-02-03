@@ -28,42 +28,39 @@ export function useMyActions() {
 - **`Lifecycle.Error`** &ndash; Triggered when an action throws an error. Receives `Fault` as payload.
 - **`Lifecycle.Unmount`** &ndash; Triggered when the component unmounts. All in-flight actions are automatically aborted before this handler runs.
 - **`Lifecycle.Update`** &ndash; Triggered when `context.data` changes. Receives an object with the changed keys.
-- **`Lifecycle.Element`** &ndash; Triggered when a DOM element is captured via `actions.element()`. Supports channeled subscriptions by element name.
+- **`Lifecycle.Node`** &ndash; Triggered when a DOM node is captured via `actions.node()`. Supports channeled subscriptions by node name.
 
 **Note:** Actions should ideally be self-contained and handle expected errors internally using patterns like [Option](https://mobily.github.io/ts-belt/api/option) or [Result](https://mobily.github.io/ts-belt/api/result) types to update the model accordingly. `Lifecycle.Error` is intended for timeouts, aborts, and uncaught catastrophic errors &ndash; not routine error handling.
 
 The `<Error>` component is a catch-all for errors from **any** action in your application, useful for global error reporting or logging. `Lifecycle.Error` handles errors **locally** where they occurred, allowing component-specific error recovery or UI updates.
 
-## Element capture events
+## Node capture events
 
-`Lifecycle.Element` fires whenever a DOM element is captured or released via `actions.element()`. Since it's a channeled action, you can subscribe to specific elements by name:
+`Lifecycle.Node` fires whenever a DOM node is captured or released via `actions.node()`. Since it's a channeled action, you can subscribe to specific nodes by name:
 
 ```tsx
 type Model = {
   count: number;
-  elements: {
+  nodes: {
     searchInput: HTMLInputElement;
   };
 };
 
 const [model, actions] = useActions<Model, typeof Actions>(model);
 
-// Subscribe to all element changes
-actions.useAction(Lifecycle.Element, (context, element) => {
-  console.log("Some element changed:", element);
+// Subscribe to all node changes
+actions.useAction(Lifecycle.Node, (context, node) => {
+  console.log("Some node changed:", node);
 });
 
 // Subscribe only to searchInput changes (channeled)
-actions.useAction(
-  Lifecycle.Element({ Name: "searchInput" }),
-  (context, element) => {
-    if (element) {
-      element.focus(); // Element was captured
-    }
-  },
-);
+actions.useAction(Lifecycle.Node({ Name: "searchInput" }), (context, node) => {
+  if (node) {
+    node.focus(); // Node was captured
+  }
+});
 
-return <input ref={(el) => actions.element("searchInput", el)} />;
+return <input ref={(node) => actions.node("searchInput", node)} />;
 ```
 
-The payload is the captured element or `null` when the element unmounts.
+The payload is the captured node or `null` when the node unmounts.

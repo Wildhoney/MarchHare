@@ -4,6 +4,7 @@ export { Error, Reason } from "./error/index.tsx";
 export { Operation, Op, State } from "immertation";
 
 export { Boundary } from "./boundary/index.tsx";
+export { Scope } from "./boundary/components/scope/index.tsx";
 
 export { useActions, With } from "./hooks/index.ts";
 export * as utils from "./utils/index.ts";

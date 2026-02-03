@@ -3,7 +3,7 @@ import { useVisitorActions } from "./actions.ts";
 import * as styles from "./styles.ts";
 import { Popover } from "antd";
 import { A } from "@mobily/ts-belt";
-import { DistributedActions } from "../types.ts";
+import { BroadcastActions } from "../types.ts";
 
 export default function Visitor(): React.ReactElement | null {
   const [model, actions] = useVisitorActions();
@@ -25,7 +25,7 @@ export default function Visitor(): React.ReactElement | null {
       <div
         className={styles.container}
         data-counter={actions.consume(
-          DistributedActions.Counter,
+          BroadcastActions.Counter,
           (counter) => counter.value,
         )}
       >

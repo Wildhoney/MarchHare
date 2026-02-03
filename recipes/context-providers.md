@@ -4,7 +4,7 @@ Chizu provides context providers for advanced use cases where you need isolated 
 
 ## `Broadcaster`
 
-Creates an isolated broadcast context for distributed actions. Useful for libraries that want their own broadcast context without interfering with the host application:
+Creates an isolated broadcast context for broadcast actions. Useful for libraries that want their own broadcast context without interfering with the host application:
 
 ```tsx
 import { Broadcaster } from "chizu";
@@ -14,7 +14,7 @@ function MyLibraryRoot({ children }) {
 }
 ```
 
-Components inside `<Broadcaster>` have their own isolated broadcast channel. Distributed actions dispatched inside won't reach components outside, and vice versa.
+Components inside `<Broadcaster>` have their own isolated broadcast channel. Broadcast actions dispatched inside won't reach components outside, and vice versa.
 
 ## `Regulators`
 
@@ -32,7 +32,7 @@ This is useful for libraries that need action control without affecting the host
 
 ## `Consumer`
 
-Creates an isolated consumer context for storing distributed action values. The Consumer stores the latest payload for each distributed action, enabling the `consume()` method to display the most recent value even when components mount after the action was dispatched:
+Creates an isolated consumer context for storing broadcast action values. The Consumer stores the latest payload for each broadcast action, enabling the `consume()` method to display the most recent value even when components mount after the action was dispatched:
 
 ```tsx
 import { Consumer } from "chizu";

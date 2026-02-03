@@ -9,7 +9,23 @@ import type {
   ActionId,
   Phase,
   Filter,
+  Nodes,
 } from "../types/index.ts";
+
+/**
+ * Return type for the useNodes hook.
+ * Contains refs for captured nodes, pending captures, and last emitted nodes.
+ *
+ * @template M - The model type containing a `nodes` property
+ */
+export type References<M extends Model> = {
+  /** Ref containing captured DOM nodes by name */
+  refs: RefObject<{ [K in keyof Nodes<M>]: Nodes<M>[K] | null }>;
+  /** Ref containing pending node captures to be processed after render */
+  pending: RefObject<Map<keyof Nodes<M>, Nodes<M>[keyof Nodes<M>] | null>>;
+  /** Ref containing last emitted node values to detect true changes */
+  emitted: RefObject<Map<keyof Nodes<M>, Nodes<M>[keyof Nodes<M>] | null>>;
+};
 
 /**
  * Function signature for action handlers registered via `useAction`.
@@ -73,7 +89,7 @@ export type Data<D extends Props = Props> = () => D;
 export type LifecycleConfig = {
   unicast: EventEmitter;
   tasks: Tasks;
-  distributedActions: Set<ActionId>;
+  broadcastActions: Set<ActionId>;
   phase: RefObject<Phase>;
   data: Props;
 };

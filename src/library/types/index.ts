@@ -13,21 +13,23 @@ export type { ConsumerRenderer };
 
 /**
  * Internal symbols used as brand keys to distinguish typed objects at runtime.
- * These enable TypeScript to differentiate between HandlerPayload, DistributedPayload,
+ * These enable TypeScript to differentiate between HandlerPayload, BroadcastPayload,
  * and channeled actions through branded types.
  * @internal
  */
 export class Brand {
   /** Brand key for HandlerPayload type */
   static Payload = Symbol("chizu.brand/Payload");
-  /** Brand key for DistributedPayload type */
-  static Distributed = Symbol("chizu.brand/Distributed");
+  /** Brand key for BroadcastPayload type */
+  static Broadcast = Symbol("chizu.brand/Broadcast");
+  /** Brand key for MulticastPayload type */
+  static Multicast = Symbol("chizu.brand/Multicast");
   /** Access the underlying symbol from an action */
   static Action = Symbol("chizu.brand/Action");
   /** Identifies channeled actions (result of calling Action(channel)) */
   static Channel = Symbol("chizu.brand/Channel");
-  /** Element capture events used by Lifecycle.Element */
-  static Element = Symbol("chizu.action.lifecycle/Element");
+  /** Node capture events used by Lifecycle.Node */
+  static Node = Symbol("chizu.action.lifecycle/Node");
 }
 
 /**
@@ -54,28 +56,28 @@ export class Lifecycle {
   static Update = Symbol("chizu.action.lifecycle/Update");
 
   /**
-   * Triggered when an element is captured or released via `actions.element()`.
-   * Supports channeled subscriptions by element name.
+   * Triggered when a node is captured or released via `actions.node()`.
+   * Supports channeled subscriptions by node name.
    *
-   * The payload is the captured element (or `null` when released).
+   * The payload is the captured node (or `null` when released).
    *
    * @example
    * ```ts
-   * // Subscribe to ALL element changes
-   * actions.useAction(Lifecycle.Element, (context, element) => {
-   *   console.log("Element changed:", element);
+   * // Subscribe to ALL node changes
+   * actions.useAction(Lifecycle.Node, (context, node) => {
+   *   console.log("Node changed:", node);
    * });
    *
-   * // Subscribe to a specific element by name (channeled)
-   * actions.useAction(Lifecycle.Element({ Name: "input" }), (context, element) => {
-   *   if (element) {
-   *     element.focus();
+   * // Subscribe to a specific node by name (channeled)
+   * actions.useAction(Lifecycle.Node({ Name: "input" }), (context, node) => {
+   *   if (node) {
+   *     node.focus();
    *   }
    * });
    * ```
    */
-  static Element = (() => {
-    const symbol = Brand.Element;
+  static Node = (() => {
+    const symbol = Brand.Node;
     const action = function (channel: {
       Name: string;
     }): ChanneledAction<unknown, { Name: string }> {
@@ -124,6 +126,8 @@ export enum Distribution {
   Unicast = "unicast",
   /** Action is broadcast to all mounted components and can be consumed. */
   Broadcast = "broadcast",
+  /** Action is multicast to all components within a named scope boundary. */
+  Multicast = "multicast",
 }
 
 /**
@@ -194,7 +198,7 @@ export type Model<M = Record<string, unknown>> = M;
 export type HandlerPayload<P = unknown, C extends Filter = never> = {
   readonly [Brand.Action]: symbol;
   readonly [Brand.Payload]: P;
-  readonly [Brand.Distributed]?: boolean;
+  readonly [Brand.Broadcast]?: boolean;
 } & ([C] extends [never]
   ? unknown
   : {
@@ -224,11 +228,11 @@ export type ChanneledAction<P = unknown, C = unknown> = {
 };
 
 /**
- * Branded type for distributed action objects created with `Action()` and `Distribution.Broadcast`.
- * Distributed actions are broadcast to all mounted components and can be consumed with `actions.consume()`.
+ * Branded type for broadcast action objects created with `Action()` and `Distribution.Broadcast`.
+ * Broadcast actions are sent to all mounted components and can be consumed with `actions.consume()`.
  *
  * This type extends `HandlerPayload<P, C>` with an additional brand to enforce at compile-time
- * that only distributed actions can be passed to `consume()`. Attempting to consume
+ * that only broadcast actions can be passed to `consume()`. Attempting to consume
  * a local action will result in a TypeScript error.
  *
  * @template P - The payload type for the action
@@ -236,7 +240,7 @@ export type ChanneledAction<P = unknown, C = unknown> = {
  *
  * @example
  * ```ts
- * // This compiles - SignedOut is a distributed action
+ * // This compiles - SignedOut is a broadcast action
  * const SignedOut = Action<User>("SignedOut", Distribution.Broadcast);
  * actions.consume(SignedOut, (box) => <div>{box.value.name}</div>);
  *
@@ -245,11 +249,64 @@ export type ChanneledAction<P = unknown, C = unknown> = {
  * actions.consume(Increment, ...); // Type error!
  * ```
  */
-export type DistributedPayload<
+export type BroadcastPayload<
   P = unknown,
   C extends Filter = never,
 > = HandlerPayload<P, C> & {
-  readonly [Brand.Distributed]: true;
+  readonly [Brand.Broadcast]: true;
+};
+
+/**
+ * Branded type for multicast action objects created with `Action()` and `Distribution.Multicast`.
+ * Multicast actions are dispatched to all components within a named scope boundary.
+ *
+ * When dispatching a multicast action, you MUST provide the scope name as the third argument:
+ * ```ts
+ * actions.dispatch(Actions.Multicast.Update, payload, { scope: "MyScope" });
+ * ```
+ *
+ * Components receive multicast events only if they are descendants of a `<Scope name="...">`.
+ *
+ * @template P - The payload type for the action
+ * @template C - The channel type for channeled dispatches (defaults to never)
+ *
+ * @example
+ * ```tsx
+ * // Define multicast actions in a shared class
+ * class MulticastActions {
+ *   static Update = Action<number>("Update", Distribution.Multicast);
+ * }
+ *
+ * // Reference from component-level Actions
+ * class Actions {
+ *   static Multicast = MulticastActions;
+ * }
+ *
+ * // In JSX - create a named scope boundary
+ * <Scope name="Counter">
+ *   <CounterA />
+ *   <CounterB />
+ * </Scope>
+ *
+ * // Inside CounterA - dispatch to all components in "Counter" scope
+ * actions.dispatch(Actions.Multicast.Update, 42, { scope: "Counter" });
+ * // CounterA and CounterB both receive the event
+ * ```
+ */
+export type MulticastPayload<
+  P = unknown,
+  C extends Filter = never,
+> = HandlerPayload<P, C> & {
+  readonly [Brand.Multicast]: true;
+};
+
+/**
+ * Options for multicast dispatch.
+ * Required when dispatching a multicast action.
+ */
+export type MulticastOptions = {
+  /** The name of the scope to multicast to. Must match a `<Scope name="...">` ancestor. */
+  scope: string;
 };
 
 /**
@@ -371,37 +428,25 @@ type AssertSync<F> =
 export type Props = Record<string, unknown>;
 
 /**
- * Extracts the elements type from a Model.
- * If the model has an `elements` property, returns its type.
+ * Extracts the nodes type from a Model.
+ * If the model has a `nodes` property, returns its type.
  * Otherwise returns an empty record.
  *
  * @example
  * ```ts
  * type Model = {
  *   count: number;
- *   elements: { button: HTMLButtonElement | null };
+ *   nodes: { button: HTMLButtonElement | null };
  * };
  *
- * type E = ModelElements<Model>; // { button: HTMLButtonElement | null }
+ * type N = Nodes<Model>; // { button: HTMLButtonElement | null }
  * ```
  */
-export type ModelElements<M> = M extends {
-  elements: infer E extends Record<string, unknown>;
+export type Nodes<M> = M extends {
+  nodes: infer N extends Record<string, unknown>;
 }
-  ? E
+  ? N
   : Record<string, never>;
-
-/**
- * Base type for element mappings in useActions.
- * @deprecated Define elements directly in your Model type instead:
- * ```ts
- * type Model = {
- *   count: number;
- *   elements: { button: HTMLButtonElement | null };
- * };
- * ```
- */
-export type Elements = Record<string, unknown>;
 
 /**
  * Constraint type for action containers.
@@ -456,7 +501,7 @@ export type HandlerContext<
    *
    * @example
    * ```ts
-   * actions.useAction(DistributedActions.Counter, (context, payload) => {
+   * actions.useAction(Actions.Broadcast.Counter, (context, payload) => {
    *   if (context.phase === Phase.Mounting) {
    *     // Called with cached value during mount
    *     console.log("Received cached value:", payload);
@@ -535,20 +580,20 @@ export type HandlerContext<
    * }
    * ```
    */
-  readonly tasks: Tasks;
+  readonly tasks: ReadonlySet<Task>;
   /**
-   * Captured DOM elements registered via `actions.element()`.
-   * Elements may be `null` if not yet captured or if the element was unmounted.
+   * Captured DOM nodes registered via `actions.node()`.
+   * Nodes may be `null` if not yet captured or if the node was unmounted.
    *
    * @example
    * ```ts
    * actions.useAction(Actions.Focus, (context) => {
-   *   context.elements.input?.focus();
+   *   context.nodes.input?.focus();
    * });
    * ```
    */
-  readonly elements: {
-    [K in keyof ModelElements<M>]: ModelElements<M>[K] | null;
+  readonly nodes: {
+    [K in keyof Nodes<M>]: Nodes<M>[K] | null;
   };
   readonly actions: {
     produce<
@@ -558,8 +603,12 @@ export type HandlerContext<
       }) => void,
     >(
       ƒ: F & AssertSync<F>,
-    ): M;
-    dispatch(action: ActionOrChanneled, payload?: unknown): void;
+    ): void;
+    dispatch(
+      action: ActionOrChanneled,
+      payload?: unknown,
+      options?: MulticastOptions,
+    ): void;
     annotate<T>(operation: Operation, value: T): T;
   };
 };
@@ -675,69 +724,115 @@ export type UseActions<
 > = [
   Readonly<M>,
   {
-    dispatch(action: ActionOrChanneled, payload?: HandlerPayload): void;
     /**
-     * Subscribes to a distributed action's values and renders based on the callback.
+     * Dispatches an action with an optional payload.
+     *
+     * For multicast actions, you MUST provide the scope as the third argument:
+     * ```ts
+     * actions.dispatch(Actions.Multicast.Update, payload, { scope: "MyScope" });
+     * ```
+     *
+     * @param action - The action to dispatch
+     * @param payload - The payload to send with the action
+     * @param options - For multicast actions, must include `{ scope: "ScopeName" }`
+     */
+    dispatch<P>(
+      action: HandlerPayload<P>,
+      payload?: P,
+      options?: MulticastOptions,
+    ): void;
+    dispatch<P>(
+      action: BroadcastPayload<P>,
+      payload?: P,
+      options?: MulticastOptions,
+    ): void;
+    dispatch<P>(
+      action: MulticastPayload<P>,
+      payload: P,
+      options: MulticastOptions,
+    ): void;
+    dispatch<P, C extends Filter>(
+      action: ChanneledAction<P, C>,
+      payload?: P,
+      options?: MulticastOptions,
+    ): void;
+    /**
+     * Subscribes to a distributed or multicast action's values and renders based on the callback.
      * The callback receives a Box with `value` (the payload) and `inspect` (for annotation status).
-     * On mount, displays the most recent value from the Consumer store if available.
+     * On mount, displays the most recent value from the Consumer/Scope store if available.
      *
-     * Supports two usage patterns:
-     * 1. Consuming actions from the local actions class (with autocomplete)
-     * 2. Consuming any distributed action from external modules
+     * Supports three usage patterns:
+     * 1. Consuming broadcast actions from the local actions class (with autocomplete)
+     * 2. Consuming any broadcast action from external modules
+     * 3. Consuming multicast actions with a scope name
      *
-     * @param action - The distributed action to consume
+     * @param action - The distributed or multicast action to consume
      * @param renderer - Render function receiving the Box
+     * @param options - For multicast actions, must include `{ scope: "ScopeName" }`
      * @returns React element rendered by the callback
      *
      * @example
      * ```tsx
-     * // Local action (from same actions class)
+     * // Local broadcast action (from same actions class)
      * {actions.consume(Actions.Visitor, (visitor) =>
      *   visitor.inspect.pending() ? "Loading..." : visitor.value.name
      * )}
      *
-     * // External distributed action
+     * // External broadcast action
      * {actions.consume(SharedActions.Counter, (counter) => counter.value)}
+     *
+     * // Multicast action with scope
+     * {actions.consume(Actions.Multicast.Update, (update) => update.value, { scope: "MyScope" })}
      * ```
      */
     consume<T>(
-      action: DistributedPayload<T>,
+      action: BroadcastPayload<T>,
       renderer: ConsumerRenderer<T>,
     ): React.ReactNode;
+    consume<T>(
+      action: MulticastPayload<T>,
+      renderer: ConsumerRenderer<T>,
+      options: MulticastOptions,
+    ): React.ReactNode;
     consume<K extends keyof AC>(
-      action: AC[K] & DistributedPayload<unknown>,
+      action: AC[K] & BroadcastPayload<unknown>,
       renderer: ConsumerRenderer<Payload<AC[K]>>,
+    ): React.ReactNode;
+    consume<K extends keyof AC>(
+      action: AC[K] & MulticastPayload<unknown>,
+      renderer: ConsumerRenderer<Payload<AC[K]>>,
+      options: MulticastOptions,
     ): React.ReactNode;
     inspect: Inspect<M>;
     /**
-     * Captured DOM elements registered via `element()`.
-     * Elements may be `null` if not yet captured or if the element was unmounted.
+     * Captured DOM nodes registered via `node()`.
+     * Nodes may be `null` if not yet captured or if the node was unmounted.
      *
      * @example
      * ```tsx
      * type Model = {
      *   count: number;
-     *   elements: { input: HTMLInputElement };
+     *   nodes: { input: HTMLInputElement };
      * };
      * const [model, actions] = useActions<Model, typeof Actions>(model);
      *
-     * // Access captured elements
-     * actions.elements.input?.focus();
+     * // Access captured nodes
+     * actions.nodes.input?.focus();
      * ```
      */
-    elements: { [K in keyof ModelElements<M>]: ModelElements<M>[K] | null };
+    nodes: { [K in keyof Nodes<M>]: Nodes<M>[K] | null };
     /**
-     * Captures a DOM element for later access via `elements` or `context.elements`.
-     * Use as a ref callback on JSX elements.
+     * Captures a DOM node for later access via `nodes` or `context.nodes`.
+     * Use as a ref callback on JSX nodes.
      *
-     * @param name - The element key (must match a key in Model['elements'])
-     * @param element - The DOM element or null (when unmounting)
+     * @param name - The node key (must match a key in Model['nodes'])
+     * @param node - The DOM node or null (when unmounting)
      *
      * @example
      * ```tsx
      * type Model = {
      *   count: number;
-     *   elements: {
+     *   nodes: {
      *     container: HTMLDivElement;
      *     input: HTMLInputElement;
      *   };
@@ -746,16 +841,13 @@ export type UseActions<
      * const [model, actions] = useActions<Model, typeof Actions>(model);
      *
      * return (
-     *   <div ref={element => actions.element('container', element)}>
-     *     <input ref={element => actions.element('input', element)} />
+     *   <div ref={node => actions.node('container', node)}>
+     *     <input ref={node => actions.node('input', node)} />
      *   </div>
      * );
      * ```
      */
-    element<K extends keyof ModelElements<M>>(
-      name: K,
-      element: ModelElements<M>[K] | null,
-    ): void;
+    node<K extends keyof Nodes<M>>(name: K, node: Nodes<M>[K] | null): void;
   },
 ] & {
   /**

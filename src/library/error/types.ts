@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import type { Tasks } from "../boundary/components/tasks/types.ts";
+import type { Task } from "../boundary/components/tasks/types.ts";
 
 /**
  * Reasons why an action error occurred.
@@ -83,7 +83,7 @@ export type Fault<E extends Error = never> = {
    * </Error>
    * ```
    */
-  tasks: Tasks;
+  tasks: ReadonlySet<Task>;
 };
 
 /**

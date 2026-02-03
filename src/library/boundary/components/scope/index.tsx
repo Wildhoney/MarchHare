@@ -1,0 +1,79 @@
+import type { Props, ScopeContext, ScopeEntry } from "./types.ts";
+import { Context, useScope } from "./utils.ts";
+import EventEmitter from "eventemitter3";
+import * as React from "react";
+
+export { useScope, getScope } from "./utils.ts";
+export type { ScopeEntry, ScopeContext } from "./types.ts";
+export { MulticastPartition } from "./partition.tsx";
+
+/**
+ * Creates a named scope boundary for multicast actions.
+ *
+ * Components within a `<Scope>` can dispatch multicast actions to all other
+ * components within the same scope boundary. This is useful for creating
+ * isolated groups of components that need to communicate without affecting
+ * other parts of the application.
+ *
+ * Multiple scopes can be nested, and each scope name creates its own
+ * communication channel. When dispatching, the nearest ancestor scope
+ * with the matching name receives the event.
+ *
+ * Like Broadcast, multicast supports `consume()` for declarative rendering
+ * and provides late-mounted components with the most recent dispatched value.
+ *
+ * @param props.name - The unique name for this scope
+ * @param props.children - Components within the scope boundary
+ *
+ * @example
+ * ```tsx
+ * // Create a scoped boundary
+ * <Scope name="UserList">
+ *   <UserFilter />
+ *   <UserTable />
+ * </Scope>
+ *
+ * // In UserFilter - dispatch to all components in "UserList" scope
+ * actions.dispatch(Actions.Multicast.FilterChanged, filter, { scope: "UserList" });
+ *
+ * // UserTable receives the event, other components outside don't
+ * ```
+ *
+ * @example
+ * ```tsx
+ * // Nested scopes - each creates its own boundary
+ * <Scope name="App">
+ *   <Header />
+ *   <Scope name="Sidebar">
+ *     <SidebarItem />
+ *   </Scope>
+ *   <Scope name="Content">
+ *     <ContentItem />
+ *   </Scope>
+ * </Scope>
+ *
+ * // Dispatch to "Sidebar" only reaches SidebarItem
+ * // Dispatch to "App" reaches all components
+ * ```
+ */
+export function Scope({ name, children }: Props): React.ReactNode {
+  const parent = useScope();
+
+  const scopeEntry = React.useMemo<ScopeEntry>(
+    () => ({
+      name,
+      emitter: new EventEmitter(),
+      store: new Map(),
+      listeners: new Map(),
+    }),
+    [],
+  );
+
+  const context = React.useMemo<ScopeContext>(() => {
+    const map = new Map(parent ?? []);
+    map.set(name, scopeEntry);
+    return map;
+  }, [parent, name, scopeEntry]);
+
+  return <Context.Provider value={context}>{children}</Context.Provider>;
+}
