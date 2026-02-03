@@ -7,9 +7,15 @@ import {
   Brand,
   Filter,
 } from "../types/index.ts";
-import type { ActionId } from "../boundary/components/tasks/types.ts";
 import { config } from "../utils/index.ts";
-import { G } from "@mobily/ts-belt";
+
+export {
+  getActionSymbol,
+  isBroadcastAction,
+  isMulticastAction,
+  getName,
+  isChanneledAction,
+} from "./utils.ts";
 
 /**
  * Interface for the Action factory function.
@@ -102,7 +108,6 @@ export const Action = <ActionFactory>(<unknown>(<
         ? Symbol(`${config.multicastActionPrefix}${name}`)
         : Symbol(`${config.actionPrefix}${name}`);
 
-  // Create a callable function that produces channeled actions
   const action = function (channel: C): ChanneledAction<P, C> {
     return {
       [Brand.Action]: symbol,
@@ -112,7 +117,6 @@ export const Action = <ActionFactory>(<unknown>(<
     };
   };
 
-  // Attach the action symbol and brand keys
   // eslint-disable-next-line fp/no-mutating-methods
   Object.defineProperty(action, Brand.Action, {
     value: symbol,
@@ -142,154 +146,3 @@ export const Action = <ActionFactory>(<unknown>(<
     HandlerPayload<P, C> | BroadcastPayload<P, C> | MulticastPayload<P, C>
   >action;
 }));
-
-/**
- * Extracts the underlying symbol from an action or channeled action.
- * This symbol is used as the event emitter key for dispatching.
- *
- * @param action The action or channeled action to extract the symbol from.
- * @returns The underlying symbol, or the action itself if it's already a symbol/string.
- *
- * @example
- * ```typescript
- * const Increment = Action<number>("Increment");
- * getActionSymbol(Increment); // Symbol(chizu.action/Increment)
- * getActionSymbol(Increment({ UserId: 5 })); // Symbol(chizu.action/Increment)
- * ```
- */
-export function getActionSymbol(action: ActionId | object): ActionId {
-  if (G.isString(action)) return action;
-  if (typeof action === "symbol") return action;
-  // Check for Brand.Action property on objects or functions
-  if (
-    (G.isObject(action) || typeof action === "function") &&
-    Brand.Action in action
-  ) {
-    return (<{ [Brand.Action]: symbol }>action)[Brand.Action];
-  }
-  return <ActionId>(<unknown>action);
-}
-
-/**
- * Checks whether an action is a broadcast action.
- * Broadcast actions are sent to all mounted components that have defined a handler for them.
- *
- * @param action The action to check.
- * @returns True if the action is a broadcast action, false otherwise.
- */
-export function isBroadcastAction(action: ActionId | object): boolean {
-  // Handle raw string/symbol (legacy or internal)
-  if (G.isString(action))
-    return action.startsWith(config.broadcastActionPrefix);
-  if (typeof action === "symbol")
-    return (
-      action.description?.startsWith(config.broadcastActionPrefix) ?? false
-    );
-
-  // Handle action object, function, or channeled action
-  // Note: G.isObject returns false for functions, so we check typeof explicitly
-  if (G.isObject(action) || typeof action === "function") {
-    // Check for Brand.Broadcast brand
-    if (
-      Brand.Broadcast in action &&
-      (<{ [Brand.Broadcast]: boolean }>action)[Brand.Broadcast]
-    ) {
-      return true;
-    }
-    // Fall back to checking the underlying symbol
-    if (Brand.Action in action) {
-      const actionSymbol = (<{ [Brand.Action]: symbol }>action)[Brand.Action];
-      return (
-        actionSymbol.description?.startsWith(config.broadcastActionPrefix) ??
-        false
-      );
-    }
-  }
-
-  return false;
-}
-
-/**
- * Extracts the action name from an action.
- *
- * Parses both regular actions (`chizu.action/Name`) and
- * distributed actions (`chizu.action/distributed/Name`)
- * to extract just the name portion.
- *
- * @param action The action to extract the name from.
- * @returns The extracted action name, or "unknown" if parsing fails.
- *
- * @example
- * ```typescript
- * const Increment = Action("Increment");
- * getName(Increment); // "Increment"
- *
- * const SignedOut = Action("SignedOut", Distribution.Broadcast);
- * getName(SignedOut); // "SignedOut"
- * ```
- */
-export function getName(action: ActionId | object): string {
-  const symbol = getActionSymbol(action);
-  const description = G.isString(symbol) ? symbol : (symbol.description ?? "");
-  if (!description.startsWith(config.actionPrefix)) return "unknown";
-  const name = description.slice(description.lastIndexOf("/") + 1);
-  return name || "unknown";
-}
-
-/**
- * Checks if the given action is a channeled action (result of calling `Action(channel)`).
- *
- * @param action - The action to check
- * @returns `true` if the action is a channeled action with a channel property, `false` otherwise
- *
- * @example
- * ```ts
- * const UserUpdated = Action<User, { UserId: number }>("UserUpdated");
- *
- * isChanneledAction(UserUpdated); // false
- * isChanneledAction(UserUpdated({ UserId: 1 })); // true
- * ```
- */
-export function isChanneledAction(
-  action: ActionId | ChanneledAction | object,
-): action is ChanneledAction {
-  return G.isObject(action) && Brand.Channel in action && "channel" in action;
-}
-
-/**
- * Checks whether an action is a multicast action.
- * Multicast actions are dispatched to all components within a named scope boundary.
- *
- * @param action The action to check.
- * @returns True if the action is a multicast action, false otherwise.
- */
-export function isMulticastAction(action: ActionId | object): boolean {
-  // Handle raw string/symbol (legacy or internal)
-  if (G.isString(action))
-    return action.startsWith(config.multicastActionPrefix);
-  if (typeof action === "symbol")
-    return (
-      action.description?.startsWith(config.multicastActionPrefix) ?? false
-    );
-
-  // Handle action object, function, or channeled action
-  if (G.isObject(action) || typeof action === "function") {
-    // Check for Brand.Multicast brand
-    if (
-      Brand.Multicast in action &&
-      (<{ [Brand.Multicast]: boolean }>action)[Brand.Multicast]
-    ) {
-      return true;
-    }
-    // Fall back to checking the underlying symbol
-    if (Brand.Action in action) {
-      const actionSymbol = (<{ [Brand.Action]: symbol }>action)[Brand.Action];
-      return (
-        actionSymbol.description?.startsWith(config.multicastActionPrefix) ??
-        false
-      );
-    }
-  }
-
-  return false;
-}

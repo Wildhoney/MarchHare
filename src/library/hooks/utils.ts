@@ -8,9 +8,12 @@ import {
   Actions,
   Filter,
   Nodes,
+  ActionId,
+  HandlerPayload,
+  ChanneledAction,
+  HandlerContext,
 } from "../types/index.ts";
-import type { LifecycleConfig, References } from "./types.ts";
-import type { HandlerContext } from "../types/index.ts";
+import type { LifecycleConfig, References, Handler, Scope } from "./types.ts";
 import { A, G } from "@mobily/ts-belt";
 import { useConsumer } from "../boundary/components/consumer/utils.ts";
 import { changes } from "../utils.ts";
@@ -158,6 +161,125 @@ export function With<K extends string>(
 
 // Re-export isChanneledAction and getActionSymbol for convenience
 export { isChanneledAction, getActionSymbol };
+
+/**
+ * Return type for useActionSets hook.
+ */
+export type ActionSets = {
+  /** Set of registered broadcast action IDs */
+  broadcast: Set<ActionId>;
+  /** Set of registered multicast action IDs */
+  multicast: Set<ActionId>;
+};
+
+/**
+ * Manages sets of broadcast and multicast action IDs.
+ *
+ * This hook creates stable refs for tracking which actions have been registered
+ * as broadcast or multicast within a component. These sets are used to:
+ * - Replay cached broadcast values on mount
+ * - Track multicast subscriptions for scope-based dispatch
+ *
+ * @returns Object with `broadcast` and `multicast` Sets for action tracking
+ *
+ * @example
+ * ```ts
+ * const actions = useActionSets();
+ *
+ * // Register a broadcast action
+ * actions.broadcast.add(getActionSymbol(MyBroadcastAction));
+ *
+ * // Check if an action is registered as multicast
+ * if (actions.multicast.has(actionId)) {
+ *   // Handle multicast dispatch
+ * }
+ * ```
+ *
+ * @internal
+ */
+export function useActionSets(): ActionSets {
+  const broadcast = React.useRef<Set<ActionId>>(new Set());
+  const multicast = React.useRef<Set<ActionId>>(new Set());
+
+  return React.useMemo(
+    () => ({
+      broadcast: broadcast.current,
+      multicast: multicast.current,
+    }),
+    [],
+  );
+}
+
+/**
+ * Registers an action handler within a component's scope.
+ *
+ * This hook binds a handler function to an action, supporting both regular and channeled
+ * actions. The handler is wrapped with `useEffectEvent` to ensure it always has access
+ * to the latest closure values while maintaining a stable reference.
+ *
+ * For generator handlers (sync or async), the hook automatically iterates through
+ * all yielded values to completion.
+ *
+ * @template M - The model type representing the component's state
+ * @template AC - The actions class containing action definitions
+ * @template D - The data type for reactive external values
+ *
+ * @param scope - Ref to the component's handler scope containing registered handlers
+ * @param action - The action to register (ActionId, HandlerPayload, or ChanneledAction)
+ * @param handler - The handler function to invoke when the action is dispatched
+ *
+ * @example
+ * ```ts
+ * useRegisterHandler(scope, Actions.Increment, async (context, payload) => {
+ *   context.actions.produce((draft) => {
+ *     draft.model.count += payload;
+ *   });
+ * });
+ *
+ * // With channeled action
+ * useRegisterHandler(scope, Actions.UserUpdated({ UserId: 5 }), (context, user) => {
+ *   // Only called when UserId matches 5
+ * });
+ * ```
+ *
+ * @internal
+ */
+export function useRegisterHandler<
+  M extends Model,
+  AC extends Actions,
+  D extends Props,
+>(
+  scope: React.RefObject<Scope<M, AC, D>>,
+  action: ActionId | HandlerPayload | ChanneledAction,
+  handler: (
+    context: HandlerContext<M, AC, D>,
+    payload: unknown,
+  ) => void | Promise<void> | AsyncGenerator | Generator,
+): void {
+  const stableHandler = React.useEffectEvent(
+    async (context: HandlerContext<M, AC, D>, payload: unknown) => {
+      const isGeneratorFn =
+        handler.constructor.name === "GeneratorFunction" ||
+        handler.constructor.name === "AsyncGeneratorFunction";
+
+      if (isGeneratorFn) {
+        const generator = <Generator | AsyncGenerator>handler(context, payload);
+        for await (const _ of generator) void 0;
+      } else {
+        await handler(context, payload);
+      }
+    },
+  );
+
+  const getChannel = React.useEffectEvent((): Filter | undefined =>
+    isChanneledAction(action) ? <Filter>action.channel : undefined,
+  );
+
+  const base = getActionSymbol(action);
+  const entries = scope.current.handlers.get(base) ?? new Set();
+  if (entries.size === 0) scope.current.handlers.set(base, entries);
+  entries.add({ getChannel, handler: <Handler<M, AC, D>>stableHandler });
+}
 
 /**
  * Manages captured DOM nodes for a model type.

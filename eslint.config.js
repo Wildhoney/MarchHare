@@ -101,4 +101,11 @@ export default defineConfig([
       ],
     },
   },
+  {
+    files: ["src/library/**/*.{ts,tsx}"],
+    ignores: ["**/*.test.{ts,tsx}"],
+    rules: {
+      "no-console": "error",
+    },
+  },
 ]);

@@ -6,6 +6,8 @@ import {
   isChanneledAction,
   getActionSymbol,
   matchesChannel,
+  useRegisterHandler,
+  useActionSets,
 } from "./utils.ts";
 
 export { With } from "./utils.ts";
@@ -30,6 +32,7 @@ import {
   ActionOrChanneled,
   Nodes,
   MulticastOptions,
+  AnyAction,
 } from "../types/index.ts";
 
 import {
@@ -53,43 +56,6 @@ import { useError } from "../error/index.tsx";
 import { State, Operation, Process } from "immertation";
 import { useTasks } from "../boundary/components/tasks/utils.ts";
 import { G } from "@mobily/ts-belt";
-
-function useRegisterHandler<
-  M extends Model,
-  AC extends Actions,
-  D extends Props,
->(
-  scope: React.RefObject<Scope>,
-  action: ActionId | HandlerPayload | ChanneledAction,
-  handler: (
-    context: HandlerContext<M, AC, D>,
-    payload: unknown,
-  ) => void | Promise<void> | AsyncGenerator | Generator,
-): void {
-  const stableHandler = React.useEffectEvent(
-    async (context: HandlerContext<M, AC, D>, payload: unknown) => {
-      const isGenerator =
-        handler.constructor.name === "GeneratorFunction" ||
-        handler.constructor.name === "AsyncGeneratorFunction";
-
-      if (isGenerator) {
-        const generator = <Generator | AsyncGenerator>handler(context, payload);
-        for await (const _ of generator) void 0;
-      } else {
-        await handler(context, payload);
-      }
-    },
-  );
-
-  const getChannel = React.useEffectEvent((): Filter | undefined =>
-    isChanneledAction(action) ? <Filter>action.channel : undefined,
-  );
-
-  const base = getActionSymbol(action);
-  const entries = scope.current.handlers.get(base) ?? new Set();
-  if (entries.size === 0) scope.current.handlers.set(base, entries);
-  entries.add({ getChannel, handler: <Handler>stableHandler });
-}
 
 /**
  * A hook for managing state with actions.
@@ -189,8 +155,7 @@ export function useActions<
   const data = useData(getData());
   const unicast = React.useMemo(() => new EventEmitter(), []);
   const scope = React.useRef<Scope>({ handlers: new Map() });
-  const broadcastActions = React.useRef<Set<ActionId>>(new Set());
-  const multicastActions = React.useRef<Set<ActionId>>(new Set());
+  const actionSets = useActionSets();
   const phase = React.useRef<Phase>(Phase.Mounting);
   const nodes = useNodes<M>();
 
@@ -241,20 +206,9 @@ export function useActions<
               ? action.channel
               : undefined;
 
-            // Handle multicast - dispatch to named scope
-            if (isMulticastAction(action)) {
-              if (!options?.scope) {
-                console.warn(
-                  `Multicast action dispatched without scope. Use: dispatch(action, payload, { scope: "ScopeName" })`,
-                );
-                return;
-              }
-              const scopeEntry = getScope(scopeContext, options.scope);
-              if (!scopeEntry) {
-                // No matching scope found - silently ignore per spec
-                return;
-              }
-              scopeEntry.emitter.emit(base, payload, channel);
+            if (isMulticastAction(action) && options?.scope) {
+              const scoped = getScope(scopeContext, options.scope);
+              if (scoped) scoped.emitter.emit(base, payload, channel);
               return;
             }
 
@@ -313,59 +267,52 @@ export function useActions<
             }
           }
           result.processes.forEach((process) => state.current.prune(process));
-          // Only rerender if state was actually changed (produce was called)
           if (result.processes.size > 0) rerender();
           completion.resolve();
         }
       };
     }
 
-    const cleanupFns: Array<() => void> = [];
+    const cleanups = new Set<() => void>();
 
     scope.current.handlers.forEach((entries, action) => {
       for (const { getChannel, handler: actionHandler } of entries) {
         const handler = createHandler(action, actionHandler, getChannel);
 
         if (isMulticastAction(action)) {
-          // Subscribe to ALL ancestor scopes for multicast actions
-          // This allows handlers to receive events from any matching scope
           if (scopeContext) {
-            for (const scopeEntry of scopeContext.values()) {
-              const emitter = scopeEntry.emitter;
+            for (const scoped of scopeContext.values()) {
+              const emitter = scoped.emitter;
               emitter.on(action, handler);
-              cleanupFns.push(() => emitter.off(action, handler));
+              cleanups.add(() => emitter.off(action, handler));
             }
           }
-          // Also listen on unicast for local dispatches
           unicast.on(action, handler);
-          multicastActions.current.add(action);
-          cleanupFns.push(() => unicast.off(action, handler));
+          actionSets.multicast.add(action);
+          cleanups.add(() => unicast.off(action, handler));
         } else if (isBroadcastAction(action)) {
           broadcast.on(action, handler);
           unicast.on(action, handler);
-          broadcastActions.current.add(action);
-          cleanupFns.push(() => {
+          actionSets.broadcast.add(action);
+          cleanups.add(() => {
             broadcast.off(action, handler);
             unicast.off(action, handler);
           });
         } else {
           unicast.on(action, handler);
-          cleanupFns.push(() => unicast.off(action, handler));
+          cleanups.add(() => unicast.off(action, handler));
         }
       }
     });
 
     return () => {
-      // Emit Unmount before removing handlers so they can respond (e.g., abort tasks)
       phase.current = Phase.Unmounting;
       unicast.emit(Lifecycle.Unmount);
       phase.current = Phase.Unmounted;
-      for (const cleanup of cleanupFns) cleanup();
+      for (const cleanup of cleanups) cleanup();
     };
   }, [unicast]);
 
-  // Process pending node captures after each render
-  // Only emit if the node truly changed (not just React's ref cleanup/setup cycle)
   React.useLayoutEffect(() => {
     for (const [name, node] of nodes.pending.current) {
       const latest = nodes.emitted.current.get(name);
@@ -380,7 +327,7 @@ export function useActions<
   useLifecycles({
     unicast,
     tasks,
-    broadcastActions: broadcastActions.current,
+    broadcastActions: actionSets.broadcast,
     phase,
     data: getData(),
   });
@@ -400,20 +347,9 @@ export function useActions<
               ? action.channel
               : undefined;
 
-            // Handle multicast - dispatch to named scope
-            if (isMulticastAction(action)) {
-              if (!options?.scope) {
-                console.warn(
-                  `Multicast action dispatched without scope. Use: dispatch(action, payload, { scope: "ScopeName" })`,
-                );
-                return;
-              }
-              const scopeEntry = getScope(scopeContext, options.scope);
-              if (!scopeEntry) {
-                // No matching scope found - silently ignore per spec
-                return;
-              }
-              scopeEntry.emitter.emit(base, payload, channel);
+            if (isMulticastAction(action) && options?.scope) {
+              const scoped = getScope(scopeContext, options.scope);
+              if (scoped) scoped.emitter.emit(base, payload, channel);
               return;
             }
 
@@ -421,18 +357,11 @@ export function useActions<
             emitter.emit(base, payload, channel);
           },
           consume(
-            action: symbol | object,
+            action: AnyAction,
             renderer: ConsumerRenderer<unknown>,
             options?: MulticastOptions,
           ): React.ReactNode {
-            // Handle multicast consume
-            if (isMulticastAction(action)) {
-              if (!options?.scope) {
-                console.warn(
-                  `Multicast action consumed without scope. Use: consume(action, renderer, { scope: "ScopeName" })`,
-                );
-                return null;
-              }
+            if (isMulticastAction(action) && options?.scope) {
               return React.createElement(MulticastPartition, {
                 action: <symbol>getActionSymbol(action),
                 scopeName: options.scope,
@@ -453,8 +382,6 @@ export function useActions<
           },
           node<K extends keyof Nodes<M>>(name: K, value: Nodes<M>[K] | null) {
             nodes.refs.current[name] = value;
-            // Always queue - processed in useLayoutEffect after render completes
-            // This handles React's ref cleanup/setup cycle correctly
             nodes.pending.current.set(name, value);
           },
         },

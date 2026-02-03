@@ -12,6 +12,40 @@ export type { ActionId, Box, Task, Tasks };
 export type { ConsumerRenderer };
 
 /**
+ * Type for objects with a Brand.Action symbol property.
+ * Used for type-safe access to the action symbol.
+ */
+export type BrandedAction = { readonly [K in typeof Brand.Action]: symbol };
+
+/**
+ * Type for objects with a Brand.Broadcast symbol property.
+ * Used for type-safe access to the broadcast flag.
+ */
+export type BrandedBroadcast = {
+  readonly [K in typeof Brand.Broadcast]: boolean;
+};
+
+/**
+ * Type for objects with a Brand.Multicast symbol property.
+ * Used for type-safe access to the multicast flag.
+ */
+export type BrandedMulticast = {
+  readonly [K in typeof Brand.Multicast]: boolean;
+};
+
+/**
+ * Base type for any object that may contain branded symbol properties.
+ * Used as a permissive input type for action utilities.
+ */
+export type BrandedObject = { readonly [x: symbol]: unknown };
+
+/**
+ * Union type representing any valid action that can be passed to action utilities.
+ * This includes raw ActionIds (symbol/string), and any branded object.
+ */
+export type AnyAction = ActionId | BrandedObject;
+
+/**
  * Internal symbols used as brand keys to distinguish typed objects at runtime.
  * These enable TypeScript to differentiate between HandlerPayload, BroadcastPayload,
  * and channeled actions through branded types.
@@ -330,25 +364,6 @@ export type Payload<A> =
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 /**
- * JavaScript primitive types.
- * Includes all primitive values: `string`, `number`, `bigint`, `boolean`, `symbol`, `null`, and `undefined`.
- */
-export type Primitive =
-  | string
-  | number
-  | bigint
-  | boolean
-  | symbol
-  | null
-  | undefined;
-
-/**
- * Primitive type for filter values, excluding null and undefined.
- * Includes `string`, `number`, `bigint`, `boolean`, and `symbol`.
- */
-export type FilterValue = Exclude<Primitive, null | undefined>;
-
-/**
  * Filter object for channeled actions.
  * Must be an object where each value is a non-nullable primitive.
  *
@@ -371,7 +386,10 @@ export type FilterValue = Exclude<Primitive, null | undefined>;
  * dispatch(Actions.User, payload);                               // Matches ALL handlers
  * ```
  */
-export type Filter = Record<string, FilterValue>;
+export type Filter = Record<
+  string,
+  string | number | bigint | boolean | symbol
+>;
 
 /**
  * Union type representing either a plain action or a channeled action.
@@ -453,32 +471,6 @@ export type Nodes<M> = M extends {
  * Actions are symbols grouped in an object (typically a class with static properties).
  */
 export type Actions = object;
-
-/**
- * Helper type to extract the Model from an ActionPair tuple.
- * If T is a tuple [M, AC], returns M. Otherwise returns T directly.
- */
-export type InferModel<T> = T extends [infer M, Actions] ? M : T;
-
-/**
- * Helper type to extract the Actions from an ActionPair tuple.
- * If T is a tuple [M, AC], returns AC. Otherwise returns the Fallback.
- */
-export type InferActions<T, Fallback = Actions> = T extends [Model, infer AC]
-  ? AC
-  : Fallback;
-
-/**
- * Type alias for the [Model, Actions] tuple pattern.
- * Use this to define a single type that captures both model and actions.
- *
- * @example
- * ```ts
- * type Action = [Model, typeof Actions];
- * const handler = useAction<Action>((context) => { ... });
- * ```
- */
-export type ActionPair = [Model, Actions];
 
 /**
  * Internal result container for tracking Immertation processes during action execution.
