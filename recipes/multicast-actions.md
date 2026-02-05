@@ -17,8 +17,6 @@ export class MulticastActions {
 // Component-level actions.ts
 export class Actions {
   static Multicast = MulticastActions;
-
-  static Increment = Action("Increment");
 }
 ```
 
@@ -59,26 +57,15 @@ actions.dispatch(Actions.Multicast.Update, 42, { scope: "TeamA" });
 
 The dispatch walks up the component tree to find the nearest ancestor `<Scope>` with the matching name. All components within that scope receive the event. If no matching scope is found, the dispatch is silently ignored.
 
-A common pattern is to use a local action that dispatches the multicast:
-
 ```tsx
 // actions.ts
 function useScoreActions() {
   const actions = useActions<Model, typeof Actions>(model);
 
-  // Local action triggers multicast
-  actions.useAction(Actions.Increment, (context) => {
-    context.actions.dispatch(
-      Actions.Multicast.Update,
-      context.model.score + 1,
-      { scope: "TeamA" },
-    );
-  });
-
   // Handle multicast from any component in scope
   actions.useAction(Actions.Multicast.Update, (context, score) => {
-    context.actions.produce((draft) => {
-      draft.model.score = score;
+    context.actions.produce(({ model }) => {
+      model.score = score;
     });
   });
 
@@ -92,7 +79,15 @@ function ScoreBoard() {
   return (
     <div>
       <p>Score: {model.score}</p>
-      <button onClick={() => actions.dispatch(Actions.Increment)}>+1</button>
+      <button
+        onClick={() =>
+          actions.dispatch(Actions.Multicast.Update, model.score + 1, {
+            scope: "TeamA",
+          })
+        }
+      >
+        +1
+      </button>
     </div>
   );
 }

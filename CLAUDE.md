@@ -238,7 +238,6 @@ export class MulticastActions {
 // component/types.ts - reference shared multicast
 export class Actions {
   static Multicast = MulticastActions; // Always at top of class
-  static Select = Action<Mood>("Select");
 }
 
 // Parent defines scope boundary
@@ -247,10 +246,8 @@ export class Actions {
   <Sad />
 </Scope>;
 
-// In actions.ts - dispatch to scope
-actions.useAction(Actions.Select, (context, mood) => {
-  context.actions.dispatch(Actions.Multicast.Mood, mood, { scope: "mood" });
-});
+// Dispatch multicast directly to scope
+actions.dispatch(Actions.Multicast.Mood, mood, { scope: "mood" });
 
 // Handle multicast from any component in scope
 actions.useAction(Actions.Multicast.Mood, (context, mood) => {
