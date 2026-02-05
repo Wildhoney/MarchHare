@@ -61,6 +61,6 @@ Key patterns demonstrated:
 - **Connection in `Lifecycle.Mount`** &ndash; Establish the SSE connection when the component mounts, storing the `EventSource` in the model for later cleanup.
 - **Event-driven dispatches** &ndash; When SSE events arrive, dispatch actions to update the model, triggering efficient re-renders.
 - **Cleanup in `Lifecycle.Unmount`** &ndash; Close the connection when the component unmounts to prevent memory leaks.
-- **All handlers use `actions.useAction`** &ndash; Lifecycle handlers benefit from the same `useEffectEvent` wrapper as regular actions, with types pre-baked from the `useActions` call.
+- **All handlers use `actions.useAction`** &ndash; Lifecycle handlers benefit from the same stable reference pattern as regular actions, with types pre-baked from the `useActions` call.
 
 See the full implementation in the [Visitor example source code](https://github.com/Wildhoney/Chizu/blob/main/src/example/visitor/actions.ts).

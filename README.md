@@ -24,7 +24,7 @@ For advanced topics, see the [recipes directory](./recipes/).
 - No stale closures &ndash; `context.data` stays current after `await`.
 - No need to lift state &ndash; siblings communicate via events.
 - Reduces context proliferation &ndash; events replace many contexts.
-- No need to memoize callbacks &ndash; handlers are stable via [`useEffectEvent`](https://react.dev/reference/react/experimental_useEffectEvent).
+- No need to memoize callbacks &ndash; handlers are stable references with fresh closure access.
 - Clear separation between business logic and markup.
 - Complements [Feature Slice Design](https://feature-sliced.design/) architecture.
 - Strongly typed dispatches, models, payloads, etc.

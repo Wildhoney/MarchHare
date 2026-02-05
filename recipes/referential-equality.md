@@ -1,6 +1,6 @@
 # Referential equality
 
-Chizu uses [`useEffectEvent`](https://react.dev/reference/react/useEffectEvent) internally, so action handlers in `actions.useAction` always access the latest values from closures without needing to re-create the handler. This means you don't need to worry about stale closures in most cases.
+Chizu uses a ref-based pattern internally, so action handlers in `actions.useAction` always access the latest values from closures without needing to re-create the handler. This means you don't need to worry about stale closures in most cases.
 
 However, in async actions where you `await` I/O operations, there's a rare edge case: if a closure reference changes while the await is in progress, you may access a stale value after the await. For these situations, pass a data callback to `useActions`:
 
@@ -15,7 +15,7 @@ function useSearchActions(props: Props) {
   }));
 
   actions.useAction(Actions.Search, async (context, query) => {
-    // Before await: props.filters is current (useEffectEvent-like behaviour)
+    // Before await: props.filters is current
     console.log(props.filters);
 
     const results = await fetch(`/search?q=${query}`);

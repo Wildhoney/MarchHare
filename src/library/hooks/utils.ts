@@ -256,23 +256,45 @@ export function useRegisterHandler<
     payload: unknown,
   ) => void | Promise<void> | AsyncGenerator | Generator,
 ): void {
-  const stableHandler = React.useEffectEvent(
+  // Store latest handler in ref to avoid stale closures (replaces useEffectEvent)
+  const handlerRef = React.useRef(handler);
+  React.useLayoutEffect(() => {
+    handlerRef.current = handler;
+  });
+
+  // Store latest action for channel resolution
+  const actionRef = React.useRef(action);
+  React.useLayoutEffect(() => {
+    actionRef.current = action;
+  });
+
+  // Stable handler wrapper that always calls the latest handler
+  const stableHandler = React.useCallback(
     async (context: HandlerContext<M, AC, D>, payload: unknown) => {
+      const currentHandler = handlerRef.current;
       const isGeneratorFn =
-        handler.constructor.name === "GeneratorFunction" ||
-        handler.constructor.name === "AsyncGeneratorFunction";
+        currentHandler.constructor.name === "GeneratorFunction" ||
+        currentHandler.constructor.name === "AsyncGeneratorFunction";
 
       if (isGeneratorFn) {
-        const generator = <Generator | AsyncGenerator>handler(context, payload);
+        const generator = <Generator | AsyncGenerator>(
+          currentHandler(context, payload)
+        );
         for await (const _ of generator) void 0;
       } else {
-        await handler(context, payload);
+        await currentHandler(context, payload);
       }
     },
+    [],
   );
 
-  const getChannel = React.useEffectEvent((): Filter | undefined =>
-    isChanneledAction(action) ? <Filter>action.channel : undefined,
+  // Stable channel getter
+  const getChannel = React.useCallback(
+    (): Filter | undefined =>
+      isChanneledAction(actionRef.current)
+        ? <Filter>actionRef.current.channel
+        : undefined,
+    [],
   );
 
   const base = getActionSymbol(action);
