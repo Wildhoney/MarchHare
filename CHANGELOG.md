@@ -2,6 +2,64 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.2.47](https://github.com/Wildhoney/Chizu/compare/v0.2.27...v0.2.47) (2026-02-05)
+
+
+### Features
+
+* abort in-flight actions on unmount, add own() methods, unify to array notation ([7eca071](https://github.com/Wildhoney/Chizu/commit/7eca071d78c319c28ec5684760e47e27430d2f27))
+* add consume() method for subscribing to distributed action values ([0594110](https://github.com/Wildhoney/Chizu/commit/0594110bd90d73a90b4cc978d8267f934491a4e9))
+* add Lifecycle.Element for element capture events with channeled subscriptions ([fac3f0f](https://github.com/Wildhoney/Chizu/commit/fac3f0ff21e6183d5e102b6bfe8bcb764e0a2edd))
+* add nested Actions.Multicast pattern with typed dispatch overloads ([e4ca34d](https://github.com/Wildhoney/Chizu/commit/e4ca34d591b2c02ff8a4f440bb6440c7e6b048b9))
+* add tuple type pattern for useAction and useActions hooks ([99ba7d4](https://github.com/Wildhoney/Chizu/commit/99ba7d4c3a11b4c4049d9abfbef7746589c76645))
+* add With.Filter helper and organize utils under With namespace ([2d4dcd3](https://github.com/Wildhoney/Chizu/commit/2d4dcd34d8b1e12b97001484d2f7631096ef08e5))
+* added + updated decorators ([5e13c71](https://github.com/Wildhoney/Chizu/commit/5e13c719db4cbb9aedd06dab1f2825534b4794c7))
+* added <Visitor /> example for real-time data ([719495b](https://github.com/Wildhoney/Chizu/commit/719495bbef0b6f670720fe8e69e21127a0cf6db9))
+* added action decorators and updated README ([e429fb9](https://github.com/Wildhoney/Chizu/commit/e429fb9da2163edec18fbb63d049fa2bfd0a574a))
+* added actions.useReactive hook ([1e8deed](https://github.com/Wildhoney/Chizu/commit/1e8deed417e8c1fe47b62a035e81bbd18ea75ae6))
+* added Bound function for simple assignments ([22235aa](https://github.com/Wildhoney/Chizu/commit/22235aa57738fd67ff448b797f9725e39835729e))
+* added checksum util fn and documented the util fns ([2c48ebb](https://github.com/Wildhoney/Chizu/commit/2c48ebb121edfcbfb673af4b117da2f5ad1e391a))
+* added decorators + updated README ([8d72c6d](https://github.com/Wildhoney/Chizu/commit/8d72c6d24ea1e8694ca544549e25964f216ad8db))
+* added error handling context ([01c1510](https://github.com/Wildhoney/Chizu/commit/01c15105f0755be06b954405d8c86e9542c68473))
+* added initial decorator example ([0d1d184](https://github.com/Wildhoney/Chizu/commit/0d1d184933cead30e580be5fcaddfec419e1869a))
+* added integration test for the counter example ([56e557b](https://github.com/Wildhoney/Chizu/commit/56e557b3bc046a736f35d849e4e9bea0f426e5db))
+* added late dispatching for useAction(DistributedAction) ([b46bbb8](https://github.com/Wildhoney/Chizu/commit/b46bbb8ce7589f987c86a88123078d417fae71a2))
+* added Lifecycle.Update with diff ([53a8c45](https://github.com/Wildhoney/Chizu/commit/53a8c45c4479440534dfe39c3b8a60940e87ac66))
+* added rulebook with associated integration tests + rulebook ([275b136](https://github.com/Wildhoney/Chizu/commit/275b136960b956e721fb1804d8ec44984753915b))
+* added the ability to dispatch events using partial object matching ([6f05cb6](https://github.com/Wildhoney/Chizu/commit/6f05cb66b4ef75c75896953da28b8fc717527c85))
+* changed the channeled actions approach ([d9b699b](https://github.com/Wildhoney/Chizu/commit/d9b699b89817cd7646cdfc5b9b70d579c27bb23e))
+* changed the interface of the regulator object ([58f755c](https://github.com/Wildhoney/Chizu/commit/58f755cd52e637df8244d7c6506e2f637c1d69f3))
+* implement real Immertation inspect for consume() and rename ConsumeRenderer to Partition ([d7a6292](https://github.com/Wildhoney/Chizu/commit/d7a62924daeaa59a5cb11748f658f2e144a67464))
+* improved the appearance of the example ([a766be1](https://github.com/Wildhoney/Chizu/commit/a766be105ecdef38213242ba6cd492ec6812d6c6))
+* improved the typing of the useAction fn ([b64104c](https://github.com/Wildhoney/Chizu/commit/b64104ca6b71fd8ce514074321f9d8c2438eb7df))
+* improved typings around the actions ([493dee6](https://github.com/Wildhoney/Chizu/commit/493dee6c6ee2b3931e331f2afee13d827a90ca5a))
+* integrated immeration ([11641a7](https://github.com/Wildhoney/Chizu/commit/11641a796066ad5791de694f7576578b946e09dd))
+* new implementation for the annotations ([eec20b2](https://github.com/Wildhoney/Chizu/commit/eec20b28483f6967a4df746e5bb79255934f7c8d))
+* re-added the model stateful and stateless concept ([0beb7c4](https://github.com/Wildhoney/Chizu/commit/0beb7c4a68cfbadf5c038495e2c2765ca4d68430))
+* regulator class ([986303f](https://github.com/Wildhoney/Chizu/commit/986303ff9433c5f20f475f54bee2f09ff0f5d609))
+* removed the regulator class in favour of Set<Task> ([9301202](https://github.com/Wildhoney/Chizu/commit/930120238fef57c10782d840b39cc98e026a38a1))
+* simplified the README ([aee1d16](https://github.com/Wildhoney/Chizu/commit/aee1d1675014ed30db9cb1626ad293b429212773))
+* support variadic arguments in regulator matching methods ([6a3ff7a](https://github.com/Wildhoney/Chizu/commit/6a3ff7a23e79ff2fd82ea5643e4168827f94617a))
+* supporting async and generator actions ([abbf73c](https://github.com/Wildhoney/Chizu/commit/abbf73c5e046235d563ee25ea624a9f4b7b6b723))
+* supporting custom error classes ([b1ce948](https://github.com/Wildhoney/Chizu/commit/b1ce94813455a930734c271392cb3f2e7ae33396))
+* update api to improve readability ([ea2cda6](https://github.com/Wildhoney/Chizu/commit/ea2cda6d3e57c4b4e46f2a4e7143f56a4e630cf8))
+* update Immertation to 0.1.21 and set yarn as package manager ([d8671a0](https://github.com/Wildhoney/Chizu/commit/d8671a05669bde98e680f688863f5f959d5339bf))
+* updated inteface for the regulator ([503923e](https://github.com/Wildhoney/Chizu/commit/503923eed9047ec5933eff7a75cb5af0c294e37e))
+* updated the api for the reactive() decorator ([51a0f14](https://github.com/Wildhoney/Chizu/commit/51a0f1404d57a830d42711159a571e77dc993815))
+* upgraded to latest immertation version ([24ebde1](https://github.com/Wildhoney/Chizu/commit/24ebde1d902f638edf20ab895cc4687cc9bb3691))
+* use `useEffectEvent` for the `useAction` hook ([a75a145](https://github.com/Wildhoney/Chizu/commit/a75a145f484d9b9b732253457a097875b1af6d66))
+* using ref to allow for sync actions ([5bc897d](https://github.com/Wildhoney/Chizu/commit/5bc897d34cbad4d4ff28b2dea406334727c8ac8c))
+
+
+### Bug Fixes
+
+* bug with the strings as action names ([f4cd779](https://github.com/Wildhoney/Chizu/commit/f4cd77992549de13330ce1fd924e40a6b8735de0))
+* emitting Lifecycle.Node ([bf58324](https://github.com/Wildhoney/Chizu/commit/bf583242534fde5f5437509481dab6ce11639bcc))
+* playwright ci ([07e84e1](https://github.com/Wildhoney/Chizu/commit/07e84e133df215061cd9477acc6a867acb382f7f))
+* tests + lint + typecheck ([5fe94ac](https://github.com/Wildhoney/Chizu/commit/5fe94ac97d57f8954997b0156b20e00a2c2894d7))
+* tests + lint + typecheck ([91678c3](https://github.com/Wildhoney/Chizu/commit/91678c36546799208a857d487e21938ed85f6f01))
+* update GitHub URLs and fix example build configuration ([d2027d2](https://github.com/Wildhoney/Chizu/commit/d2027d2991cf5428cd0dbb50019dc74b7c24c500))
+
 ## [0.2.46](https://github.com/Wildhoney/Chizu/compare/v0.2.43...v0.2.46) (2026-01-23)
 
 ### Features
