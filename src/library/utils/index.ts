@@ -13,6 +13,8 @@ export const config = {
   multicastActionPrefix: "chizu.action/multicast/",
   /** Prefix for channeled action symbols. */
   channelPrefix: "chizu.channel/",
+  /** Prefix for cache operation symbols. */
+  cachePrefix: "chizu.cache/",
 };
 
 /**

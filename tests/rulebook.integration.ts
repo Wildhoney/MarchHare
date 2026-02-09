@@ -1132,4 +1132,120 @@ test.describe("Chizu Rulebook", () => {
       await page.getByTestId("rule-39-stop").click();
     });
   });
+
+  // Cache Layer
+  test.describe("Cache", () => {
+    test.beforeEach(async ({ page }) => {
+      await page.goto("/?fixture=cache");
+      await expect(page.getByTestId("cache-fixture")).toBeVisible();
+    });
+
+    it("cacheable - should cache the result and return it on subsequent calls", async ({
+      page,
+    }) => {
+      const value = page.getByTestId("cache-value");
+      const fetchCount = page.getByTestId("cache-fetch-count");
+
+      await expect(value).toHaveText("none");
+
+      // First fetch - cache miss, should call the async function
+      await page.getByTestId("cache-fetch").click();
+      await expect(value).toHaveText("fetched-1", { timeout: 2000 });
+      await expect(fetchCount).toHaveText("1");
+
+      // Second fetch via FetchAgain - cache hit, should return cached value
+      await page.getByTestId("cache-fetch-again").click();
+      await expect(value).toHaveText("fetched-1", { timeout: 2000 });
+    });
+
+    it("invalidate - should clear the cache so the next fetch calls the async function", async ({
+      page,
+    }) => {
+      const value = page.getByTestId("cache-value");
+
+      // Populate cache
+      await page.getByTestId("cache-fetch").click();
+      await expect(value).toHaveText(/^fetched-/, { timeout: 2000 });
+
+      // Invalidate
+      await page.getByTestId("cache-invalidate").click();
+      await expect(value).toHaveText("invalidated");
+
+      // Fetch again - cache miss after invalidation, new value
+      await page.getByTestId("cache-fetch").click();
+      const text = await value.textContent();
+      // Should be a fresh fetch (counter incremented beyond original)
+      expect(text).toMatch(/^fetched-/);
+    });
+
+    it("cacheable channeled - should cache per channel independently", async ({
+      page,
+    }) => {
+      const userValue = page.getByTestId("cache-user-value");
+
+      // Fetch user 1
+      await page.getByTestId("cache-fetch-user-1").click();
+      await expect(userValue).toHaveText(/^user-1-fetch-/, { timeout: 2000 });
+      const user1Value = await userValue.textContent();
+
+      // Fetch user 2 - different channel, should be a fresh fetch
+      await page.getByTestId("cache-fetch-user-2").click();
+      await expect(userValue).toHaveText(/^user-2-fetch-/, { timeout: 2000 });
+
+      // Fetch user 1 again - should return cached value (same as before)
+      await page.getByTestId("cache-fetch-user-1").click();
+      await expect(userValue).toHaveText(user1Value!, { timeout: 2000 });
+    });
+
+    it("invalidate channeled - should only clear the targeted channel", async ({
+      page,
+    }) => {
+      const userValue = page.getByTestId("cache-user-value");
+      const userFetchCount = page.getByTestId("cache-user-fetch-count");
+
+      // Populate user 1 cache
+      await page.getByTestId("cache-fetch-user-1").click();
+      await expect(userValue).toHaveText(/^user-1-fetch-/, { timeout: 2000 });
+      const countAfterUser1 = await userFetchCount.textContent();
+
+      // Populate user 2 cache
+      await page.getByTestId("cache-fetch-user-2").click();
+      await expect(userValue).toHaveText(/^user-2-fetch-/, { timeout: 2000 });
+
+      // Invalidate user 1 only
+      await page.getByTestId("cache-invalidate-user-1").click();
+
+      // Fetch user 2 again - should still be cached (count should not increase from user 2's fetch)
+      await page.getByTestId("cache-fetch-user-2").click();
+      await expect(userValue).toHaveText(/^user-2-fetch-/, { timeout: 2000 });
+
+      // Fetch user 1 - cache was invalidated, should produce a new fetch
+      await page.getByTestId("cache-fetch-user-1").click();
+      await expect(userValue).toHaveText(/^user-1-fetch-/, { timeout: 2000 });
+      const countAfterRefetch = await userFetchCount.textContent();
+      expect(Number(countAfterRefetch)).toBeGreaterThan(
+        Number(countAfterUser1),
+      );
+    });
+
+    it("cache() model initialiser - should resolve cached value into initial model", async ({
+      page,
+    }) => {
+      // Populate the cache first
+      await page.getByTestId("cache-init-populate").click();
+      await expect(page.getByTestId("cache-init-populated")).toHaveText("yes", {
+        timeout: 2000,
+      });
+
+      // Mount the child that uses cache() in its model
+      await page.getByTestId("cache-init-show-child").click();
+
+      // Child should have resolved the cached value, not the fallback
+      await expect(page.getByTestId("cache-init-greeting")).toHaveText(
+        "Hello from cache",
+        { timeout: 2000 },
+      );
+      await expect(page.getByTestId("cache-init-status")).toHaveText("mounted");
+    });
+  });
 });

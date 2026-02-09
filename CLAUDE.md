@@ -7,6 +7,8 @@ Strongly typed React framework using generators and efficiently updated views al
 ```ts
 import {
   Action,
+  Cache,
+  cache,
   Distribution,
   Lifecycle,
   useActions,
@@ -99,6 +101,54 @@ actions.dispatch(Actions.UserUpdated, user);
 ```
 
 Channel values must be non-nullable primitives: `string`, `number`, `bigint`, `boolean`, or `symbol`. By convention, use uppercase keys like `{UserId: 4}`.
+
+## Cache Layer
+
+Cache async results across action handlers using `Cache()` operations:
+
+```ts
+import { Cache, cache } from "chizu";
+
+// Define cache operations (alongside BroadcastActions in shared types)
+export class CacheStore {
+  static User = Cache<{ UserId: number }>(30_000); // 30s TTL, channeled
+  static Config = Cache(60_000); // 60s TTL, unchanneled
+}
+
+// Model initialisation with cache fallback
+const model: Model = {
+  user: cache(CacheStore.User({ UserId: 5 }), null),
+};
+```
+
+### Using cacheable in handlers
+
+```ts
+actions.useAction(Actions.LoadUser, async (context, userId) => {
+  // Returns T synchronously on cache hit, Promise<T> on miss
+  const user = await context.actions.cacheable(
+    CacheStore.User({ UserId: userId }),
+    async (cache) => {
+      const response = await fetch(`/api/users/${userId}`);
+      return response.ok ? cache(await response.json()) : null;
+    },
+  );
+
+  context.actions.produce(({ model }) => {
+    model.user = user;
+  });
+});
+```
+
+### Invalidating cache entries
+
+```ts
+// Partial channel match: clears entries whose channel contains { UserId: 5 }
+context.actions.invalidate(CacheStore.User({ UserId: 5 }));
+
+// Clears ALL entries for this operation
+context.actions.invalidate(CacheStore.User);
+```
 
 ## Lifecycle Actions
 
@@ -530,7 +580,10 @@ docs: update the README file
 - `src/library/boundary/components/scope/` - Multicast scope implementation
 - `src/library/boundary/components/broadcast/` - Broadcast system
 - `src/library/boundary/components/consumer/` - Consumer/Partition for consume()
+- `src/library/boundary/components/cache/` - Cache store for cacheable/invalidate
 - `src/library/boundary/components/tasks/` - Task tracking context
+- `src/library/cache/index.ts` - Cache factory function
+- `src/library/cache/utils.ts` - Cache utility functions
 
 ### Documentation
 
@@ -538,6 +591,7 @@ docs: update the README file
   - `action-control-patterns.md` - Cancellation, timeouts, retries, debouncing
   - `action-regulator.md` - Regulator API for abort/policy control
   - `broadcast-actions.md` - Cross-component communication
+  - `cache.md` - Caching async results with cacheable/invalidate
   - `channeled-actions.md` - Targeted event delivery
   - `consuming-actions.md` - consume() method details
   - `context-providers.md` - Boundary, Broadcaster, Consumer, Regulators

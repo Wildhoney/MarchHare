@@ -64,6 +64,12 @@ export class Brand {
   static Channel = Symbol("chizu.brand/Channel");
   /** Node capture events used by Lifecycle.Node */
   static Node = Symbol("chizu.action.lifecycle/Node");
+  /** Identifies cache operations created with Cache() */
+  static Cache = Symbol("chizu.brand/Cache");
+  /** TTL value for cache operations */
+  static TTL = Symbol("chizu.brand/TTL");
+  /** Identifies cached initialisers created with cache() for model initialisation */
+  static Cached = Symbol("chizu.brand/Cached");
 }
 
 /**
@@ -335,6 +341,81 @@ export type MulticastPayload<
 };
 
 /**
+ * Branded type for cache operations created with `Cache()`.
+ * Cache operations identify cached async results and carry a TTL for expiration.
+ *
+ * When a channel type is specified, the cache operation becomes callable to
+ * create channeled cache keys for targeted lookups.
+ *
+ * @template C - The channel type for keyed cache entries (defaults to never)
+ *
+ * @example
+ * ```ts
+ * export class CacheStore {
+ *   static User = Cache<{ UserId: number }>(30_000);  // 30s TTL, channeled
+ *   static Config = Cache(60_000);                     // 60s TTL, unchanneled
+ * }
+ *
+ * // Channeled usage
+ * context.actions.cacheable(CacheStore.User({ UserId: 5 }), () => fetchUser(5));
+ * context.actions.invalidate(CacheStore.User({ UserId: 5 }));
+ * ```
+ */
+export type CachePayload<C extends Filter = never> = {
+  readonly [Brand.Action]: symbol;
+  readonly [Brand.Cache]: true;
+  readonly [Brand.TTL]: number;
+} & ([C] extends [never]
+  ? unknown
+  : {
+      (channel: C): ChanneledCache<C>;
+    });
+
+/**
+ * Result of calling a cache operation with a channel argument.
+ * Contains the cache reference and the channel data for keyed lookup.
+ *
+ * @template C - The channel type
+ */
+export type ChanneledCache<C = unknown> = {
+  readonly [Brand.Action]: symbol;
+  readonly [Brand.Cache]: true;
+  readonly [Brand.TTL]: number;
+  readonly [Brand.Channel]: C;
+  readonly channel: C;
+};
+
+/**
+ * Union type representing either a plain or channeled cache operation.
+ * Used in `cacheable` and `invalidate` signatures.
+ */
+export type AnyCacheOperation = CachePayload<Filter> | ChanneledCache;
+
+/**
+ * Interface for the Cache factory function.
+ */
+export type CacheFactory = {
+  /**
+   * Creates a new cache operation with a TTL in milliseconds.
+   * @template C The channel type for keyed cache entries (defaults to never).
+   * @param ttl Time-to-live in milliseconds.
+   * @returns A typed cache operation object.
+   */
+  <C extends Filter = never>(ttl: number): CachePayload<C>;
+};
+
+/**
+ * Internal type created by the `cache()` model initialiser.
+ * Carries the cache operation and fallback value for resolution by `useActions`.
+ * @internal
+ */
+export type CachedValue<T = unknown> = {
+  readonly [Brand.Cached]: true;
+  readonly operation: AnyCacheOperation;
+  readonly fallback: T;
+};
+
+/**
  * Options for multicast dispatch.
  * Required when dispatching a multicast action.
  */
@@ -602,6 +683,55 @@ export type HandlerContext<
       options?: MulticastOptions,
     ): void;
     annotate<T>(operation: Operation, value: T): T;
+    /**
+     * Retrieves a value from cache if available and within TTL,
+     * otherwise executes the async function and caches the result.
+     *
+     * Returns `T` synchronously on cache hit, or `Promise<T>` on cache miss.
+     * Using `await` handles both cases uniformly.
+     *
+     * @param operation - The cache operation (plain or channeled)
+     * @param fn - Async function receiving a `cache` callback. Call `cache(value)` to store the value; if not called, nothing is cached.
+     * @returns The cached or freshly fetched value
+     *
+     * @example
+     * ```ts
+     * const user = await context.actions.cacheable(
+     *   CacheOps.User({ UserId: 5 }),
+     *   async (cache) => {
+     *     const response = await fetchUser(5);
+     *     return response.error ? response : cache(response);
+     *   },
+     * );
+     * ```
+     */
+    cacheable<T>(
+      operation: AnyCacheOperation,
+      fn: (cache: (value: T) => T) => Promise<T>,
+    ): T | Promise<T>;
+    /**
+     * Invalidates cache entries for a cache operation.
+     *
+     * With a channeled operation, invalidates all entries whose channel
+     * contains the specified keys (partial match). For example,
+     * `invalidate(CacheOps.User({ UserId: 5 }))` removes entries for
+     * `{ UserId: 5 }`, `{ UserId: 5, Role: "admin" }`, etc.
+     *
+     * With a plain (unchanneled) operation, invalidates all entries
+     * for that operation regardless of channel.
+     *
+     * @param operation - The cache operation (plain or channeled)
+     *
+     * @example
+     * ```ts
+     * // Invalidate specific cache entry (partial channel match)
+     * context.actions.invalidate(CacheOps.User({ UserId: 5 }));
+     *
+     * // Invalidate ALL user cache entries
+     * context.actions.invalidate(CacheOps.User);
+     * ```
+     */
+    invalidate(operation: AnyCacheOperation): void;
   };
 };
 

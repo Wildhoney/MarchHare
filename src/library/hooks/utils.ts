@@ -13,9 +13,17 @@ import {
   ChanneledAction,
   HandlerContext,
 } from "../types/index.ts";
+import type { CachedValue } from "../types/index.ts";
 import type { LifecycleConfig, References, Handler, Scope } from "./types.ts";
 import { A, G } from "@mobily/ts-belt";
 import { useConsumer } from "../boundary/components/consumer/utils.ts";
+import { useCache } from "../boundary/components/cache/utils.ts";
+import {
+  getCacheSymbol,
+  isChanneledCache,
+  isCached,
+  serializeChannel,
+} from "../cache/index.ts";
 import { changes } from "../utils.ts";
 import { isChanneledAction, getActionSymbol } from "../action/index.ts";
 
@@ -49,6 +57,39 @@ export function isGenerator(
   if (typeof result !== "object" || result === null) return false;
   const name = (<object>result).constructor.name;
   return name === "Generator" || name === "AsyncGenerator";
+}
+
+/**
+ * Resolves cached initialisers in the initial model against the cache store.
+ * Any property initialised with `cache(CacheOps.X, fallback)` is replaced
+ * with the cached value (if within TTL) or the fallback.
+ *
+ * @template M The model type representing the component's state.
+ * @param initialModel The initial model state, potentially containing cached initialisers.
+ * @returns The resolved model with cached initialisers replaced by cached or fallback values.
+ */
+export function useModel<M extends Model>(initialModel: M): M {
+  const cache = useCache();
+
+  return React.useMemo(() => {
+    const resolved = { ...initialModel };
+    Object.keys(resolved).forEach((key) => {
+      const value = resolved[<keyof M>key];
+      if (isCached(value)) {
+        const marker = <CachedValue>(<unknown>value);
+        const symbol = getCacheSymbol(marker.operation);
+        const channelKey = isChanneledCache(marker.operation)
+          ? serializeChannel(
+              (<{ channel: Filter }>(<unknown>marker.operation)).channel,
+            )
+          : "";
+        const entry = cache.get(symbol)?.get(channelKey);
+        (<Record<string, unknown>>resolved)[key] =
+          entry && entry.expiresAt > Date.now() ? entry.value : marker.fallback;
+      }
+    });
+    return resolved;
+  }, []);
 }
 
 /**

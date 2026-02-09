@@ -3,6 +3,7 @@ import {
   useLifecycles,
   useData,
   useNodes,
+  useModel,
   isChanneledAction,
   getActionSymbol,
   matchesChannel,
@@ -55,6 +56,15 @@ import {
 import { useError } from "../error/index.tsx";
 import { State, Operation, Process } from "immertation";
 import { useTasks } from "../boundary/components/tasks/utils.ts";
+import { useCache } from "../boundary/components/cache/utils.ts";
+import {
+  getCacheSymbol,
+  getCacheTtl,
+  isChanneledCache,
+  serializeChannel,
+  matchesCacheChannel,
+} from "../cache/index.ts";
+import type { AnyCacheOperation } from "../types/index.ts";
 import { G } from "@mobily/ts-belt";
 
 /**
@@ -139,22 +149,24 @@ export function useActions<
   D extends Props = Props,
 >(initialModel: M, getData: Data<D> = () => <D>{}): UseActions<M, AC, D> {
   const broadcast = useBroadcast();
-  const scopeContext = useScope();
+  const scope = useScope();
   const error = useError();
   const tasks = useTasks();
-  const [model, setModel] = React.useState<M>(initialModel);
+  const cache = useCache();
+  const initial = useModel(initialModel);
+  const [model, setModel] = React.useState<M>(initial);
   const rerender = useRerender();
   const hydration = React.useRef<Process | null>(null);
   const state = React.useRef<State<M>>(
     (() => {
       const state = new State<M>();
-      hydration.current = state.hydrate(initialModel);
+      hydration.current = state.hydrate(initial);
       return state;
     })(),
   );
   const data = useData(getData());
   const unicast = React.useMemo(() => new EventEmitter(), []);
-  const scope = React.useRef<Scope>({ handlers: new Map() });
+  const registry = React.useRef<Scope>({ handlers: new Map() });
   const actionSets = useActionSets();
   const phase = React.useRef<Phase>(Phase.Mounting);
   const nodes = useNodes<M>();
@@ -207,7 +219,7 @@ export function useActions<
               : undefined;
 
             if (isMulticastAction(action) && options?.scope) {
-              const scoped = getScope(scopeContext, options.scope);
+              const scoped = getScope(scope, options.scope);
               if (scoped) scoped.emitter.emit(base, payload, channel);
               return;
             }
@@ -217,6 +229,65 @@ export function useActions<
           },
           annotate<T>(operation: Operation, value: T): T {
             return state.current.annotate(operation, value);
+          },
+          cacheable<T>(
+            operation: AnyCacheOperation,
+            fn: (cache: (value: T) => T) => Promise<T>,
+          ): T | Promise<T> {
+            const symbol = getCacheSymbol(operation);
+            const ttl = getCacheTtl(operation);
+            const channelKey = isChanneledCache(operation)
+              ? serializeChannel(
+                  (<{ channel: Filter }>(<unknown>operation)).channel,
+                )
+              : "";
+
+            const entries = cache.get(symbol);
+            if (entries) {
+              const entry = entries.get(channelKey);
+              if (entry && entry.expiresAt > Date.now()) {
+                return <T>entry.value;
+              }
+            }
+
+            const store = (value: T): T => {
+              if (!cache.has(symbol)) cache.set(symbol, new Map());
+              const bucket = <NonNullable<ReturnType<typeof cache.get>>>(
+                cache.get(symbol)
+              );
+              bucket.set(channelKey, {
+                value,
+                expiresAt: Date.now() + ttl,
+                channel: isChanneledCache(operation)
+                  ? (<{ channel: Filter }>(<unknown>operation)).channel
+                  : undefined,
+              });
+              return value;
+            };
+
+            return fn(store);
+          },
+          invalidate(operation: AnyCacheOperation): void {
+            const symbol = getCacheSymbol(operation);
+
+            if (isChanneledCache(operation)) {
+              const invalidateChannel = (<{ channel: Filter }>(
+                (<unknown>operation)
+              )).channel;
+              const entries = cache.get(symbol);
+              if (entries) {
+                for (const [key, entry] of entries) {
+                  if (
+                    entry.channel &&
+                    matchesCacheChannel(invalidateChannel, entry.channel)
+                  ) {
+                    entries.delete(key);
+                  }
+                }
+              }
+            } else {
+              cache.delete(symbol);
+            }
           },
         },
       };
@@ -249,7 +320,7 @@ export function useActions<
         try {
           await actionHandler(context, payload);
         } catch (caught) {
-          const handled = scope.current.handlers.has(Lifecycle.Error);
+          const handled = registry.current.handlers.has(Lifecycle.Error);
           const details = {
             reason: getReason(caught),
             error: getError(caught),
@@ -275,13 +346,13 @@ export function useActions<
 
     const cleanups = new Set<() => void>();
 
-    scope.current.handlers.forEach((entries, action) => {
+    registry.current.handlers.forEach((entries, action) => {
       for (const { getChannel, handler: actionHandler } of entries) {
         const handler = createHandler(action, actionHandler, getChannel);
 
         if (isMulticastAction(action)) {
-          if (scopeContext) {
-            for (const scoped of scopeContext.values()) {
+          if (scope) {
+            for (const scoped of scope.values()) {
               const emitter = scoped.emitter;
               emitter.on(action, handler);
               cleanups.add(() => emitter.off(action, handler));
@@ -348,7 +419,7 @@ export function useActions<
               : undefined;
 
             if (isMulticastAction(action) && options?.scope) {
-              const scoped = getScope(scopeContext, options.scope);
+              const scoped = getScope(scope, options.scope);
               if (scoped) scoped.emitter.emit(base, payload, channel);
               return;
             }
@@ -398,7 +469,7 @@ export function useActions<
       payload: Payload<A>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void => {
-    useRegisterHandler<M, AC, D>(scope, action, <Handler<M, AC, D>>handler);
+    useRegisterHandler<M, AC, D>(registry, action, <Handler<M, AC, D>>handler);
   };
 
   return <UseActions<M, AC, D>>result;
