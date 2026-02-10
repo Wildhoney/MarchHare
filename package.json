@@ -1,6 +1,6 @@
 {
   "name": "chizu",
-  "version": "0.2.49",
+  "version": "0.2.50",
   "type": "module",
   "license": "MIT",
   "packageManager": "yarn@1.22.22",
@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "eventemitter3": "^5.0.1",
-    "immertation": "^0.1.23"
+    "immertation": "0.1.24"
   },
   "peerDependencies": {
     "@mobily/ts-belt": "^3.0.0",
@@ -38,7 +38,6 @@
     "@babel/preset-env": "^7.28.5",
     "@babel/preset-react": "^7.28.5",
     "@babel/preset-typescript": "^7.28.5",
-    "antd": "^6.1.4",
     "@emotion/css": "^11.13.5",
     "@eslint/js": "^9.39.2",
     "@faker-js/faker": "^10.2.0",
@@ -54,6 +53,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/traverse": "^0.6.37",
     "@vitejs/plugin-react": "^5.1.2",
+    "antd": "^6.1.4",
     "commit-and-tag-version": "^12.6.1",
     "dayjs": "^1.11.19",
     "dexie": "^4.2.1",

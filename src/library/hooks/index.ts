@@ -152,17 +152,16 @@ export function useActions<
   const error = useError();
   const tasks = useTasks();
   const cache = useCache();
-  const initial = React.useMemo(() => ({ ...initialModel }), []);
-  const [model, setModel] = React.useState<M>(initial);
   const rerender = useRerender();
   const hydration = React.useRef<Process | null>(null);
   const state = React.useRef<State<M>>(
     (() => {
       const state = new State<M>();
-      hydration.current = state.hydrate(initial);
+      hydration.current = state.hydrate(initialModel);
       return state;
     })(),
   );
+  const [model, setModel] = React.useState<M>(() => state.current.model);
   const data = useData(getData());
   const unicast = React.useMemo(() => new EventEmitter(), []);
   const registry = React.useRef<Scope>({ handlers: new Map() });

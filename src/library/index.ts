@@ -3,6 +3,7 @@ export { Cache } from "./cache/index.ts";
 export { Distribution, Lifecycle } from "./types/index.ts";
 export { Error, Reason } from "./error/index.tsx";
 export { Operation, Op, State } from "immertation";
+export { annotate } from "./annotate/index.ts";
 
 export { Boundary } from "./boundary/index.tsx";
 export { Scope } from "./boundary/components/scope/index.tsx";
