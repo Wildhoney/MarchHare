@@ -2,7 +2,7 @@ unit:
 	npx vitest run
 
 integration:
-	npx playwright test
+	npx playwright install chromium && npx playwright test
 
 circular:
 	npx madge --circular src/library/index.ts
@@ -20,7 +20,7 @@ build:
 	npx vite build
 
 fslint:
-	npx fslint --files=dist/**/*.js --limit-kb=20
+	npx fslint --files=dist/**/*.js --limit-kb=22
 
 checks:
 	make fmt

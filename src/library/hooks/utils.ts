@@ -72,11 +72,9 @@ export function useLifecycles({
 }: LifecycleConfig): void {
   const consumer = useConsumer();
   const previous = React.useRef<Props | null>(null);
-  const hasEmittedMount = React.useRef(false);
 
   React.useLayoutEffect(() => {
-    if (hasEmittedMount.current) return;
-    hasEmittedMount.current = true;
+    if (phase.current !== Phase.Mounting) return;
 
     unicast.emit(Lifecycle.Mount);
 

@@ -248,4 +248,14 @@ actions.dispatch(Actions.Multicast.Update, 42, { scope: "TeamA" });
 
 Unlike broadcast which reaches all components, multicast is scoped to the named boundary &ndash; perfect for isolated widget groups, form sections, or distinct UI regions. See the [multicast recipe](./recipes/multicast-actions.md) for more details.
 
-For caching async results across components, define cache operations with `Cache()` and use `context.actions.cache.put()` inside handlers &ndash; on cache hit the value is returned synchronously. Use `context.actions.cache.get()` to read cached values and `context.actions.cache.delete()` to clear entries with partial channel matching. See the [cache recipe](./recipes/cache.md) for details.
+To preserve a component's state across unmount/remount cycles, wrap the initial model with `Rehydrate`:
+
+```ts
+import { useActions, Rehydrate } from "chizu";
+
+const actions = useActions<Model, typeof Actions>(
+  Rehydrate(model, { UserId: props.userId }),
+);
+```
+
+When the component unmounts, its model is snapshotted into the rehydrator. On remount with the same channel key, the model is restored automatically. This is useful for tab switching, route changes, and conditionally rendered components. See the [rehydration recipe](./recipes/rehydration.md) for details.

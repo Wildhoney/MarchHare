@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.2.51](https://github.com/Wildhoney/Chizu/compare/v0.2.49...v0.2.51) (2026-02-10)
+
+### Features
+
+- add cache layer with cacheable, invalidate, and model initialisation ([5f5ea22](https://github.com/Wildhoney/Chizu/commit/5f5ea221674563fdeea0387205013bad7990e589))
+- **annotate:** add standalone annotate function for initial model Op states ([2cf7e10](https://github.com/Wildhoney/Chizu/commit/2cf7e10b9a7cbf9660579d9231cfecf0a7de9fc3))
+
 ## [0.2.50](https://github.com/Wildhoney/Chizu/compare/v0.2.49...v0.2.50) (2026-02-10)
 
 ### Features

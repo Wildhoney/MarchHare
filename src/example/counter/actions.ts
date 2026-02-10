@@ -1,4 +1,4 @@
-import { useActions, Operation } from "../../library/index.ts";
+import { useActions, Rehydrate, Operation } from "../../library/index.ts";
 import { sleep } from "../../library/utils/index.ts";
 import { Model, Actions } from "./types.ts";
 
@@ -7,7 +7,10 @@ const model: Model = {
 };
 
 export function useCounterActions() {
-  const actions = useActions<Model, typeof Actions>(model);
+  const actions = useActions<Model, typeof Actions>(
+    Rehydrate(model, { UserId: 5 }),
+    () => ({ name: "Adam" }),
+  );
 
   actions.useAction(Actions.Increment, async (context) => {
     context.actions.produce((draft) => {

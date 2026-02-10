@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import { renderHook, act, render, screen } from "@testing-library/react";
 import { useActions } from "./index.ts";
 import { Action } from "../action/index.ts";
-import { Distribution, Phase } from "../types/index.ts";
+import { Lifecycle, Distribution, Phase } from "../types/index.ts";
 import { Broadcaster } from "../boundary/components/broadcast/index.tsx";
 import { Consumer } from "../boundary/components/consumer/index.tsx";
+import { annotate } from "../annotate/index.ts";
+import { Operation } from "immertation";
 import * as React from "react";
 
 type Model = { value: string | null };
@@ -805,5 +807,183 @@ describe("useActions() channeled actions", () => {
       { userId: 5, payload: "first" },
       { userId: 10, payload: "third" },
     ]);
+  });
+});
+
+describe("useActions() StrictMode resilience", () => {
+  type CountModel = { count: number };
+  const countModel: CountModel = { count: 0 };
+
+  class CountActions {
+    static Increment = Action("Increment");
+  }
+
+  const _StrictWrapper = ({ children }: { children: React.ReactNode }) => (
+    <React.StrictMode>{children}</React.StrictMode>
+  );
+
+  it("should emit Lifecycle.Mount exactly once in StrictMode", async () => {
+    let mountCount = 0;
+
+    function TestComponent() {
+      const actions = useActions<CountModel, typeof CountActions>(countModel);
+
+      actions.useAction(Lifecycle.Mount, () => {
+        mountCount++;
+      });
+
+      return <div data-testid="mounted">mounted</div>;
+    }
+
+    render(
+      <React.StrictMode>
+        <TestComponent />
+      </React.StrictMode>,
+    );
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    expect(mountCount).toBe(1);
+  });
+
+  it("should invoke each action handler exactly once per dispatch in StrictMode", async () => {
+    let handlerCount = 0;
+
+    function TestComponent() {
+      const actions = useActions<CountModel, typeof CountActions>(countModel);
+
+      actions.useAction(CountActions.Increment, () => {
+        handlerCount++;
+      });
+
+      return (
+        <button
+          data-testid="dispatch"
+          onClick={() => actions[1].dispatch(CountActions.Increment)}
+        >
+          Dispatch
+        </button>
+      );
+    }
+
+    render(
+      <React.StrictMode>
+        <TestComponent />
+      </React.StrictMode>,
+    );
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    handlerCount = 0;
+
+    await act(async () => {
+      screen.getByTestId("dispatch").click();
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    expect(handlerCount).toBe(1);
+  });
+
+  it("should clear annotations after produce in StrictMode", async () => {
+    type AnnotatedModel = { name: string | null };
+
+    const SetName = Action<string>("SetName");
+    class AnnotatedActions {
+      static SetName = SetName;
+    }
+
+    function TestComponent() {
+      const result = useActions<AnnotatedModel, typeof AnnotatedActions>({
+        name: annotate(Operation.Update, null),
+      });
+
+      result.useAction(AnnotatedActions.SetName, (context, name) => {
+        context.actions.produce(({ model }) => {
+          model.name = name;
+        });
+      });
+
+      return (
+        <>
+          <span data-testid="pending">
+            {String(result[1].inspect.name.pending())}
+          </span>
+          <span data-testid="value">{result[0].name ?? "null"}</span>
+          <button
+            data-testid="set"
+            onClick={() => result[1].dispatch(AnnotatedActions.SetName, "Adam")}
+          >
+            Set
+          </button>
+        </>
+      );
+    }
+
+    render(
+      <React.StrictMode>
+        <TestComponent />
+      </React.StrictMode>,
+    );
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    expect(screen.getByTestId("pending").textContent).toBe("true");
+
+    await act(async () => {
+      screen.getByTestId("set").click();
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    expect(screen.getByTestId("value").textContent).toBe("Adam");
+    expect(screen.getByTestId("pending").textContent).toBe("false");
+  });
+
+  it("should not double-register Mount handlers causing duplicate API calls in StrictMode", async () => {
+    const apiCalls: string[] = [];
+
+    function ParentComponent() {
+      const actions = useActions<CountModel, typeof CountActions>(countModel);
+
+      actions.useAction(Lifecycle.Mount, () => {
+        apiCalls.push("parent-mount");
+      });
+
+      return <ChildComponent />;
+    }
+
+    function ChildComponent() {
+      const actions = useActions<CountModel, typeof CountActions>(countModel);
+
+      actions.useAction(Lifecycle.Mount, () => {
+        apiCalls.push("child-mount");
+      });
+
+      return <div data-testid="child">child</div>;
+    }
+
+    render(
+      <React.StrictMode>
+        <ParentComponent />
+      </React.StrictMode>,
+    );
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    expect(apiCalls.filter((c) => c === "parent-mount")).toHaveLength(1);
+    expect(apiCalls.filter((c) => c === "child-mount")).toHaveLength(1);
   });
 });

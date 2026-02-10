@@ -1,6 +1,6 @@
 {
   "name": "chizu",
-  "version": "0.2.50",
+  "version": "0.2.51",
   "type": "module",
   "license": "MIT",
   "packageManager": "yarn@1.22.22",
@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "eventemitter3": "^5.0.1",
-    "immertation": "0.1.24"
+    "immertation": "^0.1.25"
   },
   "peerDependencies": {
     "@mobily/ts-belt": "^3.0.0",

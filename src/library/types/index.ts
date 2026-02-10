@@ -64,10 +64,8 @@ export class Brand {
   static Channel = Symbol("chizu.brand/Channel");
   /** Node capture events used by Lifecycle.Node */
   static Node = Symbol("chizu.action.lifecycle/Node");
-  /** Identifies cache operations created with Cache() */
-  static Cache = Symbol("chizu.brand/Cache");
-  /** TTL value for cache operations */
-  static TTL = Symbol("chizu.brand/TTL");
+  /** Identifies rehydrated model wrappers created with Rehydrate() */
+  static Rehydrate = Symbol("chizu.brand/Rehydrate");
 }
 
 /**
@@ -339,70 +337,6 @@ export type MulticastPayload<
 };
 
 /**
- * Branded type for cache operations created with `Cache()`.
- * Cache operations identify cached async results and carry a TTL for expiration.
- *
- * When a channel type is specified, the cache operation becomes callable to
- * create channeled cache keys for targeted lookups.
- *
- * @template C - The channel type for keyed cache entries (defaults to never)
- *
- * @example
- * ```ts
- * export class CacheStore {
- *   static User = Cache<{ UserId: number }>(30_000);  // 30s TTL, channeled
- *   static Config = Cache(60_000);                     // 60s TTL, unchanneled
- * }
- *
- * // Channeled usage
- * context.actions.cache.put(CacheStore.User({ UserId: 5 }), () => fetchUser(5));
- * context.actions.cache.delete(CacheStore.User({ UserId: 5 }));
- * ```
- */
-export type CachePayload<C extends Filter = never> = {
-  readonly [Brand.Action]: symbol;
-  readonly [Brand.Cache]: true;
-  readonly [Brand.TTL]: number;
-} & ([C] extends [never]
-  ? unknown
-  : {
-      (channel: C): ChanneledCache<C>;
-    });
-
-/**
- * Result of calling a cache operation with a channel argument.
- * Contains the cache reference and the channel data for keyed lookup.
- *
- * @template C - The channel type
- */
-export type ChanneledCache<C = unknown> = {
-  readonly [Brand.Action]: symbol;
-  readonly [Brand.Cache]: true;
-  readonly [Brand.TTL]: number;
-  readonly [Brand.Channel]: C;
-  readonly channel: C;
-};
-
-/**
- * Union type representing either a plain or channeled cache operation.
- * Used in `cache.put`, `cache.get`, and `cache.delete` signatures.
- */
-export type AnyCacheOperation = CachePayload<Filter> | ChanneledCache;
-
-/**
- * Interface for the Cache factory function.
- */
-export type CacheFactory = {
-  /**
-   * Creates a new cache operation with a TTL in milliseconds.
-   * @template C The channel type for keyed cache entries (defaults to never).
-   * @param ttl Time-to-live in milliseconds.
-   * @returns A typed cache operation object.
-   */
-  <C extends Filter = never>(ttl: number): CachePayload<C>;
-};
-
-/**
  * Options for multicast dispatch.
  * Required when dispatching a multicast action.
  */
@@ -670,79 +604,6 @@ export type HandlerContext<
       options?: MulticastOptions,
     ): void;
     annotate<T>(operation: Operation, value: T): T;
-    /**
-     * Cache operations for reading, writing, and deleting cached values.
-     */
-    cache: {
-      /**
-       * Retrieves a value from cache if available and within TTL,
-       * otherwise executes the async function and caches the result.
-       *
-       * Returns `T` synchronously on cache hit, or `Promise<T>` on cache miss.
-       * Using `await` handles both cases uniformly.
-       *
-       * @param operation - The cache operation (plain or channeled).
-       * @param fn - Async function receiving a `cache` callback. Call `cache(value)` to store the value; if not called, nothing is cached.
-       * @returns The cached or freshly fetched value.
-       *
-       * @example
-       * ```ts
-       * const user = await context.actions.cache.put(
-       *   CacheOps.User({ UserId: 5 }),
-       *   async (cache) => {
-       *     const response = await fetchUser(5);
-       *     return response.error ? response : cache(response);
-       *   },
-       * );
-       * ```
-       */
-      put<T>(
-        operation: AnyCacheOperation,
-        fn: (cache: (value: T) => T) => Promise<T>,
-      ): T | Promise<T>;
-      /**
-       * Reads a cached value for a cache operation without triggering a fetch.
-       * Returns `undefined` if no entry exists or the entry has expired.
-       *
-       * @template T - The expected value type.
-       * @param operation - The cache operation (plain or channeled).
-       * @returns The cached value, or `undefined` if not found or expired.
-       *
-       * @example
-       * ```ts
-       * const user = context.actions.cache.get<User>(CacheStore.User({ UserId: 5 }));
-       * if (user) {
-       *   context.actions.produce(({ model }) => {
-       *     model.user = user;
-       *   });
-       * }
-       * ```
-       */
-      get<T>(operation: AnyCacheOperation): T | undefined;
-      /**
-       * Deletes cache entries for a cache operation.
-       *
-       * With a channeled operation, deletes all entries whose channel
-       * contains the specified keys (partial match). For example,
-       * `cache.delete(CacheOps.User({ UserId: 5 }))` removes entries for
-       * `{ UserId: 5 }`, `{ UserId: 5, Role: "admin" }`, etc.
-       *
-       * With a plain (unchanneled) operation, deletes all entries
-       * for that operation regardless of channel.
-       *
-       * @param operation - The cache operation (plain or channeled).
-       *
-       * @example
-       * ```ts
-       * // Delete specific cache entry (partial channel match)
-       * context.actions.cache.delete(CacheOps.User({ UserId: 5 }));
-       *
-       * // Delete ALL user cache entries
-       * context.actions.cache.delete(CacheOps.User);
-       * ```
-       */
-      delete(operation: AnyCacheOperation): void;
-    };
   };
 };
 

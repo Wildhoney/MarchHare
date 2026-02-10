@@ -12,23 +12,36 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { act, render, screen } from "@testing-library/react";
+import { Boundary } from "../../library/index.ts";
 import Counter from "./index.tsx";
 
 describe("Counter", () => {
   it("should render with initial count of 1", () => {
-    render(<Counter />);
+    render(
+      <Boundary>
+        <Counter />
+      </Boundary>,
+    );
     const count = screen.getByTestId("count");
     expect(count).toHaveAttribute("data-count", "1");
   });
 
   it("should have increment and decrement buttons", () => {
-    render(<Counter />);
+    render(
+      <Boundary>
+        <Counter />
+      </Boundary>,
+    );
     expect(screen.getByRole("button", { name: "+" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "−" })).toBeInTheDocument();
   });
 
   it("should decrement when minus button clicked", async () => {
-    render(<Counter />);
+    render(
+      <Boundary>
+        <Counter />
+      </Boundary>,
+    );
     const decrement = screen.getByRole("button", { name: "−" });
     const count = screen.getByTestId("count");
     await act(async () => decrement.click());
@@ -36,7 +49,11 @@ describe("Counter", () => {
   });
 
   it("should decrement multiple times", async () => {
-    render(<Counter />);
+    render(
+      <Boundary>
+        <Counter />
+      </Boundary>,
+    );
     const decrement = screen.getByRole("button", { name: "−" });
     const count = screen.getByTestId("count");
     await act(async () => decrement.click());
@@ -47,7 +64,11 @@ describe("Counter", () => {
 
   it("should show loading indicator when increment clicked", async () => {
     vi.useFakeTimers();
-    render(<Counter />);
+    render(
+      <Boundary>
+        <Counter />
+      </Boundary>,
+    );
     const increment = screen.getByRole("button", { name: "+" });
     const loading = screen.getByTestId("loading");
     expect(loading).toHaveStyle({ opacity: "0" });
@@ -58,7 +79,11 @@ describe("Counter", () => {
 
   it("should hide loading indicator after async completes", async () => {
     vi.useFakeTimers();
-    render(<Counter />);
+    render(
+      <Boundary>
+        <Counter />
+      </Boundary>,
+    );
     const increment = screen.getByRole("button", { name: "+" });
     const loading = screen.getByTestId("loading");
     act(() => increment.click());
@@ -70,7 +95,11 @@ describe("Counter", () => {
 
   it("should update count after async increment completes", async () => {
     vi.useFakeTimers();
-    render(<Counter />);
+    render(
+      <Boundary>
+        <Counter />
+      </Boundary>,
+    );
     const increment = screen.getByRole("button", { name: "+" });
     const count = screen.getByTestId("count");
     act(() => increment.click());
@@ -82,7 +111,11 @@ describe("Counter", () => {
 
   it("should show draft value while pending", async () => {
     vi.useFakeTimers();
-    render(<Counter />);
+    render(
+      <Boundary>
+        <Counter />
+      </Boundary>,
+    );
     const increment = screen.getByRole("button", { name: "+" });
     const loading = screen.getByTestId("loading");
     act(() => increment.click());
@@ -92,7 +125,11 @@ describe("Counter", () => {
 
   it("should track multiple pending operations", async () => {
     vi.useFakeTimers();
-    render(<Counter />);
+    render(
+      <Boundary>
+        <Counter />
+      </Boundary>,
+    );
     const increment = screen.getByRole("button", { name: "+" });
     const loading = screen.getByTestId("loading");
     act(() => {

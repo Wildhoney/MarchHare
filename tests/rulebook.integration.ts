@@ -1133,119 +1133,96 @@ test.describe("Chizu Rulebook", () => {
     });
   });
 
-  // Cache Layer
-  test.describe("Cache", () => {
+  // Rehydration
+  test.describe("Rehydrate", () => {
     test.beforeEach(async ({ page }) => {
-      await page.goto("/?fixture=cache");
-      await expect(page.getByTestId("cache-fixture")).toBeVisible();
+      await page.goto("/?fixture=rehydrate");
+      await expect(page.getByTestId("rehydrate-fixture")).toBeVisible();
     });
 
-    it("cache.put - should cache the result and return it on subsequent calls", async ({
+    it("Rehydrate() - should start with initial model on first mount", async ({
       page,
     }) => {
-      const value = page.getByTestId("cache-value");
-      const fetchCount = page.getByTestId("cache-fetch-count");
-
-      await expect(value).toHaveText("none");
-
-      // First fetch - cache miss, should call the async function
-      await page.getByTestId("cache-fetch").click();
-      await expect(value).toHaveText("fetched-1", { timeout: 2000 });
-      await expect(fetchCount).toHaveText("1");
-
-      // Second fetch via FetchAgain - cache hit, should return cached value
-      await page.getByTestId("cache-fetch-again").click();
-      await expect(value).toHaveText("fetched-1", { timeout: 2000 });
+      await expect(page.getByTestId("rehydrate-count-1")).toHaveText("0");
+      await expect(page.getByTestId("rehydrate-count-2")).toHaveText("0");
+      await expect(page.getByTestId("plain-count")).toHaveText("0");
     });
 
-    it("cache.delete - should clear the cache so the next fetch calls the async function", async ({
+    it("Rehydrate() - should preserve state across unmount/remount", async ({
       page,
     }) => {
-      const value = page.getByTestId("cache-value");
+      // Increment user 1 three times
+      await page.getByTestId("rehydrate-increment-1").click();
+      await page.getByTestId("rehydrate-increment-1").click();
+      await page.getByTestId("rehydrate-increment-1").click();
+      await expect(page.getByTestId("rehydrate-count-1")).toHaveText("3");
 
-      // Populate cache
-      await page.getByTestId("cache-fetch").click();
-      await expect(value).toHaveText(/^fetched-/, { timeout: 2000 });
+      // Unmount user 1
+      await page.getByTestId("toggle-user-1").click();
+      await expect(page.getByTestId("user-1-mounted")).toHaveText("no");
 
-      // Invalidate
-      await page.getByTestId("cache-invalidate").click();
-      await expect(value).toHaveText("invalidated");
-
-      // Fetch again - cache miss after invalidation, new value
-      await page.getByTestId("cache-fetch").click();
-      const text = await value.textContent();
-      // Should be a fresh fetch (counter incremented beyond original)
-      expect(text).toMatch(/^fetched-/);
+      // Remount user 1 — state should be restored
+      await page.getByTestId("toggle-user-1").click();
+      await expect(page.getByTestId("user-1-mounted")).toHaveText("yes");
+      await expect(page.getByTestId("rehydrate-count-1")).toHaveText("3");
     });
 
-    it("cache.put channeled - should cache per channel independently", async ({
-      page,
-    }) => {
-      const userValue = page.getByTestId("cache-user-value");
+    it("Rehydrate() - channels are independent", async ({ page }) => {
+      // Increment user 1
+      await page.getByTestId("rehydrate-increment-1").click();
+      await page.getByTestId("rehydrate-increment-1").click();
+      await expect(page.getByTestId("rehydrate-count-1")).toHaveText("2");
 
-      // Fetch user 1
-      await page.getByTestId("cache-fetch-user-1").click();
-      await expect(userValue).toHaveText(/^user-1-fetch-/, { timeout: 2000 });
-      const user1Value = await userValue.textContent();
+      // User 2 should still be at 0
+      await expect(page.getByTestId("rehydrate-count-2")).toHaveText("0");
 
-      // Fetch user 2 - different channel, should be a fresh fetch
-      await page.getByTestId("cache-fetch-user-2").click();
-      await expect(userValue).toHaveText(/^user-2-fetch-/, { timeout: 2000 });
+      // Unmount and remount user 1
+      await page.getByTestId("toggle-user-1").click();
+      await page.getByTestId("toggle-user-1").click();
 
-      // Fetch user 1 again - should return cached value (same as before)
-      await page.getByTestId("cache-fetch-user-1").click();
-      await expect(userValue).toHaveText(user1Value!, { timeout: 2000 });
+      // User 1 preserved, user 2 untouched
+      await expect(page.getByTestId("rehydrate-count-1")).toHaveText("2");
+      await expect(page.getByTestId("rehydrate-count-2")).toHaveText("0");
     });
 
-    it("cache.delete channeled - should only clear the targeted channel", async ({
+    it("Rehydrate() - non-rehydrated component resets on remount", async ({
       page,
     }) => {
-      const userValue = page.getByTestId("cache-user-value");
-      const userFetchCount = page.getByTestId("cache-user-fetch-count");
+      // Increment plain component
+      await page.getByTestId("plain-increment").click();
+      await page.getByTestId("plain-increment").click();
+      await expect(page.getByTestId("plain-count")).toHaveText("2");
 
-      // Populate user 1 cache
-      await page.getByTestId("cache-fetch-user-1").click();
-      await expect(userValue).toHaveText(/^user-1-fetch-/, { timeout: 2000 });
-      const countAfterUser1 = await userFetchCount.textContent();
+      // Unmount and remount
+      await page.getByTestId("toggle-plain").click();
+      await expect(page.getByTestId("plain-mounted")).toHaveText("no");
+      await page.getByTestId("toggle-plain").click();
+      await expect(page.getByTestId("plain-mounted")).toHaveText("yes");
 
-      // Populate user 2 cache
-      await page.getByTestId("cache-fetch-user-2").click();
-      await expect(userValue).toHaveText(/^user-2-fetch-/, { timeout: 2000 });
-
-      // Invalidate user 1 only
-      await page.getByTestId("cache-invalidate-user-1").click();
-
-      // Fetch user 2 again - should still be cached (count should not increase from user 2's fetch)
-      await page.getByTestId("cache-fetch-user-2").click();
-      await expect(userValue).toHaveText(/^user-2-fetch-/, { timeout: 2000 });
-
-      // Fetch user 1 - cache was deleted, should produce a new fetch
-      await page.getByTestId("cache-fetch-user-1").click();
-      await expect(userValue).toHaveText(/^user-1-fetch-/, { timeout: 2000 });
-      const countAfterRefetch = await userFetchCount.textContent();
-      expect(Number(countAfterRefetch)).toBeGreaterThan(
-        Number(countAfterUser1),
-      );
+      // State should be reset to 0
+      await expect(page.getByTestId("plain-count")).toHaveText("0");
     });
 
-    it("cache.get - should read cached value in Lifecycle.Mount handler", async ({
+    it("Rehydrate() - survives multiple unmount/remount cycles", async ({
       page,
     }) => {
-      // Populate the cache first
-      await page.getByTestId("cache-init-populate").click();
-      await expect(page.getByTestId("cache-init-populated")).toHaveText("yes", {
-        timeout: 2000,
-      });
+      // Increment, unmount, remount, increment more, unmount, remount
+      await page.getByTestId("rehydrate-increment-1").click();
+      await expect(page.getByTestId("rehydrate-count-1")).toHaveText("1");
 
-      // Mount the child that reads cache in Lifecycle.Mount
-      await page.getByTestId("cache-init-show-child").click();
+      await page.getByTestId("toggle-user-1").click();
+      await page.getByTestId("toggle-user-1").click();
+      await expect(page.getByTestId("rehydrate-count-1")).toHaveText("1");
 
-      // Child should have read the cached value, not the fallback
-      await expect(page.getByTestId("cache-init-greeting")).toHaveText(
-        "Hello from cache",
-        { timeout: 2000 },
-      );
-      await expect(page.getByTestId("cache-init-status")).toHaveText("mounted");
+      // Increment again after rehydration
+      await page.getByTestId("rehydrate-increment-1").click();
+      await page.getByTestId("rehydrate-increment-1").click();
+      await expect(page.getByTestId("rehydrate-count-1")).toHaveText("3");
+
+      // Second cycle
+      await page.getByTestId("toggle-user-1").click();
+      await page.getByTestId("toggle-user-1").click();
+      await expect(page.getByTestId("rehydrate-count-1")).toHaveText("3");
     });
   });
 });

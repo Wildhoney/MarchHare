@@ -55,15 +55,8 @@ import {
 import { useError } from "../error/index.tsx";
 import { State, Operation, Process } from "immertation";
 import { useTasks } from "../boundary/components/tasks/utils.ts";
-import { useCache } from "../boundary/components/cache/utils.ts";
-import {
-  getCacheSymbol,
-  getCacheTtl,
-  isChanneledCache,
-  serializeChannel,
-  matchesCacheChannel,
-} from "../cache/index.ts";
-import type { AnyCacheOperation } from "../types/index.ts";
+import { useRehydration } from "../rehydrate/index.ts";
+import type { Rehydrated } from "../rehydrate/index.ts";
 import { G } from "@mobily/ts-belt";
 
 /**
@@ -82,89 +75,63 @@ import { G } from "@mobily/ts-belt";
  *
  * @template M The model type representing the component's state.
  * @template AC The actions class containing action definitions.
- * @template S The data type for reactive external values.
- * @param initialModel The initial model state.
- * @param ƒ Optional function that returns reactive values as data.
+ * @template D The data type for reactive external values.
+ * @param initialModelOrRehydrated The initial model state, or a `Rehydrate(model, channel)`
+ *   wrapper for automatic state persistence across unmount/remount cycles.
+ *   When a `Rehydrated` wrapper is passed, the model is restored from the
+ *   rehydrator on mount (if a matching snapshot exists) and snapshotted
+ *   back on unmount.
+ * @param getData Optional function that returns reactive values as data.
  *   Values returned are accessible via `context.data` in action handlers,
  *   always reflecting the latest values even after await operations.
  * @returns A result `[model, actions]` with pre-typed `useAction` method.
  *
  * @example
  * ```typescript
- * // types.ts
- * type Model = { visitor: Country | null };
+ * // Basic usage
+ * const actions = useActions<Model, typeof Actions>(model);
  *
- * export class Actions {
- *   static Visitor = Action<Country>("Visitor");
- * }
+ * // With rehydration — state survives unmount/remount
+ * const actions = useActions<Model, typeof Actions>(
+ *   Rehydrate(model, { UserId: props.userId }),
+ * );
  *
- * // actions.ts
- * export function useVisitorActions() {
- *   const actions = useActions<Model, typeof Actions>(model);
- *
- *   actions.useAction(Lifecycle.Mount, (context) => {
- *     // Setup logic - types are pre-baked from useActions
- *   });
- *
- *   actions.useAction(Actions.Visitor, (context, country) => {
- *     context.actions.produce((draft) => {
- *       draft.model.visitor = country;
- *     });
- *   });
- *
- *   actions.useAction(Lifecycle.Unmount, (context) => {
- *     // Cleanup logic
- *   });
- *
- *   return actions;
- * }
- *
- * // With data for reactive external values
- * function useSearchActions(props: { query: string }) {
- *   const actions = useActions<Model, typeof Actions, { query: string }>(
- *     model,
- *     () => ({ query: props.query })
- *   );
- *
- *   actions.useAction(Actions.Search, async (context) => {
- *     await fetch("/search");
- *     // context.data.query is always the latest value
- *     console.log(context.data.query);
- *   });
- *
- *   return actions;
- * }
- *
- * // Component usage
- * function Visitor() {
- *   const [model, actions] = useVisitorActions();
- *   return <div>{model.visitor?.name}</div>;
- * }
+ * // With reactive data
+ * const actions = useActions<Model, typeof Actions, { query: string }>(
+ *   model,
+ *   () => ({ query: props.query }),
+ * );
  * ```
  */
 export function useActions<
   M extends Model,
   AC extends Actions,
   D extends Props = Props,
->(initialModel: M, getData: Data<D> = () => <D>{}): UseActions<M, AC, D> {
+>(
+  initialModelOrRehydrated: M | Rehydrated<M>,
+  getData: Data<D> = () => <D>{},
+): UseActions<M, AC, D> {
   const broadcast = useBroadcast();
   const scope = useScope();
   const error = useError();
   const tasks = useTasks();
-  const cache = useCache();
   const rerender = useRerender();
+  const initialised = React.useRef(false);
   const hydration = React.useRef<Process | null>(null);
-  const state = React.useRef<State<M>>(
-    (() => {
-      const state = new State<M>();
-      hydration.current = state.hydrate(initialModel);
-      return state;
-    })(),
+  const state = React.useRef(new State<M>());
+  const { model: resolvedModel, save: saveRehydration } = useRehydration(
+    initialModelOrRehydrated,
   );
+
+  if (!initialised.current) {
+    initialised.current = true;
+    hydration.current = state.current.hydrate(resolvedModel);
+  }
   const [model, setModel] = React.useState<M>(() => state.current.model);
   const data = useData(getData());
   const unicast = React.useMemo(() => new EventEmitter(), []);
   const registry = React.useRef<Scope>({ handlers: new Map() });
+  registry.current.handlers = new Map();
   const actionSets = useActionSets();
   const phase = React.useRef<Phase>(Phase.Mounting);
   const nodes = useNodes<M>();
@@ -230,79 +197,6 @@ export function useActions<
           },
           annotate<T>(operation: Operation, value: T): T {
             return state.current.annotate(operation, value);
-          },
-          cache: {
-            put<T>(
-              operation: AnyCacheOperation,
-              fn: (cache: (value: T) => T) => Promise<T>,
-            ): T | Promise<T> {
-              const symbol = getCacheSymbol(operation);
-              const ttl = getCacheTtl(operation);
-              const channelKey = isChanneledCache(operation)
-                ? serializeChannel(
-                    (<{ channel: Filter }>(<unknown>operation)).channel,
-                  )
-                : "";
-
-              const entries = cache.get(symbol);
-              if (entries) {
-                const entry = entries.get(channelKey);
-                if (entry && entry.expiresAt > Date.now()) {
-                  return <T>entry.value;
-                }
-              }
-
-              const store = (value: T): T => {
-                if (!cache.has(symbol)) cache.set(symbol, new Map());
-                const bucket = <NonNullable<ReturnType<typeof cache.get>>>(
-                  cache.get(symbol)
-                );
-                bucket.set(channelKey, {
-                  value,
-                  expiresAt: Date.now() + ttl,
-                  channel: isChanneledCache(operation)
-                    ? (<{ channel: Filter }>(<unknown>operation)).channel
-                    : undefined,
-                });
-                return value;
-              };
-
-              return fn(store);
-            },
-            get<T>(operation: AnyCacheOperation): T | undefined {
-              const symbol = getCacheSymbol(operation);
-              const channelKey = isChanneledCache(operation)
-                ? serializeChannel(
-                    (<{ channel: Filter }>(<unknown>operation)).channel,
-                  )
-                : "";
-              const entry = cache.get(symbol)?.get(channelKey);
-              return entry && entry.expiresAt > Date.now()
-                ? <T>entry.value
-                : undefined;
-            },
-            delete(operation: AnyCacheOperation): void {
-              const symbol = getCacheSymbol(operation);
-
-              if (isChanneledCache(operation)) {
-                const deleteChannel = (<{ channel: Filter }>(
-                  (<unknown>operation)
-                )).channel;
-                const entries = cache.get(symbol);
-                if (entries) {
-                  for (const [key, entry] of entries) {
-                    if (
-                      entry.channel &&
-                      matchesCacheChannel(deleteChannel, entry.channel)
-                    ) {
-                      entries.delete(key);
-                    }
-                  }
-                }
-              } else {
-                cache.delete(symbol);
-              }
-            },
           },
         },
       };
@@ -403,6 +297,8 @@ export function useActions<
           for (const cleanup of pendingCleanups) cleanup();
           return;
         }
+
+        saveRehydration(state.current.model);
 
         for (const task of localTasks.current) {
           task.controller.abort();

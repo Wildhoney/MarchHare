@@ -7,7 +7,7 @@ Strongly typed React framework using generators and efficiently updated views al
 ```ts
 import {
   Action,
-  Cache,
+  Rehydrate,
   Distribution,
   Lifecycle,
   useActions,
@@ -100,56 +100,6 @@ actions.dispatch(Actions.UserUpdated, user);
 ```
 
 Channel values must be non-nullable primitives: `string`, `number`, `bigint`, `boolean`, or `symbol`. By convention, use uppercase keys like `{UserId: 4}`.
-
-## Cache Layer
-
-Cache async results across action handlers using `Cache()` operations:
-
-```ts
-import { Cache } from "chizu";
-
-// Define cache operations (alongside BroadcastActions in shared types)
-export class CacheStore {
-  static User = Cache<{ UserId: number }>(30_000); // 30s TTL, channeled
-  static Config = Cache(60_000); // 60s TTL, unchanneled
-}
-```
-
-### Putting values into the cache
-
-```ts
-actions.useAction(Actions.LoadUser, async (context, userId) => {
-  // Returns T synchronously on cache hit, Promise<T> on miss
-  const user = await context.actions.cache.put(
-    CacheStore.User({ UserId: userId }),
-    async (cache) => {
-      const response = await fetch(`/api/users/${userId}`);
-      return response.ok ? cache(await response.json()) : null;
-    },
-  );
-
-  context.actions.produce(({ model }) => {
-    model.user = user;
-  });
-});
-```
-
-### Reading cached values
-
-```ts
-// Read a cached value without triggering a fetch
-const user = context.actions.cache.get<User>(CacheStore.User({ UserId: 5 }));
-```
-
-### Deleting cache entries
-
-```ts
-// Partial channel match: clears entries whose channel contains { UserId: 5 }
-context.actions.cache.delete(CacheStore.User({ UserId: 5 }));
-
-// Clears ALL entries for this operation
-context.actions.cache.delete(CacheStore.User);
-```
 
 ## Lifecycle Actions
 
@@ -437,7 +387,6 @@ import { Broadcaster, Consumer, Regulators, Scope } from "chizu";
 // Isolated broadcast context (for libraries)
 <Broadcaster>{children}</Broadcaster>
 
-// Isolated consumer cache
 <Consumer>{children}</Consumer>
 
 // Isolated regulator context
@@ -581,10 +530,8 @@ docs: update the README file
 - `src/library/boundary/components/scope/` - Multicast scope implementation
 - `src/library/boundary/components/broadcast/` - Broadcast system
 - `src/library/boundary/components/consumer/` - Consumer/Partition for consume()
-- `src/library/boundary/components/cache/` - Cache store for cache.put/cache.get/cache.delete
 - `src/library/boundary/components/tasks/` - Task tracking context
-- `src/library/cache/index.ts` - Cache factory function
-- `src/library/cache/utils.ts` - Cache utility functions
+- `src/library/rehydrate/index.ts` - Rehydrate factory and useRehydration hook
 
 ### Documentation
 
@@ -592,7 +539,6 @@ docs: update the README file
   - `action-control-patterns.md` - Cancellation, timeouts, retries, debouncing
   - `action-regulator.md` - Regulator API for abort/policy control
   - `broadcast-actions.md` - Cross-component communication
-  - `cache.md` - Caching async results with cache.put/cache.get/cache.delete
   - `channeled-actions.md` - Targeted event delivery
   - `consuming-actions.md` - consume() method details
   - `context-providers.md` - Boundary, Broadcaster, Consumer, Regulators
@@ -604,6 +550,7 @@ docs: update the README file
   - `react-context-in-handlers.md` - Using context.data
   - `real-time-applications.md` - SSE/WebSocket patterns
   - `referential-equality.md` - Avoiding stale closures
+  - `rehydration.md` - Persisting state across unmount/remount cycles
   - `stateful-props.md` - Box<T> type for stateful props
   - `utility-functions.md` - sleep, pk utilities
   - `utility-types.md` - Handler, Handlers types
