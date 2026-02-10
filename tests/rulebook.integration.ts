@@ -1140,7 +1140,7 @@ test.describe("Chizu Rulebook", () => {
       await expect(page.getByTestId("cache-fixture")).toBeVisible();
     });
 
-    it("cacheable - should cache the result and return it on subsequent calls", async ({
+    it("cache.put - should cache the result and return it on subsequent calls", async ({
       page,
     }) => {
       const value = page.getByTestId("cache-value");
@@ -1158,7 +1158,7 @@ test.describe("Chizu Rulebook", () => {
       await expect(value).toHaveText("fetched-1", { timeout: 2000 });
     });
 
-    it("invalidate - should clear the cache so the next fetch calls the async function", async ({
+    it("cache.delete - should clear the cache so the next fetch calls the async function", async ({
       page,
     }) => {
       const value = page.getByTestId("cache-value");
@@ -1178,7 +1178,7 @@ test.describe("Chizu Rulebook", () => {
       expect(text).toMatch(/^fetched-/);
     });
 
-    it("cacheable channeled - should cache per channel independently", async ({
+    it("cache.put channeled - should cache per channel independently", async ({
       page,
     }) => {
       const userValue = page.getByTestId("cache-user-value");
@@ -1197,7 +1197,7 @@ test.describe("Chizu Rulebook", () => {
       await expect(userValue).toHaveText(user1Value!, { timeout: 2000 });
     });
 
-    it("invalidate channeled - should only clear the targeted channel", async ({
+    it("cache.delete channeled - should only clear the targeted channel", async ({
       page,
     }) => {
       const userValue = page.getByTestId("cache-user-value");
@@ -1219,7 +1219,7 @@ test.describe("Chizu Rulebook", () => {
       await page.getByTestId("cache-fetch-user-2").click();
       await expect(userValue).toHaveText(/^user-2-fetch-/, { timeout: 2000 });
 
-      // Fetch user 1 - cache was invalidated, should produce a new fetch
+      // Fetch user 1 - cache was deleted, should produce a new fetch
       await page.getByTestId("cache-fetch-user-1").click();
       await expect(userValue).toHaveText(/^user-1-fetch-/, { timeout: 2000 });
       const countAfterRefetch = await userFetchCount.textContent();
@@ -1228,7 +1228,7 @@ test.describe("Chizu Rulebook", () => {
       );
     });
 
-    it("cache() model initialiser - should resolve cached value into initial model", async ({
+    it("cache.get - should read cached value in Lifecycle.Mount handler", async ({
       page,
     }) => {
       // Populate the cache first
@@ -1237,10 +1237,10 @@ test.describe("Chizu Rulebook", () => {
         timeout: 2000,
       });
 
-      // Mount the child that uses cache() in its model
+      // Mount the child that reads cache in Lifecycle.Mount
       await page.getByTestId("cache-init-show-child").click();
 
-      // Child should have resolved the cached value, not the fallback
+      // Child should have read the cached value, not the fallback
       await expect(page.getByTestId("cache-init-greeting")).toHaveText(
         "Hello from cache",
         { timeout: 2000 },

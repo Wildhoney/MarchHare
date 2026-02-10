@@ -248,4 +248,4 @@ actions.dispatch(Actions.Multicast.Update, 42, { scope: "TeamA" });
 
 Unlike broadcast which reaches all components, multicast is scoped to the named boundary &ndash; perfect for isolated widget groups, form sections, or distinct UI regions. See the [multicast recipe](./recipes/multicast-actions.md) for more details.
 
-For caching async results across components, define cache operations with `Cache()` and use `context.actions.cacheable()` inside handlers &ndash; on cache hit the value is returned synchronously. Use `context.actions.invalidate()` to clear entries with partial channel matching. See the [cache recipe](./recipes/cache.md) for details.
+For caching async results across components, define cache operations with `Cache()` and use `context.actions.cache.put()` inside handlers &ndash; on cache hit the value is returned synchronously. Use `context.actions.cache.get()` to read cached values and `context.actions.cache.delete()` to clear entries with partial channel matching. See the [cache recipe](./recipes/cache.md) for details.

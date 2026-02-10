@@ -68,8 +68,6 @@ export class Brand {
   static Cache = Symbol("chizu.brand/Cache");
   /** TTL value for cache operations */
   static TTL = Symbol("chizu.brand/TTL");
-  /** Identifies cached initialisers created with cache() for model initialisation */
-  static Cached = Symbol("chizu.brand/Cached");
 }
 
 /**
@@ -357,8 +355,8 @@ export type MulticastPayload<
  * }
  *
  * // Channeled usage
- * context.actions.cacheable(CacheStore.User({ UserId: 5 }), () => fetchUser(5));
- * context.actions.invalidate(CacheStore.User({ UserId: 5 }));
+ * context.actions.cache.put(CacheStore.User({ UserId: 5 }), () => fetchUser(5));
+ * context.actions.cache.delete(CacheStore.User({ UserId: 5 }));
  * ```
  */
 export type CachePayload<C extends Filter = never> = {
@@ -387,7 +385,7 @@ export type ChanneledCache<C = unknown> = {
 
 /**
  * Union type representing either a plain or channeled cache operation.
- * Used in `cacheable` and `invalidate` signatures.
+ * Used in `cache.put`, `cache.get`, and `cache.delete` signatures.
  */
 export type AnyCacheOperation = CachePayload<Filter> | ChanneledCache;
 
@@ -402,17 +400,6 @@ export type CacheFactory = {
    * @returns A typed cache operation object.
    */
   <C extends Filter = never>(ttl: number): CachePayload<C>;
-};
-
-/**
- * Internal type created by the `cache()` model initialiser.
- * Carries the cache operation and fallback value for resolution by `useActions`.
- * @internal
- */
-export type CachedValue<T = unknown> = {
-  readonly [Brand.Cached]: true;
-  readonly operation: AnyCacheOperation;
-  readonly fallback: T;
 };
 
 /**
@@ -684,54 +671,78 @@ export type HandlerContext<
     ): void;
     annotate<T>(operation: Operation, value: T): T;
     /**
-     * Retrieves a value from cache if available and within TTL,
-     * otherwise executes the async function and caches the result.
-     *
-     * Returns `T` synchronously on cache hit, or `Promise<T>` on cache miss.
-     * Using `await` handles both cases uniformly.
-     *
-     * @param operation - The cache operation (plain or channeled)
-     * @param fn - Async function receiving a `cache` callback. Call `cache(value)` to store the value; if not called, nothing is cached.
-     * @returns The cached or freshly fetched value
-     *
-     * @example
-     * ```ts
-     * const user = await context.actions.cacheable(
-     *   CacheOps.User({ UserId: 5 }),
-     *   async (cache) => {
-     *     const response = await fetchUser(5);
-     *     return response.error ? response : cache(response);
-     *   },
-     * );
-     * ```
+     * Cache operations for reading, writing, and deleting cached values.
      */
-    cacheable<T>(
-      operation: AnyCacheOperation,
-      fn: (cache: (value: T) => T) => Promise<T>,
-    ): T | Promise<T>;
-    /**
-     * Invalidates cache entries for a cache operation.
-     *
-     * With a channeled operation, invalidates all entries whose channel
-     * contains the specified keys (partial match). For example,
-     * `invalidate(CacheOps.User({ UserId: 5 }))` removes entries for
-     * `{ UserId: 5 }`, `{ UserId: 5, Role: "admin" }`, etc.
-     *
-     * With a plain (unchanneled) operation, invalidates all entries
-     * for that operation regardless of channel.
-     *
-     * @param operation - The cache operation (plain or channeled)
-     *
-     * @example
-     * ```ts
-     * // Invalidate specific cache entry (partial channel match)
-     * context.actions.invalidate(CacheOps.User({ UserId: 5 }));
-     *
-     * // Invalidate ALL user cache entries
-     * context.actions.invalidate(CacheOps.User);
-     * ```
-     */
-    invalidate(operation: AnyCacheOperation): void;
+    cache: {
+      /**
+       * Retrieves a value from cache if available and within TTL,
+       * otherwise executes the async function and caches the result.
+       *
+       * Returns `T` synchronously on cache hit, or `Promise<T>` on cache miss.
+       * Using `await` handles both cases uniformly.
+       *
+       * @param operation - The cache operation (plain or channeled).
+       * @param fn - Async function receiving a `cache` callback. Call `cache(value)` to store the value; if not called, nothing is cached.
+       * @returns The cached or freshly fetched value.
+       *
+       * @example
+       * ```ts
+       * const user = await context.actions.cache.put(
+       *   CacheOps.User({ UserId: 5 }),
+       *   async (cache) => {
+       *     const response = await fetchUser(5);
+       *     return response.error ? response : cache(response);
+       *   },
+       * );
+       * ```
+       */
+      put<T>(
+        operation: AnyCacheOperation,
+        fn: (cache: (value: T) => T) => Promise<T>,
+      ): T | Promise<T>;
+      /**
+       * Reads a cached value for a cache operation without triggering a fetch.
+       * Returns `undefined` if no entry exists or the entry has expired.
+       *
+       * @template T - The expected value type.
+       * @param operation - The cache operation (plain or channeled).
+       * @returns The cached value, or `undefined` if not found or expired.
+       *
+       * @example
+       * ```ts
+       * const user = context.actions.cache.get<User>(CacheStore.User({ UserId: 5 }));
+       * if (user) {
+       *   context.actions.produce(({ model }) => {
+       *     model.user = user;
+       *   });
+       * }
+       * ```
+       */
+      get<T>(operation: AnyCacheOperation): T | undefined;
+      /**
+       * Deletes cache entries for a cache operation.
+       *
+       * With a channeled operation, deletes all entries whose channel
+       * contains the specified keys (partial match). For example,
+       * `cache.delete(CacheOps.User({ UserId: 5 }))` removes entries for
+       * `{ UserId: 5 }`, `{ UserId: 5, Role: "admin" }`, etc.
+       *
+       * With a plain (unchanneled) operation, deletes all entries
+       * for that operation regardless of channel.
+       *
+       * @param operation - The cache operation (plain or channeled).
+       *
+       * @example
+       * ```ts
+       * // Delete specific cache entry (partial channel match)
+       * context.actions.cache.delete(CacheOps.User({ UserId: 5 }));
+       *
+       * // Delete ALL user cache entries
+       * context.actions.cache.delete(CacheOps.User);
+       * ```
+       */
+      delete(operation: AnyCacheOperation): void;
+    };
   };
 };
 

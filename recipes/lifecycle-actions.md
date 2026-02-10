@@ -24,9 +24,9 @@ export function useMyActions() {
 }
 ```
 
-- **`Lifecycle.Mount`** &ndash; Triggered once when the component mounts (`useLayoutEffect`).
+- **`Lifecycle.Mount`** &ndash; Triggered once when the component mounts (`useLayoutEffect`). Protected against React Strict Mode double-invocation.
 - **`Lifecycle.Error`** &ndash; Triggered when an action throws an error. Receives `Fault` as payload.
-- **`Lifecycle.Unmount`** &ndash; Triggered when the component unmounts. All in-flight actions are automatically aborted before this handler runs.
+- **`Lifecycle.Unmount`** &ndash; Triggered when the component unmounts. All in-flight actions are automatically aborted before this handler runs. Protected against React Strict Mode double-invocation via deferred microtask cancellation.
 - **`Lifecycle.Update`** &ndash; Triggered when `context.data` changes. Receives an object with the changed keys.
 - **`Lifecycle.Node`** &ndash; Triggered when a DOM node is captured via `actions.node()`. Supports channeled subscriptions by node name.
 

@@ -63,20 +63,6 @@ export function isChanneledCache(value: unknown): boolean {
 }
 
 /**
- * Checks whether a value is a cached model initialiser created by the `cache()` function.
- *
- * @param value The value to check.
- * @returns True if the value is a cached model initialiser.
- */
-export function isCached(value: unknown): boolean {
-  return (
-    G.isObject(value) &&
-    Brand.Cached in value &&
-    (<{ [Brand.Cached]: boolean }>value)[Brand.Cached] === true
-  );
-}
-
-/**
  * Serialises a channel object into a deterministic string key for cache lookup.
  * Keys are sorted alphabetically for deterministic output.
  * Returns an empty string for unchanneled operations.

@@ -17,13 +17,13 @@ export class CacheStore {
 
 Cache operations follow the same channel pattern as actions. The generic type parameter defines the channel shape for keyed lookups. Channel values must be non-nullable primitives (`string`, `number`, `bigint`, `boolean`, or `symbol`).
 
-## Using cacheable in handlers
+## Putting values into the cache
 
-Inside an action handler, call `context.actions.cacheable()` with a cache operation and an async callback. The callback receives a `cache` function &mdash; call `cache(value)` to store the value before returning it. If you don't call `cache`, nothing is stored:
+Inside an action handler, call `context.actions.cache.put()` with a cache operation and an async callback. The callback receives a `cache` function &mdash; call `cache(value)` to store the value before returning it. If you don't call `cache`, nothing is stored:
 
 ```ts
 actions.useAction(Actions.LoadUser, async (context, userId) => {
-  const user = await context.actions.cacheable(
+  const user = await context.actions.cache.put(
     CacheStore.User({ UserId: userId }),
     async (cache) => {
       const response = await fetch(`/api/users/${userId}`);
@@ -37,38 +37,42 @@ actions.useAction(Actions.LoadUser, async (context, userId) => {
 });
 ```
 
-On cache hit, `cacheable` returns `T` synchronously &mdash; the callback is never called. On miss, it runs the callback and returns `Promise<T>`. Using `await` handles both cases uniformly.
+On cache hit, `cache.put` returns `T` synchronously &mdash; the callback is never called. On miss, it runs the callback and returns `Promise<T>`. Using `await` handles both cases uniformly.
 
-## Model initialisation with cache
+## Reading cached values
 
-Use the `cache()` helper to initialise model fields from the cache store with a fallback:
+Use `context.actions.cache.get()` to synchronously read a cached value without triggering a fetch. Returns `undefined` if no entry exists or the entry has expired:
 
 ```ts
-import { cache } from "chizu";
+actions.useAction(Lifecycle.Mount, (context) => {
+  const user = context.actions.cache.get<User>(CacheStore.User({ UserId: 5 }));
 
-const model: Model = {
-  user: cache(CacheStore.User({ UserId: 5 }), null),
-};
+  if (user) {
+    context.actions.produce(({ model }) => {
+      model.user = user;
+    });
+  }
+});
 ```
 
-When `useActions` processes the model, it resolves cache markers against the store. If a cached value exists and is within TTL, it is used; otherwise the fallback is used.
+This is useful for hydrating model fields from the cache on mount, where you have full access to dynamic values such as route parameters via `context.data`.
 
-## Invalidating cache entries
+## Deleting cache entries
 
-Call `context.actions.invalidate()` to remove cache entries:
+Call `context.actions.cache.delete()` to remove cache entries:
 
 ```ts
 actions.useAction(Actions.UpdateUser, async (context, payload) => {
   await fetch(`/api/users/${payload.id}`, { method: "PUT", body: ... });
 
-  // Invalidate the specific user's cache (partial channel match)
-  context.actions.invalidate(CacheStore.User({ UserId: payload.id }));
+  // Delete the specific user's cache (partial channel match)
+  context.actions.cache.delete(CacheStore.User({ UserId: payload.id }));
 });
 ```
 
 ### Partial channel matching
 
-Invalidation uses partial channel matching. A channeled invalidation removes all entries whose stored channel contains the specified keys:
+Deletion uses partial channel matching. A channeled deletion removes all entries whose stored channel contains the specified keys:
 
 ```ts
 // Given cached entries for:
@@ -76,12 +80,12 @@ Invalidation uses partial channel matching. A channeled invalidation removes all
 // { UserId: 5, Role: "user" }
 // { UserId: 10, Role: "admin" }
 
-// Invalidate all entries for UserId 5 (both Role variants)
-context.actions.invalidate(CacheStore.User({ UserId: 5 }));
+// Delete all entries for UserId 5 (both Role variants)
+context.actions.cache.delete(CacheStore.User({ UserId: 5 }));
 
-// Invalidate all admin entries (UserId 5 and 10)
-context.actions.invalidate(CacheStore.User({ Role: "admin" }));
+// Delete all admin entries (UserId 5 and 10)
+context.actions.cache.delete(CacheStore.User({ Role: "admin" }));
 
-// Invalidate ALL user cache entries regardless of channel
-context.actions.invalidate(CacheStore.User);
+// Delete ALL user cache entries regardless of channel
+context.actions.cache.delete(CacheStore.User);
 ```

@@ -3,7 +3,6 @@ import {
   useLifecycles,
   useData,
   useNodes,
-  useModel,
   isChanneledAction,
   getActionSymbol,
   matchesChannel,
@@ -153,7 +152,7 @@ export function useActions<
   const error = useError();
   const tasks = useTasks();
   const cache = useCache();
-  const initial = useModel(initialModel);
+  const initial = React.useMemo(() => ({ ...initialModel }), []);
   const [model, setModel] = React.useState<M>(initial);
   const rerender = useRerender();
   const hydration = React.useRef<Process | null>(null);
@@ -170,6 +169,8 @@ export function useActions<
   const actionSets = useActionSets();
   const phase = React.useRef<Phase>(Phase.Mounting);
   const nodes = useNodes<M>();
+  const localTasks = React.useRef<Set<Task>>(new Set());
+  const unmountGeneration = React.useRef(0);
 
   /**
    * Creates the context object passed to action handlers during dispatch.
@@ -184,6 +185,7 @@ export function useActions<
       const controller = new AbortController();
       const task: Task = { controller, action, payload };
       tasks.add(task);
+      localTasks.current.add(task);
 
       return <HandlerContext<M, AC, D>>{
         model,
@@ -230,64 +232,78 @@ export function useActions<
           annotate<T>(operation: Operation, value: T): T {
             return state.current.annotate(operation, value);
           },
-          cacheable<T>(
-            operation: AnyCacheOperation,
-            fn: (cache: (value: T) => T) => Promise<T>,
-          ): T | Promise<T> {
-            const symbol = getCacheSymbol(operation);
-            const ttl = getCacheTtl(operation);
-            const channelKey = isChanneledCache(operation)
-              ? serializeChannel(
-                  (<{ channel: Filter }>(<unknown>operation)).channel,
-                )
-              : "";
+          cache: {
+            put<T>(
+              operation: AnyCacheOperation,
+              fn: (cache: (value: T) => T) => Promise<T>,
+            ): T | Promise<T> {
+              const symbol = getCacheSymbol(operation);
+              const ttl = getCacheTtl(operation);
+              const channelKey = isChanneledCache(operation)
+                ? serializeChannel(
+                    (<{ channel: Filter }>(<unknown>operation)).channel,
+                  )
+                : "";
 
-            const entries = cache.get(symbol);
-            if (entries) {
-              const entry = entries.get(channelKey);
-              if (entry && entry.expiresAt > Date.now()) {
-                return <T>entry.value;
-              }
-            }
-
-            const store = (value: T): T => {
-              if (!cache.has(symbol)) cache.set(symbol, new Map());
-              const bucket = <NonNullable<ReturnType<typeof cache.get>>>(
-                cache.get(symbol)
-              );
-              bucket.set(channelKey, {
-                value,
-                expiresAt: Date.now() + ttl,
-                channel: isChanneledCache(operation)
-                  ? (<{ channel: Filter }>(<unknown>operation)).channel
-                  : undefined,
-              });
-              return value;
-            };
-
-            return fn(store);
-          },
-          invalidate(operation: AnyCacheOperation): void {
-            const symbol = getCacheSymbol(operation);
-
-            if (isChanneledCache(operation)) {
-              const invalidateChannel = (<{ channel: Filter }>(
-                (<unknown>operation)
-              )).channel;
               const entries = cache.get(symbol);
               if (entries) {
-                for (const [key, entry] of entries) {
-                  if (
-                    entry.channel &&
-                    matchesCacheChannel(invalidateChannel, entry.channel)
-                  ) {
-                    entries.delete(key);
-                  }
+                const entry = entries.get(channelKey);
+                if (entry && entry.expiresAt > Date.now()) {
+                  return <T>entry.value;
                 }
               }
-            } else {
-              cache.delete(symbol);
-            }
+
+              const store = (value: T): T => {
+                if (!cache.has(symbol)) cache.set(symbol, new Map());
+                const bucket = <NonNullable<ReturnType<typeof cache.get>>>(
+                  cache.get(symbol)
+                );
+                bucket.set(channelKey, {
+                  value,
+                  expiresAt: Date.now() + ttl,
+                  channel: isChanneledCache(operation)
+                    ? (<{ channel: Filter }>(<unknown>operation)).channel
+                    : undefined,
+                });
+                return value;
+              };
+
+              return fn(store);
+            },
+            get<T>(operation: AnyCacheOperation): T | undefined {
+              const symbol = getCacheSymbol(operation);
+              const channelKey = isChanneledCache(operation)
+                ? serializeChannel(
+                    (<{ channel: Filter }>(<unknown>operation)).channel,
+                  )
+                : "";
+              const entry = cache.get(symbol)?.get(channelKey);
+              return entry && entry.expiresAt > Date.now()
+                ? <T>entry.value
+                : undefined;
+            },
+            delete(operation: AnyCacheOperation): void {
+              const symbol = getCacheSymbol(operation);
+
+              if (isChanneledCache(operation)) {
+                const deleteChannel = (<{ channel: Filter }>(
+                  (<unknown>operation)
+                )).channel;
+                const entries = cache.get(symbol);
+                if (entries) {
+                  for (const [key, entry] of entries) {
+                    if (
+                      entry.channel &&
+                      matchesCacheChannel(deleteChannel, entry.channel)
+                    ) {
+                      entries.delete(key);
+                    }
+                  }
+                }
+              } else {
+                cache.delete(symbol);
+              }
+            },
           },
         },
       };
@@ -296,6 +312,8 @@ export function useActions<
   );
 
   React.useLayoutEffect(() => {
+    unmountGeneration.current++;
+
     function createHandler(
       action: ActionId,
       actionHandler: Handler,
@@ -334,6 +352,7 @@ export function useActions<
           for (const task of tasks) {
             if (task === context.task) {
               tasks.delete(task);
+              localTasks.current.delete(task);
               break;
             }
           }
@@ -377,10 +396,27 @@ export function useActions<
     });
 
     return () => {
-      phase.current = Phase.Unmounting;
-      unicast.emit(Lifecycle.Unmount);
-      phase.current = Phase.Unmounted;
-      for (const cleanup of cleanups) cleanup();
+      const generation = ++unmountGeneration.current;
+      const pendingCleanups = new Set(cleanups);
+
+      queueMicrotask(() => {
+        if (unmountGeneration.current !== generation) {
+          for (const cleanup of pendingCleanups) cleanup();
+          return;
+        }
+
+        for (const task of localTasks.current) {
+          task.controller.abort();
+          tasks.delete(task);
+        }
+        localTasks.current.clear();
+
+        phase.current = Phase.Unmounting;
+        unicast.emit(Lifecycle.Unmount);
+        phase.current = Phase.Unmounted;
+
+        for (const cleanup of pendingCleanups) cleanup();
+      });
     };
   }, [unicast]);
 

@@ -1,7 +1,7 @@
 /**
  * E2E Test Fixtures for Cache Layer
  *
- * Tests cacheable(), invalidate(), and cache() model initialisation.
+ * Tests cache.put(), cache.delete(), and cache.get().
  */
 import * as React from "react";
 import {
@@ -9,7 +9,6 @@ import {
   Lifecycle,
   useActions,
   Cache,
-  cache,
 } from "../../../src/library/index.ts";
 
 class CacheOps {
@@ -50,7 +49,7 @@ function CacheableTest() {
   actions.useAction(CacheActions.Fetch, async (context) => {
     fetchCounter++;
     const count = fetchCounter;
-    const value = await context.actions.cacheable(
+    const value = await context.actions.cache.put(
       CacheOps.Counter,
       async (cache) => cache(`fetched-${count}`),
     );
@@ -62,7 +61,7 @@ function CacheableTest() {
   });
 
   actions.useAction(CacheActions.FetchAgain, async (context) => {
-    const value = await context.actions.cacheable(
+    const value = await context.actions.cache.put(
       CacheOps.Counter,
       async (cache) => {
         fetchCounter++;
@@ -76,7 +75,7 @@ function CacheableTest() {
   });
 
   actions.useAction(CacheActions.Invalidate, (context) => {
-    context.actions.invalidate(CacheOps.Counter);
+    context.actions.cache.delete(CacheOps.Counter);
     context.actions.produce(({ model }) => {
       model.value = "invalidated";
     });
@@ -85,7 +84,7 @@ function CacheableTest() {
   actions.useAction(CacheActions.FetchUser, async (context, userId) => {
     userFetchCounter++;
     const count = userFetchCounter;
-    const value = await context.actions.cacheable(
+    const value = await context.actions.cache.put(
       CacheOps.User({ UserId: userId }),
       async (cache) => cache(`user-${userId}-fetch-${count}`),
     );
@@ -97,7 +96,7 @@ function CacheableTest() {
   });
 
   actions.useAction(CacheActions.InvalidateUser, (context, userId) => {
-    context.actions.invalidate(CacheOps.User({ UserId: userId }));
+    context.actions.cache.delete(CacheOps.User({ UserId: userId }));
   });
 
   return (
@@ -147,14 +146,13 @@ function CacheableTest() {
   );
 }
 
-// Test cache() model initialisation
+// Test cache.get() for reading cached values on mount
 class InitCacheOps {
   static Greeting = Cache(30_000);
 }
 
 class InitActions {
   static Populate = Action("Populate");
-  static Mount = Action("Mount");
 }
 
 type InitModel = {
@@ -170,7 +168,7 @@ function CacheInitTest() {
   >({ populated: false });
 
   actions.useAction(InitActions.Populate, async (context) => {
-    await context.actions.cacheable(InitCacheOps.Greeting, async (cache) =>
+    await context.actions.cache.put(InitCacheOps.Greeting, async (cache) =>
       cache("Hello from cache"),
     );
     context.actions.produce(({ model }) => {
@@ -202,12 +200,19 @@ function CacheInitTest() {
 }
 
 function CacheInitChild() {
-  const initModel: InitModel = {
-    greeting: cache(InitCacheOps.Greeting, "fallback"),
+  const [model, actions] = useActions<InitModel, typeof InitActions>({
+    greeting: "fallback",
     status: "mounted",
-  };
+  });
 
-  const [model] = useActions<InitModel, typeof InitActions>(initModel);
+  actions.useAction(Lifecycle.Mount, (context) => {
+    const greeting = context.actions.cache.get<string>(InitCacheOps.Greeting);
+    if (greeting) {
+      context.actions.produce(({ model }) => {
+        model.greeting = greeting;
+      });
+    }
+  });
 
   return (
     <div>

@@ -13,17 +13,10 @@ import {
   ChanneledAction,
   HandlerContext,
 } from "../types/index.ts";
-import type { CachedValue } from "../types/index.ts";
+
 import type { LifecycleConfig, References, Handler, Scope } from "./types.ts";
 import { A, G } from "@mobily/ts-belt";
 import { useConsumer } from "../boundary/components/consumer/utils.ts";
-import { useCache } from "../boundary/components/cache/utils.ts";
-import {
-  getCacheSymbol,
-  isChanneledCache,
-  isCached,
-  serializeChannel,
-} from "../cache/index.ts";
 import { changes } from "../utils.ts";
 import { isChanneledAction, getActionSymbol } from "../action/index.ts";
 
@@ -60,42 +53,12 @@ export function isGenerator(
 }
 
 /**
- * Resolves cached initialisers in the initial model against the cache store.
- * Any property initialised with `cache(CacheOps.X, fallback)` is replaced
- * with the cached value (if within TTL) or the fallback.
- *
- * @template M The model type representing the component's state.
- * @param initialModel The initial model state, potentially containing cached initialisers.
- * @returns The resolved model with cached initialisers replaced by cached or fallback values.
- */
-export function useModel<M extends Model>(initialModel: M): M {
-  const cache = useCache();
-
-  return React.useMemo(() => {
-    const resolved = { ...initialModel };
-    Object.keys(resolved).forEach((key) => {
-      const value = resolved[<keyof M>key];
-      if (isCached(value)) {
-        const marker = <CachedValue>(<unknown>value);
-        const symbol = getCacheSymbol(marker.operation);
-        const channelKey = isChanneledCache(marker.operation)
-          ? serializeChannel(
-              (<{ channel: Filter }>(<unknown>marker.operation)).channel,
-            )
-          : "";
-        const entry = cache.get(symbol)?.get(channelKey);
-        (<Record<string, unknown>>resolved)[key] =
-          entry && entry.expiresAt > Date.now() ? entry.value : marker.fallback;
-      }
-    });
-    return resolved;
-  }, []);
-}
-
-/**
- * Emits lifecycle events for component mount/unmount and DOM attachment.
+ * Emits lifecycle events for component mount and DOM attachment.
  * Also invokes broadcast action handlers with cached values on mount.
  * Updates the phase ref to track the component's current lifecycle state.
+ *
+ * Uses a ref guard to prevent React Strict Mode from causing duplicate
+ * Mount emissions during its development-only double-invocation cycle.
  *
  * Note: The phase transitions are:
  * - Mounting → (cached broadcast action values emitted here) → Mounted
@@ -109,8 +72,12 @@ export function useLifecycles({
 }: LifecycleConfig): void {
   const consumer = useConsumer();
   const previous = React.useRef<Props | null>(null);
+  const hasEmittedMount = React.useRef(false);
 
   React.useLayoutEffect(() => {
+    if (hasEmittedMount.current) return;
+    hasEmittedMount.current = true;
+
     unicast.emit(Lifecycle.Mount);
 
     broadcastActions.forEach((action) => {
@@ -120,7 +87,6 @@ export function useLifecycles({
     });
 
     phase.current = Phase.Mounted;
-    // Unmount emission handled in handler cleanup (index.ts) to ensure handlers receive it
   }, []);
 
   React.useLayoutEffect(() => {

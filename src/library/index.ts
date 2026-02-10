@@ -1,5 +1,5 @@
 export { Action } from "./action/index.ts";
-export { Cache, cache } from "./cache/index.ts";
+export { Cache } from "./cache/index.ts";
 export { Distribution, Lifecycle } from "./types/index.ts";
 export { Error, Reason } from "./error/index.tsx";
 export { Operation, Op, State } from "immertation";

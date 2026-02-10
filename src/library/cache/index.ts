@@ -3,8 +3,6 @@ import {
   Filter,
   CachePayload,
   ChanneledCache,
-  CachedValue,
-  AnyCacheOperation,
   CacheFactory,
 } from "../types/index.ts";
 import { config } from "../utils/index.ts";
@@ -14,7 +12,6 @@ export {
   getCacheTtl,
   isCacheOperation,
   isChanneledCache,
-  isCached,
   serializeChannel,
   matchesCacheChannel,
 } from "./utils.ts";
@@ -22,8 +19,8 @@ export {
 /**
  * Creates a new cache operation with a TTL (time-to-live) in milliseconds.
  *
- * Cache operations are identifiers used with `context.actions.cacheable()` and
- * `context.actions.invalidate()` to manage cached async results. They follow the
+ * Cache operations are identifiers used with `context.actions.cache.put()` and
+ * `context.actions.cache.delete()` to manage cached async results. They follow the
  * same channel pattern as actions.
  *
  * @template C - The channel type for keyed cache entries (defaults to never).
@@ -38,11 +35,11 @@ export {
  * }
  *
  * // Channeled usage
- * context.actions.cacheable(CacheStore.User({ UserId: 5 }), () => fetchUser(5));
+ * context.actions.cache.put(CacheStore.User({ UserId: 5 }), () => fetchUser(5));
  *
- * // Invalidation (partial channel match)
- * context.actions.invalidate(CacheStore.User({ UserId: 5 }));
- * context.actions.invalidate(CacheStore.User); // clears all
+ * // Deletion (partial channel match)
+ * context.actions.cache.delete(CacheStore.User({ UserId: 5 }));
+ * context.actions.cache.delete(CacheStore.User); // clears all
  * ```
  */
 export const Cache = <CacheFactory>(<unknown>(<C extends Filter = never>(
@@ -78,28 +75,3 @@ export const Cache = <CacheFactory>(<unknown>(<C extends Filter = never>(
 
   return <CachePayload<C>>operation;
 }));
-
-/**
- * Creates a cached model initialiser. When `useActions` processes
- * the initial model, it resolves cached values against the cache store and
- * substitutes them with the cached value or the fallback.
- *
- * @template T - The value type.
- * @param operation - The cache operation to look up.
- * @param fallback - The value to use if no cached entry exists.
- * @returns The cached value at runtime (or fallback), typed as T.
- *
- * @example
- * ```ts
- * const model: Model = {
- *   count: cache(CacheStore.Google, 1),
- * };
- * ```
- */
-export function cache<T>(operation: AnyCacheOperation, fallback: T): T {
-  return <T>(<unknown>(<CachedValue<T>>{
-    [Brand.Cached]: true,
-    operation,
-    fallback,
-  }));
-}
