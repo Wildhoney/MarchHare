@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.2.53](https://github.com/Wildhoney/Chizu/compare/v0.2.52...v0.2.53) (2026-02-11)
+
+### Features
+
+- **rehydrate:** add typed Id<M, C> store factory and context.actions.invalidate for rehydration snapshots ([2327fb9](https://github.com/Wildhoney/Chizu/commit/2327fb93b0eaac6b209a538a79e08d6eacd57064))
+
 ## [0.2.52](https://github.com/Wildhoney/Chizu/compare/v0.2.49...v0.2.52) (2026-02-10)
 
 ### Features
