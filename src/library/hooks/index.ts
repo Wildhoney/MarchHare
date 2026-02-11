@@ -119,9 +119,11 @@ export function useActions<
   const initialised = React.useRef(false);
   const hydration = React.useRef<Process | null>(null);
   const state = React.useRef(new State<M>());
-  const { model: resolvedModel, save: saveRehydration } = useRehydration(
-    initialModelOrRehydrated,
-  );
+  const {
+    model: resolvedModel,
+    save: saveRehydration,
+    invalidate: invalidateRehydration,
+  } = useRehydration(initialModelOrRehydrated);
 
   if (!initialised.current) {
     initialised.current = true;
@@ -197,6 +199,9 @@ export function useActions<
           },
           annotate<T>(operation: Operation, value: T): T {
             return state.current.annotate(operation, value);
+          },
+          invalidate(channel: Filter) {
+            invalidateRehydration(channel);
           },
         },
       };

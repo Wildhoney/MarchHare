@@ -604,6 +604,22 @@ export type HandlerContext<
       options?: MulticastOptions,
     ): void;
     annotate<T>(operation: Operation, value: T): T;
+    /**
+     * Removes a rehydration snapshot from the store.
+     *
+     * Use this to invalidate persisted state for a specific channel key,
+     * so that the next mount of the target component starts fresh instead
+     * of restoring stale data.
+     *
+     * @param channel - The channel key identifying the snapshot to remove.
+     *
+     * @example
+     * ```ts
+     * context.actions.invalidate(Store.Counter({ UserId: 5 }));
+     * context.actions.invalidate(Store.Settings());
+     * ```
+     */
+    invalidate(channel: Filter): void;
   };
 };
 

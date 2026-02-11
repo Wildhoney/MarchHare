@@ -5,7 +5,12 @@
  * when using Rehydrate(), and that non-rehydrated components reset.
  */
 import * as React from "react";
-import { Action, useActions, Rehydrate } from "../../../src/library/index.ts";
+import {
+  Action,
+  useActions,
+  Rehydrate,
+  Id,
+} from "../../../src/library/index.ts";
 
 class RehydrateActions {
   static Increment = Action("Increment");
@@ -17,9 +22,13 @@ type RehydrateModel = {
 
 const initialModel: RehydrateModel = { count: 0 };
 
+class Store {
+  static Counter = Id<RehydrateModel, { UserId: number }>();
+}
+
 function useRehydrateActions(userId: number) {
   const actions = useActions<RehydrateModel, typeof RehydrateActions>(
-    Rehydrate(initialModel, { UserId: userId }),
+    Rehydrate(initialModel, Store.Counter({ UserId: userId })),
   );
 
   actions.useAction(RehydrateActions.Increment, (context) => {

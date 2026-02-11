@@ -248,14 +248,31 @@ actions.dispatch(Actions.Multicast.Update, 42, { scope: "TeamA" });
 
 Unlike broadcast which reaches all components, multicast is scoped to the named boundary &ndash; perfect for isolated widget groups, form sections, or distinct UI regions. See the [multicast recipe](./recipes/multicast-actions.md) for more details.
 
-To preserve a component's state across unmount/remount cycles, wrap the initial model with `Rehydrate`:
+To preserve a component's state across unmount/remount cycles, define a store with `Id` and wrap the initial model with `Rehydrate`:
 
 ```ts
-import { useActions, Rehydrate } from "chizu";
+import { useActions, Rehydrate, Id } from "chizu";
 
+class Store {
+  static Counter = Id<Model, { UserId: number }>();
+  static Settings = Id<Model>();
+}
+
+// Channeled — independent snapshot per UserId
 const actions = useActions<Model, typeof Actions>(
-  Rehydrate(model, { UserId: props.userId }),
+  Rehydrate(model, Store.Counter({ UserId: props.userId })),
+);
+
+// Unchanneled — single shared snapshot
+const actions = useActions<Model, typeof Actions>(
+  Rehydrate(model, Store.Settings()),
 );
 ```
 
-When the component unmounts, its model is snapshotted into the rehydrator. On remount with the same channel key, the model is restored automatically. This is useful for tab switching, route changes, and conditionally rendered components. See the [rehydration recipe](./recipes/rehydration.md) for details.
+When the component unmounts, its model is snapshotted into the rehydrator. On remount with the same channel key, the model is restored automatically. Use `context.actions.invalidate` to clear a specific snapshot so the next mount starts fresh:
+
+```ts
+context.actions.invalidate(Store.Counter({ UserId: 5 }));
+```
+
+This is useful for tab switching, route changes, and conditionally rendered components. See the [rehydration recipe](./recipes/rehydration.md) for details.

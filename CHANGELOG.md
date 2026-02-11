@@ -4,12 +4,11 @@ All notable changes to this project will be documented in this file. See [commit
 
 ## [0.2.52](https://github.com/Wildhoney/Chizu/compare/v0.2.49...v0.2.52) (2026-02-10)
 
-
 ### Features
 
-* add cache layer with cacheable, invalidate, and model initialisation ([5f5ea22](https://github.com/Wildhoney/Chizu/commit/5f5ea221674563fdeea0387205013bad7990e589))
-* **annotate:** add standalone annotate function for initial model Op states ([2cf7e10](https://github.com/Wildhoney/Chizu/commit/2cf7e10b9a7cbf9660579d9231cfecf0a7de9fc3))
-* replace cache layer with rehydration for persisting state across unmount/remount cycles ([f0c9330](https://github.com/Wildhoney/Chizu/commit/f0c93306b971d2d729595b5f0932e7148315e6f2))
+- add cache layer with cacheable, invalidate, and model initialisation ([5f5ea22](https://github.com/Wildhoney/Chizu/commit/5f5ea221674563fdeea0387205013bad7990e589))
+- **annotate:** add standalone annotate function for initial model Op states ([2cf7e10](https://github.com/Wildhoney/Chizu/commit/2cf7e10b9a7cbf9660579d9231cfecf0a7de9fc3))
+- replace cache layer with rehydration for persisting state across unmount/remount cycles ([f0c9330](https://github.com/Wildhoney/Chizu/commit/f0c93306b971d2d729595b5f0932e7148315e6f2))
 
 ## [0.2.51](https://github.com/Wildhoney/Chizu/compare/v0.2.49...v0.2.51) (2026-02-10)
 

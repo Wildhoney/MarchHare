@@ -8,6 +8,7 @@ Strongly typed React framework using generators and efficiently updated views al
 import {
   Action,
   Rehydrate,
+  Id,
   Distribution,
   Lifecycle,
   useActions,
