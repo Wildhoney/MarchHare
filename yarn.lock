@@ -5712,10 +5712,10 @@ immer@^11.1.3:
   resolved "https://registry.npmjs.org/immer/-/immer-11.1.3.tgz"
   integrity sha512-6jQTc5z0KJFtr1UgFpIL3N9XSC3saRaI9PwWtzM2pSqkNGtiNkYY2OSwkOGDK2XcTRcLb1pi/aNkKZz0nxVH4Q==
 
-immertation@^0.1.25:
-  version "0.1.25"
-  resolved "https://registry.yarnpkg.com/immertation/-/immertation-0.1.25.tgz#fe2962f025d13e2ae586fb668fc40004db1299ef"
-  integrity sha512-X6n2nYrBgDNQSxGbE0Vr/FY6YSOE3NWVyHGAzSAwMBWrGGu449PEWqh16LdNqMkoVSS2ENAk1SaMWtZ93BImzw==
+immertation@^0.1.26:
+  version "0.1.26"
+  resolved "https://registry.yarnpkg.com/immertation/-/immertation-0.1.26.tgz#d378e19afd0476ea0a818f3492eac84144ea906a"
+  integrity sha512-lAvmxNRO7DkxBdgrKGbEKU5IN6bQTMmcQTSVEbyOmkz+HVWH/h64Xb1EXdtTGZ5YvAxXBSv6GaBJ4PbZVKvGVg==
   dependencies:
     nanoid "^5.1.6"
 

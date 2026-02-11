@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "eventemitter3": "^5.0.1",
-    "immertation": "^0.1.25"
+    "immertation": "^0.1.26"
   },
   "peerDependencies": {
     "@mobily/ts-belt": "^3.0.0",
