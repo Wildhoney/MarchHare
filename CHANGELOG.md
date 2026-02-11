@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.2.61](https://github.com/Wildhoney/Chizu/compare/v0.2.60...v0.2.61) (2026-02-11)
+
+### Features
+
+- support void model type in useActions for stateless action-only components ([fa83b1c](https://github.com/Wildhoney/Chizu/commit/fa83b1cb76f6727e7fd7ea756ee1e66120dcf86c))
+
 ## [0.2.60](https://github.com/Wildhoney/Chizu/compare/v0.2.59...v0.2.60) (2026-02-11)
 
 ### Features
