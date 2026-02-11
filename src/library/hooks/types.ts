@@ -18,7 +18,7 @@ import type {
  *
  * @template M - The model type containing a `nodes` property
  */
-export type References<M extends Model> = {
+export type References<M extends Model | void> = {
   /** Ref containing captured DOM nodes by name */
   refs: RefObject<{ [K in keyof Nodes<M>]: Nodes<M>[K] | null }>;
   /** Ref containing pending node captures to be processed after render */
@@ -36,7 +36,7 @@ export type References<M extends Model> = {
  * @template D - The data props type
  */
 export type Handler<
-  M extends Model = Model,
+  M extends Model | void = Model,
   AC extends Actions = Actions,
   D extends Props = Props,
 > = (
@@ -50,7 +50,7 @@ export type Handler<
  * When getChannel returns a channel, dispatches must match.
  */
 export type HandlerEntry<
-  M extends Model = Model,
+  M extends Model | void = Model,
   AC extends Actions = Actions,
   D extends Props = Props,
 > = {
@@ -67,7 +67,7 @@ export type HandlerEntry<
  * @template D - The data props type
  */
 export type Scope<
-  M extends Model = Model,
+  M extends Model | void = Model,
   AC extends Actions = Actions,
   D extends Props = Props,
 > = {

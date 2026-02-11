@@ -250,7 +250,7 @@ export function useActionSets(): ActionSets {
  * @internal
  */
 export function useRegisterHandler<
-  M extends Model,
+  M extends Model | void,
   AC extends Actions,
   D extends Props,
 >(
@@ -315,7 +315,7 @@ export function useRegisterHandler<
  * @template M The model type containing a `nodes` property
  * @returns Object containing refs for nodes, pending captures, and emitted nodes
  */
-export function useNodes<M extends Model>(): References<M> {
+export function useNodes<M extends Model | void>(): References<M> {
   type N = Nodes<M>;
   const refs = React.useRef<{ [K in keyof N]: N[K] | null }>(
     <{ [K in keyof N]: N[K] | null }>{},

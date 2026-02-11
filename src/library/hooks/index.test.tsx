@@ -1233,3 +1233,144 @@ describe("useActions() context.model freshness", () => {
     expect(capturedItems).toEqual(["file-1", "file-2"]);
   });
 });
+
+describe("useActions() void model", () => {
+  class VoidActions {
+    static Ping = Action("Ping");
+    static SetValue = Action<string>("SetValue");
+  }
+
+  it("should work without a model", async () => {
+    let pinged = false;
+
+    const { result } = renderHook(() => {
+      const actions = useActions<void, typeof VoidActions>();
+
+      actions.useAction(VoidActions.Ping, () => {
+        pinged = true;
+      });
+
+      return actions;
+    });
+
+    await act(async () => {
+      result.current[1].dispatch(VoidActions.Ping);
+    });
+
+    expect(pinged).toBe(true);
+  });
+
+  it("should receive payloads in handlers", async () => {
+    let captured: string | null = null;
+
+    const { result } = renderHook(() => {
+      const actions = useActions<void, typeof VoidActions>();
+
+      actions.useAction(VoidActions.SetValue, (_context, value) => {
+        captured = value;
+      });
+
+      return actions;
+    });
+
+    await act(async () => {
+      result.current[1].dispatch(VoidActions.SetValue, "hello");
+    });
+
+    expect(captured).toBe("hello");
+  });
+
+  it("should support lifecycle actions", async () => {
+    let mounted = false;
+
+    renderHook(() => {
+      const actions = useActions<void, typeof VoidActions>();
+
+      actions.useAction(Lifecycle.Mount, () => {
+        mounted = true;
+      });
+
+      return actions;
+    });
+
+    expect(mounted).toBe(true);
+  });
+
+  it("should support context.data with void model", async () => {
+    let capturedQuery: string | null = null;
+
+    const { result } = renderHook(() => {
+      const actions = useActions<void, typeof VoidActions, { query: string }>(
+        () => ({ query: "search-term" }),
+      );
+
+      actions.useAction(VoidActions.Ping, (context) => {
+        capturedQuery = context.data.query;
+      });
+
+      return actions;
+    });
+
+    await act(async () => {
+      result.current[1].dispatch(VoidActions.Ping);
+    });
+
+    expect(capturedQuery).toBe("search-term");
+  });
+
+  it("should dispatch broadcast actions with void model", async () => {
+    let received = false;
+
+    class BroadcastVoidActions {
+      static Notify = Action("Notify", Distribution.Broadcast);
+    }
+
+    function Sender() {
+      const actions = useActions<void, typeof BroadcastVoidActions>();
+
+      actions.useAction(BroadcastVoidActions.Notify, () => {});
+
+      return (
+        <button
+          data-testid="send"
+          onClick={() => actions[1].dispatch(BroadcastVoidActions.Notify)}
+        >
+          Send
+        </button>
+      );
+    }
+
+    function Receiver() {
+      const actions = useActions<void, typeof BroadcastVoidActions>();
+
+      actions.useAction(BroadcastVoidActions.Notify, () => {
+        received = true;
+      });
+
+      return <div>Receiver</div>;
+    }
+
+    function App() {
+      return (
+        <Broadcaster>
+          <Consumer>
+            <Sender />
+            <Receiver />
+          </Consumer>
+        </Broadcaster>
+      );
+    }
+
+    render(<App />);
+
+    await act(async () => {
+      screen.getByTestId("send").click();
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+
+    expect(received).toBe(true);
+  });
+});

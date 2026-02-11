@@ -4,10 +4,9 @@ All notable changes to this project will be documented in this file. See [commit
 
 ## [0.2.60](https://github.com/Wildhoney/Chizu/compare/v0.2.59...v0.2.60) (2026-02-11)
 
-
 ### Features
 
-* read context.model from state ref to prevent stale closure reads ([448e827](https://github.com/Wildhoney/Chizu/commit/448e827dfa96a703fc1d788a81188c1587e08f07))
+- read context.model from state ref to prevent stale closure reads ([448e827](https://github.com/Wildhoney/Chizu/commit/448e827dfa96a703fc1d788a81188c1587e08f07))
 
 ## [0.2.59](https://github.com/Wildhoney/Chizu/compare/v0.2.58...v0.2.59) (2026-02-11)
 

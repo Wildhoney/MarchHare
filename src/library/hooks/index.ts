@@ -90,6 +90,9 @@ import { G } from "@mobily/ts-belt";
  * // Basic usage
  * const actions = useActions<Model, typeof Actions>(model);
  *
+ * // Without a model (actions-only)
+ * const actions = useActions<void, typeof Actions>();
+ *
  * // With reactive data
  * const actions = useActions<Model, typeof Actions, { query: string }>(
  *   model,
@@ -98,10 +101,26 @@ import { G } from "@mobily/ts-belt";
  * ```
  */
 export function useActions<
+  _M extends void,
+  A extends Actions,
+  D extends Props = Props,
+>(getData?: Data<D>): UseActions<void, A, D>;
+export function useActions<
   M extends Model,
+  A extends Actions,
+  D extends Props = Props,
+>(initialModel: M, getData?: Data<D>): UseActions<M, A, D>;
+export function useActions<
+  M extends Model | void,
   AC extends Actions,
   D extends Props = Props,
->(initialModel: M, getData: Data<D> = () => <D>{}): UseActions<M, AC, D> {
+>(...args: unknown[]): unknown {
+  const isVoidModel = G.isUndefined(args[0]) || G.isFunction(args[0]);
+  const initialModel = <Model>(isVoidModel ? {} : args[0]);
+  const getData: Data<D> = G.isFunction(args[0])
+    ? <Data<D>>args[0]
+    : <Data<D>>(args[1] ?? (() => <D>{}));
+
   const broadcast = useBroadcast();
   const scope = useScope();
   const consumer = useConsumer();
@@ -111,16 +130,18 @@ export function useActions<
   const rerender = useRerender();
   const initialised = React.useRef(false);
   const hydration = React.useRef<Process | null>(null);
-  const state = React.useRef(new State<M>());
+  const state = React.useRef(new State<Model>());
 
   if (!initialised.current) {
     initialised.current = true;
     hydration.current = state.current.hydrate(initialModel);
   }
-  const [model, setModel] = React.useState<M>(() => state.current.model);
+  const [model, setModel] = React.useState<M>(
+    () => <M>(<unknown>state.current.model),
+  );
   const data = useData(getData());
   const unicast = React.useMemo(() => new EventEmitter(), []);
-  const registry = React.useRef<Scope>({ handlers: new Map() });
+  const registry = React.useRef<Scope<M, AC, D>>({ handlers: new Map() });
   registry.current.handlers = new Map();
   const actionSets = useActionSets();
   const phase = React.useRef<Phase>(Phase.Mounting);
@@ -156,9 +177,12 @@ export function useActions<
           produce(f) {
             if (controller.signal.aborted) return;
             const process = state.current.produce((draft) =>
-              f({ model: draft, inspect: state.current.inspect }),
+              f({
+                model: <M>(<unknown>draft),
+                inspect: <Readonly<Inspect<M>>>(<unknown>state.current.inspect),
+              }),
             );
-            setModel(state.current.model);
+            setModel(<M>(<unknown>state.current.model));
             result.processes.add(process);
             if (hydration.current) {
               result.processes.add(hydration.current);
@@ -260,7 +284,7 @@ export function useActions<
 
     function createHandler(
       action: ActionId,
-      actionHandler: Handler,
+      actionHandler: Handler<M, AC, D>,
       getChannel: () => Filter | undefined,
     ) {
       return async function handler(

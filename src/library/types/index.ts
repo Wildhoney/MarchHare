@@ -55,19 +55,19 @@ export type AnyAction = ActionId | BrandedObject;
  */
 export class Brand {
   /** Brand key for HandlerPayload type */
-  static Payload = Symbol("chizu.brand/Payload");
+  static readonly Payload = Symbol("chizu.brand/Payload");
   /** Brand key for BroadcastPayload type */
-  static Broadcast = Symbol("chizu.brand/Broadcast");
+  static readonly Broadcast = Symbol("chizu.brand/Broadcast");
   /** Brand key for MulticastPayload type */
-  static Multicast = Symbol("chizu.brand/Multicast");
+  static readonly Multicast = Symbol("chizu.brand/Multicast");
   /** Access the underlying symbol from an action */
-  static Action = Symbol("chizu.brand/Action");
+  static readonly Action = Symbol("chizu.brand/Action");
   /** Identifies channeled actions (result of calling Action(channel)) */
-  static Channel = Symbol("chizu.brand/Channel");
+  static readonly Channel = Symbol("chizu.brand/Channel");
   /** Node capture events used by Lifecycle.Node */
-  static Node = Symbol("chizu.action.lifecycle/Node");
+  static readonly Node = Symbol("chizu.action.lifecycle/Node");
   /** Identifies cache entry identifiers created with Entry() */
-  static Cache = Symbol("chizu.brand/Cache");
+  static readonly Cache = Symbol("chizu.brand/Cache");
 }
 
 /**
@@ -124,13 +124,13 @@ export type ChanneledCacheId<T = unknown, C = unknown> = {
  */
 export class Lifecycle {
   /** Triggered once when the component mounts (`useLayoutEffect`). */
-  static Mount = Symbol("chizu.action.lifecycle/Mount");
+  static readonly Mount = Symbol("chizu.action.lifecycle/Mount");
   /** Triggered when the component unmounts. */
-  static Unmount = Symbol("chizu.action.lifecycle/Unmount");
+  static readonly Unmount = Symbol("chizu.action.lifecycle/Unmount");
   /** Triggered when an action throws an error. Receives `Fault` as payload. */
-  static Error = Symbol("chizu.action.lifecycle/Error");
+  static readonly Error = Symbol("chizu.action.lifecycle/Error");
   /** Triggered when `context.data` has changed. Not fired on initial mount. Receives `Record<string, unknown>` payload with changed keys. */
-  static Update = Symbol("chizu.action.lifecycle/Update");
+  static readonly Update = Symbol("chizu.action.lifecycle/Update");
 
   /**
    * Triggered when a node is captured or released via `actions.node()`.
@@ -524,7 +524,7 @@ export type Result = {
 };
 
 export type HandlerContext<
-  M extends Model,
+  M extends Model | void,
   _AC extends Actions,
   D extends Props = Props,
 > = {
@@ -762,7 +762,7 @@ export type HandlerContext<
  * @see {@link Handlers} for the recommended HKT pattern
  */
 export type Handler<
-  M extends Model,
+  M extends Model | void,
   AC extends Actions,
   K extends keyof AC,
   D extends Props = Props,
@@ -844,7 +844,7 @@ type FlattenKeys<AC, Prefix extends string = never> = {
  * ```
  */
 export type Handlers<
-  M extends Model,
+  M extends Model | void,
   AC extends Actions,
   D extends Props = Props,
 > = {
@@ -855,7 +855,7 @@ export type Handlers<
 };
 
 export type UseActions<
-  M extends Model,
+  M extends Model | void,
   AC extends Actions,
   D extends Props = Props,
 > = [

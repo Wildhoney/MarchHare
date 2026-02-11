@@ -37,9 +37,9 @@ import type {
 
 Chizu is an event-driven state management library for React built on the publish-subscribe pattern. Key concepts:
 
-- **Model:** The application state, a plain JavaScript object.
+- **Model:** The application state, a plain JavaScript object. Pass `void` for actions-only components with no local state.
 - **Actions:** Typed events that trigger state changes. Created with `Action<Payload>("name")`.
-- **`useActions` hook:** Returns `[model, actions]` tuple with pre-typed methods.
+- **`useActions` hook:** Returns `[model, actions]` tuple with pre-typed methods. Use `useActions<void, typeof Actions>()` when no model is needed.
 - **`actions.useAction`:** Registers handlers for actions. Receives `context` and `payload`.
 - **`context.actions.produce`:** Immutable state updates via Immer/Immertation. Receives `{ model, inspect }`.
 - **`context.data`:** Reactive external values (props, context) that stay fresh after `await`.
@@ -569,3 +569,4 @@ docs: update the README file
   - `stateful-props.md` - Box<T> type for stateful props
   - `utility-functions.md` - sleep, pk utilities
   - `utility-types.md` - Handler, Handlers types
+  - `void-model.md` - Actions without local state

@@ -113,6 +113,28 @@ actions.useAction(Actions.Search, async (context) => {
 
 For more details, see the [referential equality recipe](./recipes/referential-equality.md).
 
+If your component doesn't need local state but still needs to dispatch or listen to actions, pass `void` as the model type. No initial model is required:
+
+```tsx
+import { useActions, Action, Lifecycle } from "chizu";
+
+export class Actions {
+  static Ping = Action("Ping");
+}
+
+export default function usePingActions() {
+  const actions = useActions<void, typeof Actions>();
+
+  actions.useAction(Actions.Ping, () => {
+    console.log("Pinged!");
+  });
+
+  return actions;
+}
+```
+
+This is useful for components that only coordinate via events &ndash; forwarding broadcasts, triggering side-effects, or bridging external systems. You can still use lifecycle hooks, `context.data`, and `dispatch` as normal. See the [void model recipe](./recipes/void-model.md) for more details.
+
 Each action should be responsible for managing its own data &ndash; in this case our `Profile` action handles fetching the user but other components may want to consume it &ndash; for that we should use a broadcast action:
 
 ```tsx
