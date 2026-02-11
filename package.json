@@ -1,6 +1,6 @@
 {
   "name": "chizu",
-  "version": "0.2.58",
+  "version": "0.2.59",
   "type": "module",
   "license": "MIT",
   "packageManager": "yarn@1.22.22",
