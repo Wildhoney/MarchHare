@@ -7,8 +7,7 @@ Strongly typed React framework using generators and efficiently updated views al
 ```ts
 import {
   Action,
-  Rehydrate,
-  Id,
+  Entry,
   Distribution,
   Lifecycle,
   useActions,
@@ -21,7 +20,17 @@ import {
   Op,
   Operation,
 } from "chizu";
-import type { Box, Fault, Handler, Handlers, Pk, Task, Tasks } from "chizu";
+import type {
+  Box,
+  CacheId,
+  ChanneledCacheId,
+  Fault,
+  Handler,
+  Handlers,
+  Pk,
+  Task,
+  Tasks,
+} from "chizu";
 ```
 
 ## Core Concepts
@@ -532,7 +541,8 @@ docs: update the README file
 - `src/library/boundary/components/broadcast/` - Broadcast system
 - `src/library/boundary/components/consumer/` - Consumer/Partition for consume()
 - `src/library/boundary/components/tasks/` - Task tracking context
-- `src/library/rehydrate/index.ts` - Rehydrate factory and useRehydration hook
+- `src/library/boundary/components/cache/` - Cache store context
+- `src/library/cache/index.ts` - Entry factory and cache utilities
 
 ### Documentation
 
@@ -540,6 +550,7 @@ docs: update the README file
   - `action-control-patterns.md` - Cancellation, timeouts, retries, debouncing
   - `action-regulator.md` - Regulator API for abort/policy control
   - `broadcast-actions.md` - Cross-component communication
+  - `caching.md` - TTL-based caching with cacheable/invalidate
   - `channeled-actions.md` - Targeted event delivery
   - `consuming-actions.md` - consume() method details
   - `context-providers.md` - Boundary, Broadcaster, Consumer, Regulators
@@ -551,7 +562,6 @@ docs: update the README file
   - `react-context-in-handlers.md` - Using context.data
   - `real-time-applications.md` - SSE/WebSocket patterns
   - `referential-equality.md` - Avoiding stale closures
-  - `rehydration.md` - Persisting state across unmount/remount cycles
   - `stateful-props.md` - Box<T> type for stateful props
   - `utility-functions.md` - sleep, pk utilities
   - `utility-types.md` - Handler, Handlers types

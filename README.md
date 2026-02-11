@@ -248,31 +248,59 @@ actions.dispatch(Actions.Multicast.Update, 42, { scope: "TeamA" });
 
 Unlike broadcast which reaches all components, multicast is scoped to the named boundary &ndash; perfect for isolated widget groups, form sections, or distinct UI regions. See the [multicast recipe](./recipes/multicast-actions.md) for more details.
 
-To preserve a component's state across unmount/remount cycles, define a store with `Id` and wrap the initial model with `Rehydrate`:
+For data that is expensive to fetch, use `cacheable` to cache values with a TTL. Define typed cache entries with `Entry` and call `context.actions.cacheable` inside a handler &ndash; the callback only runs when the cache is empty or expired:
 
 ```ts
-import { useActions, Rehydrate, Id } from "chizu";
+import { Entry, useActions, Action } from "chizu";
+import { O } from "@mobily/ts-belt";
 
-class Store {
-  static Counter = Id<Model, { UserId: number }>();
-  static Settings = Id<Model>();
+class CacheStore {
+  static Pairs = Entry<CryptoPair[]>();
+  static User = Entry<User, { UserId: number }>();
 }
 
-// Channeled — independent snapshot per UserId
-const actions = useActions<Model, typeof Actions>(
-  Rehydrate(model, Store.Counter({ UserId: props.userId })),
-);
-
-// Unchanneled — single shared snapshot
-const actions = useActions<Model, typeof Actions>(
-  Rehydrate(model, Store.Settings()),
-);
+class Actions {
+  static FetchPairs = Action("FetchPairs");
+  static FetchUser = Action("FetchUser");
+}
 ```
-
-When the component unmounts, its model is snapshotted into the rehydrator. On remount with the same channel key, the model is restored automatically. Use `context.actions.invalidate` to clear a specific snapshot so the next mount starts fresh:
 
 ```ts
-context.actions.invalidate(Store.Counter({ UserId: 5 }));
+actions.useAction(Actions.FetchPairs, async (context) => {
+  const { data } = await context.actions.cacheable(
+    CacheStore.Pairs,
+    30_000,
+    async () => O.Some(await api.fetchPairs()),
+  );
+
+  if (data) {
+    context.actions.produce(({ model }) => {
+      model.pairs = data;
+    });
+  }
+});
+
+// Channeled &ndash; independent cache per user
+actions.useAction(Actions.FetchUser, async (context) => {
+  const { data } = await context.actions.cacheable(
+    CacheStore.User({ UserId: context.data.userId }),
+    60_000,
+    async () => O.Some(await api.fetchUser(context.data.userId)),
+  );
+
+  if (data) {
+    context.actions.produce(({ model }) => {
+      model.user = data;
+    });
+  }
+});
 ```
 
-This is useful for tab switching, route changes, and conditionally rendered components. See the [rehydration recipe](./recipes/rehydration.md) for details.
+Only `Some` / `Ok` values are stored in the cache. `None` and `Error` results are skipped. Use `context.actions.invalidate` to clear a specific entry so the next `cacheable` call fetches fresh data:
+
+```ts
+context.actions.invalidate(CacheStore.Pairs);
+context.actions.invalidate(CacheStore.User({ UserId: 5 }));
+```
+
+The cache is scoped to the nearest `<Boundary>`. See the [caching recipe](./recipes/caching.md) for more details.

@@ -33,6 +33,7 @@ import {
   Nodes,
   MulticastOptions,
   AnyAction,
+  type CacheId,
 } from "../types/index.ts";
 
 import {
@@ -55,8 +56,8 @@ import {
 import { useError } from "../error/index.tsx";
 import { State, Operation, Process } from "immertation";
 import { useTasks } from "../boundary/components/tasks/utils.ts";
-import { useRehydration } from "../rehydrate/index.ts";
-import type { Rehydrated } from "../rehydrate/index.ts";
+import { useCacheStore } from "../boundary/components/cache/index.tsx";
+import { getCacheKey, unwrap } from "../cache/index.ts";
 import { G } from "@mobily/ts-belt";
 
 /**
@@ -76,11 +77,7 @@ import { G } from "@mobily/ts-belt";
  * @template M The model type representing the component's state.
  * @template AC The actions class containing action definitions.
  * @template D The data type for reactive external values.
- * @param initialModelOrRehydrated The initial model state, or a `Rehydrate(model, channel)`
- *   wrapper for automatic state persistence across unmount/remount cycles.
- *   When a `Rehydrated` wrapper is passed, the model is restored from the
- *   rehydrator on mount (if a matching snapshot exists) and snapshotted
- *   back on unmount.
+ * @param initialModel The initial model state.
  * @param getData Optional function that returns reactive values as data.
  *   Values returned are accessible via `context.data` in action handlers,
  *   always reflecting the latest values even after await operations.
@@ -90,11 +87,6 @@ import { G } from "@mobily/ts-belt";
  * ```typescript
  * // Basic usage
  * const actions = useActions<Model, typeof Actions>(model);
- *
- * // With rehydration — state survives unmount/remount
- * const actions = useActions<Model, typeof Actions>(
- *   Rehydrate(model, { UserId: props.userId }),
- * );
  *
  * // With reactive data
  * const actions = useActions<Model, typeof Actions, { query: string }>(
@@ -107,27 +99,20 @@ export function useActions<
   M extends Model,
   AC extends Actions,
   D extends Props = Props,
->(
-  initialModelOrRehydrated: M | Rehydrated<M>,
-  getData: Data<D> = () => <D>{},
-): UseActions<M, AC, D> {
+>(initialModel: M, getData: Data<D> = () => <D>{}): UseActions<M, AC, D> {
   const broadcast = useBroadcast();
   const scope = useScope();
   const error = useError();
   const tasks = useTasks();
+  const cache = useCacheStore();
   const rerender = useRerender();
   const initialised = React.useRef(false);
   const hydration = React.useRef<Process | null>(null);
   const state = React.useRef(new State<M>());
-  const {
-    model: resolvedModel,
-    save: saveRehydration,
-    invalidate: invalidateRehydration,
-  } = useRehydration(initialModelOrRehydrated);
 
   if (!initialised.current) {
     initialised.current = true;
-    hydration.current = state.current.hydrate(resolvedModel);
+    hydration.current = state.current.hydrate(initialModel);
   }
   const [model, setModel] = React.useState<M>(() => state.current.model);
   const data = useData(getData());
@@ -200,8 +185,27 @@ export function useActions<
           annotate<T>(operation: Operation, value: T): T {
             return state.current.annotate(operation, value);
           },
-          invalidate(channel: Filter) {
-            invalidateRehydration(channel);
+          async cacheable(entry, ttl, fn) {
+            if (controller.signal.aborted) return { data: null };
+
+            const key = getCacheKey(<CacheId>(<unknown>entry));
+            const cached = cache.get(key);
+            if (cached && Date.now() < cached.expiry) {
+              return { data: cached.value };
+            }
+
+            const raw = await fn();
+            const outcome = unwrap(raw);
+
+            if (!outcome.ok) return { data: null };
+            cache.set(key, {
+              value: outcome.value,
+              expiry: Date.now() + ttl,
+            });
+            return { data: outcome.value };
+          },
+          invalidate(entry) {
+            cache.delete(getCacheKey(<CacheId>(<unknown>entry)));
           },
         },
       };
@@ -302,8 +306,6 @@ export function useActions<
           for (const cleanup of pendingCleanups) cleanup();
           return;
         }
-
-        saveRehydration(state.current.model);
 
         for (const task of localTasks.current) {
           task.controller.abort();

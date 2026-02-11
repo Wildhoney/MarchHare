@@ -40,9 +40,6 @@ import { ComponentStructureFixture } from "./rules/component-structure.tsx";
 // Fixture imports - Rules 36-39: Utilities
 import { UtilitiesFixture } from "./rules/utilities.tsx";
 
-// Fixture imports - Rehydration
-import { RehydrateFixture } from "./rules/rehydrate.tsx";
-
 const fixtures: Record<string, React.ComponentType> = {
   actions: ActionsFixture,
   "state-updates": StateUpdatesFixture,
@@ -54,7 +51,6 @@ const fixtures: Record<string, React.ComponentType> = {
   "type-safety": TypeSafetyFixture,
   "component-structure": ComponentStructureFixture,
   utilities: UtilitiesFixture,
-  rehydrate: RehydrateFixture,
 };
 
 function App() {

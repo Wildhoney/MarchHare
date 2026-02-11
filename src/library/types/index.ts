@@ -7,6 +7,8 @@ import type {
 } from "../boundary/components/tasks/types.ts";
 import type { ConsumerRenderer } from "../boundary/components/consumer/index.tsx";
 import type * as React from "react";
+import type { Option } from "@mobily/ts-belt/Option";
+import type { Result as TsBeltResult } from "@mobily/ts-belt/Result";
 
 export type { ActionId, Box, Task, Tasks };
 export type { ConsumerRenderer };
@@ -64,9 +66,48 @@ export class Brand {
   static Channel = Symbol("chizu.brand/Channel");
   /** Node capture events used by Lifecycle.Node */
   static Node = Symbol("chizu.action.lifecycle/Node");
-  /** Identifies rehydrated model wrappers created with Rehydrate() */
-  static Rehydrate = Symbol("chizu.brand/Rehydrate");
+  /** Identifies cache entry identifiers created with Entry() */
+  static Cache = Symbol("chizu.brand/Cache");
 }
+
+/**
+ * Phantom brand symbol for value type tracking on cache entry identifiers.
+ * Uses a function type `(t: T) => T` to enforce invariance, preventing
+ * a cache entry declared for one type from being used with a different type.
+ * @internal
+ */
+declare const CacheValueBrand: unique symbol;
+
+/**
+ * A branded cache entry identifier.
+ *
+ * When the second type parameter `C` is provided, the entry becomes callable
+ * to produce channeled identifiers for independent cache slots per channel.
+ *
+ * @template T - The cached value type.
+ * @template C - The channel type for channeled entries (defaults to never).
+ */
+export type CacheId<T = unknown, C extends Filter = never> = {
+  readonly [Brand.Cache]: symbol;
+  readonly [CacheValueBrand]?: (t: T) => T;
+} & ([C] extends [never]
+  ? unknown
+  : {
+      (channel: C): ChanneledCacheId<T, C>;
+    });
+
+/**
+ * Result of calling a channeled cache entry with a channel argument.
+ * Contains the entry identity and the channel data for scoped cache access.
+ *
+ * @template T - The cached value type.
+ * @template C - The channel type.
+ */
+export type ChanneledCacheId<T = unknown, C = unknown> = {
+  readonly [Brand.Cache]: symbol;
+  readonly [CacheValueBrand]?: (t: T) => T;
+  readonly channel: C;
+};
 
 /**
  * Lifecycle actions that trigger at specific points in a component's lifecycle.
@@ -605,21 +646,48 @@ export type HandlerContext<
     ): void;
     annotate<T>(operation: Operation, value: T): T;
     /**
-     * Removes a rehydration snapshot from the store.
+     * Fetches a value from the cache or executes the callback if not cached / expired.
      *
-     * Use this to invalidate persisted state for a specific channel key,
-     * so that the next mount of the target component starts fresh instead
-     * of restoring stale data.
+     * The callback must return an `Option<T>` or `Result<T, E>`. Only `Some` / `Ok`
+     * values are stored; `None` / `Error` results are skipped and `{ data: null }`
+     * is returned. Exactly one layer of `Option` / `Result` is unwrapped.
      *
-     * @param channel - The channel key identifying the snapshot to remove.
+     * @param entry - The cache entry identifier (from `Entry()`).
+     * @param ttl - Time-to-live in milliseconds.
+     * @param fn - Async callback that produces the value to cache.
+     * @returns An object with `data` set to the cached or freshly-fetched value, or `null`.
      *
      * @example
      * ```ts
-     * context.actions.invalidate(Store.Counter({ UserId: 5 }));
-     * context.actions.invalidate(Store.Settings());
+     * const { data } = await context.actions.cacheable(
+     *   CacheStore.Pairs,
+     *   30_000,
+     *   async () => Some(await api.fetchPairs()),
+     * );
      * ```
      */
-    invalidate(channel: Filter): void;
+    cacheable<T>(
+      entry: CacheId<T> | ChanneledCacheId<T>,
+      ttl: number,
+      fn: () => Promise<Option<T>>,
+    ): Promise<{ data: T | null }>;
+    cacheable<T>(
+      entry: CacheId<T> | ChanneledCacheId<T>,
+      ttl: number,
+      fn: () => Promise<TsBeltResult<T, unknown>>,
+    ): Promise<{ data: T | null }>;
+    /**
+     * Removes a cached value from the store.
+     *
+     * @param entry - The cache entry identifier to invalidate.
+     *
+     * @example
+     * ```ts
+     * context.actions.invalidate(CacheStore.Pairs);
+     * context.actions.invalidate(CacheStore.User({ UserId: 5 }));
+     * ```
+     */
+    invalidate(entry: CacheId<unknown> | ChanneledCacheId<unknown>): void;
   };
 };
 
