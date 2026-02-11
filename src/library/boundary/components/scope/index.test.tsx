@@ -52,6 +52,22 @@ describe("withScope", () => {
     expect(screen.getByTestId("scope-names").textContent).toBe("outer,inner");
   });
 
+  it("should name the wrapper by prepending 'Scoped' to the component name", () => {
+    function Layout() {
+      return <div />;
+    }
+
+    const Wrapped = withScope("naming", Layout);
+
+    expect(Wrapped.name).toBe("ScopedLayout");
+  });
+
+  it("should fall back to 'ScopedComponent' for anonymous components", () => {
+    const Wrapped = withScope("anon", () => <div />);
+
+    expect(Wrapped.name).toBe("ScopedComponent");
+  });
+
   it("should render children of the wrapped component", () => {
     function Inner() {
       return (

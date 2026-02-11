@@ -105,13 +105,15 @@ export function withScope<P extends object>(
   name: string,
   Component: ComponentType<P>,
 ): (props: P) => ReactNode {
-  function ScopedComponent(props: P): ReactNode {
-    return (
-      <Scope name={name}>
-        <Component {...props} />
-      </Scope>
-    );
-  }
+  const scopedName = `Scoped${Component.displayName || Component.name || "Component"}`;
 
-  return ScopedComponent;
+  return {
+    [scopedName](props: P): ReactNode {
+      return (
+        <Scope name={name}>
+          <Component {...props} />
+        </Scope>
+      );
+    },
+  }[scopedName];
 }
