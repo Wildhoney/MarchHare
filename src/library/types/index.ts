@@ -800,7 +800,7 @@ type DeepAction<AC, K extends string> = K extends `${infer Head}.${infer Tail}`
  * @template Prefix - Accumulated prefix for recursion (defaults to never)
  */
 type FlattenKeys<AC, Prefix extends string = never> = {
-  [K in keyof AC & string]: AC[K] extends HandlerPayload
+  [K in keyof AC & string]: keyof AC[K] & string extends never
     ? [Prefix] extends [never]
       ? K
       : `${Prefix}.${K}`

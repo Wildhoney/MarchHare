@@ -4,11 +4,10 @@ All notable changes to this project will be documented in this file. See [commit
 
 ## [0.2.58](https://github.com/Wildhoney/Chizu/compare/v0.2.56...v0.2.58) (2026-02-11)
 
-
 ### Features
 
-* **hooks:** add context.actions.consume for handler-side broadcast/multicast reads ([3ab2bc5](https://github.com/Wildhoney/Chizu/commit/3ab2bc5475303044fd1da6f47eaa9629d527f3a2))
-* **types:** support dot-notated nested actions in Handlers HKT ([a56cae9](https://github.com/Wildhoney/Chizu/commit/a56cae94559563eb17d0ab07f13f0a92a5b48462))
+- **hooks:** add context.actions.consume for handler-side broadcast/multicast reads ([3ab2bc5](https://github.com/Wildhoney/Chizu/commit/3ab2bc5475303044fd1da6f47eaa9629d527f3a2))
+- **types:** support dot-notated nested actions in Handlers HKT ([a56cae9](https://github.com/Wildhoney/Chizu/commit/a56cae94559563eb17d0ab07f13f0a92a5b48462))
 
 ## [0.2.57](https://github.com/Wildhoney/Chizu/compare/v0.2.56...v0.2.57) (2026-02-11)
 
