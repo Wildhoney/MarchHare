@@ -14,4 +14,3 @@ export * as utils from "./utils/index.ts";
 export type { Box } from "immertation";
 export type { Fault, Catcher } from "./error/index.tsx";
 export type { Pk, Task, Tasks, Handlers } from "./types/index.ts";
-export type { CacheId, ChanneledCacheId } from "./cache/index.ts";

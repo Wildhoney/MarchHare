@@ -772,11 +772,49 @@ export type Handler<
 ) => void | Promise<void> | AsyncGenerator | Generator;
 
 /**
+ * Resolves the action value at a (possibly dot-notated) path within an actions object.
+ * For a simple key like `"SetName"`, returns `AC["SetName"]`.
+ * For a dotted key like `"Broadcast.PaymentSent"`, recursively resolves to
+ * `AC["Broadcast"]["PaymentSent"]`.
+ *
+ * @template AC - The actions object to traverse
+ * @template K - The key path (may contain dots)
+ */
+type DeepAction<AC, K extends string> = K extends `${infer Head}.${infer Tail}`
+  ? Head extends keyof AC
+    ? DeepAction<AC[Head], Tail>
+    : never
+  : K extends keyof AC
+    ? AC[K]
+    : never;
+
+/**
+ * Produces a union of all valid dot-notated key paths that resolve to leaf actions
+ * (i.e. values with `Brand.Action`) within an actions object.
+ *
+ * Flat actions like `SetName` produce `"SetName"`.
+ * Nested namespaces like `Broadcast = { PaymentSent, PaymentLink }` produce
+ * `"Broadcast.PaymentSent" | "Broadcast.PaymentLink"`.
+ *
+ * @template AC - The actions object to flatten
+ * @template Prefix - Accumulated prefix for recursion (defaults to never)
+ */
+type FlattenKeys<AC, Prefix extends string = never> = {
+  [K in keyof AC & string]: AC[K] extends HandlerPayload
+    ? [Prefix] extends [never]
+      ? K
+      : `${Prefix}.${K}`
+    : FlattenKeys<AC[K], [Prefix] extends [never] ? K : `${Prefix}.${K}`>;
+}[keyof AC & string];
+
+/**
  * Higher-Kinded Type (HKT) emulation for action handlers.
  * Creates a mapped type where each action key maps to its fully-typed handler.
  *
  * TypeScript doesn't natively support HKTs (types that return types), but this
  * pattern emulates them using mapped types with indexed access.
+ *
+ * Supports both flat and nested action classes with dot notation:
  *
  * @template M - The model type
  * @template AC - The actions class type
@@ -784,36 +822,25 @@ export type Handler<
  *
  * @example
  * ```ts
- * import { Action, Handlers } from "chizu";
+ * import { Action, Distribution, Handlers } from "chizu";
+ *
+ * class BroadcastActions {
+ *   static PaymentSent = Action("PaymentSent", Distribution.Broadcast);
+ *   static PaymentLink = Action<PaymentLinkData>("PaymentLink", Distribution.Broadcast);
+ * }
  *
  * class Actions {
  *   static SetName = Action<string>("SetName");
- *   static SetAge = Action<number>("SetAge");
+ *   static Broadcast = BroadcastActions;
  * }
  *
- * // Define the HKT once for this module
  * type H = Handlers<Model, typeof Actions>;
  *
- * // "Apply" the HKT via indexed access — H["SetName"] is the handler type
- * export const handleSetName: H["SetName"] = (context, name) => {
- *   context.actions.produce((draft) => {
- *     draft.model.name = name;
- *   });
- * };
+ * // Flat actions work as before
+ * export const handleSetName: H["SetName"] = (context, name) => { ... };
  *
- * export const handleSetAge: H["SetAge"] = (context, age) => {
- *   context.actions.produce((draft) => {
- *     draft.model.age = age;
- *   });
- * };
- *
- * // Use in component
- * export default function useUserActions() {
- *   const actions = useActions<Model, typeof Actions>(model);
- *   actions.useAction(Actions.SetName, handleSetName);
- *   actions.useAction(Actions.SetAge, handleSetAge);
- *   return actions;
- * }
+ * // Nested actions use dot notation
+ * export const handlePaymentSent: H["Broadcast.PaymentSent"] = (context) => { ... };
  * ```
  */
 export type Handlers<
@@ -821,9 +848,9 @@ export type Handlers<
   AC extends Actions,
   D extends Props = Props,
 > = {
-  [K in keyof AC]: (
+  [K in FlattenKeys<AC>]: (
     context: HandlerContext<M, AC, D>,
-    payload: Payload<AC[K] & HandlerPayload<unknown>>,
+    payload: Payload<DeepAction<AC, K> & HandlerPayload<unknown>>,
   ) => void | Promise<void> | AsyncGenerator | Generator;
 };
 

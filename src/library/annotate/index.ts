@@ -1,5 +1,13 @@
 import { State, Operation } from "immertation";
 
+/**
+ * Module-level Immertation state instance used to annotate initial model values
+ * with operation metadata (e.g., {@link Operation}) before hydration.
+ *
+ * This is intentionally a singleton — it exists solely to provide the
+ * {@link annotate} helper with access to `State.annotate`, without requiring
+ * consumers to instantiate their own `State` object.
+ */
 const state = new State();
 
 /**
