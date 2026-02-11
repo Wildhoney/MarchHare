@@ -246,7 +246,24 @@ actions.dispatch(Actions.Multicast.Update, 42, { scope: "TeamA" });
 }
 ```
 
-Unlike broadcast which reaches all components, multicast is scoped to the named boundary &ndash; perfect for isolated widget groups, form sections, or distinct UI regions. See the [multicast recipe](./recipes/multicast-actions.md) for more details.
+Unlike broadcast which reaches all components, multicast is scoped to the named boundary &ndash; perfect for isolated widget groups, form sections, or distinct UI regions.
+
+For components that always render inside a scope, use the `withScope` HOC to eliminate the manual `<Scope>` wrapper:
+
+```tsx
+import { withScope } from "chizu";
+
+export default withScope("payment-link", function Layout(): ReactElement {
+  return (
+    <div>
+      <PaymentLink />
+      <Outlet />
+    </div>
+  );
+});
+```
+
+See the [multicast recipe](./recipes/multicast-actions.md) for more details.
 
 For data that is expensive to fetch, use `cacheable` to cache values with a TTL. Define typed cache entries with `Entry` and call `context.actions.cacheable` inside a handler &ndash; the callback only runs when the cache is empty or expired:
 

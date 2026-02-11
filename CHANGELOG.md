@@ -4,10 +4,9 @@ All notable changes to this project will be documented in this file. See [commit
 
 ## [0.2.55](https://github.com/Wildhoney/Chizu/compare/v0.2.54...v0.2.55) (2026-02-11)
 
-
 ### Features
 
-* **deps:** update immertation to ^0.1.26 ([65fa1e8](https://github.com/Wildhoney/Chizu/commit/65fa1e8a5743c03bdd286fbcbe3ee49ec692a430))
+- **deps:** update immertation to ^0.1.26 ([65fa1e8](https://github.com/Wildhoney/Chizu/commit/65fa1e8a5743c03bdd286fbcbe3ee49ec692a430))
 
 ## [0.2.54](https://github.com/Wildhoney/Chizu/compare/v0.2.52...v0.2.54) (2026-02-11)
 

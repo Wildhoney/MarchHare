@@ -1,5 +1,6 @@
 import type { Props, ScopeContext, ScopeEntry } from "./types.ts";
 import { Context, useScope } from "./utils.ts";
+import type { ComponentType, ReactNode } from "react";
 import EventEmitter from "eventemitter3";
 import * as React from "react";
 
@@ -76,4 +77,41 @@ export function Scope({ name, children }: Props): React.ReactNode {
   }, [parent, name, scopeEntry]);
 
   return <Context.Provider value={context}>{children}</Context.Provider>;
+}
+
+/**
+ * Higher-order component that wraps a component in a multicast `<Scope>`.
+ *
+ * Eliminates the need to manually wrap component output in `<Scope name={...}>`,
+ * keeping the component body focused on its own rendering logic.
+ *
+ * @param name - The scope name for multicast action delivery.
+ * @param Component - The component to wrap.
+ * @returns A new component that renders the original within a `<Scope>`.
+ *
+ * @example
+ * ```tsx
+ * export default withScope(SCOPE_NAME, function Layout(): ReactElement {
+ *   return (
+ *     <div>
+ *       <Sidebar />
+ *       <Content />
+ *     </div>
+ *   );
+ * });
+ * ```
+ */
+export function withScope<P extends object>(
+  name: string,
+  Component: ComponentType<P>,
+): (props: P) => ReactNode {
+  function ScopedComponent(props: P): ReactNode {
+    return (
+      <Scope name={name}>
+        <Component {...props} />
+      </Scope>
+    );
+  }
+
+  return ScopedComponent;
 }

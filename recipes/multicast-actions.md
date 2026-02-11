@@ -46,6 +46,27 @@ function App() {
 }
 ```
 
+### `withScope` HOC
+
+For components that always render inside a scope, use the `withScope` higher-order component to eliminate the manual `<Scope>` wrapper:
+
+```tsx
+import { withScope } from "chizu";
+
+const SCOPE_NAME = "payment-link";
+
+export default withScope(SCOPE_NAME, function Layout(): ReactElement {
+  return (
+    <div>
+      <PaymentLink />
+      <Outlet />
+    </div>
+  );
+});
+```
+
+This is equivalent to wrapping the component's output in `<Scope name={SCOPE_NAME}>`, but keeps the component body focused on rendering. Props are forwarded to the wrapped component automatically.
+
 ## Dispatching multicast actions
 
 When dispatching a multicast action, you **must** provide the scope name as the third argument:

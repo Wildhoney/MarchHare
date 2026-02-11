@@ -6,7 +6,7 @@ export { Operation, Op, State } from "immertation";
 export { annotate } from "./annotate/index.ts";
 
 export { Boundary } from "./boundary/index.tsx";
-export { Scope } from "./boundary/components/scope/index.tsx";
+export { Scope, withScope } from "./boundary/components/scope/index.tsx";
 
 export { useActions, With } from "./hooks/index.ts";
 export * as utils from "./utils/index.ts";
