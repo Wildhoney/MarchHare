@@ -144,7 +144,7 @@ export function useActions<
       localTasks.current.add(task);
 
       return <HandlerContext<M, AC, D>>{
-        model,
+        model: state.current.model,
         get phase() {
           return phase.current;
         },

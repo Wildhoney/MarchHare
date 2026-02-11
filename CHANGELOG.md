@@ -4,10 +4,9 @@ All notable changes to this project will be documented in this file. See [commit
 
 ## [0.2.59](https://github.com/Wildhoney/Chizu/compare/v0.2.58...v0.2.59) (2026-02-11)
 
-
 ### Features
 
-* support dot-notation for nested action namespaces in Handlers type ([75013c0](https://github.com/Wildhoney/Chizu/commit/75013c0b3e58a67ea1e761b6f68609e5a3eb5ee1))
+- support dot-notation for nested action namespaces in Handlers type ([75013c0](https://github.com/Wildhoney/Chizu/commit/75013c0b3e58a67ea1e761b6f68609e5a3eb5ee1))
 
 ## [0.2.58](https://github.com/Wildhoney/Chizu/compare/v0.2.56...v0.2.58) (2026-02-11)
 

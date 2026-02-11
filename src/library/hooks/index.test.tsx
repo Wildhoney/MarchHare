@@ -1187,3 +1187,49 @@ describe("useActions() context.actions.consume", () => {
     expect(consumedValue).toBe(99);
   });
 });
+
+describe("useActions() context.model freshness", () => {
+  type ItemModel = { items: string[] };
+  const itemModel: ItemModel = { items: [] };
+
+  class ItemActions {
+    static Add = Action<string>("Add");
+    static Process = Action("Process");
+  }
+
+  it("should provide the latest model in context after a prior action mutates state", async () => {
+    let capturedItems: string[] = [];
+
+    const { result } = renderHook(() => {
+      const actions = useActions<ItemModel, typeof ItemActions>(itemModel);
+
+      actions.useAction(ItemActions.Add, (context, item) => {
+        context.actions.produce((draft) => {
+          draft.model.items = [...draft.model.items, item];
+        });
+      });
+
+      actions.useAction(ItemActions.Process, (context) => {
+        capturedItems = [...context.model.items];
+      });
+
+      return actions;
+    });
+
+    // Add items first
+    await act(async () => {
+      result.current[1].dispatch(ItemActions.Add, "file-1");
+    });
+
+    await act(async () => {
+      result.current[1].dispatch(ItemActions.Add, "file-2");
+    });
+
+    // Process should see both items via context.model
+    await act(async () => {
+      result.current[1].dispatch(ItemActions.Process);
+    });
+
+    expect(capturedItems).toEqual(["file-1", "file-2"]);
+  });
+});
