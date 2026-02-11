@@ -9,6 +9,7 @@ import {
   useRegisterHandler,
   useActionSets,
 } from "./utils.ts";
+import { useConsumer } from "../boundary/components/consumer/utils.ts";
 
 export { With } from "./utils.ts";
 import { useRerender } from "../utils/utils.ts";
@@ -54,7 +55,8 @@ import {
   getName,
 } from "../action/index.ts";
 import { useError } from "../error/index.tsx";
-import { State, Operation, Process } from "immertation";
+import { State, Operation, Process, Inspect } from "immertation";
+import { AbortError } from "../error/types.ts";
 import { useTasks } from "../boundary/components/tasks/utils.ts";
 import { useCacheStore } from "../boundary/components/cache/index.tsx";
 import { getCacheKey, unwrap } from "../cache/index.ts";
@@ -102,6 +104,7 @@ export function useActions<
 >(initialModel: M, getData: Data<D> = () => <D>{}): UseActions<M, AC, D> {
   const broadcast = useBroadcast();
   const scope = useScope();
+  const consumer = useConsumer();
   const error = useError();
   const tasks = useTasks();
   const cache = useCacheStore();
@@ -206,6 +209,45 @@ export function useActions<
           },
           invalidate(entry) {
             cache.delete(getCacheKey(<CacheId>(<unknown>entry)));
+          },
+          async consume(action: AnyAction, options?: MulticastOptions) {
+            if (controller.signal.aborted) return null;
+
+            const key = getActionSymbol(action);
+            let entry;
+
+            if (isMulticastAction(action) && options?.scope) {
+              const scoped = getScope(scope, options.scope);
+              if (!scoped) return null;
+              entry = scoped.store.get(key);
+            } else {
+              entry = consumer.get(key);
+            }
+
+            if (!entry?.state.model?.value) return null;
+
+            const inspect = <{ value: Inspect<unknown> }>(
+              (<unknown>entry.state.inspect)
+            );
+
+            if (inspect.value.pending()) {
+              await new Promise<void>((resolve, reject) => {
+                if (controller.signal.aborted) {
+                  reject(new AbortError());
+                  return;
+                }
+                const onAbort = () => reject(new AbortError());
+                controller.signal.addEventListener("abort", onAbort, {
+                  once: true,
+                });
+                inspect.value.settled().then(() => {
+                  controller.signal.removeEventListener("abort", onAbort);
+                  resolve();
+                });
+              });
+            }
+
+            return entry.state.model.value;
           },
         },
       };

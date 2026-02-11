@@ -5,6 +5,7 @@ import { Action } from "../action/index.ts";
 import { Lifecycle, Distribution, Phase } from "../types/index.ts";
 import { Broadcaster } from "../boundary/components/broadcast/index.tsx";
 import { Consumer } from "../boundary/components/consumer/index.tsx";
+import { Scope } from "../boundary/components/scope/index.tsx";
 import { annotate } from "../annotate/index.ts";
 import { Operation } from "immertation";
 import * as React from "react";
@@ -985,5 +986,204 @@ describe("useActions() StrictMode resilience", () => {
 
     expect(apiCalls.filter((c) => c === "parent-mount")).toHaveLength(1);
     expect(apiCalls.filter((c) => c === "child-mount")).toHaveLength(1);
+  });
+});
+
+describe("useActions() context.actions.consume", () => {
+  class BroadcastConsumeActions {
+    static Name = Action<string>("Name", Distribution.Broadcast);
+  }
+
+  class MulticastConsumeActions {
+    static Score = Action<number>("Score", Distribution.Multicast);
+  }
+
+  it("should return the settled value from the broadcast consumer store", async () => {
+    let consumedValue: string | null = null;
+
+    type M = { result: string | null };
+
+    function Publisher() {
+      const [, actions] = useActions<
+        Record<string, never>,
+        typeof BroadcastConsumeActions
+      >({});
+
+      return (
+        <>
+          {actions.consume(BroadcastConsumeActions.Name, () => null)}
+          <button
+            data-testid="publish"
+            onClick={() =>
+              actions.dispatch(BroadcastConsumeActions.Name, "Adam")
+            }
+          >
+            Publish
+          </button>
+        </>
+      );
+    }
+
+    function Reader() {
+      const result = useActions<M, typeof BroadcastConsumeActions>({
+        result: null,
+      });
+
+      result.useAction(BroadcastConsumeActions.Name, async (context, _name) => {
+        const value = await context.actions.consume(
+          BroadcastConsumeActions.Name,
+        );
+        consumedValue = value;
+        context.actions.produce(({ model }) => {
+          model.result = value;
+        });
+      });
+
+      return <div data-testid="result">{result[0].result ?? "null"}</div>;
+    }
+
+    function App() {
+      return (
+        <Broadcaster>
+          <Consumer>
+            <Publisher />
+            <Reader />
+          </Consumer>
+        </Broadcaster>
+      );
+    }
+
+    render(<App />);
+
+    await act(async () => {
+      screen.getByTestId("publish").click();
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    expect(consumedValue).toBe("Adam");
+  });
+
+  it("should return null when no value has been dispatched", async () => {
+    let consumedValue: unknown = "not-called";
+
+    class LocalActions {
+      static Trigger = Action("Trigger");
+    }
+
+    function Reader() {
+      const result = useActions<Record<string, never>, typeof LocalActions>({});
+
+      result.useAction(LocalActions.Trigger, async (context) => {
+        const value = await context.actions.consume(
+          BroadcastConsumeActions.Name,
+        );
+        consumedValue = value;
+      });
+
+      return (
+        <button
+          data-testid="trigger"
+          onClick={() => result[1].dispatch(LocalActions.Trigger)}
+        >
+          Trigger
+        </button>
+      );
+    }
+
+    function App() {
+      return (
+        <Broadcaster>
+          <Consumer>
+            <Reader />
+          </Consumer>
+        </Broadcaster>
+      );
+    }
+
+    render(<App />);
+
+    await act(async () => {
+      screen.getByTestId("trigger").click();
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    expect(consumedValue).toBeNull();
+  });
+
+  it("should return multicast value from the scope store", async () => {
+    let consumedValue: number | null = null;
+
+    function Publisher() {
+      const [, actions] = useActions<
+        Record<string, never>,
+        typeof MulticastConsumeActions
+      >({});
+
+      return (
+        <>
+          {actions.consume(MulticastConsumeActions.Score, () => null, {
+            scope: "test",
+          })}
+          <button
+            data-testid="publish-mc"
+            onClick={() =>
+              actions.dispatch(MulticastConsumeActions.Score, 99, {
+                scope: "test",
+              })
+            }
+          >
+            Publish
+          </button>
+        </>
+      );
+    }
+
+    function Reader() {
+      const result = useActions<
+        Record<string, never>,
+        typeof MulticastConsumeActions
+      >({});
+
+      result.useAction(MulticastConsumeActions.Score, async (context) => {
+        const value = await context.actions.consume(
+          MulticastConsumeActions.Score,
+          { scope: "test" },
+        );
+        consumedValue = value;
+      });
+
+      return <div data-testid="mc-reader">Reader</div>;
+    }
+
+    function App() {
+      return (
+        <Broadcaster>
+          <Consumer>
+            <Scope name="test">
+              <Publisher />
+              <Reader />
+            </Scope>
+          </Consumer>
+        </Broadcaster>
+      );
+    }
+
+    render(<App />);
+
+    await act(async () => {
+      screen.getByTestId("publish-mc").click();
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    expect(consumedValue).toBe(99);
   });
 });

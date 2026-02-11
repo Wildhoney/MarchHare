@@ -167,6 +167,19 @@ actions.useAction(Actions.Broadcast.Name, async (context, name) => {
 });
 ```
 
+Or read the latest broadcast value directly in a handler with `context.actions.consume`:
+
+```tsx
+actions.useAction(Actions.FetchFriends, async (context) => {
+  const name = await context.actions.consume(Actions.Broadcast.Name);
+  if (!name) return;
+  const friends = await fetch(api.friends(name));
+  context.actions.produce(({ model }) => {
+    model.friends = friends;
+  });
+});
+```
+
 For targeted event delivery, use channeled actions. Define a channel type as the second generic argument and call the action with a channel object &ndash; handlers fire when the dispatch channel matches:
 
 ```tsx

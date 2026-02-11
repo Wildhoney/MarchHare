@@ -688,6 +688,38 @@ export type HandlerContext<
      * ```
      */
     invalidate(entry: CacheId<unknown> | ChanneledCacheId<unknown>): void;
+    /**
+     * Reads the latest broadcast or multicast value from the consumer store.
+     *
+     * Returns the raw value `T` or `null` if no value has been dispatched.
+     * If the value has pending annotations, awaits `settled()` before returning.
+     * Respects the task's abort signal — returns `null` if the task is aborted
+     * while waiting.
+     *
+     * **Important:** A JSX-side `consume()` or `<Partition>` must have populated
+     * the store for this value to be available.
+     *
+     * @param action - The broadcast or multicast action to read.
+     * @param options - For multicast actions, must include `{ scope: "ScopeName" }`.
+     * @returns The latest dispatched value, or `null`.
+     *
+     * @example
+     * ```ts
+     * actions.useAction(Actions.FetchPosts, async (context) => {
+     *   const user = await context.actions.consume(Actions.Broadcast.User);
+     *   if (!user) return;
+     *   const posts = await fetchPosts(user.id, {
+     *     signal: context.task.controller.signal,
+     *   });
+     *   context.actions.produce(({ model }) => { model.posts = posts; });
+     * });
+     * ```
+     */
+    consume<T>(action: BroadcastPayload<T>): Promise<T | null>;
+    consume<T>(
+      action: MulticastPayload<T>,
+      options: MulticastOptions,
+    ): Promise<T | null>;
   };
 };
 

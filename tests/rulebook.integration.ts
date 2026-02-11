@@ -512,6 +512,35 @@ test.describe("Chizu Rulebook", () => {
       await expect(user1).toHaveText("Broadcast to All <all@example.com>");
       await expect(user2).toHaveText("Broadcast to All <all@example.com>");
     });
+
+    it("Rule 40: Use context.actions.consume to read broadcast values in handlers - should read broadcast value imperatively", async ({
+      page,
+    }) => {
+      const consumed = page.getByTestId("rule-40-consumed");
+
+      // Publish a broadcast value first
+      await page.getByTestId("rule-40-publish").click();
+
+      // Mount the consumer — its Lifecycle.Mount handler calls context.actions.consume
+      await page.getByTestId("rule-40-mount-consumer").click();
+
+      // The consumed value should appear after the handler reads it
+      await expect(consumed).toHaveText("Charlie", { timeout: 2000 });
+    });
+
+    it("Rule 40: Use context.actions.consume to read broadcast values in handlers - should return null when no value dispatched", async ({
+      page,
+    }) => {
+      // Mount the consumer WITHOUT publishing first
+      await page.getByTestId("rule-40-mount-consumer").click();
+
+      const consumed = page.getByTestId("rule-40-consumed");
+
+      // Trigger the handler — no broadcast value exists yet
+      await page.getByTestId("rule-40-trigger").click();
+
+      await expect(consumed).toHaveText("null", { timeout: 2000 });
+    });
   });
 
   // Task Management (Rules 20-22)

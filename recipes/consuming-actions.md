@@ -45,3 +45,39 @@ function LateComponent() {
 ```
 
 This enables late-mounting components to synchronise with previously dispatched state. See the [broadcast actions recipe](./broadcast-actions.md#cached-values-on-mount) for more details.
+
+## Handler-side consume
+
+Use `context.actions.consume` to read the latest broadcast or multicast value directly inside an action handler, without subscribing via `useAction` and storing it in the local model.
+
+```ts
+actions.useAction(Actions.FetchPosts, async (context) => {
+  const user = await context.actions.consume(Actions.Broadcast.User);
+  if (!user) return;
+  const posts = await fetchPosts(user.id, {
+    signal: context.task.controller.signal,
+  });
+  context.actions.produce(({ model }) => {
+    model.posts = posts;
+  });
+});
+```
+
+Key details:
+
+- **Async** &ndash; returns `Promise<T | null>`.
+- **Raw value** &ndash; returns `T`, not a `Box<T>`. Handlers need the data, not the reactive wrapper.
+- **Null when empty** &ndash; returns `null` if no value has been dispatched for that action.
+- **Awaits settled** &ndash; if the value has pending annotations, `consume` waits for `settled()` before returning.
+- **Abort-safe** &ndash; respects `context.task.controller.signal`. Returns `null` if the task is aborted while waiting.
+- **Requires a store entry** &ndash; a JSX-side `consume()` or `<Partition>` must have populated the consumer store for the value to be available.
+
+### Multicast support
+
+For multicast actions, pass the scope name via the `options` argument:
+
+```ts
+const score = await context.actions.consume(Actions.Multicast.Score, {
+  scope: "game",
+});
+```

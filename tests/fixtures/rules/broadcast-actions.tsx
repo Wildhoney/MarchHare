@@ -1,15 +1,17 @@
 /**
- * E2E Test Fixtures for Rules 16-19: Broadcast Actions
+ * E2E Test Fixtures for Rules 16-19, 40: Broadcast Actions
  *
  * Rule 16: Only broadcast actions can be consumed
  * Rule 17: Use consume() for reactive UI from broadcast actions
  * Rule 18: Late-mounting components receive cached values
  * Rule 19: Use channeled actions for targeted broadcast delivery
+ * Rule 40: Use context.actions.consume to read broadcast values in handlers
  */
 import * as React from "react";
 import {
   Action,
   Distribution,
+  Lifecycle,
   useActions,
 } from "../../../src/library/index.ts";
 
@@ -411,13 +413,107 @@ function Rule19ChanneledBroadcast() {
   );
 }
 
+// ============================================================================
+// Rule 40: Use context.actions.consume to read broadcast values in handlers
+// ============================================================================
+
+class Rule40Actions {
+  static Trigger = Action("Trigger");
+}
+
+type Rule40Model = {
+  consumed: string;
+};
+
+function Rule40Publisher() {
+  const [, actions] = useActions<EmptyModel, typeof BroadcastActions>({});
+
+  return (
+    <>
+      {actions.consume(BroadcastActions.UserLoggedIn, () => null)}
+      <button
+        data-testid="rule-40-publish"
+        onClick={() =>
+          actions.dispatch(BroadcastActions.UserLoggedIn, {
+            name: "Charlie",
+            id: 3,
+          })
+        }
+      >
+        Publish User
+      </button>
+    </>
+  );
+}
+
+function useRule40ConsumerActions() {
+  const actions = useActions<
+    Rule40Model,
+    typeof Rule40Actions & typeof BroadcastActions
+  >({
+    consumed: "",
+  });
+
+  actions.useAction(Lifecycle.Mount, async (context) => {
+    const user = await context.actions.consume(BroadcastActions.UserLoggedIn);
+    if (!user) return;
+    context.actions.produce(({ model }) => {
+      model.consumed = user.name;
+    });
+  });
+
+  actions.useAction(Rule40Actions.Trigger, async (context) => {
+    const user = await context.actions.consume(BroadcastActions.UserLoggedIn);
+    context.actions.produce(({ model }) => {
+      model.consumed = user ? user.name : "null";
+    });
+  });
+
+  return actions;
+}
+
+function Rule40Consumer() {
+  const [model, actions] = useRule40ConsumerActions();
+
+  return (
+    <div data-testid="rule-40-consumer">
+      <div data-testid="rule-40-consumed">{model.consumed}</div>
+      <button
+        data-testid="rule-40-trigger"
+        onClick={() => actions.dispatch(Rule40Actions.Trigger)}
+      >
+        Read via consume
+      </button>
+    </div>
+  );
+}
+
+function Rule40HandlerConsume() {
+  const [showConsumer, setShowConsumer] = React.useState(false);
+
+  return (
+    <section data-testid="rule-40">
+      <h3>Rule 40: Handler-side consume()</h3>
+      <Rule40Publisher />
+      {showConsumer && <Rule40Consumer />}
+      <button
+        data-testid="rule-40-mount-consumer"
+        onClick={() => setShowConsumer(true)}
+      >
+        Mount Consumer
+      </button>
+    </section>
+  );
+}
+
 export function BroadcastActionsFixture() {
   return (
     <div data-testid="broadcast-actions-fixture">
-      <h2>Rules 16-19: Broadcast Actions</h2>
+      <h2>Rules 16-19, 40: Broadcast Actions</h2>
       <Rule16And17Consume />
       <Rule18LateMounting />
       <Rule19ChanneledBroadcast />
+      <Rule40HandlerConsume />
     </div>
   );
 }

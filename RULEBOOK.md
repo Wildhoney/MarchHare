@@ -887,6 +887,39 @@ context.actions.dispatch(Actions.PriceUpdate({ Symbol: price.symbol }), price);
 
 Late-mounting components receive the last cached value during `Phase.Mounting`.
 
+### Rule 40: Use `context.actions.consume` to read broadcast values in handlers
+
+When an action handler needs the latest broadcast or multicast value imperatively, use `context.actions.consume` instead of subscribing with `useAction` and storing it in the local model.
+
+```ts
+actions.useAction(Actions.FetchPosts, async (context) => {
+  const user = await context.actions.consume(Actions.Broadcast.User);
+  if (!user) return;
+  const posts = await fetchPosts(user.id, {
+    signal: context.task.controller.signal,
+  });
+  context.actions.produce(({ model }) => {
+    model.posts = posts;
+  });
+});
+```
+
+Key details:
+
+- Returns `T | null` — the raw value, not a `Box<T>`
+- Returns `null` when no value has been dispatched
+- Awaits `settled()` if the value has pending annotations
+- Respects the task's abort signal
+- Requires a JSX-side `consume()` or `<Partition>` to have populated the store
+- Supports multicast with `{ scope: "name" }` option
+
+```ts
+// Multicast consume in handler
+const score = await context.actions.consume(Actions.Multicast.Score, {
+  scope: "game",
+});
+```
+
 ---
 
 ## Anti-Patterns

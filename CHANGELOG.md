@@ -4,10 +4,9 @@ All notable changes to this project will be documented in this file. See [commit
 
 ## [0.2.56](https://github.com/Wildhoney/Chizu/compare/v0.2.55...v0.2.56) (2026-02-11)
 
-
 ### Features
 
-* added withScope HOC for multicast actions ([2da9708](https://github.com/Wildhoney/Chizu/commit/2da9708e2371089a21f2018ee72dab6496a96208))
+- added withScope HOC for multicast actions ([2da9708](https://github.com/Wildhoney/Chizu/commit/2da9708e2371089a21f2018ee72dab6496a96208))
 
 ## [0.2.55](https://github.com/Wildhoney/Chizu/compare/v0.2.54...v0.2.55) (2026-02-11)
 

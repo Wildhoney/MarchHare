@@ -178,6 +178,10 @@ actions.useAction(Actions.Fetch, async (context, payload) => {
   context.actions.dispatch(action, payload, options?);
 
   context.actions.annotate(Op.Update, value); // Mark async state
+
+  // Read latest broadcast/multicast value imperatively
+  const user = await context.actions.consume(Actions.Broadcast.User);
+  // Returns T | null — awaits settled(), respects abort signal
 });
 ```
 
