@@ -30,18 +30,6 @@ function Example({ children }) {
 
 This is useful for libraries that need action control without affecting the host application's actions. An `abort.all()` inside the provider won't abort actions outside it.
 
-## `Consumer`
+## `Consumer` (Internal)
 
-Creates an isolated consumer context for storing broadcast action values. The Consumer stores the latest payload for each broadcast action, enabling the `consume()` method to display the most recent value even when components mount after the action was dispatched:
-
-```tsx
-import { Consumer } from "chizu";
-
-function MyLibraryRoot({ children }) {
-  return <Consumer>{children}</Consumer>;
-}
-```
-
-Components inside `<Consumer>` have their own isolated value store. Actions consumed inside won't see values dispatched outside, and vice versa. This is useful for libraries that want to use `consume()` without interfering with the host application's consumed values.
-
-**Note:** In most applications, you don't need to provide a `Consumer` &ndash; one is created automatically at the default context level. Only use `<Consumer>` when you need isolation for library boundaries or testing.
+The Consumer context is an internal mechanism and does not need to be used directly. Broadcast values are cached automatically by the `BroadcastEmitter`.

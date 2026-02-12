@@ -180,8 +180,8 @@ actions.useAction(Actions.Fetch, async (context, payload) => {
   context.actions.annotate(Op.Update, value); // Mark async state
 
   // Read latest broadcast/multicast value imperatively
-  const user = await context.actions.consume(Actions.Broadcast.User);
-  // Returns T | null — awaits settled(), respects abort signal
+  const user = context.actions.read(Actions.Broadcast.User);
+  // Returns T | null synchronously
 });
 ```
 
@@ -215,30 +215,26 @@ actions.inspect.user.draft(); // draft value (latest annotation or model)
 actions.inspect.user.is(Op.Update); // check specific operation
 ```
 
-## Consuming Broadcast Actions
+## Action-Driven Derived Values
 
-Subscribe to broadcast values declaratively in JSX:
+Use `useDerived` to subscribe to actions and map their payloads onto the model. The callback parameter is auto-typed from the action's payload, and derived values start as `null`.
 
-```tsx
-// Only works with Distribution.Broadcast or Distribution.Multicast actions
-{
-  actions.consume(Actions.Broadcast.User, (box) =>
-    box.inspect.pending() ? "Loading..." : box.value.name,
-  );
-}
-
-// With multicast (requires scope)
-{
-  actions.consume(Actions.Multicast.Score, (box) => box.value, {
-    scope: "TeamA",
-  });
-}
+```ts
+return actions.useDerived({
+  doubled: [Actions.Broadcast.Counter, (counter) => counter * 2],
+  label: [Actions.Decrement, () => "decremented"],
+});
 ```
 
-The `box` is a `Box<T>` from Immertation with:
+In the component, derived values appear on the model without additional typing:
 
-- `box.value` - The payload
-- `box.inspect` - Annotation state proxy
+```tsx
+const [model] = useCounterActions();
+model.doubled; // number | null
+model.label; // string | null
+```
+
+Works with unicast, broadcast, multicast, and channeled actions. When a normal `useAction` handler and a `useDerived` entry fire for the same action, the component renders once.
 
 ## Multicast Pattern
 
@@ -387,7 +383,7 @@ actions.useAction(Actions.Search, async (context, query) => {
 ```tsx
 import { Boundary } from "chizu";
 
-// Wraps app with Broadcaster, Consumer, and Tasks providers
+// Wraps app with Broadcaster and Tasks providers
 <Boundary>
   <App />
 </Boundary>;
@@ -396,12 +392,10 @@ import { Boundary } from "chizu";
 ### Individual Providers (for isolation)
 
 ```tsx
-import { Broadcaster, Consumer, Regulators, Scope } from "chizu";
+import { Broadcaster, Regulators, Scope } from "chizu";
 
 // Isolated broadcast context (for libraries)
 <Broadcaster>{children}</Broadcaster>
-
-<Consumer>{children}</Consumer>
 
 // Isolated regulator context
 <Regulators>{children}</Regulators>
@@ -448,7 +442,7 @@ const handleSetName: Handler<Model, typeof Actions, "SetName"> = (
 };
 ```
 
-### `Handlers<M, AC, D>` - HKT for All Handlers
+### `Handlers<M, A, D>` - HKT for All Handlers
 
 ```ts
 import { Handlers } from "chizu";
@@ -543,7 +537,7 @@ docs: update the README file
 - `src/library/boundary/index.tsx` - Boundary all-in-one provider
 - `src/library/boundary/components/scope/` - Multicast scope implementation
 - `src/library/boundary/components/broadcast/` - Broadcast system
-- `src/library/boundary/components/consumer/` - Consumer/Partition for consume()
+- `src/library/boundary/components/consumer/` - Consumer store (internal)
 - `src/library/boundary/components/tasks/` - Task tracking context
 - `src/library/boundary/components/cache/` - Cache store context
 - `src/library/cache/index.ts` - Entry factory and cache utilities
@@ -556,8 +550,9 @@ docs: update the README file
   - `broadcast-actions.md` - Cross-component communication
   - `caching.md` - TTL-based caching with cacheable/invalidate
   - `channeled-actions.md` - Targeted event delivery
-  - `consuming-actions.md` - consume() method details
+  - `consuming-actions.md` - Reading broadcast values in handlers
   - `context-providers.md` - Boundary, Broadcaster, Consumer, Regulators
+  - `derived-values.md` - Computed/derived model values via derive() and useDerived()
   - `error-handling.md` - Error component and fault handling
   - `ky-http-client.md` - Integration with ky HTTP client
   - `lifecycle-actions.md` - Mount, Unmount, Error, Update, Node

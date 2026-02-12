@@ -35,9 +35,8 @@ flowchart TB
         BroadcastCounter["Actions.Broadcast.Counter"]
     end
 
-    subgraph Consumption["🎯 Consumers"]
-        VisitorConsume["actions.consume()"]
-        PartitionRender["Partition Component"]
+    subgraph Subscription["🎯 Subscribers"]
+        VisitorSubscribe["useAction / useDerived"]
     end
 
     %% User interactions
@@ -57,9 +56,8 @@ flowchart TB
     EventSource -->|"dispatch()"| Visitor
     Visitor -->|"Bound('visitor')"| VisitorModel
 
-    %% Broadcast consumption
-    BroadcastCounter -->|"subscribe"| VisitorConsume
-    VisitorConsume --> PartitionRender
+    %% Broadcast subscription
+    BroadcastCounter -->|"subscribe"| VisitorSubscribe
 
     %% Lifecycle connections
     Mount -.->|"component mounts"| CounterComponent
@@ -77,14 +75,14 @@ flowchart TB
     classDef lifecycle fill:#f3e5f5,stroke:#7b1fa2,color:#7b1fa2
     classDef interaction fill:#e8f5e9,stroke:#2e7d32,color:#2e7d32
     classDef model fill:#fce4ec,stroke:#c2185b,color:#c2185b
-    classDef consumer fill:#fff8e1,stroke:#ff8f00,color:#ff8f00
+    classDef subscriber fill:#fff8e1,stroke:#ff8f00,color:#ff8f00
 
     class Increment,Decrement,Visitor unicast
     class BroadcastCounter broadcast
     class Mount,Unmount,Error,Node lifecycle
     class IncrementBtn,DecrementBtn,EventSource interaction
     class CounterModel,VisitorModel model
-    class VisitorConsume,PartitionRender consumer
+    class VisitorSubscribe subscriber
 ```
 
 ## Dispatch Types
@@ -99,8 +97,8 @@ flowchart TB
 1. **User Interaction** → Button clicks dispatch unicast actions
 2. **Action Handlers** → Update local model state via `produce()`
 3. **Broadcast Dispatch** → Handlers emit `Actions.Broadcast.Counter` to broadcast channel
-4. **Cross-Component Consumption** → Visitor component subscribes via `actions.consume()`
-5. **Reactive Rendering** → `Partition` component re-renders with new counter value
+4. **Cross-Component Subscription** → Visitor component subscribes via `useAction` or `useDerived`
+5. **Reactive Rendering** → Component re-renders when model updates
 
 ## Action Registry
 

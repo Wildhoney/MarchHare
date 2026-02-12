@@ -176,20 +176,17 @@ actions.useAction(Actions.Profile, async (context) => {
 });
 ```
 
-Once we have the broadcast action if we simply want to read the `name` when it's updated we can use consume:
+Once we have the broadcast action, if we want to derive a value from the broadcast payload onto the model, use `useDerived`:
 
 ```tsx
-export default function Subscriptions(): React.ReactElement {
-  return (
-    <>
-      Manage your subscriptions for your{" "}
-      {actions.consume(Actions.Broadcast.Name, (name) => name.value)} account.
-    </>
-  );
-}
+const [model] = actions.useDerived({
+  name: [Actions.Broadcast.Name, (name) => name],
+});
+
+// model.name is null until the first dispatch, then stays in sync
 ```
 
-However if we want to listen for it and perform another operation in our local component we can do that via `useAction`:
+If we want to listen for it and perform another operation in our local component we can do that via `useAction`:
 
 ```tsx
 actions.useAction(Actions.Broadcast.Name, async (context, name) => {
@@ -201,11 +198,11 @@ actions.useAction(Actions.Broadcast.Name, async (context, name) => {
 });
 ```
 
-Or read the latest broadcast value directly in a handler with `context.actions.consume`:
+Or read the latest broadcast value directly in a handler with `context.actions.read`:
 
 ```tsx
 actions.useAction(Actions.FetchFriends, async (context) => {
-  const name = await context.actions.consume(Actions.Broadcast.Name);
+  const name = context.actions.read(Actions.Broadcast.Name);
   if (!name) return;
   const friends = await fetch(api.friends(name));
   context.actions.produce(({ model }) => {
@@ -285,12 +282,10 @@ function App() {
 // Dispatch to all components within "TeamA" scope
 actions.dispatch(Actions.Multicast.Update, 42, { scope: "TeamA" });
 
-// Consume with scope
-{
-  actions.consume(Actions.Multicast.Update, (box) => box.value, {
-    scope: "TeamA",
-  });
-}
+// Subscribe to multicast values with useDerived
+const [model] = actions.useDerived({
+  score: [Actions.Multicast.Update, (v) => v],
+});
 ```
 
 Unlike broadcast which reaches all components, multicast is scoped to the named boundary &ndash; perfect for isolated widget groups, form sections, or distinct UI regions.
@@ -368,3 +363,44 @@ context.actions.invalidate(CacheStore.User({ UserId: 5 }));
 ```
 
 The cache is scoped to the nearest `<Boundary>`. See the [caching recipe](./recipes/caching.md) for more details.
+
+When you want to expose a derived value alongside your model without storing it separately, use `derive` to overlay computed properties on top of the model:
+
+```tsx
+type Model = {
+  paymentLink: PaymentLink | null;
+  partialCrypto: boolean;
+};
+
+export function usePaymentActions() {
+  const actions = useActions<Model, typeof Actions>(model);
+
+  actions.useAction(Actions.Broadcast.PaymentLink, (context, paymentLink) => {
+    context.actions.produce(({ model }) => {
+      model.paymentLink = paymentLink;
+    });
+  });
+
+  const [model] = actions;
+
+  return actions.derive({
+    partialCrypto:
+      model.paymentLink?.receivable?.partialCryptoPaymentDetected === true,
+  });
+}
+```
+
+The keys passed to `derive` must be existing model properties and the values must match their types. Consumers see the derived values when destructuring the model &ndash; no manual `produce` required. Calls can be chained: `actions.derive({ a: 1 }).derive({ b: 2 })`.
+
+For action-driven derived values, use `useDerived` to subscribe to actions and map their payloads onto the model:
+
+```tsx
+return actions.useDerived({
+  doubled: [Actions.Broadcast.Counter, (counter) => counter * 2],
+  label: [Actions.Decrement, () => "decremented"],
+});
+```
+
+Derived values are `null` before the action fires. Callback parameters are auto-typed from the action's payload, and the component renders once even when a normal handler and a derived entry fire together.
+
+See the [derived values recipe](./recipes/derived-values.md) for more details.

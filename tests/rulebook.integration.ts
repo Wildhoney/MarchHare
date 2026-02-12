@@ -412,7 +412,7 @@ test.describe("Chizu Rulebook", () => {
       await expect(page.getByTestId("broadcast-actions-fixture")).toBeVisible();
     });
 
-    it("Rule 16: Only broadcast actions can be consumed - should update traditional handler on broadcast", async ({
+    it("Rule 16: Only broadcast actions support reactive subscription - should update traditional handler on broadcast", async ({
       page,
     }) => {
       const traditional = page.getByTestId("rule-16-17-traditional");
@@ -426,7 +426,7 @@ test.describe("Chizu Rulebook", () => {
       await expect(traditional).toHaveText("Bob");
     });
 
-    it("Rule 17: Use consume() for reactive UI from broadcast actions - should reactively render with consume()", async ({
+    it("Rule 17: Use useDerived() for reactive model values from broadcast actions - should reactively render with useDerived()", async ({
       page,
     }) => {
       const consumedUser = page.getByTestId("rule-16-17-consumed-user");
@@ -513,7 +513,7 @@ test.describe("Chizu Rulebook", () => {
       await expect(user2).toHaveText("Broadcast to All <all@example.com>");
     });
 
-    it("Rule 40: Use context.actions.consume to read broadcast values in handlers - should read broadcast value imperatively", async ({
+    it("Rule 40: Use context.actions.read to read broadcast values in handlers - should read broadcast value imperatively", async ({
       page,
     }) => {
       const consumed = page.getByTestId("rule-40-consumed");
@@ -521,14 +521,14 @@ test.describe("Chizu Rulebook", () => {
       // Publish a broadcast value first
       await page.getByTestId("rule-40-publish").click();
 
-      // Mount the consumer — its Lifecycle.Mount handler calls context.actions.consume
+      // Mount the consumer — its Lifecycle.Mount handler calls context.actions.read
       await page.getByTestId("rule-40-mount-consumer").click();
 
       // The consumed value should appear after the handler reads it
       await expect(consumed).toHaveText("Charlie", { timeout: 2000 });
     });
 
-    it("Rule 40: Use context.actions.consume to read broadcast values in handlers - should return null when no value dispatched", async ({
+    it("Rule 40: Use context.actions.read to read broadcast values in handlers - should return null when no value dispatched", async ({
       page,
     }) => {
       // Mount the consumer WITHOUT publishing first

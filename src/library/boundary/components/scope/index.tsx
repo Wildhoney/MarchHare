@@ -1,12 +1,11 @@
 import type { Props, ScopeContext, ScopeEntry } from "./types.ts";
 import { Context, useScope } from "./utils.ts";
 import type { ComponentType, ReactNode } from "react";
-import EventEmitter from "eventemitter3";
+import { BroadcastEmitter } from "../broadcast/utils.ts";
 import * as React from "react";
 
 export { useScope, getScope } from "./utils.ts";
 export type { ScopeEntry, ScopeContext } from "./types.ts";
-export { MulticastPartition } from "./partition.tsx";
 
 /**
  * Creates a named scope boundary for multicast actions.
@@ -20,8 +19,8 @@ export { MulticastPartition } from "./partition.tsx";
  * communication channel. When dispatching, the nearest ancestor scope
  * with the matching name receives the event.
  *
- * Like Broadcast, multicast supports `consume()` for declarative rendering
- * and provides late-mounted components with the most recent dispatched value.
+ * Like Broadcast, multicast caches the most recent dispatched value so that
+ * late-mounted components can read it via `context.actions.read()`.
  *
  * @param props.name - The unique name for this scope
  * @param props.children - Components within the scope boundary
@@ -63,9 +62,7 @@ export function Scope({ name, children }: Props): React.ReactNode {
   const scopeEntry = React.useMemo<ScopeEntry>(
     () => ({
       name,
-      emitter: new EventEmitter(),
-      store: new Map(),
-      listeners: new Map(),
+      emitter: new BroadcastEmitter(),
     }),
     [],
   );

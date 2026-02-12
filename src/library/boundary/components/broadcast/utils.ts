@@ -4,10 +4,10 @@ import * as React from "react";
 /**
  * EventEmitter subclass that caches the latest payload per event.
  *
- * When a broadcast action is dispatched, the payload is stored so that
- * late-mounting components can replay it via {@link useLifecycles} —
- * even when no `consume()` call created a Partition to cache the value
- * in the consumer Map.
+ * When a broadcast or multicast action is dispatched, the payload is
+ * stored so that late-mounting components can replay it via
+ * {@link useLifecycles} and handlers can read it via
+ * `context.actions.read()`.
  */
 export class BroadcastEmitter extends EventEmitter {
   private cache = new Map<string | symbol, unknown>();

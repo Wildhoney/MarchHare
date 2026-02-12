@@ -33,15 +33,15 @@ export type References<M extends Model | void> = {
  * Receives the reactive context and payload, returning void or a promise/generator.
  *
  * @template M - The model type
- * @template AC - The actions class type
+ * @template A - The actions class type
  * @template D - The data props type
  */
 export type Handler<
   M extends Model | void = Model,
-  AC extends Actions | void = Actions,
+  A extends Actions | void = Actions,
   D extends Props = Props,
 > = (
-  context: HandlerContext<M, AC, D>,
+  context: HandlerContext<M, A, D>,
   payload: unknown,
 ) => void | Promise<void> | AsyncGenerator | Generator;
 
@@ -52,10 +52,10 @@ export type Handler<
  */
 export type HandlerEntry<
   M extends Model | void = Model,
-  AC extends Actions | void = Actions,
+  A extends Actions | void = Actions,
   D extends Props = Props,
 > = {
-  handler: Handler<M, AC, D>;
+  handler: Handler<M, A, D>;
   getChannel: () => Filter | undefined;
 };
 
@@ -64,16 +64,16 @@ export type HandlerEntry<
  * Maps action IDs to sets of handler entries (with optional channels).
  *
  * @template M - The model type
- * @template AC - The actions class type
+ * @template A - The actions class type
  * @template D - The data props type
  */
 export type Scope<
   M extends Model | void = Model,
-  AC extends Actions | void = Actions,
+  A extends Actions | void = Actions,
   D extends Props = Props,
 > = {
   /** All handlers for each action, with optional channels */
-  handlers: Map<ActionId, Set<HandlerEntry<M, AC, D>>>;
+  handlers: Map<ActionId, Set<HandlerEntry<M, A, D>>>;
 };
 
 /**

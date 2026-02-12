@@ -114,22 +114,19 @@ function ScoreBoard() {
 }
 ```
 
-## Consuming multicast actions
+## Deriving multicast values
 
-Multicast supports `consume()` just like broadcast, but requires the scope name:
+Use `useDerived` to subscribe to multicast actions and map their payloads onto the model:
 
 ```tsx
 function ScoreDisplay() {
-  const [model, actions] = useScoreActions();
+  const result = useScoreActions();
 
-  return (
-    <div>
-      Current score:{" "}
-      {actions.consume(Actions.Multicast.Update, (box) => box.value, {
-        scope: "TeamA",
-      })}
-    </div>
-  );
+  const [model] = result.useDerived({
+    latestScore: [Actions.Multicast.Update, (score) => score],
+  });
+
+  return <div>Current score: {model.latestScore ?? "—"}</div>;
 }
 ```
 
@@ -187,10 +184,10 @@ Multicast is ideal for:
 
 ## Comparison with broadcast
 
-| Feature           | Broadcast                   | Multicast                              |
-| ----------------- | --------------------------- | -------------------------------------- |
-| Reach             | All mounted components      | Components within named scope          |
-| Dispatch          | `dispatch(action, payload)` | `dispatch(action, payload, { scope })` |
-| Consume           | `consume(action, renderer)` | `consume(action, renderer, { scope })` |
-| Late mount values | ✓                           | ✓                                      |
-| Isolation         | Global                      | Scoped                                 |
+| Feature           | Broadcast                           | Multicast                              |
+| ----------------- | ----------------------------------- | -------------------------------------- |
+| Reach             | All mounted components              | Components within named scope          |
+| Dispatch          | `dispatch(action, payload)`         | `dispatch(action, payload, { scope })` |
+| useDerived        | `useDerived({ key: [action, cb] })` | Same, values scoped automatically      |
+| Late mount values | ✓                                   | ✓                                      |
+| Isolation         | Global                              | Scoped                                 |

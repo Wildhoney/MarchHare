@@ -1,6 +1,4 @@
-import type EventEmitter from "eventemitter3";
-import type { Entry } from "../consumer/types.ts";
-import type { ActionId } from "../tasks/types.ts";
+import type { BroadcastEmitter } from "../broadcast/utils.ts";
 import type * as React from "react";
 
 /**
@@ -15,17 +13,13 @@ export type Props = {
 
 /**
  * Represents a single scope in the ancestor chain.
- * Each scope has its own EventEmitter and consumer store.
+ * Each scope has its own BroadcastEmitter for multicast events and caching.
  */
 export type ScopeEntry = {
   /** The name of this scope */
   name: string;
-  /** EventEmitter for multicast events within this scope */
-  emitter: EventEmitter;
-  /** Consumer store for late-mounting components (like Broadcast) */
-  store: Map<ActionId, Entry>;
-  /** Listeners for store changes (for consume() re-renders) */
-  listeners: Map<ActionId, Set<() => void>>;
+  /** BroadcastEmitter for multicast events within this scope (caches last payload per event) */
+  emitter: BroadcastEmitter;
 };
 
 /**

@@ -5,14 +5,10 @@ import type {
   Task,
   Tasks,
 } from "../boundary/components/tasks/types.ts";
-import type { ConsumerRenderer } from "../boundary/components/consumer/index.tsx";
-import type * as React from "react";
 import type { Option } from "@mobily/ts-belt/Option";
 import type { Result as TsBeltResult } from "@mobily/ts-belt/Result";
 
 export type { ActionId, Box, Task, Tasks };
-export type { ConsumerRenderer };
-
 /**
  * Type for objects with a Brand.Action symbol property.
  * Used for type-safe access to the action symbol.
@@ -185,7 +181,7 @@ export class Lifecycle {
  * - **Unicast** &ndash; Action is scoped to the component that defines it and cannot be
  *   consumed by other components. This is the default behaviour.
  * - **Broadcast** &ndash; Action is distributed to all mounted components that have defined
- *   a handler for it. Can be consumed with `actions.consume()`.
+ *   a handler for it. Values are cached for late-mounting components.
  *
  * @example
  * ```ts
@@ -306,24 +302,21 @@ export type ChanneledAction<P = unknown, C = unknown> = {
 
 /**
  * Branded type for broadcast action objects created with `Action()` and `Distribution.Broadcast`.
- * Broadcast actions are sent to all mounted components and can be consumed with `actions.consume()`.
+ * Broadcast actions are sent to all mounted components. Values are cached so that
+ * late-mounting components receive the most recent payload.
  *
  * This type extends `HandlerPayload<P, C>` with an additional brand to enforce at compile-time
- * that only broadcast actions can be passed to `consume()`. Attempting to consume
- * a local action will result in a TypeScript error.
+ * that only broadcast actions can be passed to `context.actions.read()`.
  *
  * @template P - The payload type for the action
  * @template C - The channel type for channeled dispatches (defaults to never)
  *
  * @example
  * ```ts
- * // This compiles - SignedOut is a broadcast action
  * const SignedOut = Action<User>("SignedOut", Distribution.Broadcast);
- * actions.consume(SignedOut, (box) => <div>{box.value.name}</div>);
  *
- * // This fails to compile - Increment is a local action
- * const Increment = Action<number>("Increment");
- * actions.consume(Increment, ...); // Type error!
+ * // Read the latest value inside a handler
+ * const user = await context.actions.read(SignedOut);
  * ```
  */
 export type BroadcastPayload<
@@ -397,14 +390,9 @@ export type MulticastOptions = {
  * @template A - The action type (HandlerPayload or ChanneledAction)
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-export type Payload<A> =
-  A extends ChanneledAction<infer P, any>
-    ? P
-    : A extends HandlerPayload<infer P, any>
-      ? P
-      : never;
-/* eslint-enable @typescript-eslint/no-explicit-any */
+export type Payload<A> = A extends { readonly [Brand.Payload]: infer P }
+  ? P
+  : never;
 
 /**
  * Filter object for channeled actions.
@@ -689,15 +677,10 @@ export type HandlerContext<
      */
     invalidate(entry: CacheId<unknown> | ChanneledCacheId<unknown>): void;
     /**
-     * Reads the latest broadcast or multicast value from the consumer store.
+     * Reads the latest broadcast or multicast value from the cache.
      *
      * Returns the raw value `T` or `null` if no value has been dispatched.
-     * If the value has pending annotations, awaits `settled()` before returning.
-     * Respects the task's abort signal — returns `null` if the task is aborted
-     * while waiting.
-     *
-     * **Important:** A JSX-side `consume()` or `<Partition>` must have populated
-     * the store for this value to be available.
+     * Returns `null` if the task is aborted.
      *
      * @param action - The broadcast or multicast action to read.
      * @param options - For multicast actions, must include `{ scope: "ScopeName" }`.
@@ -706,7 +689,7 @@ export type HandlerContext<
      * @example
      * ```ts
      * actions.useAction(Actions.FetchPosts, async (context) => {
-     *   const user = await context.actions.consume(Actions.Broadcast.User);
+     *   const user = await context.actions.read(Actions.Broadcast.User);
      *   if (!user) return;
      *   const posts = await fetchPosts(user.id, {
      *     signal: context.task.controller.signal,
@@ -715,11 +698,8 @@ export type HandlerContext<
      * });
      * ```
      */
-    consume<T>(action: BroadcastPayload<T>): Promise<T | null>;
-    consume<T>(
-      action: MulticastPayload<T>,
-      options: MulticastOptions,
-    ): Promise<T | null>;
+    read<T>(action: BroadcastPayload<T>): T | null;
+    read<T>(action: MulticastPayload<T>, options: MulticastOptions): T | null;
   };
 };
 
@@ -728,7 +708,7 @@ export type HandlerContext<
  *
  * A tuple containing:
  * 1. The current model state of type M
- * 2. An actions object with dispatch, consume, and inspect capabilities
+ * 2. An actions object with dispatch and inspect capabilities
  *
  * @template M - The model type representing the component's state
  * @template AC - The actions class containing action definitions
@@ -742,9 +722,6 @@ export type HandlerContext<
  *
  * // Dispatch actions
  * actions.dispatch(Actions.Increment, 5);
- *
- * // Consume action values declaratively
- * {actions.consume(Actions.Data, (box) => box.value.name)}
  *
  * // Check pending state
  * actions.inspect.count.pending();
@@ -768,7 +745,9 @@ export type Handler<
   D extends Props = Props,
 > = (
   context: HandlerContext<M, AC, D>,
-  payload: Payload<AC[K] & HandlerPayload<unknown>>,
+  ...args: [Payload<AC[K] & HandlerPayload<unknown>>] extends [never]
+    ? []
+    : [payload: Payload<AC[K] & HandlerPayload<unknown>>]
 ) => void | Promise<void> | AsyncGenerator | Generator;
 
 /**
@@ -850,9 +829,37 @@ export type Handlers<
 > = {
   [K in FlattenKeys<AC>]: (
     context: HandlerContext<M, AC, D>,
-    payload: Payload<DeepAction<AC, K> & HandlerPayload<unknown>>,
+    ...args: [Payload<DeepAction<AC, K> & HandlerPayload<unknown>>] extends [
+      never,
+    ]
+      ? []
+      : [payload: Payload<DeepAction<AC, K> & HandlerPayload<unknown>>]
   ) => void | Promise<void> | AsyncGenerator | Generator;
 };
+
+/**
+ * Union of action types accepted by `useDerived` configuration entries.
+ * @internal
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type DerivedAction = HandlerPayload<any> | ChanneledAction<any, any>;
+
+/**
+ * Extracts the callback return type from a derived entry tuple.
+ * @internal
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type DerivedReturn<E> = E extends readonly [any, (...args: any[]) => infer R]
+  ? R
+  : never;
+
+/**
+ * Computes an object type from a derived config where each key maps to
+ * the callback's return type unioned with `null` (the initial value before
+ * the action has fired).
+ * @internal
+ */
+type DerivedModel<C> = { [K in keyof C]: DerivedReturn<C[K]> | null };
 
 export type UseActions<
   M extends Model | void,
@@ -893,53 +900,6 @@ export type UseActions<
       payload?: P,
       options?: MulticastOptions,
     ): void;
-    /**
-     * Subscribes to a distributed or multicast action's values and renders based on the callback.
-     * The callback receives a Box with `value` (the payload) and `inspect` (for annotation status).
-     * On mount, displays the most recent value from the Consumer/Scope store if available.
-     *
-     * Supports three usage patterns:
-     * 1. Consuming broadcast actions from the local actions class (with autocomplete)
-     * 2. Consuming any broadcast action from external modules
-     * 3. Consuming multicast actions with a scope name
-     *
-     * @param action - The distributed or multicast action to consume
-     * @param renderer - Render function receiving the Box
-     * @param options - For multicast actions, must include `{ scope: "ScopeName" }`
-     * @returns React element rendered by the callback
-     *
-     * @example
-     * ```tsx
-     * // Local broadcast action (from same actions class)
-     * {actions.consume(Actions.Visitor, (visitor) =>
-     *   visitor.inspect.pending() ? "Loading..." : visitor.value.name
-     * )}
-     *
-     * // External broadcast action
-     * {actions.consume(SharedActions.Counter, (counter) => counter.value)}
-     *
-     * // Multicast action with scope
-     * {actions.consume(Actions.Multicast.Update, (update) => update.value, { scope: "MyScope" })}
-     * ```
-     */
-    consume<T>(
-      action: BroadcastPayload<T>,
-      renderer: ConsumerRenderer<T>,
-    ): React.ReactNode;
-    consume<T>(
-      action: MulticastPayload<T>,
-      renderer: ConsumerRenderer<T>,
-      options: MulticastOptions,
-    ): React.ReactNode;
-    consume<K extends keyof AC>(
-      action: AC[K] & BroadcastPayload<unknown>,
-      renderer: ConsumerRenderer<Payload<AC[K]>>,
-    ): React.ReactNode;
-    consume<K extends keyof AC>(
-      action: AC[K] & MulticastPayload<unknown>,
-      renderer: ConsumerRenderer<Payload<AC[K]>>,
-      options: MulticastOptions,
-    ): React.ReactNode;
     inspect: Inspect<M>;
     /**
      * Captured DOM nodes registered via `node()`.
@@ -1017,7 +977,73 @@ export type UseActions<
     action: A,
     handler: (
       context: HandlerContext<M, AC, D>,
-      payload: Payload<A>,
+      ...args: [Payload<A>] extends [never] ? [] : [payload: Payload<A>]
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void;
+  /**
+   * Overlays computed/derived values onto the model without storing them in state.
+   * Keys must be existing model properties and values must match the property types.
+   *
+   * Useful for values that can be derived from other model fields at render time,
+   * avoiding the need to manually update them via `produce`.
+   *
+   * @param computed - An object with model keys mapped to their derived values
+   * @returns A new UseActions tuple with the model values overridden
+   *
+   * @example
+   * ```ts
+   * return actions.derive({
+   *   partialCrypto: model.paymentLink?.receivable?.partialCryptoPaymentDetected === true,
+   * });
+   * ```
+   */
+  derive(
+    computed: M extends void ? never : Partial<M & object>,
+  ): UseActions<M, AC, D>;
+  /**
+   * Subscribes to actions and derives model properties from their payloads.
+   *
+   * Each config entry maps a new model key to an `[action, callback]` tuple.
+   * When the action fires, the callback runs with the payload and the return
+   * value is applied to the model under that key. The component re-renders
+   * once, even when a normal `useAction` handler for the same action also
+   * calls `produce`.
+   *
+   * Before an action fires, derived values are `null`.
+   *
+   * Works with unicast, broadcast, multicast, and channeled actions.
+   * For broadcast actions, cached values are replayed on mount.
+   *
+   * @param config - Object mapping derived key names to `[action, callback]` tuples
+   * @returns A new UseActions tuple with the model extended by derived properties
+   *
+   * @example
+   * ```ts
+   * return actions.useDerived({
+   *   doubled: [Actions.Broadcast.Counter, (counter) => counter * 2],
+   *   label: [Actions.SetName, (name) => `Hello, ${name}`],
+   * });
+   * ```
+   */
+  useDerived<
+    C extends Record<
+      string,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      readonly [DerivedAction, (...args: any[]) => any]
+    >,
+  >(
+    config: M extends void
+      ? never
+      : {
+          [K in keyof C]: C[K] extends readonly [
+            infer A,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (...args: any[]) => infer R,
+          ]
+            ? A extends { readonly [Brand.Payload]: infer P }
+              ? readonly [A, (payload: P) => R]
+              : readonly [A, () => R]
+            : C[K];
+        },
+  ): UseActions<M & DerivedModel<C>, AC, D>;
 };

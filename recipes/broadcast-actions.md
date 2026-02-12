@@ -17,7 +17,7 @@ export class Actions {
 }
 ```
 
-Broadcast actions return a `BroadcastPayload<T>` type, which is distinct from the `Payload<T>` returned by unicast actions. This enables compile-time enforcement &ndash; only broadcast actions can be passed to `actions.consume()`.
+Broadcast actions return a `BroadcastPayload<T>` type, which is distinct from the `Payload<T>` returned by unicast actions. This enables compile-time enforcement &ndash; only broadcast actions support reactive subscription via `useAction` and `useDerived`.
 
 Any component that defines a handler for `Actions.Broadcast.SignedOut` will receive the action when it's dispatched from any other component.
 
@@ -46,19 +46,12 @@ The predicate receives the context and the fully-typed payload. When it returns 
 
 ## Cached values on mount
 
-When a component mounts with a `useAction()` handler for a broadcast action, the handler is automatically invoked with the most recent cached value (if one exists). This mirrors the behaviour of `consume()` and enables late-mounting components to receive historical state.
+When a component mounts with a `useAction()` handler for a broadcast action, the handler is automatically invoked with the most recent cached value (if one exists). The broadcast emitter caches values automatically when they are dispatched, enabling late-mounting components to receive historical state.
 
 ```tsx
-// Component A uses consume() which stores values in the cache
+// Component A dispatches the action
 function ComponentA() {
-  const [model, actions] = useActions<Model, typeof Actions>(model);
-
-  return <div>{actions.consume(Actions.Counter, (box) => box.value)}</div>;
-}
-
-// Component B dispatches the action
-function ComponentB() {
-  const [model, actions] = useActions<Model, typeof Actions>(model);
+  const [, actions] = useActions<Model, typeof Actions>(model);
 
   return (
     <button onClick={() => actions.dispatch(Actions.Counter, 42)}>
@@ -67,12 +60,12 @@ function ComponentB() {
   );
 }
 
-// Component C mounts later and receives the cached value
-function ComponentC() {
+// Component B mounts later and receives the cached value
+function ComponentB() {
   const actions = useActions<Model, typeof Actions>(model);
 
   // This handler is invoked with 42 when the component mounts
-  // (assuming ComponentB dispatched before ComponentC mounted)
+  // (assuming ComponentA dispatched before ComponentB mounted)
   actions.useAction(Actions.Counter, (context, value) => {
     console.log("Received cached value:", value);
   });
@@ -81,7 +74,7 @@ function ComponentC() {
 }
 ```
 
-> **Note:** The cache is populated by `consume()` calls (which create internal `Partition` components). For cached values to be available, at least one component must use `consume()` for that action. If no component has ever consumed the action, late-mounting handlers won't receive a cached value.
+> **Note:** The broadcast cache stores the most recent payload for each action automatically. Late-mounting components receive this cached value during the mounting phase.
 
 ## Direct broadcast access
 

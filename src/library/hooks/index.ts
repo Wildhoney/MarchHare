@@ -9,8 +9,6 @@ import {
   useRegisterHandler,
   useActionSets,
 } from "./utils.ts";
-import { useConsumer } from "../boundary/components/consumer/utils.ts";
-
 export { With } from "./utils.ts";
 import { useRerender } from "../utils/utils.ts";
 import type { Data, Handler, Scope } from "./types.ts";
@@ -37,18 +35,10 @@ import {
   type CacheId,
 } from "../types/index.ts";
 
-import {
-  Partition,
-  ConsumerRenderer,
-} from "../boundary/components/consumer/index.tsx";
 import { getReason, getError } from "../error/utils.ts";
 import EventEmitter from "eventemitter3";
 import { useBroadcast } from "../boundary/components/broadcast/index.tsx";
-import {
-  useScope,
-  getScope,
-  MulticastPartition,
-} from "../boundary/components/scope/index.tsx";
+import { useScope, getScope } from "../boundary/components/scope/index.tsx";
 import {
   isBroadcastAction,
   isMulticastAction,
@@ -56,7 +46,6 @@ import {
 } from "../action/index.ts";
 import { useError } from "../error/index.tsx";
 import { State, Operation, Process, Inspect } from "immertation";
-import { AbortError } from "../error/types.ts";
 import { useTasks } from "../boundary/components/tasks/utils.ts";
 import { useCacheStore } from "../boundary/components/cache/index.tsx";
 import { getCacheKey, unwrap } from "../cache/index.ts";
@@ -71,7 +60,7 @@ import { G } from "@mobily/ts-belt";
  *
  * The hook returns a result containing:
  * 1. The current model state
- * 2. An actions object with `dispatch`, `consume`, `inspect`, and `useAction`
+ * 2. An actions object with `dispatch`, `inspect`, and `useAction`
  *
  * The `inspect` property provides access to Immertation's annotation system,
  * allowing you to check for pending operations on model properties.
@@ -112,7 +101,7 @@ export function useActions<
 >(initialModel: M, getData?: Data<D>): UseActions<M, A, D>;
 export function useActions<
   M extends Model | void,
-  AC extends Actions | void,
+  A extends Actions | void,
   D extends Props = Props,
 >(...args: unknown[]): unknown {
   const isVoidModel = G.isUndefined(args[0]) || G.isFunction(args[0]);
@@ -123,7 +112,6 @@ export function useActions<
 
   const broadcast = useBroadcast();
   const scope = useScope();
-  const consumer = useConsumer();
   const error = useError();
   const tasks = useTasks();
   const cache = useCacheStore();
@@ -141,7 +129,7 @@ export function useActions<
   );
   const data = useData(getData());
   const unicast = React.useMemo(() => new EventEmitter(), []);
-  const registry = React.useRef<Scope<M, AC, D>>({ handlers: new Map() });
+  const registry = React.useRef<Scope<M, A, D>>({ handlers: new Map() });
   registry.current.handlers = new Map();
   const actionSets = useActionSets();
   const phase = React.useRef<Phase>(Phase.Mounting);
@@ -164,7 +152,7 @@ export function useActions<
       tasks.add(task);
       localTasks.current.add(task);
 
-      return <HandlerContext<M, AC, D>>{
+      return <HandlerContext<M, A, D>>{
         model: state.current.model,
         get phase() {
           return phase.current;
@@ -234,44 +222,18 @@ export function useActions<
           invalidate(entry) {
             cache.delete(getCacheKey(<CacheId>(<unknown>entry)));
           },
-          async consume(action: AnyAction, options?: MulticastOptions) {
+          read(action: AnyAction, options?: MulticastOptions) {
             if (controller.signal.aborted) return null;
 
             const key = getActionSymbol(action);
-            let entry;
 
             if (isMulticastAction(action) && options?.scope) {
               const scoped = getScope(scope, options.scope);
               if (!scoped) return null;
-              entry = scoped.store.get(key);
-            } else {
-              entry = consumer.get(key);
+              return scoped.emitter.getCached(key) ?? null;
             }
 
-            if (!entry?.state.model?.value) return null;
-
-            const inspect = <{ value: Inspect<unknown> }>(
-              (<unknown>entry.state.inspect)
-            );
-
-            if (inspect.value.pending()) {
-              await new Promise<void>((resolve, reject) => {
-                if (controller.signal.aborted) {
-                  reject(new AbortError());
-                  return;
-                }
-                const onAbort = () => reject(new AbortError());
-                controller.signal.addEventListener("abort", onAbort, {
-                  once: true,
-                });
-                inspect.value.settled().then(() => {
-                  controller.signal.removeEventListener("abort", onAbort);
-                  resolve();
-                });
-              });
-            }
-
-            return entry.state.model.value;
+            return broadcast.getCached(key) ?? null;
           },
         },
       };
@@ -284,7 +246,7 @@ export function useActions<
 
     function createHandler(
       action: ActionId,
-      actionHandler: Handler<M, AC, D>,
+      actionHandler: Handler<M, A, D>,
       getChannel: () => Filter | undefined,
     ) {
       return async function handler(
@@ -410,7 +372,7 @@ export function useActions<
 
   const result = React.useMemo(
     () =>
-      <UseActions<M, AC, D>>[
+      <UseActions<M, A, D>>[
         model,
         {
           dispatch(
@@ -432,24 +394,6 @@ export function useActions<
             const emitter = isBroadcastAction(action) ? broadcast : unicast;
             emitter.emit(base, payload, channel);
           },
-          consume(
-            action: AnyAction,
-            renderer: ConsumerRenderer<unknown>,
-            options?: MulticastOptions,
-          ): React.ReactNode {
-            if (isMulticastAction(action) && options?.scope) {
-              return React.createElement(MulticastPartition, {
-                action: <symbol>getActionSymbol(action),
-                scopeName: options.scope,
-                renderer,
-              });
-            }
-
-            return React.createElement(Partition, {
-              action: <symbol>getActionSymbol(action),
-              renderer,
-            });
-          },
           get inspect() {
             return state.current.inspect;
           },
@@ -465,17 +409,75 @@ export function useActions<
     [model, unicast],
   );
 
-  (<UseActions<M, AC, D>>result).useAction = <
-    A extends ActionId | HandlerPayload | ChanneledAction,
+  (<UseActions<M, A, D>>result).useAction = <
+    Act extends ActionId | HandlerPayload | ChanneledAction,
   >(
-    action: A,
+    action: Act,
     handler: (
-      context: HandlerContext<M, AC, D>,
-      payload: Payload<A>,
+      context: HandlerContext<M, A, D>,
+      ...args: [Payload<Act>] extends [never] ? [] : [payload: Payload<Act>]
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void => {
-    useRegisterHandler<M, AC, D>(registry, action, <Handler<M, AC, D>>handler);
+    useRegisterHandler<M, A, D>(registry, action, <Handler<M, A, D>>handler);
   };
 
-  return <UseActions<M, AC, D>>result;
+  const typedResult = <UseActions<M, A, D>>result;
+
+  const attachDerive = (target: UseActions<M, A, D>): void => {
+    target.derive = (computed: Partial<M & object>): UseActions<M, A, D> => {
+      const derived = <UseActions<M, A, D>>[
+        { ...target[0], ...computed },
+        target[1],
+      ];
+      derived.useAction = typedResult.useAction;
+      attachDerive(derived);
+      return derived;
+    };
+  };
+
+  attachDerive(typedResult);
+
+  // The implementation is typed loosely since `C` (the derived config shape)
+  // is only available at each call site. Type safety is enforced by the
+  // `useDerived` signature on `UseActions`.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (<any>typedResult).useDerived = (
+    config: Record<
+      string,
+      readonly [ActionOrChanneled, (p: unknown) => unknown]
+    >,
+  ) => {
+    // Initialise every derived key as null so the model always has the keys
+    // present, even before any action has fired.
+    const derivedRef = React.useRef<Record<string, unknown>>(
+      Object.fromEntries(Object.keys(config).map((k) => [k, null])),
+    );
+
+    // Register a handler per entry. The handler stores the callback result
+    // and triggers a re-render via the existing rerender() mechanism. React
+    // 18+ batches this with any setModel call from a normal useAction
+    // handler for the same action, guaranteeing a single render.
+    for (const [key, entry] of Object.entries(config)) {
+      const [action, callback] = entry;
+      useRegisterHandler<M, A, D>(registry, action, <Handler<M, A, D>>((
+        _context: unknown,
+        payload: unknown,
+      ) => {
+        derivedRef.current[key] = callback(payload);
+        rerender();
+      }));
+    }
+
+    // Build a new tuple with derived values merged onto the model (same
+    // pattern as derive()).
+    const extended = <UseActions<M, A, D>>[
+      { ...typedResult[0], ...derivedRef.current },
+      typedResult[1],
+    ];
+    extended.useAction = typedResult.useAction;
+    attachDerive(extended);
+    return extended;
+  };
+
+  return typedResult;
 }

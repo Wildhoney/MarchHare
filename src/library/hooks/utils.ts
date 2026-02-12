@@ -16,7 +16,6 @@ import {
 
 import type { LifecycleConfig, References, Handler, Scope } from "./types.ts";
 import { A, G } from "@mobily/ts-belt";
-import { useConsumer } from "../boundary/components/consumer/utils.ts";
 import { changes } from "../utils.ts";
 import { isChanneledAction, getActionSymbol } from "../action/index.ts";
 
@@ -71,7 +70,6 @@ export function useLifecycles({
   phase,
   data,
 }: LifecycleConfig): void {
-  const consumer = useConsumer();
   const previous = React.useRef<Props | null>(null);
 
   React.useLayoutEffect(() => {
@@ -80,15 +78,6 @@ export function useLifecycles({
     unicast.emit(Lifecycle.Mount);
 
     broadcastActions.forEach((action) => {
-      // Try the consumer Map first (populated by Partition via consume())
-      const entry = consumer.get(action);
-      const broadcastPayload = entry?.state.model?.value;
-      if (!G.isNullable(broadcastPayload)) {
-        unicast.emit(action, broadcastPayload);
-        return;
-      }
-
-      // Fall back to the BroadcastEmitter's cache (populated on dispatch)
       const cached = broadcast.getCached(action);
       if (!G.isNullable(cached)) unicast.emit(action, cached);
     });
@@ -159,11 +148,11 @@ export function With<K extends string>(
   key: K,
 ): <
   M extends Model,
-  AC extends Actions | void,
+  A extends Actions | void,
   D extends Props,
   P extends K extends keyof M ? M[K] : never,
 >(
-  context: HandlerContext<M, AC, D>,
+  context: HandlerContext<M, A, D>,
   payload: P,
 ) => void {
   return (context, payload) => {
@@ -260,13 +249,13 @@ export function useActionSets(): ActionSets {
  */
 export function useRegisterHandler<
   M extends Model | void,
-  AC extends Actions | void,
+  A extends Actions | void,
   D extends Props,
 >(
-  scope: React.RefObject<Scope<M, AC, D>>,
+  scope: React.RefObject<Scope<M, A, D>>,
   action: ActionId | HandlerPayload | ChanneledAction,
   handler: (
-    context: HandlerContext<M, AC, D>,
+    context: HandlerContext<M, A, D>,
     payload: unknown,
   ) => void | Promise<void> | AsyncGenerator | Generator,
 ): void {
@@ -284,7 +273,7 @@ export function useRegisterHandler<
 
   // Stable handler wrapper that always calls the latest handler
   const stableHandler = React.useCallback(
-    async (context: HandlerContext<M, AC, D>, payload: unknown) => {
+    async (context: HandlerContext<M, A, D>, payload: unknown) => {
       const currentHandler = handlerRef.current;
       const isGeneratorFn =
         currentHandler.constructor.name === "GeneratorFunction" ||
@@ -314,7 +303,7 @@ export function useRegisterHandler<
   const base = getActionSymbol(action);
   const entries = scope.current.handlers.get(base) ?? new Set();
   if (entries.size === 0) scope.current.handlers.set(base, entries);
-  entries.add({ getChannel, handler: <Handler<M, AC, D>>stableHandler });
+  entries.add({ getChannel, handler: <Handler<M, A, D>>stableHandler });
 }
 
 /**

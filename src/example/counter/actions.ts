@@ -34,5 +34,18 @@ export function useCounterActions() {
     });
   });
 
-  return actions;
+  return actions.useDerived({
+    anExample: [
+      Actions.Decrement,
+      () => {
+        return "hey!";
+      },
+    ],
+    anotherExample: [
+      Actions.Broadcast.Counter,
+      (counter) => {
+        return counter * 2;
+      },
+    ],
+  });
 }

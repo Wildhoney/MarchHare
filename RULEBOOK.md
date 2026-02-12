@@ -373,40 +373,46 @@ This enables components to distinguish between hydration and live updates.
 
 ## Broadcast Actions
 
-### Rule 16: Only broadcast actions can be consumed
+### Rule 16: Only broadcast actions support reactive subscription
 
-```tsx
+Broadcast and multicast actions support reactive subscription via `useAction` and `useDerived`. Unicast actions are local to the dispatching component.
+
+```ts
 class Actions {
   static Broadcast = Action<Data>("Broadcast", Distribution.Broadcast);
   static Unicast = Action<Data>("Unicast");
 }
 
-actions.consume(Actions.Broadcast, (box) => <div>{box.value}</div>); // Valid
-actions.consume(Actions.Unicast, (box) => <div>{box.value}</div>); // Type error
+// Broadcast: all mounted handlers fire
+actions.useAction(Actions.Broadcast, (context, data) => {
+  context.actions.produce(({ model }) => {
+    model.data = data;
+  });
+});
+
+// useDerived: subscribe and map payload onto model
+const [model] = actions.useDerived({
+  data: [Actions.Broadcast, (d) => d],
+});
 ```
 
-### Rule 17: Use `consume()` for reactive UI from broadcast actions
+### Rule 17: Use `useDerived` for reactive model values from broadcast actions
+
+`useDerived` subscribes to actions and maps their payloads onto the model. Derived values start as `null` and update when the action fires.
 
 ```tsx
-actions.consume(Actions.UserLoggedIn, (box) => (
-  <span>Welcome, {box.value.name}!</span>
-));
+const result = useMyActions();
+
+const [model] = result.useDerived({
+  user: [Actions.Broadcast.UserLoggedIn, (user) => user],
+  counter: [Actions.Broadcast.Counter, (count) => count],
+});
+
+// model.user is null until first dispatch
+// model.counter is null until first dispatch
 ```
 
-The `consume()` method creates a reactive UI element that:
-
-- Renders `null` until the action is first dispatched
-- Re-renders automatically when new payloads arrive
-- Provides a `Box<T>` with `.value` (the payload) and `.inspect` (for annotations)
-
-```tsx
-// Access the payload and check annotations
-actions.consume(Actions.Data, (box) => (
-  <div className={box.inspect.pending() ? "loading" : ""}>
-    {box.value.content}
-  </div>
-));
-```
+`useDerived` works with unicast, broadcast, multicast, and channeled actions. When a normal `useAction` handler and a `useDerived` entry fire for the same action, the component renders once.
 
 ### Rule 18: Late-mounting components receive cached values
 
@@ -872,10 +878,10 @@ actions.useAction(
   },
 );
 
-// Or render directly with consume()
-actions.consume(Actions.PriceUpdate, (box) => (
-  <span className="price">${box.value.amount}</span>
-));
+// Or derive values from broadcasts with useDerived()
+const [model] = actions.useDerived({
+  price: [Actions.PriceUpdate, (price) => price],
+});
 ```
 
 When dispatching, use a channel to target specific listeners:
@@ -887,13 +893,13 @@ context.actions.dispatch(Actions.PriceUpdate({ Symbol: price.symbol }), price);
 
 Late-mounting components receive the last cached value during `Phase.Mounting`.
 
-### Rule 40: Use `context.actions.consume` to read broadcast values in handlers
+### Rule 40: Use `context.actions.read` to read broadcast values in handlers
 
-When an action handler needs the latest broadcast or multicast value imperatively, use `context.actions.consume` instead of subscribing with `useAction` and storing it in the local model.
+When an action handler needs the latest broadcast or multicast value imperatively, use `context.actions.read` instead of subscribing with `useAction` and storing it in the local model.
 
 ```ts
 actions.useAction(Actions.FetchPosts, async (context) => {
-  const user = await context.actions.consume(Actions.Broadcast.User);
+  const user = context.actions.read(Actions.Broadcast.User);
   if (!user) return;
   const posts = await fetchPosts(user.id, {
     signal: context.task.controller.signal,
@@ -906,16 +912,15 @@ actions.useAction(Actions.FetchPosts, async (context) => {
 
 Key details:
 
-- Returns `T | null` — the raw value, not a `Box<T>`
+- **Synchronous** &ndash; returns `T | null` directly
 - Returns `null` when no value has been dispatched
-- Awaits `settled()` if the value has pending annotations
-- Respects the task's abort signal
-- Requires a JSX-side `consume()` or `<Partition>` to have populated the store
+- Respects the task's abort signal (returns `null` if aborted)
+- Reads from the broadcast/scope cache
 - Supports multicast with `{ scope: "name" }` option
 
 ```ts
-// Multicast consume in handler
-const score = await context.actions.consume(Actions.Multicast.Score, {
+// Multicast read in handler
+const score = context.actions.read(Actions.Multicast.Score, {
   scope: "game",
 });
 ```

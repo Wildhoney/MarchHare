@@ -1,11 +1,11 @@
 /**
  * E2E Test Fixtures for Rules 16-19, 40: Broadcast Actions
  *
- * Rule 16: Only broadcast actions can be consumed
- * Rule 17: Use consume() for reactive UI from broadcast actions
+ * Rule 16: Only broadcast actions support reactive subscription
+ * Rule 17: Use useDerived() for reactive model values from broadcast actions
  * Rule 18: Late-mounting components receive cached values
  * Rule 19: Use channeled actions for targeted broadcast delivery
- * Rule 40: Use context.actions.consume to read broadcast values in handlers
+ * Rule 40: Use context.actions.read to read broadcast values in handlers
  */
 import * as React from "react";
 import {
@@ -164,15 +164,23 @@ function useChanneledSubscriberActions() {
 // ============================================================================
 
 /**
- * Rule 16 & 17 Test: consume() for reactive UI from broadcast actions
- * Only broadcast actions can be consumed.
+ * Rule 16 & 17 Test: useDerived() for reactive model values from broadcast actions
+ * Only broadcast actions support reactive subscription.
  */
-function Rule16And17Consume() {
-  const [model, actions] = useRule16And17Actions();
+function Rule16And17Derived() {
+  const result = useRule16And17Actions();
+
+  // useDerived subscribes to broadcast actions and merges payload values onto the model
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [model, actions] = result.useDerived({
+    user: [BroadcastActions.UserLoggedIn, (u: any) => u],
+    counter: [BroadcastActions.Counter, (c: any) => c],
+    loadedData: [BroadcastActions.DataLoaded, (d: any) => d],
+  });
 
   return (
     <section data-testid="rule-16-17">
-      <h3>Rules 16 & 17: consume() for Broadcast</h3>
+      <h3>Rules 16 & 17: useDerived() for Broadcast</h3>
 
       {/* Dispatch buttons */}
       <div data-testid="rule-16-17-controls">
@@ -219,29 +227,27 @@ function Rule16And17Consume() {
       {/* Traditional handler result */}
       <div data-testid="rule-16-17-traditional">{model.traditionalUser}</div>
 
-      {/* Rule 17: consume() for reactive UI */}
+      {/* Rule 17: useDerived() merges broadcast payloads onto the model */}
       <div data-testid="rule-16-17-consumed-user">
-        {actions.consume(BroadcastActions.UserLoggedIn, (box) => (
+        {model.user && (
           <span>
-            Welcome, {box.value.name} (ID: {box.value.id})
+            Welcome, {model.user.name} (ID: {model.user.id})
           </span>
-        ))}
+        )}
       </div>
 
       <div data-testid="rule-16-17-consumed-counter">
-        {actions.consume(BroadcastActions.Counter, (box) => (
-          <span>Counter: {box.value}</span>
-        ))}
+        {model.counter != null && <span>Counter: {model.counter}</span>}
       </div>
 
       <div data-testid="rule-16-17-consumed-data">
-        {actions.consume(BroadcastActions.DataLoaded, (box) => (
+        {model.loadedData && (
           <ul>
-            {box.value.items.map((item, i) => (
+            {model.loadedData.items.map((item: string, i: number) => (
               <li key={i}>{item}</li>
             ))}
           </ul>
-        ))}
+        )}
       </div>
     </section>
   );
@@ -414,7 +420,7 @@ function Rule19ChanneledBroadcast() {
 }
 
 // ============================================================================
-// Rule 40: Use context.actions.consume to read broadcast values in handlers
+// Rule 40: Use context.actions.read to read broadcast values in handlers
 // ============================================================================
 
 class Rule40Actions {
@@ -429,20 +435,17 @@ function Rule40Publisher() {
   const [, actions] = useActions<EmptyModel, typeof BroadcastActions>({});
 
   return (
-    <>
-      {actions.consume(BroadcastActions.UserLoggedIn, () => null)}
-      <button
-        data-testid="rule-40-publish"
-        onClick={() =>
-          actions.dispatch(BroadcastActions.UserLoggedIn, {
-            name: "Charlie",
-            id: 3,
-          })
-        }
-      >
-        Publish User
-      </button>
-    </>
+    <button
+      data-testid="rule-40-publish"
+      onClick={() =>
+        actions.dispatch(BroadcastActions.UserLoggedIn, {
+          name: "Charlie",
+          id: 3,
+        })
+      }
+    >
+      Publish User
+    </button>
   );
 }
 
@@ -454,16 +457,16 @@ function useRule40ConsumerActions() {
     consumed: "",
   });
 
-  actions.useAction(Lifecycle.Mount, async (context) => {
-    const user = await context.actions.consume(BroadcastActions.UserLoggedIn);
+  actions.useAction(Lifecycle.Mount, (context) => {
+    const user = context.actions.read(BroadcastActions.UserLoggedIn);
     if (!user) return;
     context.actions.produce(({ model }) => {
       model.consumed = user.name;
     });
   });
 
-  actions.useAction(Rule40Actions.Trigger, async (context) => {
-    const user = await context.actions.consume(BroadcastActions.UserLoggedIn);
+  actions.useAction(Rule40Actions.Trigger, (context) => {
+    const user = context.actions.read(BroadcastActions.UserLoggedIn);
     context.actions.produce(({ model }) => {
       model.consumed = user ? user.name : "null";
     });
@@ -482,18 +485,18 @@ function Rule40Consumer() {
         data-testid="rule-40-trigger"
         onClick={() => actions.dispatch(Rule40Actions.Trigger)}
       >
-        Read via consume
+        Read via read
       </button>
     </div>
   );
 }
 
-function Rule40HandlerConsume() {
+function Rule40HandlerRead() {
   const [showConsumer, setShowConsumer] = React.useState(false);
 
   return (
     <section data-testid="rule-40">
-      <h3>Rule 40: Handler-side consume()</h3>
+      <h3>Rule 40: Handler-side read()</h3>
       <Rule40Publisher />
       {showConsumer && <Rule40Consumer />}
       <button
@@ -510,10 +513,10 @@ export function BroadcastActionsFixture() {
   return (
     <div data-testid="broadcast-actions-fixture">
       <h2>Rules 16-19, 40: Broadcast Actions</h2>
-      <Rule16And17Consume />
+      <Rule16And17Derived />
       <Rule18LateMounting />
       <Rule19ChanneledBroadcast />
-      <Rule40HandlerConsume />
+      <Rule40HandlerRead />
     </div>
   );
 }

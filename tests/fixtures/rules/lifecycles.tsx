@@ -257,8 +257,6 @@ function CacheSender() {
 
   return (
     <div data-testid="rule-15-sender">
-      {/* consume() creates a Partition that caches dispatched values for late-mounting subscribers */}
-      {actions.consume(CachedActions.CachedData, () => null)}
       <button
         data-testid="rule-15-send"
         onClick={() =>

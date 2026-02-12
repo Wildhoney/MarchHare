@@ -1,58 +1,10 @@
-# Consuming actions
+# Reading broadcast values in handlers
 
-The `consume()` method subscribes to a broadcast action and re-renders content whenever a new value is dispatched, making it ideal for global context scenarios where you want to fetch data once and access it throughout your app without prop drilling. The callback receives a `Box<T>` from [Immertation](https://github.com/Wildhoney/Immertation) containing the `value` and an `inspect` proxy for checking annotation status.
-
-```tsx
-export default function Visitor(): React.ReactElement {
-  const [model, actions] = useVisitorActions();
-
-  return (
-    <div>
-      {actions.consume(Actions.Visitor, (visitor) =>
-        visitor.inspect.pending() ? <>Loading&hellip;</> : visitor.value.name,
-      )}
-    </div>
-  );
-}
-```
-
-> **Important:** The `consume()` method only accepts broadcast actions created with `Distribution.Broadcast`. Attempting to pass a local (unicast) action will result in a TypeScript error. This is enforced at compile-time to prevent confusion &ndash; local actions are scoped to a single component and cannot be consumed across the application.
-
-> **Note:** When a component mounts, `consume()` displays the most recent value for that action, even if it was dispatched before the component mounted. This is managed by the `Consumer` context provider. If no value has been dispatched yet, `consume()` renders `null` until the first dispatch occurs.
-
-## Cached values for useAction handlers
-
-Components using `useAction()` for broadcast actions also receive cached values on mount. When a component mounts with a handler for a broadcast action, the handler is automatically invoked with the most recent value that was stored by any `consume()` call.
-
-```tsx
-// This component stores dispatched values in the cache
-function ConsumerComponent() {
-  const [model, actions] = useActions<Model, typeof Actions>(model);
-  return <>{actions.consume(Actions.Name, (box) => box.value)}</>;
-}
-
-// This component's handler receives cached values on mount
-function LateComponent() {
-  const actions = useActions<Model, typeof Actions>(model);
-
-  actions.useAction(Actions.Name, (context, name) => {
-    // Called with the cached value when component mounts
-    console.log("Received:", name);
-  });
-
-  return <div>Late Component</div>;
-}
-```
-
-This enables late-mounting components to synchronise with previously dispatched state. See the [broadcast actions recipe](./broadcast-actions.md#cached-values-on-mount) for more details.
-
-## Handler-side consume
-
-Use `context.actions.consume` to read the latest broadcast or multicast value directly inside an action handler, without subscribing via `useAction` and storing it in the local model.
+Use `context.actions.read` to read the latest broadcast or multicast value directly inside an action handler, without subscribing via `useAction` and storing it in the local model.
 
 ```ts
 actions.useAction(Actions.FetchPosts, async (context) => {
-  const user = await context.actions.consume(Actions.Broadcast.User);
+  const user = context.actions.read(Actions.Broadcast.User);
   if (!user) return;
   const posts = await fetchPosts(user.id, {
     signal: context.task.controller.signal,
@@ -63,21 +15,71 @@ actions.useAction(Actions.FetchPosts, async (context) => {
 });
 ```
 
-Key details:
+> **Important:** The `read()` method only accepts broadcast or multicast actions. Attempting to pass a unicast action returns `null` as unicast values are not cached.
 
-- **Async** &ndash; returns `Promise<T | null>`.
+## Key details
+
+- **Synchronous** &ndash; returns `T | null` directly.
 - **Raw value** &ndash; returns `T`, not a `Box<T>`. Handlers need the data, not the reactive wrapper.
 - **Null when empty** &ndash; returns `null` if no value has been dispatched for that action.
-- **Awaits settled** &ndash; if the value has pending annotations, `consume` waits for `settled()` before returning.
-- **Abort-safe** &ndash; respects `context.task.controller.signal`. Returns `null` if the task is aborted while waiting.
-- **Requires a store entry** &ndash; a JSX-side `consume()` or `<Partition>` must have populated the consumer store for the value to be available.
+- **Abort-safe** &ndash; returns `null` if the task's abort signal has fired.
+- **Reads from cache** &ndash; values are stored by the `BroadcastEmitter` automatically when dispatched.
 
-### Multicast support
+## Multicast support
 
 For multicast actions, pass the scope name via the `options` argument:
 
 ```ts
-const score = await context.actions.consume(Actions.Multicast.Score, {
+const score = context.actions.read(Actions.Multicast.Score, {
   scope: "game",
 });
 ```
+
+## Reactive subscriptions with useDerived
+
+For reactive model values from broadcast or multicast actions, use `useDerived` instead of `read`. The `useDerived` method subscribes to actions and maps their payloads onto the model:
+
+```tsx
+const result = useMyActions();
+
+const [model] = result.useDerived({
+  user: [Actions.Broadcast.User, (user) => user],
+  score: [Actions.Multicast.Score, (score) => score],
+});
+
+// model.user is null until first dispatch, then stays in sync
+```
+
+See the [derived values recipe](./derived-values.md) for more details.
+
+## Cached values for useAction handlers
+
+Components using `useAction()` for broadcast actions also receive cached values on mount. When a component mounts with a handler for a broadcast action, the handler is automatically invoked with the most recent value from the broadcast cache.
+
+```tsx
+// Component A dispatches a broadcast action
+function ComponentA() {
+  const [, actions] = useActions<Model, typeof Actions>(model);
+
+  return (
+    <button onClick={() => actions.dispatch(Actions.Counter, 42)}>
+      Update Counter
+    </button>
+  );
+}
+
+// Component B mounts later and receives the cached value
+function ComponentB() {
+  const actions = useActions<Model, typeof Actions>(model);
+
+  // This handler is invoked with 42 when the component mounts
+  // (assuming ComponentA dispatched before ComponentB mounted)
+  actions.useAction(Actions.Counter, (context, value) => {
+    console.log("Received cached value:", value);
+  });
+
+  return <div>Late Component</div>;
+}
+```
+
+This enables late-mounting components to synchronise with previously dispatched state. See the [broadcast actions recipe](./broadcast-actions.md#cached-values-on-mount) for more details.

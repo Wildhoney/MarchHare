@@ -45,6 +45,13 @@ export default function Counter(): React.ReactElement {
           </button>
         </div>
 
+        <div data-testid="derived">
+          {model.anExample && <span>Derived: {model.anExample}</span>}
+          {model.anotherExample !== null && (
+            <span> | Doubled: {model.anotherExample}</span>
+          )}
+        </div>
+
         <div
           className={styles.loading}
           data-testid="loading"
