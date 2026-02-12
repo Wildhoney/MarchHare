@@ -150,7 +150,7 @@ export function With<K extends string>(
   key: K,
 ): <
   M extends Model,
-  AC extends Actions,
+  AC extends Actions | void,
   D extends Props,
   P extends K extends keyof M ? M[K] : never,
 >(
@@ -251,7 +251,7 @@ export function useActionSets(): ActionSets {
  */
 export function useRegisterHandler<
   M extends Model | void,
-  AC extends Actions,
+  AC extends Actions | void,
   D extends Props,
 >(
   scope: React.RefObject<Scope<M, AC, D>>,

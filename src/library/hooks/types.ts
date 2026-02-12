@@ -37,7 +37,7 @@ export type References<M extends Model | void> = {
  */
 export type Handler<
   M extends Model | void = Model,
-  AC extends Actions = Actions,
+  AC extends Actions | void = Actions,
   D extends Props = Props,
 > = (
   context: HandlerContext<M, AC, D>,
@@ -51,7 +51,7 @@ export type Handler<
  */
 export type HandlerEntry<
   M extends Model | void = Model,
-  AC extends Actions = Actions,
+  AC extends Actions | void = Actions,
   D extends Props = Props,
 > = {
   handler: Handler<M, AC, D>;
@@ -68,7 +68,7 @@ export type HandlerEntry<
  */
 export type Scope<
   M extends Model | void = Model,
-  AC extends Actions = Actions,
+  AC extends Actions | void = Actions,
   D extends Props = Props,
 > = {
   /** All handlers for each action, with optional channels */

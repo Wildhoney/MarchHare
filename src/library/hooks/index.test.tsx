@@ -1234,6 +1234,77 @@ describe("useActions() context.model freshness", () => {
   });
 });
 
+describe("useActions() void actions", () => {
+  it("should work with void model and void actions using bare useActions()", async () => {
+    let mounted = false;
+
+    renderHook(() => {
+      const actions = useActions();
+
+      actions.useAction(Lifecycle.Mount, () => {
+        mounted = true;
+      });
+
+      return actions;
+    });
+
+    expect(mounted).toBe(true);
+  });
+
+  it("should work with explicit void, void type parameters", async () => {
+    let mounted = false;
+
+    renderHook(() => {
+      const actions = useActions<void, void>();
+
+      actions.useAction(Lifecycle.Mount, () => {
+        mounted = true;
+      });
+
+      return actions;
+    });
+
+    expect(mounted).toBe(true);
+  });
+
+  it("should work with model and void actions", async () => {
+    type LocalModel = { count: number };
+
+    const { result } = renderHook(() => {
+      const actions = useActions<LocalModel, void>({ count: 0 });
+
+      actions.useAction(Lifecycle.Mount, (context) => {
+        context.actions.produce(({ model }) => {
+          model.count = 42;
+        });
+      });
+
+      return actions;
+    });
+
+    expect(result.current[0].count).toBe(42);
+  });
+
+  it("should support context.data with void actions", async () => {
+    let capturedQuery: string | null = null;
+
+    const { result } = renderHook(() => {
+      const actions = useActions<void, void, { query: string }>(() => ({
+        query: "test",
+      }));
+
+      actions.useAction(Lifecycle.Mount, (context) => {
+        capturedQuery = context.data.query;
+      });
+
+      return actions;
+    });
+
+    void result;
+    expect(capturedQuery).toBe("test");
+  });
+});
+
 describe("useActions() void model", () => {
   class VoidActions {
     static Ping = Action("Ping");

@@ -1,6 +1,19 @@
-# Void Model
+# Void Model and Void Actions
 
-When a component needs to dispatch or listen to actions but doesn't manage any local state, pass `void` as the model type. No initial model argument is required:
+Both the model and actions type parameters default to `void`, so you can omit them entirely when neither is needed:
+
+```ts
+import { useActions, Lifecycle } from "chizu";
+
+// Bare call — both M and AC default to void
+const actions = useActions();
+
+actions.useAction(Lifecycle.Mount, () => {
+  console.log("Mounted!");
+});
+```
+
+When a component needs to dispatch or listen to actions but doesn't manage any local state, pass `void` as the model type:
 
 ```ts
 import { useActions, Action } from "chizu";
@@ -14,6 +27,12 @@ const actions = useActions<void, typeof Actions>();
 actions.useAction(Actions.Ping, () => {
   console.log("Pinged!");
 });
+```
+
+You can also pass `void` for just the actions parameter while keeping a model:
+
+```ts
+const actions = useActions<Model, void>(initialModel);
 ```
 
 ## When to use a void model

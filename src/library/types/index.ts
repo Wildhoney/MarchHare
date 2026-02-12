@@ -525,7 +525,7 @@ export type Result = {
 
 export type HandlerContext<
   M extends Model | void,
-  _AC extends Actions,
+  _AC extends Actions | void,
   D extends Props = Props,
 > = {
   readonly model: Readonly<M>;
@@ -763,8 +763,8 @@ export type HandlerContext<
  */
 export type Handler<
   M extends Model | void,
-  AC extends Actions,
-  K extends keyof AC,
+  AC extends Actions | void,
+  K extends keyof AC & string,
   D extends Props = Props,
 > = (
   context: HandlerContext<M, AC, D>,
@@ -845,7 +845,7 @@ type FlattenKeys<AC, Prefix extends string = never> = {
  */
 export type Handlers<
   M extends Model | void,
-  AC extends Actions,
+  AC extends Actions | void,
   D extends Props = Props,
 > = {
   [K in FlattenKeys<AC>]: (
@@ -856,7 +856,7 @@ export type Handlers<
 
 export type UseActions<
   M extends Model | void,
-  AC extends Actions,
+  AC extends Actions | void,
   D extends Props = Props,
 > = [
   Readonly<M>,

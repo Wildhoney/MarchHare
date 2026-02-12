@@ -101,18 +101,18 @@ import { G } from "@mobily/ts-belt";
  * ```
  */
 export function useActions<
-  _M extends void,
-  A extends Actions,
+  _M extends void = void,
+  A extends Actions | void = void,
   D extends Props = Props,
 >(getData?: Data<D>): UseActions<void, A, D>;
 export function useActions<
   M extends Model,
-  A extends Actions,
+  A extends Actions | void = void,
   D extends Props = Props,
 >(initialModel: M, getData?: Data<D>): UseActions<M, A, D>;
 export function useActions<
   M extends Model | void,
-  AC extends Actions,
+  AC extends Actions | void,
   D extends Props = Props,
 >(...args: unknown[]): unknown {
   const isVoidModel = G.isUndefined(args[0]) || G.isFunction(args[0]);

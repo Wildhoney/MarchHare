@@ -113,7 +113,19 @@ actions.useAction(Actions.Search, async (context) => {
 
 For more details, see the [referential equality recipe](./recipes/referential-equality.md).
 
-If your component doesn't need local state but still needs to dispatch or listen to actions, pass `void` as the model type. No initial model is required:
+Both the model and actions type parameters default to `void`, so you can call `useActions()` with no generics at all when neither is needed:
+
+```tsx
+import { useActions, Lifecycle } from "chizu";
+
+const actions = useActions();
+
+actions.useAction(Lifecycle.Mount, () => {
+  console.log("Mounted!");
+});
+```
+
+If your component doesn't need local state but still needs to dispatch or listen to typed actions, pass `void` as the model type. No initial model is required:
 
 ```tsx
 import { useActions, Action, Lifecycle } from "chizu";
