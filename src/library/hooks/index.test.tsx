@@ -354,6 +354,163 @@ describe("useActions() broadcast action mount behaviour", () => {
   });
 });
 
+describe("useActions() broadcast replay without consume()", () => {
+  it("should replay broadcast value to late-mounting useAction handler even without consume()", async () => {
+    const capturedPayloads: number[] = [];
+
+    type CounterModel = { count: number };
+    const counterModel: CounterModel = { count: 0 };
+
+    function ProducerComponent({ onShowLate }: { onShowLate: () => void }) {
+      const actions = useActions<CounterModel, typeof BroadcastActions>(
+        counterModel,
+      );
+
+      actions.useAction(BroadcastActions.Counter, (context, payload) => {
+        context.actions.produce((draft) => {
+          draft.model.count = payload;
+        });
+      });
+
+      return (
+        <>
+          {/* No consume() call — only dispatch + useAction */}
+          <button
+            data-testid="dispatch-no-consume"
+            onClick={() => {
+              actions[1].dispatch(BroadcastActions.Counter, 42);
+              onShowLate();
+            }}
+          >
+            Dispatch
+          </button>
+        </>
+      );
+    }
+
+    function LateComponent() {
+      const actions = useActions<CounterModel, typeof BroadcastActions>(
+        counterModel,
+      );
+
+      actions.useAction(BroadcastActions.Counter, (_context, payload) => {
+        capturedPayloads.push(payload);
+      });
+
+      return <div data-testid="late-no-consume">Late Component</div>;
+    }
+
+    function App() {
+      const [show, setShow] = React.useState(false);
+
+      return (
+        <Broadcaster>
+          <Consumer>
+            <ProducerComponent onShowLate={() => setShow(true)} />
+            {show && <LateComponent />}
+          </Consumer>
+        </Broadcaster>
+      );
+    }
+
+    render(<App />);
+
+    // Dispatch from producer (no consume) and mount late component
+    await act(async () => {
+      screen.getByTestId("dispatch-no-consume").click();
+    });
+
+    // Wait for effects to complete
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    // The late component should have received the cached value on mount
+    // even though no consume() was called
+    expect(capturedPayloads).toContain(42);
+  });
+
+  it("should replay the latest broadcast value when multiple dispatches occur before mount", async () => {
+    const capturedPayloads: number[] = [];
+
+    type CounterModel = { count: number };
+    const counterModel: CounterModel = { count: 0 };
+
+    function ProducerComponent({ onShowLate }: { onShowLate: () => void }) {
+      const actions = useActions<CounterModel, typeof BroadcastActions>(
+        counterModel,
+      );
+
+      actions.useAction(BroadcastActions.Counter, () => {});
+
+      return (
+        <>
+          <button
+            data-testid="dispatch-first"
+            onClick={() => actions[1].dispatch(BroadcastActions.Counter, 10)}
+          >
+            First
+          </button>
+          <button
+            data-testid="dispatch-second"
+            onClick={() => {
+              actions[1].dispatch(BroadcastActions.Counter, 20);
+              onShowLate();
+            }}
+          >
+            Second
+          </button>
+        </>
+      );
+    }
+
+    function LateComponent() {
+      const actions = useActions<CounterModel, typeof BroadcastActions>(
+        counterModel,
+      );
+
+      actions.useAction(BroadcastActions.Counter, (_context, payload) => {
+        capturedPayloads.push(payload);
+      });
+
+      return <div data-testid="late-multi">Late</div>;
+    }
+
+    function App() {
+      const [show, setShow] = React.useState(false);
+
+      return (
+        <Broadcaster>
+          <Consumer>
+            <ProducerComponent onShowLate={() => setShow(true)} />
+            {show && <LateComponent />}
+          </Consumer>
+        </Broadcaster>
+      );
+    }
+
+    render(<App />);
+
+    // Dispatch first value
+    await act(async () => {
+      screen.getByTestId("dispatch-first").click();
+    });
+
+    // Dispatch second value and mount late component
+    await act(async () => {
+      screen.getByTestId("dispatch-second").click();
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    // Should replay the LATEST value (20), not the first (10)
+    expect(capturedPayloads).toContain(20);
+    expect(capturedPayloads).not.toContain(10);
+  });
+});
+
 describe("useActions() channeled actions", () => {
   type UserModel = { lastPayload: string | null };
   const userModel: UserModel = { lastPayload: null };

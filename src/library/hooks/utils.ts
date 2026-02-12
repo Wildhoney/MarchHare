@@ -66,6 +66,7 @@ export function isGenerator(
  */
 export function useLifecycles({
   unicast,
+  broadcast,
   broadcastActions,
   phase,
   data,
@@ -79,9 +80,17 @@ export function useLifecycles({
     unicast.emit(Lifecycle.Mount);
 
     broadcastActions.forEach((action) => {
+      // Try the consumer Map first (populated by Partition via consume())
       const entry = consumer.get(action);
-      const value = entry?.state.model?.value;
-      if (!G.isNullable(value)) unicast.emit(action, value);
+      const broadcastPayload = entry?.state.model?.value;
+      if (!G.isNullable(broadcastPayload)) {
+        unicast.emit(action, broadcastPayload);
+        return;
+      }
+
+      // Fall back to the BroadcastEmitter's cache (populated on dispatch)
+      const cached = broadcast.getCached(action);
+      if (!G.isNullable(cached)) unicast.emit(action, cached);
     });
 
     phase.current = Phase.Mounted;

@@ -11,6 +11,7 @@ import type {
   Filter,
   Nodes,
 } from "../types/index.ts";
+import type { BroadcastEmitter } from "../boundary/components/broadcast/utils.ts";
 
 /**
  * Return type for the useNodes hook.
@@ -88,6 +89,7 @@ export type Data<D extends Props = Props> = () => D;
  */
 export type LifecycleConfig = {
   unicast: EventEmitter;
+  broadcast: BroadcastEmitter;
   tasks: Tasks;
   broadcastActions: Set<ActionId>;
   phase: RefObject<Phase>;

@@ -1,14 +1,16 @@
-import EventEmitter from "eventemitter3";
+import type { BroadcastEmitter } from "./utils.ts";
 import * as React from "react";
 
 /**
- * The broadcast context is an EventEmitter used for distributed actions across components.
+ * The broadcast context is a BroadcastEmitter used for distributed actions across components.
+ * Extends EventEmitter with a per-action value cache so late-mounting components can replay
+ * broadcast values even without a Partition (from `consume()`).
  */
-export type BroadcastContext = EventEmitter;
+export type BroadcastContext = BroadcastEmitter;
 
 /**
  * Return type for the useBroadcast hook.
- * Provides access to the shared EventEmitter for emitting and subscribing to distributed actions.
+ * Provides access to the shared BroadcastEmitter for emitting and subscribing to distributed actions.
  */
 export type UseBroadcast = BroadcastContext;
 

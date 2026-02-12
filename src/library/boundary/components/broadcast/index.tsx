@@ -1,9 +1,8 @@
 import { Props } from "./types.ts";
-import { Context } from "./utils.ts";
-import EventEmitter from "eventemitter3";
+import { Context, BroadcastEmitter } from "./utils.ts";
 import * as React from "react";
 
-export { useBroadcast } from "./utils.ts";
+export { useBroadcast, BroadcastEmitter } from "./utils.ts";
 
 /**
  * Creates a new broadcast context for distributed actions. Only needed if you
@@ -14,7 +13,7 @@ export { useBroadcast } from "./utils.ts";
  * @returns The children wrapped in a broadcast context provider.
  */
 export function Broadcaster({ children }: Props): React.ReactNode {
-  const context = React.useMemo(() => new EventEmitter(), []);
+  const context = React.useMemo(() => new BroadcastEmitter(), []);
 
   return <Context.Provider value={context}>{children}</Context.Provider>;
 }

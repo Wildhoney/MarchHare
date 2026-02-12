@@ -401,6 +401,7 @@ export function useActions<
 
   useLifecycles({
     unicast,
+    broadcast,
     tasks,
     broadcastActions: actionSets.broadcast,
     phase,
