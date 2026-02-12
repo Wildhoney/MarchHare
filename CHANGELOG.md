@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.2.63](https://github.com/Wildhoney/Chizu/compare/v0.2.60...v0.2.63) (2026-02-12)
+
+
+### Features
+
+* **hooks:** support void actions type parameter in useActions with void,void defaults ([e23fbd0](https://github.com/Wildhoney/Chizu/commit/e23fbd0df671e6973e841d7dab75284221795c72))
+* **scope:** derive withScope wrapper name from wrapped component ([2652691](https://github.com/Wildhoney/Chizu/commit/265269122c9b2ec9cdf7c25ced4ee07a0c016578))
+* support void model type in useActions for stateless action-only components ([fa83b1c](https://github.com/Wildhoney/Chizu/commit/fa83b1cb76f6727e7fd7ea756ee1e66120dcf86c))
+
 ## [0.2.62](https://github.com/Wildhoney/Chizu/compare/v0.2.60...v0.2.62) (2026-02-11)
 
 ### Features
