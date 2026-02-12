@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.2.64](https://github.com/Wildhoney/Chizu/compare/v0.2.63...v0.2.64) (2026-02-12)
+
+### Bug Fixes
+
+- replay broadcast values for useAction handlers without consume ([576e705](https://github.com/Wildhoney/Chizu/commit/576e705dbde193452090ad95d4a629f53689ca26))
+
 ## [0.2.63](https://github.com/Wildhoney/Chizu/compare/v0.2.60...v0.2.63) (2026-02-12)
 
 ### Features
