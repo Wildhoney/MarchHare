@@ -405,48 +405,11 @@ test.describe("Chizu Rulebook", () => {
     });
   });
 
-  // Broadcast Actions (Rules 16-19)
+  // Broadcast Actions (Rules 17-19, 40)
   test.describe("Broadcast Actions", () => {
     test.beforeEach(async ({ page }) => {
       await page.goto("/?fixture=broadcast-actions");
       await expect(page.getByTestId("broadcast-actions-fixture")).toBeVisible();
-    });
-
-    it("Rule 16: Only broadcast actions support reactive subscription - should update traditional handler on broadcast", async ({
-      page,
-    }) => {
-      const traditional = page.getByTestId("rule-16-17-traditional");
-
-      await expect(traditional).toHaveText("");
-
-      await page.getByTestId("rule-16-17-login").click();
-      await expect(traditional).toHaveText("Alice");
-
-      await page.getByTestId("rule-16-17-login-bob").click();
-      await expect(traditional).toHaveText("Bob");
-    });
-
-    it("Rule 17: Use derive() for reactive model values from broadcast actions - should reactively render with derive()", async ({
-      page,
-    }) => {
-      const consumedUser = page.getByTestId("rule-16-17-consumed-user");
-      const consumedCounter = page.getByTestId("rule-16-17-consumed-counter");
-      const consumedData = page.getByTestId("rule-16-17-consumed-data");
-
-      await expect(consumedUser).toBeEmpty();
-      await expect(consumedCounter).toBeEmpty();
-      await expect(consumedData).toBeEmpty();
-
-      await page.getByTestId("rule-16-17-login").click();
-      await expect(consumedUser).toContainText("Welcome, Alice (ID: 1)");
-
-      await page.getByTestId("rule-16-17-counter").click();
-      await expect(consumedCounter).toContainText("Counter: 42");
-
-      await page.getByTestId("rule-16-17-data").click();
-      await expect(consumedData).toContainText("apple");
-      await expect(consumedData).toContainText("banana");
-      await expect(consumedData).toContainText("cherry");
     });
 
     it("Rule 18: Late-mounting components receive cached values - should deliver cached values to late subscribers", async ({
@@ -513,7 +476,7 @@ test.describe("Chizu Rulebook", () => {
       await expect(user2).toHaveText("Broadcast to All <all@example.com>");
     });
 
-    it("Rule 40: Use context.actions.read to read broadcast values in handlers - should read broadcast value imperatively", async ({
+    it("Rule 40: Use context.actions.consume to consume broadcast values in handlers - should consume broadcast value imperatively", async ({
       page,
     }) => {
       const consumed = page.getByTestId("rule-40-consumed");
@@ -521,14 +484,14 @@ test.describe("Chizu Rulebook", () => {
       // Publish a broadcast value first
       await page.getByTestId("rule-40-publish").click();
 
-      // Mount the consumer — its Lifecycle.Mount handler calls context.actions.read
+      // Mount the consumer — its Lifecycle.Mount handler calls context.actions.consume
       await page.getByTestId("rule-40-mount-consumer").click();
 
-      // The consumed value should appear after the handler reads it
+      // The consumed value should appear after the handler consumes it
       await expect(consumed).toHaveText("Charlie", { timeout: 2000 });
     });
 
-    it("Rule 40: Use context.actions.read to read broadcast values in handlers - should return null when no value dispatched", async ({
+    it("Rule 40: Use context.actions.consume to consume broadcast values in handlers - should return null when no value dispatched", async ({
       page,
     }) => {
       // Mount the consumer WITHOUT publishing first

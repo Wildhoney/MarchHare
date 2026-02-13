@@ -375,7 +375,7 @@ This enables components to distinguish between hydration and live updates.
 
 ### Rule 16: Only broadcast actions support reactive subscription
 
-Broadcast and multicast actions support reactive subscription via `useAction` and `derive`. Unicast actions are local to the dispatching component.
+Broadcast and multicast actions support reactive subscription via `useAction`. Unicast actions are local to the dispatching component.
 
 ```ts
 class Actions {
@@ -389,27 +389,37 @@ actions.useAction(Actions.Broadcast, (context, data) => {
     model.data = data;
   });
 });
-
-// derive: subscribe and map payload onto model
-const [model] = actions.derive("data", Actions.Broadcast, (d) => d);
 ```
 
-### Rule 17: Use `derive` for reactive model values from broadcast actions
+### Rule 17: Store only what the component needs
 
-`derive` subscribes to actions and maps their payloads onto the model. Derived values start as `null` and update when the action fires.
+Each component's model should contain exactly the data it requires — nothing more. When subscribing to a broadcast that carries a rich payload (e.g. a full `User` object), extract and store only the fields the component actually uses. Perform any transformation logic inside the action handler itself, not after the fact.
 
-```tsx
-const result = useMyActions();
+```ts
+// Good — store only what you need, transform in the handler
+type Model = { age: number | null };
 
-const [model] = result
-  .derive("user", Actions.Broadcast.UserLoggedIn, (user) => user)
-  .derive("counter", Actions.Broadcast.Counter, (count) => count);
-
-// model.user is null until first dispatch
-// model.counter is null until first dispatch
+actions.useAction(Actions.Broadcast.UserUpdated, (context, user) => {
+  context.actions.produce(({ model }) => {
+    model.age = user.age;
+  });
+});
 ```
 
-`derive` works with unicast, broadcast, multicast, and channeled actions. When a normal `useAction` handler and a `derive` entry fire for the same action, the component renders once.
+```ts
+// Bad — storing the entire payload and deriving later
+type Model = { user: User | null };
+
+actions.useAction(Actions.Broadcast.UserUpdated, (context, user) => {
+  context.actions.produce(({ model }) => {
+    model.user = user; // Storing data the component doesn't use
+  });
+});
+
+// Later: model.user.age — why not just store age?
+```
+
+This keeps models honest — they reflect what the component cares about, not what the event provides.
 
 ### Rule 18: Late-mounting components receive cached values
 
@@ -874,9 +884,6 @@ actions.useAction(
     });
   },
 );
-
-// Or derive values from broadcasts with derive()
-const [model] = actions.derive("price", Actions.PriceUpdate, (price) => price);
 ```
 
 When dispatching, use a channel to target specific listeners:
@@ -888,13 +895,13 @@ context.actions.dispatch(Actions.PriceUpdate({ Symbol: price.symbol }), price);
 
 Late-mounting components receive the last cached value during `Phase.Mounting`.
 
-### Rule 40: Use `context.actions.read` to read broadcast values in handlers
+### Rule 40: Use `context.actions.consume` to consume broadcast values in handlers
 
-When an action handler needs the latest broadcast or multicast value imperatively, use `context.actions.read` instead of subscribing with `useAction` and storing it in the local model.
+When an action handler needs the latest broadcast or multicast value imperatively, use `context.actions.consume` instead of subscribing with `useAction` and storing it in the local model.
 
 ```ts
 actions.useAction(Actions.FetchPosts, async (context) => {
-  const user = await context.actions.read(Actions.Broadcast.User);
+  const user = await context.actions.consume(Actions.Broadcast.User);
   if (!user) return;
   const posts = await fetchPosts(user.id, {
     signal: context.task.controller.signal,
@@ -915,8 +922,8 @@ Key details:
 - Supports multicast with `{ scope: "name" }` option
 
 ```ts
-// Multicast read in handler
-const score = await context.actions.read(Actions.Multicast.Score, {
+// Multicast consume in handler
+const score = await context.actions.consume(Actions.Multicast.Score, {
   scope: "game",
 });
 ```

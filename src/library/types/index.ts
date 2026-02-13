@@ -306,7 +306,7 @@ export type ChanneledAction<P = unknown, C = unknown> = {
  * late-mounting components receive the most recent payload.
  *
  * This type extends `HandlerPayload<P, C>` with an additional brand to enforce at compile-time
- * that only broadcast actions can be passed to `context.actions.read()`.
+ * that only broadcast actions can be passed to `context.actions.consume()`.
  *
  * @template P - The payload type for the action
  * @template C - The channel type for channeled dispatches (defaults to never)
@@ -315,8 +315,8 @@ export type ChanneledAction<P = unknown, C = unknown> = {
  * ```ts
  * const SignedOut = Action<User>("SignedOut", Distribution.Broadcast);
  *
- * // Read the latest value inside a handler
- * const user = await context.actions.read(SignedOut);
+ * // Consume the latest value inside a handler
+ * const user = await context.actions.consume(SignedOut);
  * ```
  */
 export type BroadcastPayload<
@@ -677,20 +677,20 @@ export type HandlerContext<
      */
     invalidate(entry: CacheId<unknown> | ChanneledCacheId<unknown>): void;
     /**
-     * Reads the latest broadcast or multicast value, waiting for it if necessary.
+     * Consumes the latest broadcast or multicast value, waiting for it if necessary.
      *
      * If a value has already been dispatched it resolves immediately.
      * Otherwise it waits until the next dispatch of the action.
      * Resolves with `null` if the task is aborted before a value arrives.
      *
-     * @param action - The broadcast or multicast action to read.
+     * @param action - The broadcast or multicast action to consume.
      * @param options - For multicast actions, must include `{ scope: "ScopeName" }`.
      * @returns The dispatched value, or `null` if aborted.
      *
      * @example
      * ```ts
      * actions.useAction(Actions.FetchPosts, async (context) => {
-     *   const user = await context.actions.read(Actions.Broadcast.User);
+     *   const user = await context.actions.consume(Actions.Broadcast.User);
      *   if (!user) return;
      *   const posts = await fetchPosts(user.id, {
      *     signal: context.task.controller.signal,
@@ -699,8 +699,8 @@ export type HandlerContext<
      * });
      * ```
      */
-    read<T>(action: BroadcastPayload<T>): Promise<T | null>;
-    read<T>(
+    consume<T>(action: BroadcastPayload<T>): Promise<T | null>;
+    consume<T>(
       action: MulticastPayload<T>,
       options: MulticastOptions,
     ): Promise<T | null>;
@@ -812,13 +812,6 @@ export type Handlers<
       ) => void | Promise<void> | AsyncGenerator | Generator
     : Handlers<M, AC[K] & Actions, D>;
 };
-
-/**
- * Union of action types accepted by `derive` configuration entries.
- * @internal
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type DerivedAction = HandlerPayload<any> | ChanneledAction<any, any>;
 
 export type UseActions<
   M extends Model | void,
@@ -939,46 +932,4 @@ export type UseActions<
       ...args: [Payload<A>] extends [never] ? [] : [payload: Payload<A>]
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void;
-  /**
-   * Derives a model property from the current model state. The selector
-   * evaluates synchronously on every render and always has a value.
-   *
-   * @param key - The property name to add to the model
-   * @param selector - A function receiving the current model, returning the derived value
-   * @returns A new UseActions tuple with the model extended by the derived property
-   *
-   * @example
-   * ```ts
-   * actions.derive('greeting', (model) => `Hey ${model.name}`);
-   * ```
-   */
-  derive<K extends string, R>(
-    key: M extends void ? never : K,
-    selector: (model: Readonly<M>) => R,
-  ): UseActions<M & Record<K, R>, AC, D>;
-  /**
-   * Derives a model property from an action's payload. When the action fires,
-   * the callback runs and the return value is applied to the model under the
-   * given key. Before the action fires the value is `null`.
-   *
-   * Works with unicast, broadcast, multicast, and channeled actions.
-   * For broadcast actions, cached values are replayed on mount.
-   *
-   * @param key - The property name to add to the model
-   * @param action - The action to subscribe to
-   * @param callback - Receives the action payload, returns the derived value
-   * @returns A new UseActions tuple with the model extended by the derived property
-   *
-   * @example
-   * ```ts
-   * actions.derive('doubled', Actions.Broadcast.Counter, (counter) => counter * 2);
-   * ```
-   */
-  derive<K extends string, A extends DerivedAction, R>(
-    key: K,
-    action: A,
-    callback: [Payload<A>] extends [never]
-      ? () => R
-      : (payload: Payload<A>) => R,
-  ): UseActions<(M extends void ? unknown : M) & Record<K, R | null>, AC, D>;
 };

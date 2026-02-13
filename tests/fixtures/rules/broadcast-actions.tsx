@@ -1,11 +1,10 @@
 /**
- * E2E Test Fixtures for Rules 16-19, 40: Broadcast Actions
+ * E2E Test Fixtures for Rules 16, 18-19, 40: Broadcast Actions
  *
  * Rule 16: Only broadcast actions support reactive subscription
- * Rule 17: Use derive() for reactive model values from broadcast actions
  * Rule 18: Late-mounting components receive cached values
  * Rule 19: Use channeled actions for targeted broadcast delivery
- * Rule 40: Use context.actions.read to read broadcast values in handlers
+ * Rule 40: Use context.actions.consume to consume broadcast values in handlers
  */
 import * as React from "react";
 import {
@@ -42,10 +41,6 @@ class ChanneledBroadcastActions {
 
 type EmptyModel = Record<string, never>;
 
-type ConsumeModel = {
-  traditionalUser: string;
-};
-
 type ChanneledModel = {
   user1Data: string;
   user2Data: string;
@@ -57,21 +52,6 @@ type ChanneledModel = {
 // ============================================================================
 // Custom Hooks
 // ============================================================================
-
-function useRule16And17Actions() {
-  const actions = useActions<ConsumeModel, typeof BroadcastActions>({
-    traditionalUser: "",
-  });
-
-  // Traditional handler approach
-  actions.useAction(BroadcastActions.UserLoggedIn, (context, user) => {
-    context.actions.produce((draft) => {
-      draft.model.traditionalUser = user.name;
-    });
-  });
-
-  return actions;
-}
 
 function useLateMountingPublisherActions() {
   const actions = useActions<EmptyModel, typeof BroadcastActions>({});
@@ -162,95 +142,6 @@ function useChanneledSubscriberActions() {
 // ============================================================================
 // Components
 // ============================================================================
-
-/**
- * Rule 16 & 17 Test: derive() for reactive model values from broadcast actions
- * Only broadcast actions support reactive subscription.
- */
-function Rule16And17Derived() {
-  const result = useRule16And17Actions();
-
-  // derive subscribes to broadcast actions and merges payload values onto the model
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [model, actions] = result
-    .derive("user", BroadcastActions.UserLoggedIn, (u: any) => u)
-    .derive("counter", BroadcastActions.Counter, (c: any) => c)
-    .derive("loadedData", BroadcastActions.DataLoaded, (d: any) => d);
-
-  return (
-    <section data-testid="rule-16-17">
-      <h3>Rules 16 & 17: derive() for Broadcast</h3>
-
-      {/* Dispatch buttons */}
-      <div data-testid="rule-16-17-controls">
-        <button
-          data-testid="rule-16-17-login"
-          onClick={() =>
-            actions.dispatch(BroadcastActions.UserLoggedIn, {
-              name: "Alice",
-              id: 1,
-            })
-          }
-        >
-          Login Alice
-        </button>
-        <button
-          data-testid="rule-16-17-login-bob"
-          onClick={() =>
-            actions.dispatch(BroadcastActions.UserLoggedIn, {
-              name: "Bob",
-              id: 2,
-            })
-          }
-        >
-          Login Bob
-        </button>
-        <button
-          data-testid="rule-16-17-counter"
-          onClick={() => actions.dispatch(BroadcastActions.Counter, 42)}
-        >
-          Set Counter
-        </button>
-        <button
-          data-testid="rule-16-17-data"
-          onClick={() =>
-            actions.dispatch(BroadcastActions.DataLoaded, {
-              items: ["apple", "banana", "cherry"],
-            })
-          }
-        >
-          Load Data
-        </button>
-      </div>
-
-      {/* Traditional handler result */}
-      <div data-testid="rule-16-17-traditional">{model.traditionalUser}</div>
-
-      {/* Rule 17: derive() merges broadcast payloads onto the model */}
-      <div data-testid="rule-16-17-consumed-user">
-        {model.user && (
-          <span>
-            Welcome, {model.user.name} (ID: {model.user.id})
-          </span>
-        )}
-      </div>
-
-      <div data-testid="rule-16-17-consumed-counter">
-        {model.counter != null && <span>Counter: {model.counter}</span>}
-      </div>
-
-      <div data-testid="rule-16-17-consumed-data">
-        {model.loadedData && (
-          <ul>
-            {model.loadedData.items.map((item: string, i: number) => (
-              <li key={i}>{item}</li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </section>
-  );
-}
 
 /**
  * Rule 18 Test: Late-mounting components receive cached values
@@ -419,7 +310,7 @@ function Rule19ChanneledBroadcast() {
 }
 
 // ============================================================================
-// Rule 40: Use context.actions.read to read broadcast values in handlers
+// Rule 40: Use context.actions.consume to consume broadcast values in handlers
 // ============================================================================
 
 class Rule40Actions {
@@ -457,7 +348,7 @@ function useRule40ConsumerActions() {
   });
 
   actions.useAction(Lifecycle.Mount, async (context) => {
-    const user = await context.actions.read(BroadcastActions.UserLoggedIn);
+    const user = await context.actions.consume(BroadcastActions.UserLoggedIn);
     if (!user) return;
     context.actions.produce(({ model }) => {
       model.consumed = user.name;
@@ -465,7 +356,7 @@ function useRule40ConsumerActions() {
   });
 
   actions.useAction(Rule40Actions.Trigger, async (context) => {
-    const user = await context.actions.read(BroadcastActions.UserLoggedIn);
+    const user = await context.actions.consume(BroadcastActions.UserLoggedIn);
     context.actions.produce(({ model }) => {
       model.consumed = user ? user.name : "null";
     });
@@ -484,7 +375,7 @@ function Rule40Consumer() {
         data-testid="rule-40-trigger"
         onClick={() => actions.dispatch(Rule40Actions.Trigger)}
       >
-        Read via read
+        Read via consume
       </button>
     </div>
   );
@@ -495,7 +386,7 @@ function Rule40HandlerRead() {
 
   return (
     <section data-testid="rule-40">
-      <h3>Rule 40: Handler-side read()</h3>
+      <h3>Rule 40: Handler-side consume()</h3>
       <Rule40Publisher />
       {showConsumer && <Rule40Consumer />}
       <button
@@ -511,8 +402,7 @@ function Rule40HandlerRead() {
 export function BroadcastActionsFixture() {
   return (
     <div data-testid="broadcast-actions-fixture">
-      <h2>Rules 16-19, 40: Broadcast Actions</h2>
-      <Rule16And17Derived />
+      <h2>Rules 16, 18-19, 40: Broadcast Actions</h2>
       <Rule18LateMounting />
       <Rule19ChanneledBroadcast />
       <Rule40HandlerRead />

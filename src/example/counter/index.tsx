@@ -11,7 +11,7 @@ export default function Counter(): React.ReactElement {
     <section className={styles.container}>
       <div className={styles.card}>
         <div className={styles.header}>
-          <h1 className={styles.title}>Counter - Hey {model.name}</h1>
+          <h1 className={styles.title}>Counter</h1>
         </div>
 
         <div className={styles.group}>
@@ -43,12 +43,6 @@ export default function Counter(): React.ReactElement {
           >
             +
           </button>
-        </div>
-
-        <div data-testid="derived">
-          {model.doubled !== null && (
-            <span style={{ fontSize: "small" }}>Doubled: {model.doubled}</span>
-          )}
         </div>
 
         <div

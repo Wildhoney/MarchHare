@@ -179,8 +179,8 @@ actions.useAction(Actions.Fetch, async (context, payload) => {
 
   context.actions.annotate(Op.Update, value); // Mark async state
 
-  // Read latest broadcast/multicast value imperatively
-  const user = await context.actions.read(Actions.Broadcast.User);
+  // Consume latest broadcast/multicast value imperatively
+  const user = await context.actions.consume(Actions.Broadcast.User);
   // Returns Promise<T | null> — waits for Immertation annotations to settle
 });
 ```
@@ -214,40 +214,6 @@ actions.inspect.user.remaining(); // count of pending operations
 actions.inspect.user.draft(); // draft value (latest annotation or model)
 actions.inspect.user.is(Op.Update); // check specific operation
 ```
-
-## Derived Values with `derive`
-
-Use `derive` to add new properties to the model. Two forms:
-
-**Action-based** &ndash; subscribes to an action, callback receives the payload, value is `null` until the action fires:
-
-```ts
-actions.derive("doubled", Actions.Broadcast.Counter, (counter) => counter * 2);
-```
-
-**Model-based** &ndash; receives the current model, evaluates every render, always has a value:
-
-```ts
-actions.derive("greeting", (model) => `Hello #${model.count}`);
-```
-
-Calls are chained and callback parameters are auto-typed:
-
-```ts
-return actions
-  .derive("greeting", (model) => `Hello #${model.count}`)
-  .derive("doubled", Actions.Broadcast.Counter, (counter) => counter * 2);
-```
-
-In the component, derived values appear on the model without additional typing:
-
-```tsx
-const [model] = useCounterActions();
-model.greeting; // string
-model.doubled; // number | null
-```
-
-Works with unicast, broadcast, multicast, and channeled actions. When a normal `useAction` handler and a `derive` entry fire for the same action, the component renders once.
 
 ## Multicast Pattern
 
@@ -563,9 +529,8 @@ docs: update the README file
   - `broadcast-actions.md` - Cross-component communication
   - `caching.md` - TTL-based caching with cacheable/invalidate
   - `channeled-actions.md` - Targeted event delivery
-  - `consuming-actions.md` - Reading broadcast values in handlers
+  - `consuming-actions.md` - Reading broadcast values in handlers with consume()
   - `context-providers.md` - Boundary, Broadcaster, Consumer, Regulators
-  - `derived-values.md` - Computed/derived model values via derive() and derive()
   - `error-handling.md` - Error component and fault handling
   - `ky-http-client.md` - Integration with ky HTTP client
   - `lifecycle-actions.md` - Mount, Unmount, Error, Update, Node

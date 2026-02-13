@@ -1189,7 +1189,7 @@ describe("useActions() StrictMode resilience", () => {
   });
 });
 
-describe("useActions() context.actions.read", () => {
+describe("useActions() context.actions.consume", () => {
   class BroadcastReadActions {
     static Name = Action<string>("Name", Distribution.Broadcast);
   }
@@ -1225,7 +1225,7 @@ describe("useActions() context.actions.read", () => {
       });
 
       result.useAction(BroadcastReadActions.Name, async (context, _name) => {
-        const value = await context.actions.read(BroadcastReadActions.Name);
+        const value = await context.actions.consume(BroadcastReadActions.Name);
         readValue = value;
         context.actions.produce(({ model }) => {
           model.result = value;
@@ -1268,7 +1268,7 @@ describe("useActions() context.actions.read", () => {
       const result = useActions<Record<string, never>, typeof LocalActions>({});
 
       result.useAction(LocalActions.Trigger, async (context) => {
-        const value = await context.actions.read(BroadcastReadActions.Name);
+        const value = await context.actions.consume(BroadcastReadActions.Name);
         readValue = value;
       });
 
@@ -1333,9 +1333,12 @@ describe("useActions() context.actions.read", () => {
       >({});
 
       result.useAction(MulticastReadActions.Score, async (context) => {
-        const value = await context.actions.read(MulticastReadActions.Score, {
-          scope: "test",
-        });
+        const value = await context.actions.consume(
+          MulticastReadActions.Score,
+          {
+            scope: "test",
+          },
+        );
         readValue = value;
       });
 
@@ -1422,7 +1425,7 @@ describe("useActions() context.actions.read", () => {
 
       // Read should await until the annotations on `name` have settled.
       actions.useAction(LocalActions.Read, async (context) => {
-        const value = await context.actions.read(BroadcastReadActions.Name);
+        const value = await context.actions.consume(BroadcastReadActions.Name);
         readValue = value;
       });
 
@@ -1719,409 +1722,5 @@ describe("useActions() void model", () => {
     });
 
     expect(received).toBe(true);
-  });
-});
-
-describe("useActions() derive()", () => {
-  type CountModel = { count: number };
-  const countModel: CountModel = { count: 0 };
-
-  class CountActions {
-    static Increment = Action("Increment");
-    static Decrement = Action("Decrement");
-    static Broadcast = BroadcastActions;
-  }
-
-  it("should derive a value from a unicast action dispatch", async () => {
-    const { result } = renderHook(() => {
-      const actions = useActions<CountModel, typeof CountActions>(countModel);
-
-      actions.useAction(CountActions.Decrement, (context) => {
-        context.actions.produce(({ model }) => {
-          model.count = model.count - 1;
-        });
-      });
-
-      return actions.derive(
-        "label",
-        CountActions.Decrement,
-        () => "decremented",
-      );
-    });
-
-    expect(result.current[0].label).toBeNull();
-
-    await act(async () => {
-      result.current[1].dispatch(CountActions.Decrement);
-    });
-
-    expect(result.current[0].label).toBe("decremented");
-    expect(result.current[0].count).toBe(-1);
-  });
-
-  it("should derive a value from a broadcast action dispatch", async () => {
-    function TestComponent({
-      onResult,
-    }: {
-      onResult: (model: { count: number; doubled: number | null }) => void;
-    }) {
-      const actions = useActions<CountModel, typeof CountActions>(countModel);
-
-      actions.useAction(CountActions.Broadcast.Counter, (context, payload) => {
-        context.actions.produce(({ model }) => {
-          model.count = payload;
-        });
-      });
-
-      const derived = actions.derive(
-        "doubled",
-        CountActions.Broadcast.Counter,
-        (counter) => counter * 2,
-      );
-
-      React.useEffect(() => {
-        onResult(derived[0]);
-      });
-
-      return (
-        <button
-          data-testid="dispatch-bc"
-          onClick={() =>
-            derived[1].dispatch(CountActions.Broadcast.Counter, 21)
-          }
-        >
-          Dispatch
-        </button>
-      );
-    }
-
-    let captured: { count: number; doubled: number | null } | null = null;
-
-    function App() {
-      return (
-        <Broadcaster>
-          <TestComponent onResult={(m) => (captured = m)} />
-        </Broadcaster>
-      );
-    }
-
-    render(<App />);
-
-    await act(async () => {
-      screen.getByTestId("dispatch-bc").click();
-    });
-
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 10));
-    });
-
-    expect(captured?.doubled).toBe(42);
-    expect(captured?.count).toBe(21);
-  });
-
-  it("should start with null before any action fires", () => {
-    const { result } = renderHook(() => {
-      const actions = useActions<CountModel, typeof CountActions>(countModel);
-      return actions.derive("label", CountActions.Decrement, () => "hello");
-    });
-
-    expect(result.current[0].label).toBeNull();
-  });
-
-  it("should pass the action payload to the derived callback", async () => {
-    class PayloadActions {
-      static SetName = Action<string>("SetName");
-    }
-
-    type PayloadModel = { name: string | null };
-
-    const { result } = renderHook(() => {
-      const actions = useActions<PayloadModel, typeof PayloadActions>({
-        name: null,
-      });
-
-      return actions.derive(
-        "greeting",
-        PayloadActions.SetName,
-        (name) => `Hello, ${name}`,
-      );
-    });
-
-    expect(result.current[0].greeting).toBeNull();
-
-    await act(async () => {
-      result.current[1].dispatch(PayloadActions.SetName, "Adam");
-    });
-
-    expect(result.current[0].greeting).toBe("Hello, Adam");
-  });
-
-  it("should support multiple chained derive calls independently", async () => {
-    const { result } = renderHook(() => {
-      const actions = useActions<CountModel, typeof CountActions>(countModel);
-
-      return actions
-        .derive("incLabel", CountActions.Increment, () => "incremented")
-        .derive("decLabel", CountActions.Decrement, () => "decremented");
-    });
-
-    expect(result.current[0].incLabel).toBeNull();
-    expect(result.current[0].decLabel).toBeNull();
-
-    await act(async () => {
-      result.current[1].dispatch(CountActions.Increment);
-    });
-
-    expect(result.current[0].incLabel).toBe("incremented");
-    expect(result.current[0].decLabel).toBeNull();
-
-    await act(async () => {
-      result.current[1].dispatch(CountActions.Decrement);
-    });
-
-    expect(result.current[0].incLabel).toBe("incremented");
-    expect(result.current[0].decLabel).toBe("decremented");
-  });
-
-  it("should coexist with normal useAction handlers for the same action", async () => {
-    let handlerCalled = false;
-
-    const { result } = renderHook(() => {
-      const actions = useActions<CountModel, typeof CountActions>(countModel);
-
-      actions.useAction(CountActions.Decrement, (context) => {
-        handlerCalled = true;
-        context.actions.produce(({ model }) => {
-          model.count = model.count - 1;
-        });
-      });
-
-      return actions.derive("label", CountActions.Decrement, () => "derived");
-    });
-
-    await act(async () => {
-      result.current[1].dispatch(CountActions.Decrement);
-    });
-
-    expect(handlerCalled).toBe(true);
-    expect(result.current[0].count).toBe(-1);
-    expect(result.current[0].label).toBe("derived");
-  });
-
-  it("should preserve original model keys on the derived result", () => {
-    const { result } = renderHook(() => {
-      const actions = useActions<CountModel, typeof CountActions>({
-        count: 42,
-      });
-
-      return actions.derive("label", CountActions.Decrement, () => "hello");
-    });
-
-    expect(result.current[0].count).toBe(42);
-    expect(result.current[0].label).toBeNull();
-  });
-
-  it("should work with derive as the only handler (no normal useAction)", async () => {
-    const { result } = renderHook(() => {
-      const actions = useActions<CountModel, typeof CountActions>(countModel);
-
-      return actions.derive(
-        "label",
-        CountActions.Decrement,
-        () => "standalone",
-      );
-    });
-
-    await act(async () => {
-      result.current[1].dispatch(CountActions.Decrement);
-    });
-
-    expect(result.current[0].label).toBe("standalone");
-  });
-
-  it("should replay broadcast value to late-mounting derive handler", async () => {
-    let capturedModel: { count: number; doubled: number | null } | null = null;
-
-    function ProducerComponent({ onShowLate }: { onShowLate: () => void }) {
-      const actions = useActions<CountModel, typeof CountActions>(countModel);
-
-      actions.useAction(CountActions.Broadcast.Counter, () => {});
-
-      return (
-        <button
-          data-testid="dispatch-derived-replay"
-          onClick={() => {
-            actions[1].dispatch(CountActions.Broadcast.Counter, 21);
-            onShowLate();
-          }}
-        >
-          Dispatch
-        </button>
-      );
-    }
-
-    function LateComponent() {
-      const actions = useActions<CountModel, typeof CountActions>(countModel);
-
-      const derived = actions.derive(
-        "doubled",
-        CountActions.Broadcast.Counter,
-        (counter) => counter * 2,
-      );
-
-      React.useEffect(() => {
-        capturedModel = derived[0];
-      });
-
-      return <div data-testid="late-derived">{derived[0].doubled}</div>;
-    }
-
-    function App() {
-      const [show, setShow] = React.useState(false);
-
-      return (
-        <Broadcaster>
-          <ProducerComponent onShowLate={() => setShow(true)} />
-          {show && <LateComponent />}
-        </Broadcaster>
-      );
-    }
-
-    render(<App />);
-
-    // Dispatch broadcast and mount late component in same act
-    await act(async () => {
-      screen.getByTestId("dispatch-derived-replay").click();
-    });
-
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    });
-
-    // The late-mounting derive handler should have received the replayed value
-    expect(capturedModel?.doubled).toBe(42);
-  });
-
-  it("should evaluate model-based selector on mount", () => {
-    const { result } = renderHook(() => {
-      const actions = useActions<CountModel, typeof CountActions>({
-        count: 5,
-      });
-
-      return actions.derive("label", (model) => `Count is ${model.count}`);
-    });
-
-    expect(result.current[0].label).toBe("Count is 5");
-  });
-
-  it("should re-evaluate model-based selector when the model changes", async () => {
-    const { result } = renderHook(() => {
-      const actions = useActions<CountModel, typeof CountActions>({
-        count: 0,
-      });
-
-      actions.useAction(CountActions.Increment, (context) => {
-        context.actions.produce(({ model }) => {
-          model.count = model.count + 1;
-        });
-      });
-
-      return actions.derive("label", (model) => `Count is ${model.count}`);
-    });
-
-    expect(result.current[0].label).toBe("Count is 0");
-
-    await act(async () => {
-      result.current[1].dispatch(CountActions.Increment);
-    });
-
-    expect(result.current[0].label).toBe("Count is 1");
-  });
-
-  it("should support model-based and action-based entries together", async () => {
-    const { result } = renderHook(() => {
-      const actions = useActions<CountModel, typeof CountActions>({
-        count: 3,
-      });
-
-      actions.useAction(CountActions.Decrement, (context) => {
-        context.actions.produce(({ model }) => {
-          model.count = model.count - 1;
-        });
-      });
-
-      return actions
-        .derive("summary", (model) => `Current: ${model.count}`)
-        .derive("decLabel", CountActions.Decrement, () => "decremented");
-    });
-
-    expect(result.current[0].summary).toBe("Current: 3");
-    expect(result.current[0].decLabel).toBeNull();
-
-    await act(async () => {
-      result.current[1].dispatch(CountActions.Decrement);
-    });
-
-    expect(result.current[0].summary).toBe("Current: 2");
-    expect(result.current[0].decLabel).toBe("decremented");
-  });
-
-  it("should support action-based derive with a void model", async () => {
-    class VoidDeriveActions {
-      static Broadcast = class {
-        static Name = Action<string>("Name", Distribution.Broadcast);
-      };
-    }
-
-    function Sender() {
-      const actions = useActions<void, typeof VoidDeriveActions>();
-      actions.useAction(VoidDeriveActions.Broadcast.Name, () => {});
-      return (
-        <button
-          data-testid="send-void-derive"
-          onClick={() =>
-            actions[1].dispatch(VoidDeriveActions.Broadcast.Name, "Adam")
-          }
-        >
-          Send
-        </button>
-      );
-    }
-
-    function Receiver({
-      onResult,
-    }: {
-      onResult: (model: { greeting: string | null }) => void;
-    }) {
-      const actions = useActions<void, typeof VoidDeriveActions>();
-      const derived = actions.derive(
-        "greeting",
-        VoidDeriveActions.Broadcast.Name,
-        (name) => `Hello ${name}`,
-      );
-
-      React.useEffect(() => {
-        onResult(derived[0]);
-      });
-
-      return <div data-testid="void-derive-result">{derived[0].greeting}</div>;
-    }
-
-    let capturedModel: { greeting: string | null } | null = null;
-
-    render(
-      <Broadcaster>
-        <Sender />
-        <Receiver onResult={(m) => (capturedModel = m)} />
-      </Broadcaster>,
-    );
-
-    expect(capturedModel?.greeting).toBeNull();
-
-    await act(async () => {
-      screen.getByTestId("send-void-derive").click();
-    });
-
-    expect(capturedModel?.greeting).toBe("Hello Adam");
   });
 });

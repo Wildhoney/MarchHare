@@ -7,7 +7,7 @@ import * as React from "react";
  * When a broadcast or multicast action is dispatched, the payload is
  * stored so that late-mounting components can replay it via
  * {@link useLifecycles} and handlers can read it via
- * `context.actions.read()`.
+ * `context.actions.consume()`.
  */
 export class BroadcastEmitter extends EventEmitter {
   private cache = new Map<string | symbol, unknown>();

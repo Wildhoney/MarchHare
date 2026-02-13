@@ -222,7 +222,7 @@ export function useActions<
           invalidate(entry) {
             cache.delete(getCacheKey(<CacheId>(<unknown>entry)));
           },
-          async read(action: AnyAction, options?: MulticastOptions) {
+          async consume(action: AnyAction, options?: MulticastOptions) {
             if (controller.signal.aborted) return null;
 
             const key = getActionSymbol(action);
@@ -454,53 +454,5 @@ export function useActions<
     useRegisterHandler<M, A, D>(registry, action, <Handler<M, A, D>>handler);
   };
 
-  const typedResult = <UseActions<M, A, D>>result;
-
-  // Shared ref for all derive calls — accumulates derived key/value
-  // pairs across chained calls within the same hook invocation.
-  const derivedRef = React.useRef<Record<string, unknown>>({});
-
-  const attachMethods = (target: UseActions<M, A, D>): void => {
-    // Type safety is enforced by the overloaded `derive` signatures on
-    // `UseActions`. The runtime implementation accepts all overloads via a
-    // loose union and distinguishes them by the first argument type.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (<any>target).derive = (
-      key: string,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      actionOrSelector?: ActionOrChanneled | ((model: any) => unknown),
-      callback?: (payload: unknown) => unknown,
-    ): UseActions<M, A, D> => {
-      if (G.isNullable(callback)) {
-        // Model-based: derive('key', (model) => value)
-        derivedRef.current[key] = (<(m: unknown) => unknown>actionOrSelector)(
-          typedResult[0],
-        );
-      } else if (callback) {
-        // Action-based: derive('key', action, callback)
-        if (!(key in derivedRef.current)) derivedRef.current[key] = null;
-        const cb = callback;
-        useRegisterHandler<M, A, D>(
-          registry,
-          <ActionOrChanneled>actionOrSelector,
-          <Handler<M, A, D>>((_context: unknown, payload: unknown) => {
-            derivedRef.current[key] = cb(payload);
-            rerender();
-          }),
-        );
-      }
-
-      const extended = <UseActions<M, A, D>>[
-        { ...typedResult[0], ...derivedRef.current },
-        typedResult[1],
-      ];
-      extended.useAction = typedResult.useAction;
-      attachMethods(extended);
-      return extended;
-    };
-  };
-
-  attachMethods(typedResult);
-
-  return typedResult;
+  return <UseActions<M, A, D>>result;
 }
