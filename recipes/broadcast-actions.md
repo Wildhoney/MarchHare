@@ -17,7 +17,7 @@ export class Actions {
 }
 ```
 
-Broadcast actions return a `BroadcastPayload<T>` type, which is distinct from the `Payload<T>` returned by unicast actions. This enables compile-time enforcement &ndash; only broadcast actions support reactive subscription via `useAction` and `useDerived`.
+Broadcast actions return a `BroadcastPayload<T>` type, which is distinct from the `Payload<T>` returned by unicast actions. This enables compile-time enforcement &ndash; only broadcast actions support reactive subscription via `useAction` and `derive`.
 
 Any component that defines a handler for `Actions.Broadcast.SignedOut` will receive the action when it's dispatched from any other component.
 

@@ -375,7 +375,7 @@ This enables components to distinguish between hydration and live updates.
 
 ### Rule 16: Only broadcast actions support reactive subscription
 
-Broadcast and multicast actions support reactive subscription via `useAction` and `useDerived`. Unicast actions are local to the dispatching component.
+Broadcast and multicast actions support reactive subscription via `useAction` and `derive`. Unicast actions are local to the dispatching component.
 
 ```ts
 class Actions {
@@ -390,29 +390,26 @@ actions.useAction(Actions.Broadcast, (context, data) => {
   });
 });
 
-// useDerived: subscribe and map payload onto model
-const [model] = actions.useDerived({
-  data: [Actions.Broadcast, (d) => d],
-});
+// derive: subscribe and map payload onto model
+const [model] = actions.derive("data", Actions.Broadcast, (d) => d);
 ```
 
-### Rule 17: Use `useDerived` for reactive model values from broadcast actions
+### Rule 17: Use `derive` for reactive model values from broadcast actions
 
-`useDerived` subscribes to actions and maps their payloads onto the model. Derived values start as `null` and update when the action fires.
+`derive` subscribes to actions and maps their payloads onto the model. Derived values start as `null` and update when the action fires.
 
 ```tsx
 const result = useMyActions();
 
-const [model] = result.useDerived({
-  user: [Actions.Broadcast.UserLoggedIn, (user) => user],
-  counter: [Actions.Broadcast.Counter, (count) => count],
-});
+const [model] = result
+  .derive("user", Actions.Broadcast.UserLoggedIn, (user) => user)
+  .derive("counter", Actions.Broadcast.Counter, (count) => count);
 
 // model.user is null until first dispatch
 // model.counter is null until first dispatch
 ```
 
-`useDerived` works with unicast, broadcast, multicast, and channeled actions. When a normal `useAction` handler and a `useDerived` entry fire for the same action, the component renders once.
+`derive` works with unicast, broadcast, multicast, and channeled actions. When a normal `useAction` handler and a `derive` entry fire for the same action, the component renders once.
 
 ### Rule 18: Late-mounting components receive cached values
 
@@ -878,10 +875,8 @@ actions.useAction(
   },
 );
 
-// Or derive values from broadcasts with useDerived()
-const [model] = actions.useDerived({
-  price: [Actions.PriceUpdate, (price) => price],
-});
+// Or derive values from broadcasts with derive()
+const [model] = actions.derive("price", Actions.PriceUpdate, (price) => price);
 ```
 
 When dispatching, use a channel to target specific listeners:
@@ -899,7 +894,7 @@ When an action handler needs the latest broadcast or multicast value imperativel
 
 ```ts
 actions.useAction(Actions.FetchPosts, async (context) => {
-  const user = context.actions.read(Actions.Broadcast.User);
+  const user = await context.actions.read(Actions.Broadcast.User);
   if (!user) return;
   const posts = await fetchPosts(user.id, {
     signal: context.task.controller.signal,
@@ -912,15 +907,16 @@ actions.useAction(Actions.FetchPosts, async (context) => {
 
 Key details:
 
-- **Synchronous** &ndash; returns `T | null` directly
+- **Async** &ndash; returns `Promise<T | null>`
 - Returns `null` when no value has been dispatched
-- Respects the task's abort signal (returns `null` if aborted)
+- Waits for pending Immertation annotations to settle before resolving
+- Respects the task's abort signal (resolves with `null` if aborted)
 - Reads from the broadcast/scope cache
 - Supports multicast with `{ scope: "name" }` option
 
 ```ts
 // Multicast read in handler
-const score = context.actions.read(Actions.Multicast.Score, {
+const score = await context.actions.read(Actions.Multicast.Score, {
   scope: "game",
 });
 ```

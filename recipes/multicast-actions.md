@@ -116,15 +116,17 @@ function ScoreBoard() {
 
 ## Deriving multicast values
 
-Use `useDerived` to subscribe to multicast actions and map their payloads onto the model:
+Use `derive` to subscribe to multicast actions and map their payloads onto the model:
 
 ```tsx
 function ScoreDisplay() {
   const result = useScoreActions();
 
-  const [model] = result.useDerived({
-    latestScore: [Actions.Multicast.Update, (score) => score],
-  });
+  const [model] = result.derive(
+    "latestScore",
+    Actions.Multicast.Update,
+    (score) => score,
+  );
 
   return <div>Current score: {model.latestScore ?? "—"}</div>;
 }
@@ -184,10 +186,10 @@ Multicast is ideal for:
 
 ## Comparison with broadcast
 
-| Feature           | Broadcast                           | Multicast                              |
-| ----------------- | ----------------------------------- | -------------------------------------- |
-| Reach             | All mounted components              | Components within named scope          |
-| Dispatch          | `dispatch(action, payload)`         | `dispatch(action, payload, { scope })` |
-| useDerived        | `useDerived({ key: [action, cb] })` | Same, values scoped automatically      |
-| Late mount values | ✓                                   | ✓                                      |
-| Isolation         | Global                              | Scoped                                 |
+| Feature           | Broadcast                   | Multicast                              |
+| ----------------- | --------------------------- | -------------------------------------- |
+| Reach             | All mounted components      | Components within named scope          |
+| Dispatch          | `dispatch(action, payload)` | `dispatch(action, payload, { scope })` |
+| derive            | `derive("key", action, cb)` | Same, values scoped automatically      |
+| Late mount values | ✓                           | ✓                                      |
+| Isolation         | Global                      | Scoped                                 |

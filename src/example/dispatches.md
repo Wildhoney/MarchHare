@@ -36,7 +36,7 @@ flowchart TB
     end
 
     subgraph Subscription["🎯 Subscribers"]
-        VisitorSubscribe["useAction / useDerived"]
+        VisitorSubscribe["useAction / derive"]
     end
 
     %% User interactions
@@ -97,7 +97,7 @@ flowchart TB
 1. **User Interaction** → Button clicks dispatch unicast actions
 2. **Action Handlers** → Update local model state via `produce()`
 3. **Broadcast Dispatch** → Handlers emit `Actions.Broadcast.Counter` to broadcast channel
-4. **Cross-Component Subscription** → Visitor component subscribes via `useAction` or `useDerived`
+4. **Cross-Component Subscription** → Visitor component subscribes via `useAction` or `derive`
 5. **Reactive Rendering** → Component re-renders when model updates
 
 ## Action Registry

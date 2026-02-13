@@ -677,14 +677,15 @@ export type HandlerContext<
      */
     invalidate(entry: CacheId<unknown> | ChanneledCacheId<unknown>): void;
     /**
-     * Reads the latest broadcast or multicast value from the cache.
+     * Reads the latest broadcast or multicast value, waiting for it if necessary.
      *
-     * Returns the raw value `T` or `null` if no value has been dispatched.
-     * Returns `null` if the task is aborted.
+     * If a value has already been dispatched it resolves immediately.
+     * Otherwise it waits until the next dispatch of the action.
+     * Resolves with `null` if the task is aborted before a value arrives.
      *
      * @param action - The broadcast or multicast action to read.
      * @param options - For multicast actions, must include `{ scope: "ScopeName" }`.
-     * @returns The latest dispatched value, or `null`.
+     * @returns The dispatched value, or `null` if aborted.
      *
      * @example
      * ```ts
@@ -698,8 +699,11 @@ export type HandlerContext<
      * });
      * ```
      */
-    read<T>(action: BroadcastPayload<T>): T | null;
-    read<T>(action: MulticastPayload<T>, options: MulticastOptions): T | null;
+    read<T>(action: BroadcastPayload<T>): Promise<T | null>;
+    read<T>(
+      action: MulticastPayload<T>,
+      options: MulticastOptions,
+    ): Promise<T | null>;
   };
 };
 
@@ -751,49 +755,21 @@ export type Handler<
 ) => void | Promise<void> | AsyncGenerator | Generator;
 
 /**
- * Resolves the action value at a (possibly dot-notated) path within an actions object.
- * For a simple key like `"SetName"`, returns `AC["SetName"]`.
- * For a dotted key like `"Broadcast.PaymentSent"`, recursively resolves to
- * `AC["Broadcast"]["PaymentSent"]`.
- *
- * @template AC - The actions object to traverse
- * @template K - The key path (may contain dots)
+ * String keys of `AC` excluding inherited `prototype` from class constructors.
+ * When action containers are classes (`typeof MyActions`), TypeScript includes
+ * `"prototype"` in `keyof`. Excluding it prevents `prototype` from appearing
+ * as a handler key and avoids recursion into Function internals.
  */
-type DeepAction<AC, K extends string> = K extends `${infer Head}.${infer Tail}`
-  ? Head extends keyof AC
-    ? DeepAction<AC[Head], Tail>
-    : never
-  : K extends keyof AC
-    ? AC[K]
-    : never;
+type OwnKeys<AC> = Exclude<keyof AC & string, "prototype">;
 
 /**
- * Produces a union of all valid dot-notated key paths that resolve to leaf actions
- * (i.e. values with `Brand.Action`) within an actions object.
+ * Recursive mapped type for action handlers that mirrors the action class hierarchy.
  *
- * Flat actions like `SetName` produce `"SetName"`.
- * Nested namespaces like `Broadcast = { PaymentSent, PaymentLink }` produce
- * `"Broadcast.PaymentSent" | "Broadcast.PaymentLink"`.
+ * For leaf actions (values with no own string keys, i.e. `HandlerPayload`), produces
+ * a handler function signature. For namespace objects (containing nested actions),
+ * produces a nested `Handlers` object.
  *
- * @template AC - The actions object to flatten
- * @template Prefix - Accumulated prefix for recursion (defaults to never)
- */
-type FlattenKeys<AC, Prefix extends string = never> = {
-  [K in keyof AC & string]: keyof AC[K] & string extends never
-    ? [Prefix] extends [never]
-      ? K
-      : `${Prefix}.${K}`
-    : FlattenKeys<AC[K], [Prefix] extends [never] ? K : `${Prefix}.${K}`>;
-}[keyof AC & string];
-
-/**
- * Higher-Kinded Type (HKT) emulation for action handlers.
- * Creates a mapped type where each action key maps to its fully-typed handler.
- *
- * TypeScript doesn't natively support HKTs (types that return types), but this
- * pattern emulates them using mapped types with indexed access.
- *
- * Supports both flat and nested action classes with dot notation:
+ * Access handlers using bracket notation matching the action structure:
  *
  * @template M - The model type
  * @template AC - The actions class type
@@ -815,11 +791,11 @@ type FlattenKeys<AC, Prefix extends string = never> = {
  *
  * type H = Handlers<Model, typeof Actions>;
  *
- * // Flat actions work as before
+ * // Flat actions
  * export const handleSetName: H["SetName"] = (context, name) => { ... };
  *
- * // Nested actions use dot notation
- * export const handlePaymentSent: H["Broadcast.PaymentSent"] = (context) => { ... };
+ * // Nested actions use chained bracket notation
+ * export const handlePaymentSent: H["Broadcast"]["PaymentSent"] = (context) => { ... };
  * ```
  */
 export type Handlers<
@@ -827,39 +803,22 @@ export type Handlers<
   AC extends Actions | void,
   D extends Props = Props,
 > = {
-  [K in FlattenKeys<AC>]: (
-    context: HandlerContext<M, AC, D>,
-    ...args: [Payload<DeepAction<AC, K> & HandlerPayload<unknown>>] extends [
-      never,
-    ]
-      ? []
-      : [payload: Payload<DeepAction<AC, K> & HandlerPayload<unknown>>]
-  ) => void | Promise<void> | AsyncGenerator | Generator;
+  [K in OwnKeys<AC>]: OwnKeys<AC[K]> extends never
+    ? (
+        context: HandlerContext<M, AC, D>,
+        ...args: [Payload<AC[K] & HandlerPayload<unknown>>] extends [never]
+          ? []
+          : [payload: Payload<AC[K] & HandlerPayload<unknown>>]
+      ) => void | Promise<void> | AsyncGenerator | Generator
+    : Handlers<M, AC[K] & Actions, D>;
 };
 
 /**
- * Union of action types accepted by `useDerived` configuration entries.
+ * Union of action types accepted by `derive` configuration entries.
  * @internal
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DerivedAction = HandlerPayload<any> | ChanneledAction<any, any>;
-
-/**
- * Extracts the callback return type from a derived entry tuple.
- * @internal
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type DerivedReturn<E> = E extends readonly [any, (...args: any[]) => infer R]
-  ? R
-  : never;
-
-/**
- * Computes an object type from a derived config where each key maps to
- * the callback's return type unioned with `null` (the initial value before
- * the action has fired).
- * @internal
- */
-type DerivedModel<C> = { [K in keyof C]: DerivedReturn<C[K]> | null };
 
 export type UseActions<
   M extends Model | void,
@@ -981,69 +940,45 @@ export type UseActions<
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void;
   /**
-   * Overlays computed/derived values onto the model without storing them in state.
-   * Keys must be existing model properties and values must match the property types.
+   * Derives a model property from the current model state. The selector
+   * evaluates synchronously on every render and always has a value.
    *
-   * Useful for values that can be derived from other model fields at render time,
-   * avoiding the need to manually update them via `produce`.
-   *
-   * @param computed - An object with model keys mapped to their derived values
-   * @returns A new UseActions tuple with the model values overridden
+   * @param key - The property name to add to the model
+   * @param selector - A function receiving the current model, returning the derived value
+   * @returns A new UseActions tuple with the model extended by the derived property
    *
    * @example
    * ```ts
-   * return actions.derive({
-   *   partialCrypto: model.paymentLink?.receivable?.partialCryptoPaymentDetected === true,
-   * });
+   * actions.derive('greeting', (model) => `Hey ${model.name}`);
    * ```
    */
-  derive(
-    computed: M extends void ? never : Partial<M & object>,
-  ): UseActions<M, AC, D>;
+  derive<K extends string, R>(
+    key: M extends void ? never : K,
+    selector: (model: Readonly<M>) => R,
+  ): UseActions<M & Record<K, R>, AC, D>;
   /**
-   * Subscribes to actions and derives model properties from their payloads.
-   *
-   * Each config entry maps a new model key to an `[action, callback]` tuple.
-   * When the action fires, the callback runs with the payload and the return
-   * value is applied to the model under that key. The component re-renders
-   * once, even when a normal `useAction` handler for the same action also
-   * calls `produce`.
-   *
-   * Before an action fires, derived values are `null`.
+   * Derives a model property from an action's payload. When the action fires,
+   * the callback runs and the return value is applied to the model under the
+   * given key. Before the action fires the value is `null`.
    *
    * Works with unicast, broadcast, multicast, and channeled actions.
    * For broadcast actions, cached values are replayed on mount.
    *
-   * @param config - Object mapping derived key names to `[action, callback]` tuples
-   * @returns A new UseActions tuple with the model extended by derived properties
+   * @param key - The property name to add to the model
+   * @param action - The action to subscribe to
+   * @param callback - Receives the action payload, returns the derived value
+   * @returns A new UseActions tuple with the model extended by the derived property
    *
    * @example
    * ```ts
-   * return actions.useDerived({
-   *   doubled: [Actions.Broadcast.Counter, (counter) => counter * 2],
-   *   label: [Actions.SetName, (name) => `Hello, ${name}`],
-   * });
+   * actions.derive('doubled', Actions.Broadcast.Counter, (counter) => counter * 2);
    * ```
    */
-  useDerived<
-    C extends Record<
-      string,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      readonly [DerivedAction, (...args: any[]) => any]
-    >,
-  >(
-    config: M extends void
-      ? never
-      : {
-          [K in keyof C]: C[K] extends readonly [
-            infer A,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (...args: any[]) => infer R,
-          ]
-            ? A extends { readonly [Brand.Payload]: infer P }
-              ? readonly [A, (payload: P) => R]
-              : readonly [A, () => R]
-            : C[K];
-        },
-  ): UseActions<M & DerivedModel<C>, AC, D>;
+  derive<K extends string, A extends DerivedAction, R>(
+    key: M extends void ? never : K,
+    action: A,
+    callback: [Payload<A>] extends [never]
+      ? () => R
+      : (payload: Payload<A>) => R,
+  ): UseActions<M & Record<K, R | null>, AC, D>;
 };

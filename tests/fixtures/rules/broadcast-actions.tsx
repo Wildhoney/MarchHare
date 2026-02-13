@@ -2,7 +2,7 @@
  * E2E Test Fixtures for Rules 16-19, 40: Broadcast Actions
  *
  * Rule 16: Only broadcast actions support reactive subscription
- * Rule 17: Use useDerived() for reactive model values from broadcast actions
+ * Rule 17: Use derive() for reactive model values from broadcast actions
  * Rule 18: Late-mounting components receive cached values
  * Rule 19: Use channeled actions for targeted broadcast delivery
  * Rule 40: Use context.actions.read to read broadcast values in handlers
@@ -164,23 +164,22 @@ function useChanneledSubscriberActions() {
 // ============================================================================
 
 /**
- * Rule 16 & 17 Test: useDerived() for reactive model values from broadcast actions
+ * Rule 16 & 17 Test: derive() for reactive model values from broadcast actions
  * Only broadcast actions support reactive subscription.
  */
 function Rule16And17Derived() {
   const result = useRule16And17Actions();
 
-  // useDerived subscribes to broadcast actions and merges payload values onto the model
+  // derive subscribes to broadcast actions and merges payload values onto the model
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [model, actions] = result.useDerived({
-    user: [BroadcastActions.UserLoggedIn, (u: any) => u],
-    counter: [BroadcastActions.Counter, (c: any) => c],
-    loadedData: [BroadcastActions.DataLoaded, (d: any) => d],
-  });
+  const [model, actions] = result
+    .derive("user", BroadcastActions.UserLoggedIn, (u: any) => u)
+    .derive("counter", BroadcastActions.Counter, (c: any) => c)
+    .derive("loadedData", BroadcastActions.DataLoaded, (d: any) => d);
 
   return (
     <section data-testid="rule-16-17">
-      <h3>Rules 16 & 17: useDerived() for Broadcast</h3>
+      <h3>Rules 16 & 17: derive() for Broadcast</h3>
 
       {/* Dispatch buttons */}
       <div data-testid="rule-16-17-controls">
@@ -227,7 +226,7 @@ function Rule16And17Derived() {
       {/* Traditional handler result */}
       <div data-testid="rule-16-17-traditional">{model.traditionalUser}</div>
 
-      {/* Rule 17: useDerived() merges broadcast payloads onto the model */}
+      {/* Rule 17: derive() merges broadcast payloads onto the model */}
       <div data-testid="rule-16-17-consumed-user">
         {model.user && (
           <span>
@@ -457,16 +456,16 @@ function useRule40ConsumerActions() {
     consumed: "",
   });
 
-  actions.useAction(Lifecycle.Mount, (context) => {
-    const user = context.actions.read(BroadcastActions.UserLoggedIn);
+  actions.useAction(Lifecycle.Mount, async (context) => {
+    const user = await context.actions.read(BroadcastActions.UserLoggedIn);
     if (!user) return;
     context.actions.produce(({ model }) => {
       model.consumed = user.name;
     });
   });
 
-  actions.useAction(Rule40Actions.Trigger, (context) => {
-    const user = context.actions.read(BroadcastActions.UserLoggedIn);
+  actions.useAction(Rule40Actions.Trigger, async (context) => {
+    const user = await context.actions.read(BroadcastActions.UserLoggedIn);
     context.actions.produce(({ model }) => {
       model.consumed = user ? user.name : "null";
     });

@@ -34,18 +34,11 @@ export function useCounterActions() {
     });
   });
 
-  return actions.useDerived({
-    anExample: [
-      Actions.Decrement,
-      () => {
-        return "hey!";
-      },
-    ],
-    anotherExample: [
-      Actions.Broadcast.Counter,
-      (counter) => {
-        return counter * 2;
-      },
-    ],
-  });
+  return actions
+    .derive("name", (model) => {
+      return "Hey " + Math.random() + model.count;
+    })
+    .derive("doubled", Actions.Broadcast.Counter, (counter) => {
+      return counter * 2;
+    });
 }

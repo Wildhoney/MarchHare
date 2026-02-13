@@ -222,18 +222,51 @@ export function useActions<
           invalidate(entry) {
             cache.delete(getCacheKey(<CacheId>(<unknown>entry)));
           },
-          read(action: AnyAction, options?: MulticastOptions) {
+          async read(action: AnyAction, options?: MulticastOptions) {
             if (controller.signal.aborted) return null;
 
             const key = getActionSymbol(action);
 
-            if (isMulticastAction(action) && options?.scope) {
-              const scoped = getScope(scope, options.scope);
-              if (!scoped) return null;
-              return scoped.emitter.getCached(key) ?? null;
+            const emitter =
+              isMulticastAction(action) && options?.scope
+                ? (getScope(scope, options.scope)?.emitter ?? null)
+                : broadcast;
+
+            if (!emitter) return null;
+
+            const cached = emitter.getCached(key);
+            if (cached === undefined) return null;
+
+            // Derive the model path from the action name and wait for
+            // any pending Immertation annotations to settle.
+            const actionName = getName(action);
+            const path =
+              actionName !== "unknown"
+                ? actionName[0].toLowerCase() + actionName.slice(1)
+                : null;
+
+            if (path) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const inspector = (<any>state.current.inspect)[path];
+              if (inspector?.pending?.()) {
+                await new Promise<void>((resolve, reject) => {
+                  if (controller.signal.aborted) {
+                    reject(controller.signal.reason);
+                    return;
+                  }
+                  const onAbort = () => reject(controller.signal.reason);
+                  controller.signal.addEventListener("abort", onAbort, {
+                    once: true,
+                  });
+                  inspector.settled().then(() => {
+                    controller.signal.removeEventListener("abort", onAbort);
+                    resolve();
+                  });
+                });
+              }
             }
 
-            return broadcast.getCached(key) ?? null;
+            return emitter.getCached(key) ?? null;
           },
         },
       };
@@ -423,61 +456,51 @@ export function useActions<
 
   const typedResult = <UseActions<M, A, D>>result;
 
-  const attachDerive = (target: UseActions<M, A, D>): void => {
-    target.derive = (computed: Partial<M & object>): UseActions<M, A, D> => {
-      const derived = <UseActions<M, A, D>>[
-        { ...target[0], ...computed },
-        target[1],
+  // Shared ref for all derive calls — accumulates derived key/value
+  // pairs across chained calls within the same hook invocation.
+  const derivedRef = React.useRef<Record<string, unknown>>({});
+
+  const attachMethods = (target: UseActions<M, A, D>): void => {
+    // Type safety is enforced by the overloaded `derive` signatures on
+    // `UseActions`. The runtime implementation accepts all overloads via a
+    // loose union and distinguishes them by the first argument type.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (<any>target).derive = (
+      key: string,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      actionOrSelector?: ActionOrChanneled | ((model: any) => unknown),
+      callback?: (payload: unknown) => unknown,
+    ): UseActions<M, A, D> => {
+      if (G.isNullable(callback)) {
+        // Model-based: derive('key', (model) => value)
+        derivedRef.current[key] = (<(m: unknown) => unknown>actionOrSelector)(
+          typedResult[0],
+        );
+      } else if (callback) {
+        // Action-based: derive('key', action, callback)
+        if (!(key in derivedRef.current)) derivedRef.current[key] = null;
+        const cb = callback;
+        useRegisterHandler<M, A, D>(
+          registry,
+          <ActionOrChanneled>actionOrSelector,
+          <Handler<M, A, D>>((_context: unknown, payload: unknown) => {
+            derivedRef.current[key] = cb(payload);
+            rerender();
+          }),
+        );
+      }
+
+      const extended = <UseActions<M, A, D>>[
+        { ...typedResult[0], ...derivedRef.current },
+        typedResult[1],
       ];
-      derived.useAction = typedResult.useAction;
-      attachDerive(derived);
-      return derived;
+      extended.useAction = typedResult.useAction;
+      attachMethods(extended);
+      return extended;
     };
   };
 
-  attachDerive(typedResult);
-
-  // The implementation is typed loosely since `C` (the derived config shape)
-  // is only available at each call site. Type safety is enforced by the
-  // `useDerived` signature on `UseActions`.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (<any>typedResult).useDerived = (
-    config: Record<
-      string,
-      readonly [ActionOrChanneled, (p: unknown) => unknown]
-    >,
-  ) => {
-    // Initialise every derived key as null so the model always has the keys
-    // present, even before any action has fired.
-    const derivedRef = React.useRef<Record<string, unknown>>(
-      Object.fromEntries(Object.keys(config).map((k) => [k, null])),
-    );
-
-    // Register a handler per entry. The handler stores the callback result
-    // and triggers a re-render via the existing rerender() mechanism. React
-    // 18+ batches this with any setModel call from a normal useAction
-    // handler for the same action, guaranteeing a single render.
-    for (const [key, entry] of Object.entries(config)) {
-      const [action, callback] = entry;
-      useRegisterHandler<M, A, D>(registry, action, <Handler<M, A, D>>((
-        _context: unknown,
-        payload: unknown,
-      ) => {
-        derivedRef.current[key] = callback(payload);
-        rerender();
-      }));
-    }
-
-    // Build a new tuple with derived values merged onto the model (same
-    // pattern as derive()).
-    const extended = <UseActions<M, A, D>>[
-      { ...typedResult[0], ...derivedRef.current },
-      typedResult[1],
-    ];
-    extended.useAction = typedResult.useAction;
-    attachDerive(extended);
-    return extended;
-  };
+  attachMethods(typedResult);
 
   return typedResult;
 }

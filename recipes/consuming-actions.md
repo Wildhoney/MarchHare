@@ -4,7 +4,7 @@ Use `context.actions.read` to read the latest broadcast or multicast value direc
 
 ```ts
 actions.useAction(Actions.FetchPosts, async (context) => {
-  const user = context.actions.read(Actions.Broadcast.User);
+  const user = await context.actions.read(Actions.Broadcast.User);
   if (!user) return;
   const posts = await fetchPosts(user.id, {
     signal: context.task.controller.signal,
@@ -19,7 +19,7 @@ actions.useAction(Actions.FetchPosts, async (context) => {
 
 ## Key details
 
-- **Synchronous** &ndash; returns `T | null` directly.
+- **Async** &ndash; returns `Promise<T | null>`. If the corresponding model field has pending Immertation annotations, `read` waits for them to settle before resolving.
 - **Raw value** &ndash; returns `T`, not a `Box<T>`. Handlers need the data, not the reactive wrapper.
 - **Null when empty** &ndash; returns `null` if no value has been dispatched for that action.
 - **Abort-safe** &ndash; returns `null` if the task's abort signal has fired.
@@ -30,22 +30,21 @@ actions.useAction(Actions.FetchPosts, async (context) => {
 For multicast actions, pass the scope name via the `options` argument:
 
 ```ts
-const score = context.actions.read(Actions.Multicast.Score, {
+const score = await context.actions.read(Actions.Multicast.Score, {
   scope: "game",
 });
 ```
 
-## Reactive subscriptions with useDerived
+## Reactive subscriptions with derive
 
-For reactive model values from broadcast or multicast actions, use `useDerived` instead of `read`. The `useDerived` method subscribes to actions and maps their payloads onto the model:
+For reactive model values from broadcast or multicast actions, use `derive` instead of `read`. The `derive` method subscribes to actions and maps their payloads onto the model:
 
 ```tsx
 const result = useMyActions();
 
-const [model] = result.useDerived({
-  user: [Actions.Broadcast.User, (user) => user],
-  score: [Actions.Multicast.Score, (score) => score],
-});
+const [model] = result
+  .derive("user", Actions.Broadcast.User, (user) => user)
+  .derive("score", Actions.Multicast.Score, (score) => score);
 
 // model.user is null until first dispatch, then stays in sync
 ```

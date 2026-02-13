@@ -426,7 +426,7 @@ test.describe("Chizu Rulebook", () => {
       await expect(traditional).toHaveText("Bob");
     });
 
-    it("Rule 17: Use useDerived() for reactive model values from broadcast actions - should reactively render with useDerived()", async ({
+    it("Rule 17: Use derive() for reactive model values from broadcast actions - should reactively render with derive()", async ({
       page,
     }) => {
       const consumedUser = page.getByTestId("rule-16-17-consumed-user");
