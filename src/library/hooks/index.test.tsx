@@ -2065,4 +2065,63 @@ describe("useActions() derive()", () => {
     expect(result.current[0].summary).toBe("Current: 2");
     expect(result.current[0].decLabel).toBe("decremented");
   });
+
+  it("should support action-based derive with a void model", async () => {
+    class VoidDeriveActions {
+      static Broadcast = class {
+        static Name = Action<string>("Name", Distribution.Broadcast);
+      };
+    }
+
+    function Sender() {
+      const actions = useActions<void, typeof VoidDeriveActions>();
+      actions.useAction(VoidDeriveActions.Broadcast.Name, () => {});
+      return (
+        <button
+          data-testid="send-void-derive"
+          onClick={() =>
+            actions[1].dispatch(VoidDeriveActions.Broadcast.Name, "Adam")
+          }
+        >
+          Send
+        </button>
+      );
+    }
+
+    function Receiver({
+      onResult,
+    }: {
+      onResult: (model: { greeting: string | null }) => void;
+    }) {
+      const actions = useActions<void, typeof VoidDeriveActions>();
+      const derived = actions.derive(
+        "greeting",
+        VoidDeriveActions.Broadcast.Name,
+        (name) => `Hello ${name}`,
+      );
+
+      React.useEffect(() => {
+        onResult(derived[0]);
+      });
+
+      return <div data-testid="void-derive-result">{derived[0].greeting}</div>;
+    }
+
+    let capturedModel: { greeting: string | null } | null = null;
+
+    render(
+      <Broadcaster>
+        <Sender />
+        <Receiver onResult={(m) => (capturedModel = m)} />
+      </Broadcaster>,
+    );
+
+    expect(capturedModel?.greeting).toBeNull();
+
+    await act(async () => {
+      screen.getByTestId("send-void-derive").click();
+    });
+
+    expect(capturedModel?.greeting).toBe("Hello Adam");
+  });
 });

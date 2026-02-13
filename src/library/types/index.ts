@@ -975,10 +975,10 @@ export type UseActions<
    * ```
    */
   derive<K extends string, A extends DerivedAction, R>(
-    key: M extends void ? never : K,
+    key: K,
     action: A,
     callback: [Payload<A>] extends [never]
       ? () => R
       : (payload: Payload<A>) => R,
-  ): UseActions<M & Record<K, R | null>, AC, D>;
+  ): UseActions<(M extends void ? unknown : M) & Record<K, R | null>, AC, D>;
 };
