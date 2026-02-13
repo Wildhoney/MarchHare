@@ -252,9 +252,16 @@ actions.useAction(Actions.Multicast.Mood, (context, mood) => {
 ```ts
 import { utils } from "chizu";
 
-// Sleep with optional abort signal
+// Sleep with abort signal
 await utils.sleep(1000, context.task.controller.signal);
-utils.ζ(1000); // Greek alias
+utils.ζ(1000, signal); // Greek alias
+
+// Poll until condition is met
+await utils.poll(2_000, context.task.controller.signal, async () => {
+  const res = await fetch("/api/status");
+  return (await res.json()).done === true;
+});
+utils.π(2_000, signal, fn); // Greek alias
 
 // Primary key generation for optimistic updates
 const tempId = utils.pk(); // Generate unique symbol

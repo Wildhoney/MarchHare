@@ -37,14 +37,35 @@ context.actions.produce((draft) => {
 });
 ```
 
-## `utils.sleep(ms, signal?)` / `utils.ζ`
+## `utils.sleep(ms, signal)` / `utils.ζ`
 
-Returns a promise that resolves after the specified milliseconds. Useful for simulating delays in actions during development or adding intentional pauses. Optionally accepts an `AbortSignal` to cancel the sleep early:
+Returns a promise that resolves after the specified milliseconds. Accepts an `AbortSignal` to cancel the sleep early (pass `undefined` when no signal is needed). Useful for simulating delays in actions during development or adding intentional pauses:
 
 ```ts
-const fetch = useAction<Action, "Fetch">(async (context) => {
-  await utils.sleep(1_000); // Simulate network delay
-  const data = await fetch("/api/data", { signal: context.signal });
+actions.useAction(Actions.Fetch, async (context) => {
+  await utils.sleep(1_000, context.task.controller.signal);
+  const data = await fetch("/api/data", {
+    signal: context.task.controller.signal,
+  });
   // ...
+});
+```
+
+## `utils.poll(ms, signal, fn)` / `utils.π`
+
+Repeatedly calls a function at a fixed interval until it returns `true` or the signal is aborted. The callback is invoked immediately on the first iteration, then after each interval. Useful for polling an API endpoint until a condition is met:
+
+```ts
+actions.useAction(Actions.WaitForResult, async (context) => {
+  const { signal } = context.task.controller;
+
+  await utils.poll(2_000, signal, async () => {
+    const response = await fetch("/api/job/status", { signal });
+    const { status } = await response.json();
+    context.actions.produce(({ model }) => {
+      model.status = status;
+    });
+    return status === "complete";
+  });
 });
 ```
