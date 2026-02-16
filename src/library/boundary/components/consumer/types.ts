@@ -1,15 +1,18 @@
-import type { Box } from "immertation";
+import type { Inspect } from "immertation";
 import { State } from "immertation";
 import type { ActionId } from "../tasks/types.ts";
 import * as React from "react";
 
 /**
  * Callback function for the consume() method.
- * Receives a Box wrapping the action's payload.
+ * Receives the dispatched value and an inspect proxy for annotation tracking.
  *
  * @template T - The payload type
  */
-export type ConsumerRenderer<T> = (box: Box<T>) => React.ReactNode;
+export type ConsumerRenderer<T> = (
+  value: T,
+  inspect: Inspect<T>,
+) => React.ReactNode;
 
 /**
  * Model for consumed values.

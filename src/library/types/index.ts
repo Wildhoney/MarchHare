@@ -1,3 +1,4 @@
+import * as React from "react";
 import { Operation } from "immertation";
 import { Process, Inspect, Box } from "immertation";
 import type {
@@ -704,6 +705,27 @@ export type HandlerContext<
       action: MulticastPayload<T>,
       options: MulticastOptions,
     ): Promise<T | null>;
+
+    /**
+     * Returns the latest broadcast or multicast value immediately without
+     * waiting for annotations to settle. Use this when you need the current
+     * cached value and do not need to wait for pending operations to complete.
+     *
+     * @param action - The broadcast or multicast action to peek at.
+     * @param options - For multicast actions, must include `{ scope: "ScopeName" }`.
+     * @returns The cached value, or `null` if no value has been dispatched.
+     *
+     * @example
+     * ```ts
+     * actions.useAction(Actions.Check, (context) => {
+     *   const user = context.actions.peek(Actions.Broadcast.User);
+     *   if (!user) return;
+     *   console.log(user.name);
+     * });
+     * ```
+     */
+    peek<T>(action: BroadcastPayload<T>): T | null;
+    peek<T>(action: MulticastPayload<T>, options: MulticastOptions): T | null;
   };
 };
 
@@ -897,6 +919,32 @@ export type UseActions<
      * ```
      */
     node<K extends keyof Nodes<M>>(name: K, node: Nodes<M>[K] | null): void;
+    /**
+     * Renders broadcast values declaratively in JSX using a render-prop pattern.
+     *
+     * Subscribes to the given broadcast action and re-renders when a new value
+     * is dispatched. Returns `null` until the first dispatch. The renderer
+     * receives the value and an inspect proxy for annotation tracking.
+     *
+     * @param action - The broadcast action to subscribe to.
+     * @param renderer - Callback that receives value and inspect, returns React nodes.
+     * @returns React nodes from the renderer, or null if no value has been dispatched.
+     *
+     * @example
+     * ```tsx
+     * return (
+     *   <div>
+     *     {actions.consume(Actions.Broadcast.User, (user, inspect) => (
+     *       <span>{user.name}</span>
+     *     ))}
+     *   </div>
+     * );
+     * ```
+     */
+    consume<T extends object>(
+      action: BroadcastPayload<T>,
+      renderer: (value: T, inspect: Inspect<T>) => React.ReactNode,
+    ): React.ReactNode;
   },
 ] & {
   /**

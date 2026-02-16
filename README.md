@@ -201,6 +201,32 @@ actions.useAction(Actions.FetchFriends, async (context) => {
 });
 ```
 
+For a synchronous, non-waiting alternative use `context.actions.peek` &ndash; it returns the cached value immediately without waiting for annotations to settle:
+
+```tsx
+actions.useAction(Actions.Check, (context) => {
+  const name = context.actions.peek(Actions.Broadcast.Name);
+  if (!name) return;
+  console.log(name);
+});
+```
+
+You can also render broadcast values declaratively in JSX with `actions.consume`. The renderer callback receives `(value, inspect)` and returns React nodes:
+
+```tsx
+function Dashboard() {
+  const [model, actions] = useDashboardActions();
+
+  return (
+    <div>
+      {actions.consume(Actions.Broadcast.User, (user, inspect) => (
+        <span>Welcome, {user.name}</span>
+      ))}
+    </div>
+  );
+}
+```
+
 For targeted event delivery, use channeled actions. Define a channel type as the second generic argument and call the action with a channel object &ndash; handlers fire when the dispatch channel matches:
 
 ```tsx

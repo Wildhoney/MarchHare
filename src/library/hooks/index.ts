@@ -48,6 +48,8 @@ import { useError } from "../error/index.tsx";
 import { State, Operation, Process, Inspect } from "immertation";
 import { useTasks } from "../boundary/components/tasks/utils.ts";
 import { useCacheStore } from "../boundary/components/cache/index.tsx";
+import { Partition } from "../boundary/components/consumer/index.tsx";
+import type { ConsumerRenderer } from "../boundary/components/consumer/types.ts";
 import { getCacheKey, unwrap } from "../cache/index.ts";
 import { G } from "@mobily/ts-belt";
 
@@ -268,6 +270,20 @@ export function useActions<
 
             return emitter.getCached(key) ?? null;
           },
+          peek(action: AnyAction, options?: MulticastOptions) {
+            if (controller.signal.aborted) return null;
+
+            const key = getActionSymbol(action);
+
+            const emitter =
+              isMulticastAction(action) && options?.scope
+                ? (getScope(scope, options.scope)?.emitter ?? null)
+                : broadcast;
+
+            if (!emitter) return null;
+
+            return emitter.getCached(key) ?? null;
+          },
         },
       };
     },
@@ -436,6 +452,16 @@ export function useActions<
           node<K extends keyof Nodes<M>>(name: K, value: Nodes<M>[K] | null) {
             nodes.refs.current[name] = value;
             nodes.pending.current.set(name, value);
+          },
+          consume(
+            action: AnyAction,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            renderer: ConsumerRenderer<any>,
+          ): React.ReactNode {
+            return React.createElement(Partition, {
+              action: <symbol>getActionSymbol(action),
+              renderer,
+            });
           },
         },
       ],

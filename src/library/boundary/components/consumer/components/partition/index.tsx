@@ -21,14 +21,14 @@ import { Props } from "./types.ts";
  * annotation tracking through the `inspect` proxy. When a payload containing annotated
  * values is dispatched, the annotations are preserved and accessible via `inspect`.
  *
- * The renderer callback receives a `Box<T>` containing:
+ * The renderer callback receives two arguments:
  * - `value`: The latest dispatched payload
  * - `inspect`: A proxy for checking annotation status (pending, is, draft, settled, etc.)
  *
  * @template T - The payload type for the action (must be an object type)
  * @param props.action - The distributed action symbol to subscribe to
- * @param props.renderer - Callback that receives a Box and returns React nodes
- * @returns The result of calling renderer with the Box, or null if no value exists
+ * @param props.renderer - Callback that receives value and inspect, returns React nodes
+ * @returns The result of calling renderer, or null if no value exists
  * @internal
  */
 export function Partition<T extends object>({
@@ -70,8 +70,5 @@ export function Partition<T extends object>({
 
   const inspect = entry.state.inspect as unknown as { value: Inspect<T> };
 
-  return renderer({
-    value,
-    inspect: inspect.value,
-  });
+  return renderer(value, inspect.value);
 }

@@ -74,9 +74,7 @@ describe("Partition", () => {
         <Consumer>
           <Partition
             action={testAction}
-            renderer={(box) => (
-              <div data-testid="value">{String(box.value)}</div>
-            )}
+            renderer={(value) => <div data-testid="value">{String(value)}</div>}
           />
         </Consumer>
       </Broadcaster>,
@@ -96,8 +94,8 @@ describe("Partition", () => {
               return (
                 <Partition
                   action={testAction}
-                  renderer={(box) => (
-                    <div data-testid="value">{box.value.name}</div>
+                  renderer={(value) => (
+                    <div data-testid="value">{value.name}</div>
                   )}
                 />
               );
@@ -126,10 +124,8 @@ describe("Partition", () => {
               return (
                 <Partition
                   action={testAction}
-                  renderer={(box) => (
-                    <div data-testid="pending">
-                      {String(box.inspect.pending())}
-                    </div>
+                  renderer={(_value, inspect) => (
+                    <div data-testid="pending">{String(inspect.pending())}</div>
                   )}
                 />
               );
@@ -158,8 +154,8 @@ describe("Partition", () => {
               return (
                 <Partition
                   action={testAction}
-                  renderer={(box) => (
-                    <div data-testid="value">{box.value.count}</div>
+                  renderer={(value) => (
+                    <div data-testid="value">{value.count}</div>
                   )}
                 />
               );

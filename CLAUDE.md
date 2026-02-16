@@ -179,11 +179,33 @@ actions.useAction(Actions.Fetch, async (context, payload) => {
 
   context.actions.annotate(Op.Update, value); // Mark async state
 
-  // Consume latest broadcast/multicast value imperatively
+  // Consume latest broadcast/multicast value (waits for settled annotations)
   const user = await context.actions.consume(Actions.Broadcast.User);
-  // Returns Promise<T | null> — waits for Immertation annotations to settle
+  // Returns Promise<T | null>
+
+  // Peek at latest value immediately (no waiting)
+  const current = context.actions.peek(Actions.Broadcast.User);
+  // Returns T | null
 });
 ```
+
+### JSX Consume (Declarative Rendering)
+
+Render broadcast values directly in JSX without storing in local model:
+
+```tsx
+const [model, actions] = useDashboardActions();
+
+return (
+  <div>
+    {actions.consume(Actions.Broadcast.User, (user, inspect) => (
+      <span>Welcome, {user.name}</span>
+    ))}
+  </div>
+);
+```
+
+Returns `null` until the first dispatch. The renderer receives `(value, inspect)` — use `inspect` for annotation status.
 
 ## Model Annotations (Async State Tracking)
 
@@ -536,7 +558,7 @@ docs: update the README file
   - `broadcast-actions.md` - Cross-component communication
   - `caching.md` - TTL-based caching with cacheable/invalidate
   - `channeled-actions.md` - Targeted event delivery
-  - `consuming-actions.md` - Reading broadcast values in handlers with consume()
+  - `consuming-actions.md` - Consuming broadcast values: handler consume(), peek(), and JSX consume()
   - `context-providers.md` - Boundary, Broadcaster, Consumer, Regulators
   - `error-handling.md` - Error component and fault handling
   - `ky-http-client.md` - Integration with ky HTTP client

@@ -504,6 +504,56 @@ test.describe("Chizu Rulebook", () => {
 
       await expect(consumed).toHaveText("null", { timeout: 2000 });
     });
+
+    it("Rule 40: Use context.actions.peek to read broadcast value synchronously - should return cached value", async ({
+      page,
+    }) => {
+      // Publish a broadcast value first
+      await page.getByTestId("rule-40-peek-publish").click();
+
+      // Peek should return the value immediately
+      await page.getByTestId("rule-40-peek-trigger").click();
+
+      await expect(page.getByTestId("rule-40-peeked")).toHaveText("Charlie", {
+        timeout: 2000,
+      });
+    });
+
+    it("Rule 40: Use context.actions.peek to read broadcast value synchronously - should return null when no value dispatched", async ({
+      page,
+    }) => {
+      // Peek without publishing — should return null
+      await page.getByTestId("rule-40-peek-trigger").click();
+
+      await expect(page.getByTestId("rule-40-peeked")).toHaveText("null", {
+        timeout: 2000,
+      });
+    });
+
+    it("Rule 41: Use actions.consume to render broadcast values declaratively in JSX - should render broadcast value", async ({
+      page,
+    }) => {
+      const consumer = page.getByTestId("rule-41-consumer");
+
+      // Before dispatch, consume renders nothing
+      await expect(consumer).toHaveText("");
+
+      // Publish a broadcast value
+      await page.getByTestId("rule-41-publish").click();
+
+      // The consumed value should appear via JSX render-prop
+      await expect(page.getByTestId("rule-41-value")).toHaveText("Diana", {
+        timeout: 2000,
+      });
+    });
+
+    it("Rule 41: Use actions.consume to render broadcast values declaratively in JSX - should render null when no value dispatched", async ({
+      page,
+    }) => {
+      // Without publishing, the consumer should render nothing
+      const consumer = page.getByTestId("rule-41-consumer");
+      await expect(consumer).toHaveText("");
+    });
   });
 
   // Task Management (Rules 20-22)

@@ -1,10 +1,11 @@
 /**
- * E2E Test Fixtures for Rules 16, 18-19, 40: Broadcast Actions
+ * E2E Test Fixtures for Rules 16, 18-19, 40-41: Broadcast Actions
  *
  * Rule 16: Only broadcast actions support reactive subscription
  * Rule 18: Late-mounting components receive cached values
  * Rule 19: Use channeled actions for targeted broadcast delivery
  * Rule 40: Use context.actions.consume to consume broadcast values in handlers
+ * Rule 41: Use actions.consume to render broadcast values declaratively in JSX
  */
 import * as React from "react";
 import {
@@ -399,13 +400,133 @@ function Rule40HandlerRead() {
   );
 }
 
+// ============================================================================
+// Rule 40 (peek): Use context.actions.peek for synchronous reads
+// ============================================================================
+
+class Rule40PeekActions {
+  static Check = Action("Check");
+}
+
+type Rule40PeekModel = {
+  peeked: string;
+};
+
+function Rule40PeekPublisher() {
+  const [, actions] = useActions<EmptyModel, typeof BroadcastActions>({});
+
+  return (
+    <button
+      data-testid="rule-40-peek-publish"
+      onClick={() =>
+        actions.dispatch(BroadcastActions.UserLoggedIn, {
+          name: "Charlie",
+          id: 3,
+        })
+      }
+    >
+      Publish User (Peek)
+    </button>
+  );
+}
+
+function useRule40PeekActions() {
+  const actions = useActions<
+    Rule40PeekModel,
+    typeof Rule40PeekActions & typeof BroadcastActions
+  >({
+    peeked: "",
+  });
+
+  actions.useAction(Rule40PeekActions.Check, (context) => {
+    const user = context.actions.peek(BroadcastActions.UserLoggedIn);
+    context.actions.produce(({ model }) => {
+      model.peeked = user ? user.name : "null";
+    });
+  });
+
+  return actions;
+}
+
+function Rule40PeekConsumer() {
+  const [model, actions] = useRule40PeekActions();
+
+  return (
+    <div data-testid="rule-40-peek-consumer">
+      <div data-testid="rule-40-peeked">{model.peeked}</div>
+      <button
+        data-testid="rule-40-peek-trigger"
+        onClick={() => actions.dispatch(Rule40PeekActions.Check)}
+      >
+        Peek
+      </button>
+    </div>
+  );
+}
+
+function Rule40Peek() {
+  return (
+    <section data-testid="rule-40-peek">
+      <h3>Rule 40: peek()</h3>
+      <Rule40PeekPublisher />
+      <Rule40PeekConsumer />
+    </section>
+  );
+}
+
+// ============================================================================
+// Rule 41: Use actions.consume to render broadcast values declaratively in JSX
+// ============================================================================
+
+function Rule41Publisher() {
+  const [, actions] = useActions<EmptyModel, typeof BroadcastActions>({});
+
+  return (
+    <button
+      data-testid="rule-41-publish"
+      onClick={() =>
+        actions.dispatch(BroadcastActions.UserLoggedIn, {
+          name: "Diana",
+          id: 4,
+        })
+      }
+    >
+      Publish User
+    </button>
+  );
+}
+
+function Rule41Consumer() {
+  const [, actions] = useActions<EmptyModel, typeof BroadcastActions>({});
+
+  return (
+    <div data-testid="rule-41-consumer">
+      {actions.consume(BroadcastActions.UserLoggedIn, (user) => (
+        <span data-testid="rule-41-value">{user.name}</span>
+      ))}
+    </div>
+  );
+}
+
+function Rule41JsxConsume() {
+  return (
+    <section data-testid="rule-41">
+      <h3>Rule 41: JSX-side consume()</h3>
+      <Rule41Publisher />
+      <Rule41Consumer />
+    </section>
+  );
+}
+
 export function BroadcastActionsFixture() {
   return (
     <div data-testid="broadcast-actions-fixture">
-      <h2>Rules 16, 18-19, 40: Broadcast Actions</h2>
+      <h2>Rules 16, 18-19, 40-41: Broadcast Actions</h2>
       <Rule18LateMounting />
       <Rule19ChanneledBroadcast />
       <Rule40HandlerRead />
+      <Rule40Peek />
+      <Rule41JsxConsume />
     </div>
   );
 }

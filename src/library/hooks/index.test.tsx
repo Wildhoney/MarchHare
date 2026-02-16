@@ -1469,6 +1469,117 @@ describe("useActions() context.actions.consume", () => {
   });
 });
 
+describe("useActions() context.actions.peek", () => {
+  class BroadcastPeekActions {
+    static Name = Action<string>("Name", Distribution.Broadcast);
+  }
+
+  it("should return the cached value synchronously", async () => {
+    let peekedValue: string | null = null;
+
+    class LocalActions {
+      static Check = Action("Check");
+    }
+
+    function Publisher() {
+      const [, actions] = useActions<
+        Record<string, never>,
+        typeof BroadcastPeekActions
+      >({});
+
+      return (
+        <button
+          data-testid="publish-peek"
+          onClick={() =>
+            actions.dispatch(BroadcastPeekActions.Name, "Wildhoney")
+          }
+        >
+          Publish
+        </button>
+      );
+    }
+
+    function Reader() {
+      const result = useActions<Record<string, never>, typeof LocalActions>({});
+
+      result.useAction(LocalActions.Check, (context) => {
+        peekedValue = context.actions.peek(BroadcastPeekActions.Name);
+      });
+
+      return (
+        <button
+          data-testid="peek"
+          onClick={() => result[1].dispatch(LocalActions.Check)}
+        >
+          Peek
+        </button>
+      );
+    }
+
+    function App() {
+      return (
+        <Broadcaster>
+          <Publisher />
+          <Reader />
+        </Broadcaster>
+      );
+    }
+
+    render(<App />);
+
+    await act(async () => {
+      screen.getByTestId("publish-peek").click();
+    });
+
+    await act(async () => {
+      screen.getByTestId("peek").click();
+    });
+
+    expect(peekedValue).toBe("Wildhoney");
+  });
+
+  it("should return null when no value has been dispatched", async () => {
+    let peekedValue: unknown = "not-called";
+
+    class LocalActions {
+      static Check = Action("Check");
+    }
+
+    function Reader() {
+      const result = useActions<Record<string, never>, typeof LocalActions>({});
+
+      result.useAction(LocalActions.Check, (context) => {
+        peekedValue = context.actions.peek(BroadcastPeekActions.Name);
+      });
+
+      return (
+        <button
+          data-testid="peek-empty"
+          onClick={() => result[1].dispatch(LocalActions.Check)}
+        >
+          Peek
+        </button>
+      );
+    }
+
+    function App() {
+      return (
+        <Broadcaster>
+          <Reader />
+        </Broadcaster>
+      );
+    }
+
+    render(<App />);
+
+    await act(async () => {
+      screen.getByTestId("peek-empty").click();
+    });
+
+    expect(peekedValue).toBeNull();
+  });
+});
+
 describe("useActions() context.model freshness", () => {
   type ItemModel = { items: string[] };
   const itemModel: ItemModel = { items: [] };
@@ -1722,5 +1833,197 @@ describe("useActions() void model", () => {
     });
 
     expect(received).toBe(true);
+  });
+});
+
+describe("useActions() actions.consume (JSX)", () => {
+  class BroadcastUserActions {
+    static User = Action<{ name: string; id: number }>(
+      "User",
+      Distribution.Broadcast,
+    );
+  }
+
+  it("should render broadcast values declaratively in JSX", async () => {
+    function Publisher() {
+      const [, actions] = useActions<
+        Record<string, never>,
+        typeof BroadcastUserActions
+      >({});
+
+      return (
+        <button
+          data-testid="jsx-consume-publish"
+          onClick={() =>
+            actions.dispatch(BroadcastUserActions.User, {
+              name: "Diana",
+              id: 4,
+            })
+          }
+        >
+          Publish
+        </button>
+      );
+    }
+
+    function Consumer() {
+      const [, actions] = useActions<
+        Record<string, never>,
+        typeof BroadcastUserActions
+      >({});
+
+      return (
+        <div data-testid="jsx-consume-container">
+          {actions.consume(BroadcastUserActions.User, (user) => (
+            <span data-testid="jsx-consume-value">{user.name}</span>
+          ))}
+        </div>
+      );
+    }
+
+    function App() {
+      return (
+        <Broadcaster>
+          <Publisher />
+          <Consumer />
+        </Broadcaster>
+      );
+    }
+
+    render(<App />);
+
+    // Before dispatch, no value rendered
+    expect(screen.queryByTestId("jsx-consume-value")).toBeNull();
+
+    await act(async () => {
+      screen.getByTestId("jsx-consume-publish").click();
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+
+    expect(screen.getByTestId("jsx-consume-value").textContent).toBe("Diana");
+  });
+
+  it("should return null until first dispatch", async () => {
+    // Use a unique action to avoid cached values from previous tests
+    class NeverDispatchedActions {
+      static Info = Action<{ label: string }>(
+        "NeverDispatched",
+        Distribution.Broadcast,
+      );
+    }
+
+    function Consumer() {
+      const [, actions] = useActions<
+        Record<string, never>,
+        typeof NeverDispatchedActions
+      >({});
+
+      return (
+        <div data-testid="jsx-consume-empty">
+          {actions.consume(NeverDispatchedActions.Info, (info) => (
+            <span data-testid="jsx-consume-present">{info.label}</span>
+          ))}
+        </div>
+      );
+    }
+
+    function App() {
+      return (
+        <Broadcaster>
+          <Consumer />
+        </Broadcaster>
+      );
+    }
+
+    render(<App />);
+
+    // Should not render anything inside the container
+    expect(screen.queryByTestId("jsx-consume-present")).toBeNull();
+    expect(screen.getByTestId("jsx-consume-empty").textContent).toBe("");
+  });
+
+  it("should update when a new value is dispatched", async () => {
+    function Publisher() {
+      const [, actions] = useActions<
+        Record<string, never>,
+        typeof BroadcastUserActions
+      >({});
+
+      return (
+        <>
+          <button
+            data-testid="jsx-consume-publish-1"
+            onClick={() =>
+              actions.dispatch(BroadcastUserActions.User, {
+                name: "Alice",
+                id: 1,
+              })
+            }
+          >
+            Publish Alice
+          </button>
+          <button
+            data-testid="jsx-consume-publish-2"
+            onClick={() =>
+              actions.dispatch(BroadcastUserActions.User, {
+                name: "Bob",
+                id: 2,
+              })
+            }
+          >
+            Publish Bob
+          </button>
+        </>
+      );
+    }
+
+    function Consumer() {
+      const [, actions] = useActions<
+        Record<string, never>,
+        typeof BroadcastUserActions
+      >({});
+
+      return (
+        <div>
+          {actions.consume(BroadcastUserActions.User, (user) => (
+            <span data-testid="jsx-consume-updated">{user.name}</span>
+          ))}
+        </div>
+      );
+    }
+
+    function App() {
+      return (
+        <Broadcaster>
+          <Publisher />
+          <Consumer />
+        </Broadcaster>
+      );
+    }
+
+    render(<App />);
+
+    await act(async () => {
+      screen.getByTestId("jsx-consume-publish-1").click();
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+
+    expect(screen.getByTestId("jsx-consume-updated").textContent).toBe("Alice");
+
+    await act(async () => {
+      screen.getByTestId("jsx-consume-publish-2").click();
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+
+    expect(screen.getByTestId("jsx-consume-updated").textContent).toBe("Bob");
   });
 });

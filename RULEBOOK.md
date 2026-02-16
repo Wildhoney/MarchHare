@@ -928,6 +928,48 @@ const score = await context.actions.consume(Actions.Multicast.Score, {
 });
 ```
 
+Use `context.actions.peek` when you need the current cached value immediately without waiting for annotations to settle:
+
+```ts
+actions.useAction(Actions.Check, (context) => {
+  const user = context.actions.peek(Actions.Broadcast.User);
+  if (!user) return;
+  console.log(user.name);
+});
+```
+
+| Method    | Returns              | Waits for settled | Use case                       |
+| --------- | -------------------- | ----------------- | ------------------------------ |
+| `consume` | `Promise<T \| null>` | Yes               | Need the resolved value        |
+| `peek`    | `T \| null`          | No                | Quick guard check or sync read |
+
+### Rule 41: Use `actions.consume` to render broadcast values declaratively in JSX
+
+When a component needs to render broadcast values directly in JSX without storing them in the local model, use `actions.consume` with a render-prop callback. The renderer receives a `Box<T>` with `value` and `inspect` for annotation tracking.
+
+```tsx
+function Dashboard() {
+  const [model, actions] = useDashboardActions();
+
+  return (
+    <div>
+      <h1>Dashboard</h1>
+      {actions.consume(Actions.Broadcast.User, (user, inspect) => (
+        <span>Welcome, {user.name}</span>
+      ))}
+    </div>
+  );
+}
+```
+
+Key details:
+
+- Returns `null` until the first value is dispatched for that action
+- Re-renders only the consumed portion when a new value arrives
+- The renderer receives `(value, inspect)` &mdash; use `inspect` for annotation status (e.g. `inspect.pending()`)
+- Payload type must be an object (`T extends object`) for annotation tracking
+- Use `context.actions.consume` (Rule 40) for imperative reads inside handlers; use `actions.consume` (this rule) for declarative rendering in JSX
+
 ---
 
 ## Anti-Patterns
@@ -985,14 +1027,15 @@ console.log(context.data.userId); // Always fresh
 
 ## Summary
 
-| Concept      | Rule                                             |
-| ------------ | ------------------------------------------------ |
-| Actions      | Static class members with `Action<T>()`          |
-| Filters      | `[Action, { Key: value }]` for targeted delivery |
-| Broadcast    | `Distribution.Broadcast` for cross-component     |
-| State        | Always via `produce()`, use annotations          |
-| Handlers     | Sync, async, or generator signatures             |
-| Lifecycles   | `Mount`, `Unmount`, `Error`, `Node`              |
-| Data access  | Use `context.data` after await                   |
-| Cancellation | Use `context.task.controller.signal`             |
-| Types        | Strict models, `Pk<T>` for optimistic keys       |
+| Concept      | Rule                                                                  |
+| ------------ | --------------------------------------------------------------------- |
+| Actions      | Static class members with `Action<T>()`                               |
+| Filters      | `[Action, { Key: value }]` for targeted delivery                      |
+| Broadcast    | `Distribution.Broadcast` for cross-component                          |
+| State        | Always via `produce()`, use annotations                               |
+| Handlers     | Sync, async, or generator signatures                                  |
+| Lifecycles   | `Mount`, `Unmount`, `Error`, `Node`                                   |
+| Data access  | Use `context.data` after await                                        |
+| Cancellation | Use `context.task.controller.signal`                                  |
+| Consume      | `actions.consume()` for JSX, `context.actions.consume()` for handlers |
+| Types        | Strict models, `Pk<T>` for optimistic keys                            |

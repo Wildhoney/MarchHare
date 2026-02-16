@@ -1,4 +1,11 @@
-# Consuming broadcast values in handlers
+# Consuming broadcast values
+
+There are two ways to consume broadcast values:
+
+1. **In handlers** &ndash; `context.actions.consume(action)` returns `Promise<T | null>` for imperative reads inside action handlers.
+2. **In JSX** &ndash; `actions.consume(action, renderer)` returns `React.ReactNode` for declarative rendering in component output.
+
+## Handler-side consume
 
 Use `context.actions.consume` to consume the latest broadcast or multicast value directly inside an action handler, without subscribing via `useAction` and storing it in the local model.
 
@@ -24,6 +31,23 @@ actions.useAction(Actions.FetchPosts, async (context) => {
 - **Null when empty** &ndash; returns `null` if no value has been dispatched for that action.
 - **Abort-safe** &ndash; returns `null` if the task's abort signal has fired.
 - **Reads from cache** &ndash; values are stored by the `BroadcastEmitter` automatically when dispatched.
+
+## Peek (synchronous read)
+
+Use `context.actions.peek` when you need the current cached value immediately without waiting for annotations to settle:
+
+```ts
+actions.useAction(Actions.Check, (context) => {
+  const user = context.actions.peek(Actions.Broadcast.User);
+  if (!user) return;
+  console.log(user.name);
+});
+```
+
+| Method    | Returns              | Waits for settled | Use case                       |
+| --------- | -------------------- | ----------------- | ------------------------------ |
+| `consume` | `Promise<T \| null>` | Yes               | Need the resolved value        |
+| `peek`    | `T \| null`          | No                | Quick guard check or sync read |
 
 ## Multicast support
 
@@ -66,3 +90,36 @@ function ComponentB() {
 ```
 
 This enables late-mounting components to synchronise with previously dispatched state. See the [broadcast actions recipe](./broadcast-actions.md#cached-values-on-mount) for more details.
+
+## JSX-side consume
+
+Use `actions.consume` to render broadcast values declaratively in JSX. The renderer callback receives `(value, inspect)` and returns React nodes.
+
+```tsx
+function Dashboard() {
+  const [model, actions] = useDashboardActions();
+
+  return (
+    <div>
+      <h1>Dashboard</h1>
+      {actions.consume(Actions.Broadcast.User, (user, inspect) => (
+        <span>Welcome, {user.name}</span>
+      ))}
+    </div>
+  );
+}
+```
+
+### Key details
+
+- Returns `null` until the first value is dispatched for that action
+- Re-renders only the consumed portion when a new value arrives
+- The `inspect` argument tracks annotation status (e.g. `inspect.pending()`)
+- Payload type must be an object (`T extends object`) for annotation tracking
+
+### When to use which
+
+| Scenario                                   | Method                              |
+| ------------------------------------------ | ----------------------------------- |
+| Reading a broadcast value inside a handler | `context.actions.consume(action)`   |
+| Rendering a broadcast value in JSX output  | `actions.consume(action, renderer)` |
