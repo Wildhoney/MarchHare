@@ -307,7 +307,7 @@ export type ChanneledAction<P = unknown, C = unknown> = {
  * late-mounting components receive the most recent payload.
  *
  * This type extends `HandlerPayload<P, C>` with an additional brand to enforce at compile-time
- * that only broadcast actions can be passed to `context.actions.consume()`.
+ * that only broadcast actions can be passed to `context.actions.read()`.
  *
  * @template P - The payload type for the action
  * @template C - The channel type for channeled dispatches (defaults to never)
@@ -316,8 +316,8 @@ export type ChanneledAction<P = unknown, C = unknown> = {
  * ```ts
  * const SignedOut = Action<User>("SignedOut", Distribution.Broadcast);
  *
- * // Consume the latest value inside a handler
- * const user = await context.actions.consume(SignedOut);
+ * // Read the latest value inside a handler
+ * const user = await context.actions.read(SignedOut);
  * ```
  */
 export type BroadcastPayload<
@@ -678,20 +678,20 @@ export type HandlerContext<
      */
     invalidate(entry: CacheId<unknown> | ChanneledCacheId<unknown>): void;
     /**
-     * Consumes the latest broadcast or multicast value, waiting for it if necessary.
+     * Reads the latest broadcast or multicast value, waiting for annotations to settle.
      *
      * If a value has already been dispatched it resolves immediately.
      * Otherwise it waits until the next dispatch of the action.
      * Resolves with `null` if the task is aborted before a value arrives.
      *
-     * @param action - The broadcast or multicast action to consume.
+     * @param action - The broadcast or multicast action to read.
      * @param options - For multicast actions, must include `{ scope: "ScopeName" }`.
      * @returns The dispatched value, or `null` if aborted.
      *
      * @example
      * ```ts
      * actions.useAction(Actions.FetchPosts, async (context) => {
-     *   const user = await context.actions.consume(Actions.Broadcast.User);
+     *   const user = await context.actions.read(Actions.Broadcast.User);
      *   if (!user) return;
      *   const posts = await fetchPosts(user.id, {
      *     signal: context.task.controller.signal,
@@ -700,8 +700,8 @@ export type HandlerContext<
      * });
      * ```
      */
-    consume<T>(action: BroadcastPayload<T>): Promise<T | null>;
-    consume<T>(
+    read<T>(action: BroadcastPayload<T>): Promise<T | null>;
+    read<T>(
       action: MulticastPayload<T>,
       options: MulticastOptions,
     ): Promise<T | null>;
@@ -920,7 +920,7 @@ export type UseActions<
      */
     node<K extends keyof Nodes<M>>(name: K, node: Nodes<M>[K] | null): void;
     /**
-     * Renders broadcast values declaratively in JSX using a render-prop pattern.
+     * Streams broadcast values declaratively in JSX using a render-prop pattern.
      *
      * Subscribes to the given broadcast action and re-renders when a new value
      * is dispatched. Returns `null` until the first dispatch. The renderer
@@ -934,14 +934,14 @@ export type UseActions<
      * ```tsx
      * return (
      *   <div>
-     *     {actions.consume(Actions.Broadcast.User, (user, inspect) => (
+     *     {actions.stream(Actions.Broadcast.User, (user, inspect) => (
      *       <span>{user.name}</span>
      *     ))}
      *   </div>
      * );
      * ```
      */
-    consume<T extends object>(
+    stream<T extends object>(
       action: BroadcastPayload<T>,
       renderer: (value: T, inspect: Inspect<T>) => React.ReactNode,
     ): React.ReactNode;

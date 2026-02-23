@@ -4,7 +4,7 @@ import * as React from "react";
 /**
  * The broadcast context is a BroadcastEmitter used for distributed actions across components.
  * Extends EventEmitter with a per-action value cache so late-mounting components can replay
- * broadcast values even without a Partition (from `consume()`).
+ * broadcast values even without a Partition (from `stream()`).
  */
 export type BroadcastContext = BroadcastEmitter;
 

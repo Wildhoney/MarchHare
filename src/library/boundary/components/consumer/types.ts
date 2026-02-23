@@ -4,7 +4,7 @@ import type { ActionId } from "../tasks/types.ts";
 import * as React from "react";
 
 /**
- * Callback function for the consume() method.
+ * Callback function for the stream() method.
  * Receives the dispatched value and an inspect proxy for annotation tracking.
  *
  * @template T - The payload type

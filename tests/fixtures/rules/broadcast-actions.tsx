@@ -4,8 +4,8 @@
  * Rule 16: Only broadcast actions support reactive subscription
  * Rule 18: Late-mounting components receive cached values
  * Rule 19: Use channeled actions for targeted broadcast delivery
- * Rule 40: Use context.actions.consume to consume broadcast values in handlers
- * Rule 41: Use actions.consume to render broadcast values declaratively in JSX
+ * Rule 40: Use context.actions.read to read broadcast values in handlers
+ * Rule 41: Use actions.stream to render broadcast values declaratively in JSX
  */
 import * as React from "react";
 import {
@@ -15,7 +15,7 @@ import {
   useActions,
 } from "../../../src/library/index.ts";
 
-// Broadcast actions that can be consumed
+// Broadcast actions that can be read
 class BroadcastActions {
   static UserLoggedIn = Action<{ name: string; id: number }>(
     "UserLoggedIn",
@@ -311,7 +311,7 @@ function Rule19ChanneledBroadcast() {
 }
 
 // ============================================================================
-// Rule 40: Use context.actions.consume to consume broadcast values in handlers
+// Rule 40: Use context.actions.read to read broadcast values in handlers
 // ============================================================================
 
 class Rule40Actions {
@@ -349,7 +349,7 @@ function useRule40ConsumerActions() {
   });
 
   actions.useAction(Lifecycle.Mount, async (context) => {
-    const user = await context.actions.consume(BroadcastActions.UserLoggedIn);
+    const user = await context.actions.read(BroadcastActions.UserLoggedIn);
     if (!user) return;
     context.actions.produce(({ model }) => {
       model.consumed = user.name;
@@ -357,7 +357,7 @@ function useRule40ConsumerActions() {
   });
 
   actions.useAction(Rule40Actions.Trigger, async (context) => {
-    const user = await context.actions.consume(BroadcastActions.UserLoggedIn);
+    const user = await context.actions.read(BroadcastActions.UserLoggedIn);
     context.actions.produce(({ model }) => {
       model.consumed = user ? user.name : "null";
     });
@@ -376,7 +376,7 @@ function Rule40Consumer() {
         data-testid="rule-40-trigger"
         onClick={() => actions.dispatch(Rule40Actions.Trigger)}
       >
-        Read via consume
+        Read via read
       </button>
     </div>
   );
@@ -387,7 +387,7 @@ function Rule40HandlerRead() {
 
   return (
     <section data-testid="rule-40">
-      <h3>Rule 40: Handler-side consume()</h3>
+      <h3>Rule 40: Handler-side read()</h3>
       <Rule40Publisher />
       {showConsumer && <Rule40Consumer />}
       <button
@@ -475,7 +475,7 @@ function Rule40Peek() {
 }
 
 // ============================================================================
-// Rule 41: Use actions.consume to render broadcast values declaratively in JSX
+// Rule 41: Use actions.stream to render broadcast values declaratively in JSX
 // ============================================================================
 
 function Rule41Publisher() {
@@ -501,7 +501,7 @@ function Rule41Consumer() {
 
   return (
     <div data-testid="rule-41-consumer">
-      {actions.consume(BroadcastActions.UserLoggedIn, (user) => (
+      {actions.stream(BroadcastActions.UserLoggedIn, (user) => (
         <span data-testid="rule-41-value">{user.name}</span>
       ))}
     </div>
@@ -511,7 +511,7 @@ function Rule41Consumer() {
 function Rule41JsxConsume() {
   return (
     <section data-testid="rule-41">
-      <h3>Rule 41: JSX-side consume()</h3>
+      <h3>Rule 41: JSX-side stream()</h3>
       <Rule41Publisher />
       <Rule41Consumer />
     </section>

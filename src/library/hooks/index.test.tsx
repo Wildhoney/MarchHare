@@ -345,7 +345,7 @@ describe("useActions() broadcast action mount behaviour", () => {
 });
 
 describe("useActions() broadcast replay for late-mounting components", () => {
-  it("should replay broadcast value to late-mounting useAction handler even without consume()", async () => {
+  it("should replay broadcast value to late-mounting useAction handler even without read()", async () => {
     const capturedPayloads: number[] = [];
 
     type CounterModel = { count: number };
@@ -364,9 +364,9 @@ describe("useActions() broadcast replay for late-mounting components", () => {
 
       return (
         <>
-          {/* No consume() call — only dispatch + useAction */}
+          {/* No read() call — only dispatch + useAction */}
           <button
-            data-testid="dispatch-no-consume"
+            data-testid="dispatch-no-read"
             onClick={() => {
               actions[1].dispatch(BroadcastActions.Counter, 42);
               onShowLate();
@@ -387,7 +387,7 @@ describe("useActions() broadcast replay for late-mounting components", () => {
         capturedPayloads.push(payload);
       });
 
-      return <div data-testid="late-no-consume">Late Component</div>;
+      return <div data-testid="late-no-read">Late Component</div>;
     }
 
     function App() {
@@ -403,9 +403,9 @@ describe("useActions() broadcast replay for late-mounting components", () => {
 
     render(<App />);
 
-    // Dispatch from producer (no consume) and mount late component
+    // Dispatch from producer (no read) and mount late component
     await act(async () => {
-      screen.getByTestId("dispatch-no-consume").click();
+      screen.getByTestId("dispatch-no-read").click();
     });
 
     // Wait for effects to complete
@@ -414,7 +414,7 @@ describe("useActions() broadcast replay for late-mounting components", () => {
     });
 
     // The late component should have received the cached value on mount
-    // even though no consume() was called
+    // even though no read() was called
     expect(capturedPayloads).toContain(42);
   });
 
@@ -1189,7 +1189,7 @@ describe("useActions() StrictMode resilience", () => {
   });
 });
 
-describe("useActions() context.actions.consume", () => {
+describe("useActions() context.actions.read", () => {
   class BroadcastReadActions {
     static Name = Action<string>("Name", Distribution.Broadcast);
   }
@@ -1225,7 +1225,7 @@ describe("useActions() context.actions.consume", () => {
       });
 
       result.useAction(BroadcastReadActions.Name, async (context, _name) => {
-        const value = await context.actions.consume(BroadcastReadActions.Name);
+        const value = await context.actions.read(BroadcastReadActions.Name);
         readValue = value;
         context.actions.produce(({ model }) => {
           model.result = value;
@@ -1268,7 +1268,7 @@ describe("useActions() context.actions.consume", () => {
       const result = useActions<Record<string, never>, typeof LocalActions>({});
 
       result.useAction(LocalActions.Trigger, async (context) => {
-        const value = await context.actions.consume(BroadcastReadActions.Name);
+        const value = await context.actions.read(BroadcastReadActions.Name);
         readValue = value;
       });
 
@@ -1333,12 +1333,9 @@ describe("useActions() context.actions.consume", () => {
       >({});
 
       result.useAction(MulticastReadActions.Score, async (context) => {
-        const value = await context.actions.consume(
-          MulticastReadActions.Score,
-          {
-            scope: "test",
-          },
-        );
+        const value = await context.actions.read(MulticastReadActions.Score, {
+          scope: "test",
+        });
         readValue = value;
       });
 
@@ -1425,7 +1422,7 @@ describe("useActions() context.actions.consume", () => {
 
       // Read should await until the annotations on `name` have settled.
       actions.useAction(LocalActions.Read, async (context) => {
-        const value = await context.actions.consume(BroadcastReadActions.Name);
+        const value = await context.actions.read(BroadcastReadActions.Name);
         readValue = value;
       });
 
@@ -1836,7 +1833,7 @@ describe("useActions() void model", () => {
   });
 });
 
-describe("useActions() actions.consume (JSX)", () => {
+describe("useActions() actions.stream (JSX)", () => {
   class BroadcastUserActions {
     static User = Action<{ name: string; id: number }>(
       "User",
@@ -1853,7 +1850,7 @@ describe("useActions() actions.consume (JSX)", () => {
 
       return (
         <button
-          data-testid="jsx-consume-publish"
+          data-testid="jsx-stream-publish"
           onClick={() =>
             actions.dispatch(BroadcastUserActions.User, {
               name: "Diana",
@@ -1873,9 +1870,9 @@ describe("useActions() actions.consume (JSX)", () => {
       >({});
 
       return (
-        <div data-testid="jsx-consume-container">
-          {actions.consume(BroadcastUserActions.User, (user) => (
-            <span data-testid="jsx-consume-value">{user.name}</span>
+        <div data-testid="jsx-stream-container">
+          {actions.stream(BroadcastUserActions.User, (user) => (
+            <span data-testid="jsx-stream-value">{user.name}</span>
           ))}
         </div>
       );
@@ -1893,17 +1890,17 @@ describe("useActions() actions.consume (JSX)", () => {
     render(<App />);
 
     // Before dispatch, no value rendered
-    expect(screen.queryByTestId("jsx-consume-value")).toBeNull();
+    expect(screen.queryByTestId("jsx-stream-value")).toBeNull();
 
     await act(async () => {
-      screen.getByTestId("jsx-consume-publish").click();
+      screen.getByTestId("jsx-stream-publish").click();
     });
 
     await act(async () => {
       await new Promise((r) => setTimeout(r, 10));
     });
 
-    expect(screen.getByTestId("jsx-consume-value").textContent).toBe("Diana");
+    expect(screen.getByTestId("jsx-stream-value").textContent).toBe("Diana");
   });
 
   it("should return null until first dispatch", async () => {
@@ -1922,9 +1919,9 @@ describe("useActions() actions.consume (JSX)", () => {
       >({});
 
       return (
-        <div data-testid="jsx-consume-empty">
-          {actions.consume(NeverDispatchedActions.Info, (info) => (
-            <span data-testid="jsx-consume-present">{info.label}</span>
+        <div data-testid="jsx-stream-empty">
+          {actions.stream(NeverDispatchedActions.Info, (info) => (
+            <span data-testid="jsx-stream-present">{info.label}</span>
           ))}
         </div>
       );
@@ -1941,8 +1938,8 @@ describe("useActions() actions.consume (JSX)", () => {
     render(<App />);
 
     // Should not render anything inside the container
-    expect(screen.queryByTestId("jsx-consume-present")).toBeNull();
-    expect(screen.getByTestId("jsx-consume-empty").textContent).toBe("");
+    expect(screen.queryByTestId("jsx-stream-present")).toBeNull();
+    expect(screen.getByTestId("jsx-stream-empty").textContent).toBe("");
   });
 
   it("should update when a new value is dispatched", async () => {
@@ -1955,7 +1952,7 @@ describe("useActions() actions.consume (JSX)", () => {
       return (
         <>
           <button
-            data-testid="jsx-consume-publish-1"
+            data-testid="jsx-stream-publish-1"
             onClick={() =>
               actions.dispatch(BroadcastUserActions.User, {
                 name: "Alice",
@@ -1966,7 +1963,7 @@ describe("useActions() actions.consume (JSX)", () => {
             Publish Alice
           </button>
           <button
-            data-testid="jsx-consume-publish-2"
+            data-testid="jsx-stream-publish-2"
             onClick={() =>
               actions.dispatch(BroadcastUserActions.User, {
                 name: "Bob",
@@ -1988,8 +1985,8 @@ describe("useActions() actions.consume (JSX)", () => {
 
       return (
         <div>
-          {actions.consume(BroadcastUserActions.User, (user) => (
-            <span data-testid="jsx-consume-updated">{user.name}</span>
+          {actions.stream(BroadcastUserActions.User, (user) => (
+            <span data-testid="jsx-stream-updated">{user.name}</span>
           ))}
         </div>
       );
@@ -2007,24 +2004,24 @@ describe("useActions() actions.consume (JSX)", () => {
     render(<App />);
 
     await act(async () => {
-      screen.getByTestId("jsx-consume-publish-1").click();
+      screen.getByTestId("jsx-stream-publish-1").click();
     });
 
     await act(async () => {
       await new Promise((r) => setTimeout(r, 10));
     });
 
-    expect(screen.getByTestId("jsx-consume-updated").textContent).toBe("Alice");
+    expect(screen.getByTestId("jsx-stream-updated").textContent).toBe("Alice");
 
     await act(async () => {
-      screen.getByTestId("jsx-consume-publish-2").click();
+      screen.getByTestId("jsx-stream-publish-2").click();
     });
 
     await act(async () => {
       await new Promise((r) => setTimeout(r, 10));
     });
 
-    expect(screen.getByTestId("jsx-consume-updated").textContent).toBe("Bob");
+    expect(screen.getByTestId("jsx-stream-updated").textContent).toBe("Bob");
   });
 });
 

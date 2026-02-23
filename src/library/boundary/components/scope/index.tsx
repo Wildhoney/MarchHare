@@ -20,7 +20,7 @@ export type { ScopeEntry, ScopeContext } from "./types.ts";
  * with the matching name receives the event.
  *
  * Like Broadcast, multicast caches the most recent dispatched value so that
- * late-mounted components can consume it via `context.actions.consume()`.
+ * late-mounted components can read it via `context.actions.read()`.
  *
  * @param props.name - The unique name for this scope
  * @param props.children - Components within the scope boundary

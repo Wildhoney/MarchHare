@@ -224,7 +224,7 @@ export function useActions<
           invalidate(entry) {
             cache.delete(getCacheKey(<CacheId>(<unknown>entry)));
           },
-          async consume(action: AnyAction, options?: MulticastOptions) {
+          async read(action: AnyAction, options?: MulticastOptions) {
             if (controller.signal.aborted) return null;
 
             const key = getActionSymbol(action);
@@ -454,7 +454,7 @@ export function useActions<
             nodes.refs.current[name] = value;
             nodes.pending.current.set(name, value);
           },
-          consume(
+          stream(
             action: AnyAction,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             renderer: ConsumerRenderer<any>,

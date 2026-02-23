@@ -179,8 +179,8 @@ actions.useAction(Actions.Fetch, async (context, payload) => {
 
   context.actions.annotate(Op.Update, value); // Mark async state
 
-  // Consume latest broadcast/multicast value (waits for settled annotations)
-  const user = await context.actions.consume(Actions.Broadcast.User);
+  // Read latest broadcast/multicast value (waits for settled annotations)
+  const user = await context.actions.read(Actions.Broadcast.User);
   // Returns Promise<T | null>
 
   // Peek at latest value immediately (no waiting)
@@ -189,7 +189,7 @@ actions.useAction(Actions.Fetch, async (context, payload) => {
 });
 ```
 
-### JSX Consume (Declarative Rendering)
+### JSX Stream (Declarative Rendering)
 
 Render broadcast values directly in JSX without storing in local model:
 
@@ -198,7 +198,7 @@ const [model, actions] = useDashboardActions();
 
 return (
   <div>
-    {actions.consume(Actions.Broadcast.User, (user, inspect) => (
+    {actions.stream(Actions.Broadcast.User, (user, inspect) => (
       <span>Welcome, {user.name}</span>
     ))}
   </div>
@@ -558,7 +558,7 @@ docs: update the README file
   - `broadcast-actions.md` - Cross-component communication
   - `caching.md` - TTL-based caching with cacheable/invalidate
   - `channeled-actions.md` - Targeted event delivery
-  - `consuming-actions.md` - Consuming broadcast values: handler consume(), peek(), and JSX consume()
+  - `reading-actions.md` - Reading and streaming broadcast values: handler read(), peek(), and JSX stream()
   - `context-providers.md` - Boundary, Broadcaster, Consumer, Regulators
   - `error-handling.md` - Error component and fault handling
   - `ky-http-client.md` - Integration with ky HTTP client

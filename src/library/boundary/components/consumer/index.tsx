@@ -14,7 +14,7 @@ export type { ConsumerRenderer, Entry, ConsumerContext } from "./types.ts";
  *
  * The Consumer stores the latest value for each distributed action, allowing components
  * that mount later to access values that were dispatched before they mounted. This enables
- * the `consume()` method to render the most recent value immediately.
+ * the `stream()` method to render the most recent value immediately.
  *
  * @param props.children - The children to render within the consumer context.
  * @returns The children wrapped in a consumer context provider.

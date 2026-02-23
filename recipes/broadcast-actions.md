@@ -76,9 +76,9 @@ function ComponentB() {
 
 > **Note:** The broadcast cache stores the most recent payload for each action automatically. Late-mounting components receive this cached value during the mounting phase. If you also fetch data in `Lifecycle.Mount`, see the [mount deduplication recipe](./mount-broadcast-deduplication.md) to avoid duplicate work.
 
-## Consuming broadcast values
+## Reading and streaming broadcast values
 
-For reading broadcast values imperatively in handlers (`context.actions.consume`, `context.actions.peek`) or rendering them declaratively in JSX (`actions.consume`), see the [consuming broadcast values recipe](./consuming-actions.md).
+For reading broadcast values imperatively in handlers (`context.actions.read`, `context.actions.peek`) or rendering them declaratively in JSX (`actions.stream`), see the [reading broadcast values recipe](./reading-actions.md).
 
 ## Direct broadcast access
 

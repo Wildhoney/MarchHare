@@ -188,11 +188,11 @@ actions.useAction(Actions.Broadcast.Name, async (context, name) => {
 });
 ```
 
-Or consume the latest broadcast value directly in a handler with `context.actions.consume`:
+Both `read` and `peek` access the latest cached broadcast value without subscribing via `useAction`. The difference is that `read` waits for any pending annotations on the corresponding model field to settle before resolving, whereas `peek` returns the value immediately:
 
 ```tsx
 actions.useAction(Actions.FetchFriends, async (context) => {
-  const name = await context.actions.consume(Actions.Broadcast.Name);
+  const name = await context.actions.read(Actions.Broadcast.Name);
   if (!name) return;
   const friends = await fetch(api.friends(name));
   context.actions.produce(({ model }) => {
@@ -201,7 +201,7 @@ actions.useAction(Actions.FetchFriends, async (context) => {
 });
 ```
 
-For a synchronous, non-waiting alternative use `context.actions.peek` &ndash; it returns the cached value immediately without waiting for annotations to settle:
+`peek` is useful for guard checks or synchronous reads where you don't need to wait for settled state:
 
 ```tsx
 actions.useAction(Actions.Check, (context) => {
@@ -211,7 +211,7 @@ actions.useAction(Actions.Check, (context) => {
 });
 ```
 
-You can also render broadcast values declaratively in JSX with `actions.consume`. The renderer callback receives `(value, inspect)` and returns React nodes:
+You can also render broadcast values declaratively in JSX with `actions.stream`. The renderer callback receives `(value, inspect)` and returns React nodes:
 
 ```tsx
 function Dashboard() {
@@ -219,7 +219,7 @@ function Dashboard() {
 
   return (
     <div>
-      {actions.consume(Actions.Broadcast.User, (user, inspect) => (
+      {actions.stream(Actions.Broadcast.User, (user, inspect) => (
         <span>Welcome, {user.name}</span>
       ))}
     </div>

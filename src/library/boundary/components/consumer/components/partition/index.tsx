@@ -8,7 +8,7 @@ import { Entry, Model } from "../../types.ts";
 import { Props } from "./types.ts";
 
 /**
- * Renders output for the `consume()` method by subscribing to distributed action events.
+ * Renders output for the `stream()` method by subscribing to distributed action events.
  *
  * This component manages a subscription to the broadcast emitter for distributed actions,
  * storing the latest dispatched value in the Consumer context. When a new value arrives,

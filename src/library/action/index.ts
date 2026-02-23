@@ -82,7 +82,7 @@ type ActionFactory = {
  *   // Action with channel support for targeted dispatches
  *   static UserUpdated = Action<User, { UserId: number }>("UserUpdated");
  *
- *   // Broadcast action - can be consumed across components
+ *   // Broadcast action - can be read across components
  *   static Counter = Action<number>("Counter", Distribution.Broadcast);
  * }
  *
@@ -91,7 +91,7 @@ type ActionFactory = {
  * actions.dispatch(Actions.Increment, 5);
  * actions.dispatch(Actions.UserUpdated, user);                    // broadcast to all
  * actions.dispatch(Actions.UserUpdated({ UserId: 5 }), user);     // channeled dispatch
- * actions.consume(Actions.Counter, (box) => box.value);
+ * actions.stream(Actions.Counter, (box) => box.value);
  * ```
  */
 export const Action = <ActionFactory>(<unknown>(<

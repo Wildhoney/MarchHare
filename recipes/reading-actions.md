@@ -1,17 +1,17 @@
-# Consuming broadcast values
+# Reading and streaming broadcast values
 
-There are two ways to consume broadcast values:
+There are two ways to access broadcast values:
 
-1. **In handlers** &ndash; `context.actions.consume(action)` returns `Promise<T | null>` for imperative reads inside action handlers.
-2. **In JSX** &ndash; `actions.consume(action, renderer)` returns `React.ReactNode` for declarative rendering in component output.
+1. **In handlers** &ndash; `context.actions.read(action)` returns `Promise<T | null>` for imperative reads inside action handlers.
+2. **In JSX** &ndash; `actions.stream(action, renderer)` returns `React.ReactNode` for declarative rendering in component output.
 
-## Handler-side consume
+## Handler-side read
 
-Use `context.actions.consume` to consume the latest broadcast or multicast value directly inside an action handler, without subscribing via `useAction` and storing it in the local model.
+Use `context.actions.read` to read the latest broadcast or multicast value directly inside an action handler, without subscribing via `useAction` and storing it in the local model.
 
 ```ts
 actions.useAction(Actions.FetchPosts, async (context) => {
-  const user = await context.actions.consume(Actions.Broadcast.User);
+  const user = await context.actions.read(Actions.Broadcast.User);
   if (!user) return;
   const posts = await fetchPosts(user.id, {
     signal: context.task.controller.signal,
@@ -22,11 +22,11 @@ actions.useAction(Actions.FetchPosts, async (context) => {
 });
 ```
 
-> **Important:** The `consume()` method only accepts broadcast or multicast actions. Attempting to pass a unicast action returns `null` as unicast values are not cached.
+> **Important:** The `read()` method only accepts broadcast or multicast actions. Attempting to pass a unicast action returns `null` as unicast values are not cached.
 
 ## Key details
 
-- **Async** &ndash; returns `Promise<T | null>`. If the corresponding model field has pending Immertation annotations, `consume` waits for them to settle before resolving.
+- **Async** &ndash; returns `Promise<T | null>`. If the corresponding model field has pending Immertation annotations, `read` waits for them to settle before resolving.
 - **Raw value** &ndash; returns `T`, not a `Box<T>`. Handlers need the data, not the reactive wrapper.
 - **Null when empty** &ndash; returns `null` if no value has been dispatched for that action.
 - **Abort-safe** &ndash; returns `null` if the task's abort signal has fired.
@@ -44,17 +44,17 @@ actions.useAction(Actions.Check, (context) => {
 });
 ```
 
-| Method    | Returns              | Waits for settled | Use case                       |
-| --------- | -------------------- | ----------------- | ------------------------------ |
-| `consume` | `Promise<T \| null>` | Yes               | Need the resolved value        |
-| `peek`    | `T \| null`          | No                | Quick guard check or sync read |
+| Method | Returns              | Waits for settled | Use case                       |
+| ------ | -------------------- | ----------------- | ------------------------------ |
+| `read` | `Promise<T \| null>` | Yes               | Need the resolved value        |
+| `peek` | `T \| null`          | No                | Quick guard check or sync read |
 
 ## Multicast support
 
 For multicast actions, pass the scope name via the `options` argument:
 
 ```ts
-const score = await context.actions.consume(Actions.Multicast.Score, {
+const score = await context.actions.read(Actions.Multicast.Score, {
   scope: "game",
 });
 ```
@@ -91,9 +91,9 @@ function ComponentB() {
 
 This enables late-mounting components to synchronise with previously dispatched state. See the [broadcast actions recipe](./broadcast-actions.md#cached-values-on-mount) for more details.
 
-## JSX-side consume
+## JSX-side stream
 
-Use `actions.consume` to render broadcast values declaratively in JSX. The renderer callback receives `(value, inspect)` and returns React nodes.
+Use `actions.stream` to render broadcast values declaratively in JSX. The renderer callback receives `(value, inspect)` and returns React nodes.
 
 ```tsx
 function Dashboard() {
@@ -102,7 +102,7 @@ function Dashboard() {
   return (
     <div>
       <h1>Dashboard</h1>
-      {actions.consume(Actions.Broadcast.User, (user, inspect) => (
+      {actions.stream(Actions.Broadcast.User, (user, inspect) => (
         <span>Welcome, {user.name}</span>
       ))}
     </div>
@@ -113,13 +113,13 @@ function Dashboard() {
 ### Key details
 
 - Returns `null` until the first value is dispatched for that action
-- Re-renders only the consumed portion when a new value arrives
+- Re-renders only the streamed portion when a new value arrives
 - The `inspect` argument tracks annotation status (e.g. `inspect.pending()`)
 - Payload type must be an object (`T extends object`) for annotation tracking
 
 ### When to use which
 
-| Scenario                                   | Method                              |
-| ------------------------------------------ | ----------------------------------- |
-| Reading a broadcast value inside a handler | `context.actions.consume(action)`   |
-| Rendering a broadcast value in JSX output  | `actions.consume(action, renderer)` |
+| Scenario                                   | Method                             |
+| ------------------------------------------ | ---------------------------------- |
+| Reading a broadcast value inside a handler | `context.actions.read(action)`     |
+| Rendering a broadcast value in JSX output  | `actions.stream(action, renderer)` |

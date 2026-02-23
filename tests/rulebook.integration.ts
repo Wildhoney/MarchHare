@@ -476,7 +476,7 @@ test.describe("Chizu Rulebook", () => {
       await expect(user2).toHaveText("Broadcast to All <all@example.com>");
     });
 
-    it("Rule 40: Use context.actions.consume to consume broadcast values in handlers - should consume broadcast value imperatively", async ({
+    it("Rule 40: Use context.actions.read to read broadcast values in handlers - should read broadcast value imperatively", async ({
       page,
     }) => {
       const consumed = page.getByTestId("rule-40-consumed");
@@ -484,14 +484,14 @@ test.describe("Chizu Rulebook", () => {
       // Publish a broadcast value first
       await page.getByTestId("rule-40-publish").click();
 
-      // Mount the consumer — its Lifecycle.Mount handler calls context.actions.consume
+      // Mount the consumer — its Lifecycle.Mount handler calls context.actions.read
       await page.getByTestId("rule-40-mount-consumer").click();
 
-      // The consumed value should appear after the handler consumes it
+      // The read value should appear after the handler reads it
       await expect(consumed).toHaveText("Charlie", { timeout: 2000 });
     });
 
-    it("Rule 40: Use context.actions.consume to consume broadcast values in handlers - should return null when no value dispatched", async ({
+    it("Rule 40: Use context.actions.read to read broadcast values in handlers - should return null when no value dispatched", async ({
       page,
     }) => {
       // Mount the consumer WITHOUT publishing first
@@ -530,27 +530,27 @@ test.describe("Chizu Rulebook", () => {
       });
     });
 
-    it("Rule 41: Use actions.consume to render broadcast values declaratively in JSX - should render broadcast value", async ({
+    it("Rule 41: Use actions.stream to render broadcast values declaratively in JSX - should render broadcast value", async ({
       page,
     }) => {
       const consumer = page.getByTestId("rule-41-consumer");
 
-      // Before dispatch, consume renders nothing
+      // Before dispatch, stream renders nothing
       await expect(consumer).toHaveText("");
 
       // Publish a broadcast value
       await page.getByTestId("rule-41-publish").click();
 
-      // The consumed value should appear via JSX render-prop
+      // The streamed value should appear via JSX render-prop
       await expect(page.getByTestId("rule-41-value")).toHaveText("Diana", {
         timeout: 2000,
       });
     });
 
-    it("Rule 41: Use actions.consume to render broadcast values declaratively in JSX - should render null when no value dispatched", async ({
+    it("Rule 41: Use actions.stream to render broadcast values declaratively in JSX - should render null when no value dispatched", async ({
       page,
     }) => {
-      // Without publishing, the consumer should render nothing
+      // Without publishing, the stream should render nothing
       const consumer = page.getByTestId("rule-41-consumer");
       await expect(consumer).toHaveText("");
     });
