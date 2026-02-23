@@ -2,20 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
-## [0.2.66](https://github.com/Wildhoney/Chizu/compare/v0.2.63...v0.2.66) (2026-02-23)
+## [0.2.67](https://github.com/Wildhoney/Chizu/compare/v0.2.66...v0.2.67) (2026-02-23)
 
+## [0.2.66](https://github.com/Wildhoney/Chizu/compare/v0.2.63...v0.2.66) (2026-02-23)
 
 ### Features
 
-* **hooks:** add multicast cached replay on mount and document deduplication patterns ([f95babe](https://github.com/Wildhoney/Chizu/commit/f95babed564e0942d8aa319340b58158c3d57186))
-* **hooks:** add peek() for synchronous reads and JSX consume() on actions tuple ([e0d2e85](https://github.com/Wildhoney/Chizu/commit/e0d2e857bb8fe6b7c4ee1a4489bd6258c73b6e58))
-* **utils:** add signal-aware poll() utility and make sleep() signal arg explicit ([ab71164](https://github.com/Wildhoney/Chizu/commit/ab7116410532fc412d3de41dac100a60edae4f9a))
-
+- **hooks:** add multicast cached replay on mount and document deduplication patterns ([f95babe](https://github.com/Wildhoney/Chizu/commit/f95babed564e0942d8aa319340b58158c3d57186))
+- **hooks:** add peek() for synchronous reads and JSX consume() on actions tuple ([e0d2e85](https://github.com/Wildhoney/Chizu/commit/e0d2e857bb8fe6b7c4ee1a4489bd6258c73b6e58))
+- **utils:** add signal-aware poll() utility and make sleep() signal arg explicit ([ab71164](https://github.com/Wildhoney/Chizu/commit/ab7116410532fc412d3de41dac100a60edae4f9a))
 
 ### Bug Fixes
 
-* replay broadcast values for useAction handlers without consume ([576e705](https://github.com/Wildhoney/Chizu/commit/576e705dbde193452090ad95d4a629f53689ca26))
-* **types:** allow action-based derive with void model by removing never guard ([4dde105](https://github.com/Wildhoney/Chizu/commit/4dde105567413e58ae30326604502342a5836109))
+- replay broadcast values for useAction handlers without consume ([576e705](https://github.com/Wildhoney/Chizu/commit/576e705dbde193452090ad95d4a629f53689ca26))
+- **types:** allow action-based derive with void model by removing never guard ([4dde105](https://github.com/Wildhoney/Chizu/commit/4dde105567413e58ae30326604502342a5836109))
 
 ## [0.2.65](https://github.com/Wildhoney/Chizu/compare/v0.2.63...v0.2.65) (2026-02-13)
 
