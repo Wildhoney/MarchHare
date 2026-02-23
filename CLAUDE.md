@@ -563,6 +563,7 @@ docs: update the README file
   - `error-handling.md` - Error component and fault handling
   - `ky-http-client.md` - Integration with ky HTTP client
   - `lifecycle-actions.md` - Mount, Unmount, Error, Update, Node
+  - `mount-broadcast-deduplication.md` - Avoiding duplicate fetches on mount with broadcast/multicast
   - `model-annotations.md` - Async state tracking with Immertation
   - `multicast-actions.md` - Scoped component communication
   - `react-context-in-handlers.md` - Using context.data

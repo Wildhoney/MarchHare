@@ -14,7 +14,13 @@ import {
   HandlerContext,
 } from "../types/index.ts";
 
-import type { LifecycleConfig, References, Handler, Scope } from "./types.ts";
+import type {
+  Dispatchers,
+  LifecycleConfig,
+  References,
+  Handler,
+  Scope,
+} from "./types.ts";
 import { A, G } from "@mobily/ts-belt";
 import { changes } from "../utils.ts";
 import { isChanneledAction, getActionSymbol } from "../action/index.ts";
@@ -66,7 +72,8 @@ export function isGenerator(
 export function useLifecycles({
   unicast,
   broadcast,
-  broadcastActions,
+  dispatchers,
+  scope,
   phase,
   data,
 }: LifecycleConfig): void {
@@ -77,10 +84,19 @@ export function useLifecycles({
 
     unicast.emit(Lifecycle.Mount);
 
-    broadcastActions.forEach((action) => {
+    dispatchers.broadcast.forEach((action) => {
       const cached = broadcast.getCached(action);
       if (!G.isNullable(cached)) unicast.emit(action, cached);
     });
+
+    if (scope) {
+      dispatchers.multicast.forEach((action) => {
+        for (const entry of scope.values()) {
+          const cached = entry.emitter.getCached(action);
+          if (!G.isNullable(cached)) unicast.emit(action, cached);
+        }
+      });
+    }
 
     phase.current = Phase.Mounted;
   }, []);
@@ -166,16 +182,6 @@ export function With<K extends string>(
 export { isChanneledAction, getActionSymbol };
 
 /**
- * Return type for useActionSets hook.
- */
-export type ActionSets = {
-  /** Set of registered broadcast action IDs */
-  broadcast: Set<ActionId>;
-  /** Set of registered multicast action IDs */
-  multicast: Set<ActionId>;
-};
-
-/**
  * Manages sets of broadcast and multicast action IDs.
  *
  * This hook creates stable refs for tracking which actions have been registered
@@ -187,7 +193,7 @@ export type ActionSets = {
  *
  * @example
  * ```ts
- * const actions = useActionSets();
+ * const actions = useDispatchers();
  *
  * // Register a broadcast action
  * actions.broadcast.add(getActionSymbol(MyBroadcastAction));
@@ -200,7 +206,7 @@ export type ActionSets = {
  *
  * @internal
  */
-export function useActionSets(): ActionSets {
+export function useDispatchers(): Dispatchers {
   const broadcast = React.useRef<Set<ActionId>>(new Set());
   const multicast = React.useRef<Set<ActionId>>(new Set());
 

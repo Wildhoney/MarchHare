@@ -12,6 +12,7 @@ import type {
   Nodes,
 } from "../types/index.ts";
 import type { BroadcastEmitter } from "../boundary/components/broadcast/utils.ts";
+import type { ScopeContext } from "../boundary/components/scope/types.ts";
 
 /**
  * Return type for the useNodes hook.
@@ -85,13 +86,31 @@ export type Scope<
 export type Data<D extends Props = Props> = () => D;
 
 /**
+ * Return type for useDispatchers hook.
+ */
+export type Dispatchers = {
+  /** Set of registered broadcast action IDs */
+  broadcast: Set<ActionId>;
+  /** Set of registered multicast action IDs */
+  multicast: Set<ActionId>;
+};
+
+/**
  * Configuration for {@link useLifecycles}.
  */
 export type LifecycleConfig = {
+  /** Component-local event emitter for unicast action dispatch */
   unicast: EventEmitter;
+  /** Shared broadcast emitter with cached values for cross-component events */
   broadcast: BroadcastEmitter;
+  /** Global set of all in-flight tasks across components */
   tasks: Tasks;
-  broadcastActions: Set<ActionId>;
+  /** Tracked broadcast and multicast action sets for cached replay on mount */
+  dispatchers: Dispatchers;
+  /** Scope context for multicast cached replay (null when outside any scope) */
+  scope: ScopeContext;
+  /** Mutable ref tracking the component's current lifecycle phase */
   phase: RefObject<Phase>;
+  /** Current snapshot of reactive data props for change detection */
   data: Props;
 };

@@ -74,7 +74,7 @@ function ComponentB() {
 }
 ```
 
-> **Note:** The broadcast cache stores the most recent payload for each action automatically. Late-mounting components receive this cached value during the mounting phase.
+> **Note:** The broadcast cache stores the most recent payload for each action automatically. Late-mounting components receive this cached value during the mounting phase. If you also fetch data in `Lifecycle.Mount`, see the [mount deduplication recipe](./mount-broadcast-deduplication.md) to avoid duplicate work.
 
 ## Consuming broadcast values
 

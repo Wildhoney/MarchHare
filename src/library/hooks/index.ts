@@ -7,7 +7,7 @@ import {
   getActionSymbol,
   matchesChannel,
   useRegisterHandler,
-  useActionSets,
+  useDispatchers,
 } from "./utils.ts";
 export { With } from "./utils.ts";
 import { useRerender } from "../utils/utils.ts";
@@ -133,7 +133,7 @@ export function useActions<
   const unicast = React.useMemo(() => new EventEmitter(), []);
   const registry = React.useRef<Scope<M, A, D>>({ handlers: new Map() });
   registry.current.handlers = new Map();
-  const actionSets = useActionSets();
+  const dispatchers = useDispatchers();
   const phase = React.useRef<Phase>(Phase.Mounting);
   const nodes = useNodes<M>();
   const localTasks = React.useRef<Set<Task>>(new Set());
@@ -357,12 +357,12 @@ export function useActions<
             }
           }
           unicast.on(action, handler);
-          actionSets.multicast.add(action);
+          dispatchers.multicast.add(action);
           cleanups.add(() => unicast.off(action, handler));
         } else if (isBroadcastAction(action)) {
           broadcast.on(action, handler);
           unicast.on(action, handler);
-          actionSets.broadcast.add(action);
+          dispatchers.broadcast.add(action);
           cleanups.add(() => {
             broadcast.off(action, handler);
             unicast.off(action, handler);
@@ -414,7 +414,8 @@ export function useActions<
     unicast,
     broadcast,
     tasks,
-    broadcastActions: actionSets.broadcast,
+    dispatchers,
+    scope,
     phase,
     data: getData(),
   });
@@ -469,12 +470,14 @@ export function useActions<
   );
 
   (<UseActions<M, A, D>>result).useAction = <
-    Act extends ActionId | HandlerPayload | ChanneledAction,
+    Action extends ActionId | HandlerPayload | ChanneledAction,
   >(
-    action: Act,
+    action: Action,
     handler: (
       context: HandlerContext<M, A, D>,
-      ...args: [Payload<Act>] extends [never] ? [] : [payload: Payload<Act>]
+      ...args: [Payload<Action>] extends [never]
+        ? []
+        : [payload: Payload<Action>]
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void => {
     useRegisterHandler<M, A, D>(registry, action, <Handler<M, A, D>>handler);

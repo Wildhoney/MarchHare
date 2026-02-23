@@ -227,6 +227,8 @@ function Dashboard() {
 }
 ```
 
+Components that mount after a broadcast has already been dispatched automatically receive the cached value via their `useAction` handler. If you also fetch data in `Lifecycle.Mount`, see the [mount deduplication recipe](./recipes/mount-broadcast-deduplication.md) to avoid duplicate requests.
+
 For targeted event delivery, use channeled actions. Define a channel type as the second generic argument and call the action with a channel object &ndash; handlers fire when the dispatch channel matches:
 
 ```tsx
@@ -299,7 +301,7 @@ function App() {
 actions.dispatch(Actions.Multicast.Update, 42, { scope: "TeamA" });
 ```
 
-Unlike broadcast which reaches all components, multicast is scoped to the named boundary &ndash; perfect for isolated widget groups, form sections, or distinct UI regions.
+Unlike broadcast which reaches all components, multicast is scoped to the named boundary &ndash; perfect for isolated widget groups, form sections, or distinct UI regions. Like broadcast, multicast caches dispatched values per scope &ndash; components that mount later automatically receive the cached value. See the [mount deduplication recipe](./recipes/mount-broadcast-deduplication.md) if you also fetch data in `Lifecycle.Mount`.
 
 For components that always render inside a scope, use the `withScope` HOC to eliminate the manual `<Scope>` wrapper:
 

@@ -134,7 +134,7 @@ function ScoreDisplay() {
 
 ## Late-mounting components
 
-Like broadcast, multicast stores the last dispatched value for each action within the scope. Components that mount later receive the cached value automatically:
+Like broadcast, multicast stores the last dispatched value for each action within the scope. Components that mount later receive the cached value automatically. If you also fetch data in `Lifecycle.Mount`, see the [mount deduplication recipe](./mount-broadcast-deduplication.md) to avoid duplicate work.
 
 ```tsx
 function LateComponent() {

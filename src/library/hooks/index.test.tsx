@@ -2027,3 +2027,338 @@ describe("useActions() actions.consume (JSX)", () => {
     expect(screen.getByTestId("jsx-consume-updated").textContent).toBe("Bob");
   });
 });
+
+describe("useActions() mount + broadcast replay deduplication", () => {
+  class BroadcastUser {
+    static User = Action<{ id: number }>("User", Distribution.Broadcast);
+  }
+
+  it("should fire both Lifecycle.Mount and cached broadcast replay, causing duplicate work without guards", async () => {
+    const calls: string[] = [];
+
+    function Producer({ onShowLate }: { onShowLate: () => void }) {
+      const [, actions] = useActions<
+        Record<string, never>,
+        typeof BroadcastUser
+      >({});
+
+      return (
+        <button
+          data-testid="dispatch-user"
+          onClick={() => {
+            actions.dispatch(BroadcastUser.User, { id: 1 });
+            onShowLate();
+          }}
+        >
+          Dispatch
+        </button>
+      );
+    }
+
+    function Late() {
+      const actions = useActions<{ loaded: boolean }, typeof BroadcastUser>({
+        loaded: false,
+      });
+
+      actions.useAction(Lifecycle.Mount, () => {
+        calls.push("mount");
+      });
+
+      actions.useAction(BroadcastUser.User, () => {
+        calls.push("broadcast");
+      });
+
+      return <div data-testid="late-dedup">Late</div>;
+    }
+
+    function App() {
+      const [show, setShow] = React.useState(false);
+
+      return (
+        <Broadcaster>
+          <Producer onShowLate={() => setShow(true)} />
+          {show && <Late />}
+        </Broadcaster>
+      );
+    }
+
+    render(<App />);
+
+    await act(async () => {
+      screen.getByTestId("dispatch-user").click();
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+
+    // Both handlers fire during mount — this is the problem scenario
+    expect(calls).toContain("mount");
+    expect(calls).toContain("broadcast");
+    expect(calls).toHaveLength(2);
+  });
+
+  it("should avoid duplicate work by using peek() in Lifecycle.Mount to detect existing broadcast value", async () => {
+    const fetches: string[] = [];
+
+    function Producer({ onShowLate }: { onShowLate: () => void }) {
+      const [, actions] = useActions<
+        Record<string, never>,
+        typeof BroadcastUser
+      >({});
+
+      return (
+        <button
+          data-testid="dispatch-peek-guard"
+          onClick={() => {
+            actions.dispatch(BroadcastUser.User, { id: 1 });
+            onShowLate();
+          }}
+        >
+          Dispatch
+        </button>
+      );
+    }
+
+    function Late() {
+      const actions = useActions<{ loaded: boolean }, typeof BroadcastUser>({
+        loaded: false,
+      });
+
+      // Guard: only fetch in mount if no broadcast value is cached
+      actions.useAction(Lifecycle.Mount, (context) => {
+        const user = context.actions.peek(BroadcastUser.User);
+        if (!user) fetches.push("mount-fetch");
+      });
+
+      // Always fetch on broadcast (including cached replay)
+      actions.useAction(BroadcastUser.User, (_context, user) => {
+        fetches.push(`broadcast-fetch:${user.id}`);
+      });
+
+      return <div data-testid="late-peek">Late</div>;
+    }
+
+    function App() {
+      const [show, setShow] = React.useState(false);
+
+      return (
+        <Broadcaster>
+          <Producer onShowLate={() => setShow(true)} />
+          {show && <Late />}
+        </Broadcaster>
+      );
+    }
+
+    render(<App />);
+
+    await act(async () => {
+      screen.getByTestId("dispatch-peek-guard").click();
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+
+    // Mount handler skipped (peek found cached value), only broadcast fires
+    expect(fetches).toEqual(["broadcast-fetch:1"]);
+  });
+
+  it("should avoid duplicate work by checking context.phase in the broadcast handler", async () => {
+    const fetches: string[] = [];
+
+    function Producer({ onShowLate }: { onShowLate: () => void }) {
+      const [, actions] = useActions<
+        Record<string, never>,
+        typeof BroadcastUser
+      >({});
+
+      return (
+        <>
+          <button
+            data-testid="dispatch-phase-guard"
+            onClick={() => {
+              actions.dispatch(BroadcastUser.User, { id: 1 });
+              onShowLate();
+            }}
+          >
+            Dispatch
+          </button>
+          <button
+            data-testid="dispatch-phase-again"
+            onClick={() => {
+              actions.dispatch(BroadcastUser.User, { id: 2 });
+            }}
+          >
+            Dispatch Again
+          </button>
+        </>
+      );
+    }
+
+    function Late() {
+      const actions = useActions<{ loaded: boolean }, typeof BroadcastUser>({
+        loaded: false,
+      });
+
+      // Mount always fetches
+      actions.useAction(Lifecycle.Mount, () => {
+        fetches.push("mount-fetch");
+      });
+
+      // Broadcast skips cached replay (phase=Mounting), only handles live dispatches
+      actions.useAction(BroadcastUser.User, (context, user) => {
+        if (context.phase === Phase.Mounting) return;
+        fetches.push(`broadcast-fetch:${user.id}`);
+      });
+
+      return <div data-testid="late-phase">Late</div>;
+    }
+
+    function App() {
+      const [show, setShow] = React.useState(false);
+
+      return (
+        <Broadcaster>
+          <Producer onShowLate={() => setShow(true)} />
+          {show && <Late />}
+        </Broadcaster>
+      );
+    }
+
+    render(<App />);
+
+    await act(async () => {
+      screen.getByTestId("dispatch-phase-guard").click();
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+
+    // Only mount fetch ran; cached broadcast replay was skipped
+    expect(fetches).toEqual(["mount-fetch"]);
+
+    // Subsequent live dispatch should still work
+    await act(async () => {
+      screen.getByTestId("dispatch-phase-again").click();
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+
+    expect(fetches).toEqual(["mount-fetch", "broadcast-fetch:2"]);
+  });
+
+  it("should fetch in Lifecycle.Mount when no broadcast value is cached", async () => {
+    const fetches: string[] = [];
+
+    function Late() {
+      const actions = useActions<{ loaded: boolean }, typeof BroadcastUser>({
+        loaded: false,
+      });
+
+      // Guard: only fetch in mount if no broadcast value is cached
+      actions.useAction(Lifecycle.Mount, (context) => {
+        const user = context.actions.peek(BroadcastUser.User);
+        if (!user) fetches.push("mount-fetch");
+      });
+
+      actions.useAction(BroadcastUser.User, (_context, user) => {
+        fetches.push(`broadcast-fetch:${user.id}`);
+      });
+
+      return <div>Late</div>;
+    }
+
+    function App() {
+      return (
+        <Broadcaster>
+          <Late />
+        </Broadcaster>
+      );
+    }
+
+    render(<App />);
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+
+    // No cached broadcast, so mount handler fetches
+    expect(fetches).toEqual(["mount-fetch"]);
+  });
+
+  it("should deduplicate with multicast actions using peek() and scope", async () => {
+    class MulticastUser {
+      static User = Action<{ id: number }>("User", Distribution.Multicast);
+    }
+
+    const fetches: string[] = [];
+
+    function Producer({ onShowLate }: { onShowLate: () => void }) {
+      const [, actions] = useActions<
+        Record<string, never>,
+        typeof MulticastUser
+      >({});
+
+      return (
+        <button
+          data-testid="dispatch-mc-dedup"
+          onClick={() => {
+            actions.dispatch(MulticastUser.User, { id: 3 }, { scope: "team" });
+            onShowLate();
+          }}
+        >
+          Dispatch
+        </button>
+      );
+    }
+
+    function Late() {
+      const actions = useActions<{ loaded: boolean }, typeof MulticastUser>({
+        loaded: false,
+      });
+
+      actions.useAction(Lifecycle.Mount, (context) => {
+        const user = context.actions.peek(MulticastUser.User, {
+          scope: "team",
+        });
+        if (!user) fetches.push("mount-fetch");
+      });
+
+      actions.useAction(MulticastUser.User, (_context, user) => {
+        fetches.push(`multicast-fetch:${user.id}`);
+      });
+
+      return <div>Late</div>;
+    }
+
+    function App() {
+      const [show, setShow] = React.useState(false);
+
+      return (
+        <Broadcaster>
+          <Scope name="team">
+            <Producer onShowLate={() => setShow(true)} />
+            {show && <Late />}
+          </Scope>
+        </Broadcaster>
+      );
+    }
+
+    render(<App />);
+
+    await act(async () => {
+      screen.getByTestId("dispatch-mc-dedup").click();
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+
+    // Mount handler skipped (peek found cached value), only multicast fires
+    expect(fetches).toEqual(["multicast-fetch:3"]);
+  });
+});
