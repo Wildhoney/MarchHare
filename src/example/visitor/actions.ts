@@ -1,5 +1,5 @@
 import { A } from "@mobily/ts-belt";
-import { useActions, Lifecycle } from "../../library/index.ts";
+import { useActions } from "../../library/index.ts";
 import { Model, Actions, Country } from "./types.ts";
 
 const model: Model = {
@@ -12,7 +12,7 @@ const model: Model = {
 export function useVisitorActions() {
   const actions = useActions<Model, typeof Actions>(model);
 
-  actions.useAction(Lifecycle.Mount, (context) => {
+  actions.useAction(Actions.Mount, (context) => {
     const source = new EventSource("/visitors");
 
     source.addEventListener("connected", () => {
@@ -44,7 +44,7 @@ export function useVisitorActions() {
     });
   });
 
-  actions.useAction(Lifecycle.Unmount, (context) => {
+  actions.useAction(Actions.Unmount, (context) => {
     context.model.source?.close();
   });
 

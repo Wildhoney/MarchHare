@@ -2,6 +2,7 @@ import * as React from "react";
 import { Broadcaster } from "./components/broadcast/index.tsx";
 import { CacheProvider } from "./components/cache/index.tsx";
 import { Tasks } from "./components/tasks/index.tsx";
+import { Regulators } from "./components/regulators/index.tsx";
 import type { Props } from "./types.ts";
 
 /**
@@ -25,7 +26,9 @@ export function Boundary({ children }: Props): React.ReactNode {
   return (
     <Broadcaster>
       <CacheProvider>
-        <Tasks>{children}</Tasks>
+        <Regulators>
+          <Tasks>{children}</Tasks>
+        </Regulators>
       </CacheProvider>
     </Broadcaster>
   );

@@ -53,12 +53,14 @@ actions.useAction(Actions.FetchData, async (context) => {
 
 ## Debouncing and throttling
 
-For debounced inputs, use `context.regulator.abort.self()` to cancel previous instances:
+Use `utils.sleep` with the abort signal to debounce &ndash; when a new dispatch occurs, the previous sleep is aborted automatically:
 
 ```ts
 actions.useAction(Actions.Search, async (context, query) => {
-  await utils.sleep(300, context.signal); // Debounce delay
-  const results = await fetch(`/search?q=${query}`, { signal: context.signal });
+  await utils.sleep(300, context.task.controller.signal); // Debounce delay
+  const results = await fetch(`/search?q=${query}`, {
+    signal: context.task.controller.signal,
+  });
   // ...
 });
 ```

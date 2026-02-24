@@ -118,9 +118,13 @@ Both the model and actions type parameters default to `void`, so you can call `u
 ```tsx
 import { useActions, Lifecycle } from "chizu";
 
-const actions = useActions();
+class Actions {
+  static Mount = Lifecycle.Mount();
+}
 
-actions.useAction(Lifecycle.Mount, () => {
+const actions = useActions<void, typeof Actions>();
+
+actions.useAction(Actions.Mount, () => {
   console.log("Mounted!");
 });
 ```
@@ -227,7 +231,7 @@ function Dashboard() {
 }
 ```
 
-Components that mount after a broadcast has already been dispatched automatically receive the cached value via their `useAction` handler. If you also fetch data in `Lifecycle.Mount`, see the [mount deduplication recipe](./recipes/mount-broadcast-deduplication.md) to avoid duplicate requests.
+Components that mount after a broadcast has already been dispatched automatically receive the cached value via their `useAction` handler. If you also fetch data in `Lifecycle.Mount()`, see the [mount deduplication recipe](./recipes/mount-broadcast-deduplication.md) to avoid duplicate requests.
 
 For targeted event delivery, use channeled actions. Define a channel type as the second generic argument and call the action with a channel object &ndash; handlers fire when the dispatch channel matches:
 
@@ -301,7 +305,7 @@ function App() {
 actions.dispatch(Actions.Multicast.Update, 42, { scope: "TeamA" });
 ```
 
-Unlike broadcast which reaches all components, multicast is scoped to the named boundary &ndash; perfect for isolated widget groups, form sections, or distinct UI regions. Like broadcast, multicast caches dispatched values per scope &ndash; components that mount later automatically receive the cached value. See the [mount deduplication recipe](./recipes/mount-broadcast-deduplication.md) if you also fetch data in `Lifecycle.Mount`.
+Unlike broadcast which reaches all components, multicast is scoped to the named boundary &ndash; perfect for isolated widget groups, form sections, or distinct UI regions. Like broadcast, multicast caches dispatched values per scope &ndash; components that mount later automatically receive the cached value. See the [mount deduplication recipe](./recipes/mount-broadcast-deduplication.md) if you also fetch data in `Lifecycle.Mount()`.
 
 For components that always render inside a scope, use the `withScope` HOC to eliminate the manual `<Scope>` wrapper:
 
@@ -376,3 +380,20 @@ context.actions.invalidate(CacheStore.User({ UserId: 5 }));
 ```
 
 The cache is scoped to the nearest `<Boundary>`. See the [caching recipe](./recipes/caching.md) for more details.
+
+The action regulator lets handlers control which actions may be dispatched across all components within a `<Boundary>`. Use `context.regulator` to block or allow actions:
+
+```ts
+actions.useAction(Actions.Checkout, async (context) => {
+  // Allow only the cancel action during checkout
+  context.regulator.allow(Actions.Cancel);
+
+  try {
+    await processPayment(context.task.controller.signal);
+  } finally {
+    context.regulator.allow();
+  }
+});
+```
+
+`disallow()` blocks all, `disallow(A, B)` blocks specific actions, `allow()` allows all (reset), and `allow(A, B)` allows only those actions. Each call replaces the previous policy (last-write-wins). Blocked actions fire `Reason.Disallowed` through the error system without allocating resources. See the [action regulator recipe](./recipes/action-regulator.md) for more details.

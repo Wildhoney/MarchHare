@@ -33,7 +33,7 @@ The `Fault` object passed to the handler contains:
 - **`reason`** &ndash; One of `Reason.Timedout`, `Reason.Supplanted`, `Reason.Disallowed`, or `Reason.Errored`.
 - **`error`** &ndash; The `Error` object that was thrown.
 - **`action`** &ndash; The name of the action that caused the error.
-- **`handled`** &ndash; Whether the component has a `Lifecycle.Error` handler registered.
+- **`handled`** &ndash; Whether the component has a `Lifecycle.Error()` handler registered.
 - **`tasks`** &ndash; All currently running tasks across the application, enabling programmatic abort during error recovery.
 
 ## Error reasons
@@ -47,10 +47,14 @@ The `Fault` object passed to the handler contains:
 
 ## Local vs global error handling
 
-The `<Error>` component is a catch-all for errors from **any** action in your application, useful for global error reporting or logging. For component-specific error recovery, use `Lifecycle.Error` instead (see [lifecycle-actions.md](./lifecycle-actions.md)):
+The `<Error>` component is a catch-all for errors from **any** action in your application, useful for global error reporting or logging. For component-specific error recovery, use `Lifecycle.Error()` instead (see [lifecycle-actions.md](./lifecycle-actions.md)):
 
 ```ts
-actions.useAction(Lifecycle.Error, (context, error) => {
+class Actions {
+  static Error = Lifecycle.Error();
+}
+
+actions.useAction(Actions.Error, (context, error) => {
   // Handle errors locally where they occurred
   context.actions.produce((draft) => {
     draft.model.errorMessage = error.message;

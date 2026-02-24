@@ -1,11 +1,16 @@
 # Mount and broadcast/multicast deduplication
 
-When a component needs data that depends on a broadcast or multicast value, it is tempting to fetch in both `Lifecycle.Mount` (in case no event has fired yet) and in the broadcast/multicast handler (to react when the value arrives). However, because cached values are replayed during mount for both broadcast and multicast actions, both handlers fire &mdash; causing duplicate work.
+When a component needs data that depends on a broadcast or multicast value, it is tempting to fetch in both `Lifecycle.Mount()` (in case no event has fired yet) and in the broadcast/multicast handler (to react when the value arrives). However, because cached values are replayed during mount for both broadcast and multicast actions, both handlers fire &mdash; causing duplicate work.
 
 ## The problem
 
 ```ts
-actions.useAction(Lifecycle.Mount, async (context) => {
+class Actions {
+  static Mount = Lifecycle.Mount();
+  static Broadcast = BroadcastActions;
+}
+
+actions.useAction(Actions.Mount, async (context) => {
   // Fetch because we don't know if a broadcast has fired yet.
   const users = await fetchUsers(context.task.controller.signal);
   context.actions.produce(({ model }) => {
@@ -22,13 +27,13 @@ actions.useAction(Actions.Broadcast.Team, async (context, team) => {
 });
 ```
 
-If a cached broadcast value exists when the component mounts, the mount replay mechanism fires the broadcast handler immediately after `Lifecycle.Mount` &mdash; both still within `Phase.Mounting`. This results in two fetches for the same data.
+If a cached broadcast value exists when the component mounts, the mount replay mechanism fires the broadcast handler immediately after `Lifecycle.Mount()` &mdash; both still within `Phase.Mounting`. This results in two fetches for the same data.
 
 ## Why it happens
 
 During mount, Chizu executes the following sequence inside a single `useLayoutEffect`:
 
-1. Emit `Lifecycle.Mount` (handlers run with `phase = Mounting`).
+1. Emit `Lifecycle.Mount()` (handlers run with `phase = Mounting`).
 2. For each registered broadcast action, check the `BroadcastEmitter` cache.
 3. If a cached value exists, emit the action to the unicast emitter (handlers run with `phase = Mounting`).
 4. Transition phase to `Mounted`.
@@ -37,10 +42,10 @@ Both steps 1 and 3 happen synchronously before the phase transitions, so both ha
 
 ## Solution A: Guard mount with `peek()`
 
-Use `peek()` in `Lifecycle.Mount` to check whether a broadcast value already exists. If it does, skip the mount fetch and let the broadcast handler do the work:
+Use `peek()` in `Lifecycle.Mount()` to check whether a broadcast value already exists. If it does, skip the mount fetch and let the broadcast handler do the work:
 
 ```ts
-actions.useAction(Lifecycle.Mount, async (context) => {
+actions.useAction(Actions.Mount, async (context) => {
   const team = context.actions.peek(Actions.Broadcast.Team);
   if (team) return; // Broadcast replay will handle it.
 
@@ -64,10 +69,10 @@ actions.useAction(Actions.Broadcast.Team, async (context, team) => {
 
 ## Solution B: Guard broadcast with `context.phase`
 
-Use `context.phase` in the broadcast handler to skip the cached replay and let `Lifecycle.Mount` handle the initial fetch:
+Use `context.phase` in the broadcast handler to skip the cached replay and let `Lifecycle.Mount()` handle the initial fetch:
 
 ```ts
-actions.useAction(Lifecycle.Mount, async (context) => {
+actions.useAction(Actions.Mount, async (context) => {
   const users = await fetchUsers(context.task.controller.signal);
   context.actions.produce(({ model }) => {
     model.users = users;
@@ -100,7 +105,7 @@ Cached values replayed during mount arrive with `Phase.Mounting`. Live dispatche
 Both patterns work identically with multicast actions. Pass the scope name to `peek()`:
 
 ```ts
-actions.useAction(Lifecycle.Mount, async (context) => {
+actions.useAction(Actions.Mount, async (context) => {
   const team = context.actions.peek(Actions.Multicast.Team, {
     scope: "dashboard",
   });

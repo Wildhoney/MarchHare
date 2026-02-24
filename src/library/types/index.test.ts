@@ -5,10 +5,19 @@ import { Action, Distribution } from "..";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 describe("Lifecycle", () => {
-  it("should have unique symbols", () => {
-    const symbols = Object.values(Lifecycle);
-    const uniqueSymbols = new Set(symbols);
-    expect(symbols.length).toBe(uniqueSymbols.size);
+  it("should produce unique symbols per factory call", () => {
+    const mount1 = Lifecycle.Mount();
+    const mount2 = Lifecycle.Mount();
+    expect(mount1).not.toBe(mount2);
+    expect(mount1[Brand.Action]).not.toBe(mount2[Brand.Action]);
+  });
+
+  it("should have all five lifecycle factories", () => {
+    expect(typeof Lifecycle.Mount).toBe("function");
+    expect(typeof Lifecycle.Unmount).toBe("function");
+    expect(typeof Lifecycle.Error).toBe("function");
+    expect(typeof Lifecycle.Update).toBe("function");
+    expect(typeof Lifecycle.Node).toBe("function");
   });
 });
 

@@ -41,6 +41,7 @@ class MixedActions extends BroadcastActions {
 
 // Rule 4: Descriptive action names (these will appear in error.action)
 class DescriptiveActions {
+  static Error = Lifecycle.Error();
   static FetchUserProfile = Action<number>("FetchUserProfile");
   static UpdateCartQuantity = Action<{ itemId: number; quantity: number }>(
     "UpdateCartQuantity",
@@ -187,7 +188,7 @@ function useDescriptiveActionsHook() {
     },
   );
 
-  actions.useAction(Lifecycle.Error, (context, fault) => {
+  actions.useAction(DescriptiveActions.Error, (context, fault) => {
     context.actions.produce((draft) => {
       draft.model.errorAction = fault.action ?? "unknown";
       draft.model.status = "error";

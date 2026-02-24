@@ -2,7 +2,6 @@ import * as React from "react";
 import { RefObject } from "react";
 import {
   Props,
-  Lifecycle,
   Phase,
   Model,
   Actions,
@@ -23,7 +22,11 @@ import type {
 } from "./types.ts";
 import { A, G } from "@mobily/ts-belt";
 import { changes } from "../utils.ts";
-import { isChanneledAction, getActionSymbol } from "../action/index.ts";
+import {
+  isChanneledAction,
+  getActionSymbol,
+  getLifecycleType,
+} from "../action/index.ts";
 
 /**
  * Creates a new object with getters for each property of the input object.
@@ -76,13 +79,15 @@ export function useLifecycles({
   scope,
   phase,
   data,
+  handlers,
 }: LifecycleConfig): void {
   const previous = React.useRef<Props | null>(null);
 
   React.useLayoutEffect(() => {
     if (phase.current !== Phase.Mounting) return;
 
-    unicast.emit(Lifecycle.Mount);
+    const mountAction = findLifecycleAction(handlers, "Mount");
+    if (mountAction) unicast.emit(mountAction);
 
     dispatchers.broadcast.forEach((action) => {
       const cached = broadcast.getCached(action);
@@ -104,8 +109,10 @@ export function useLifecycles({
   React.useLayoutEffect(() => {
     if (G.isNotNullable(previous.current)) {
       const differences = changes(previous.current, data);
-      if (A.isNotEmpty(Object.keys(differences)))
-        unicast.emit(Lifecycle.Update, differences);
+      if (A.isNotEmpty(Object.keys(differences))) {
+        const updateAction = findLifecycleAction(handlers, "Update");
+        if (updateAction) unicast.emit(updateAction, differences);
+      }
     }
 
     previous.current = data;
@@ -176,6 +183,32 @@ export function With<K extends string>(
       draft.model[<keyof typeof draft.model>key] = payload;
     });
   };
+}
+
+/**
+ * Scans a handler registry for a lifecycle action of the given type.
+ *
+ * When lifecycle actions become per-class instances (via `Lifecycle.Mount()`),
+ * each Actions class has its own unique symbol. Emission sites can no longer
+ * emit to a shared singleton — they must discover the component's lifecycle
+ * action by scanning the registry keys for matching lifecycle prefixes.
+ *
+ * Handler maps typically contain 5–15 entries, so the O(n) scan is trivial.
+ *
+ * @param handlers The handler map from a component's scope.
+ * @param type The lifecycle type to find (e.g. `"Mount"`, `"Unmount"`, `"Error"`).
+ * @returns The matching ActionId, or `null` if no lifecycle action of that type is registered.
+ *
+ * @internal
+ */
+export function findLifecycleAction(
+  handlers: Map<ActionId, Set<unknown>>,
+  type: string,
+): ActionId | null {
+  for (const action of handlers.keys()) {
+    if (getLifecycleType(action) === type) return action;
+  }
+  return null;
 }
 
 // Re-export isChanneledAction and getActionSymbol for convenience

@@ -18,17 +18,19 @@ Components inside `<Broadcaster>` have their own isolated broadcast channel. Bro
 
 ## `Regulators`
 
-Creates an isolated regulator context. All regulator operations (`abort.all()`, `policy.disallow.matching()`, etc.) only affect components within the same `Regulators` provider:
+Creates an isolated regulator context for action regulation. Use this when you need a separate regulation policy &ndash; for example, a library that wants its own regulation boundary without affecting the host application:
 
 ```tsx
 import { Regulators } from "chizu";
 
-function Example({ children }) {
+function MyLibraryRoot({ children }) {
   return <Regulators>{children}</Regulators>;
 }
 ```
 
-This is useful for libraries that need action control without affecting the host application's actions. An `abort.all()` inside the provider won't abort actions outside it.
+Components inside `<Regulators>` share a regulation policy. Calling `context.regulator.disallow.all()` in one component blocks actions for all components within the same `<Regulators>` boundary. The `<Boundary>` component includes `<Regulators>` automatically.
+
+See the [action regulator recipe](./action-regulator.md) for full details.
 
 ## `Consumer` (Internal)
 

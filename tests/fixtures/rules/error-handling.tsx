@@ -18,6 +18,7 @@ import {
 import { O, R } from "@mobily/ts-belt";
 
 class ErrorActions {
+  static Error = Lifecycle.Error();
   static ThrowError = Action<string>("ThrowError");
   static ThrowTimeout = Action("ThrowTimeout");
   static SupplantAction = Action<number>("SupplantAction");
@@ -77,7 +78,7 @@ function useRule23Actions() {
   });
 
   // Local error handler
-  actions.useAction(Lifecycle.Error, (context, fault) => {
+  actions.useAction(ErrorActions.Error, (context, fault) => {
     context.actions.produce((draft) => {
       draft.model.lastError = fault.error.message;
       draft.model.lastReason = Reason[fault.reason]?.toLowerCase() ?? "";
@@ -136,7 +137,7 @@ function useRule25Actions() {
     });
   });
 
-  actions.useAction(Lifecycle.Error, (context, fault) => {
+  actions.useAction(ErrorActions.Error, (context, fault) => {
     context.actions.produce((draft) => {
       draft.model.lastReason = Reason[fault.reason]?.toLowerCase() ?? "";
       draft.model.lastError = fault.error.message;

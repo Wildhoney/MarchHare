@@ -11,6 +11,7 @@ export function getReason(error: unknown): Reason {
   if (error instanceof Error) {
     if (error.name === "TimeoutError") return Reason.Timedout;
     if (error.name === "AbortError") return Reason.Supplanted;
+    if (error.name === "DisallowedError") return Reason.Disallowed;
   }
   return Reason.Errored;
 }

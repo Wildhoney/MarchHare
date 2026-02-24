@@ -1,4 +1,4 @@
-import { Action } from "../../library/index.ts";
+import { Action, Lifecycle } from "../../library/index.ts";
 import { BroadcastActions } from "../types.ts";
 
 export type Country = {
@@ -16,6 +16,8 @@ export type Model = {
 };
 
 export class Actions {
+  static Mount = Lifecycle.Mount();
+  static Unmount = Lifecycle.Unmount();
   static Broadcast = BroadcastActions;
 
   static Visitor = Action<Country>("Visitor");

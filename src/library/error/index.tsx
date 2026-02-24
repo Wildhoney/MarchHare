@@ -2,7 +2,7 @@ import { Props } from "./types";
 import { ErrorContext } from "./utils";
 
 export { useError } from "./utils";
-export { Reason, AbortError, TimeoutError } from "./types";
+export { Reason, AbortError, TimeoutError, DisallowedError } from "./types";
 export type { Fault, Catcher } from "./types";
 
 /**

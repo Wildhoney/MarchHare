@@ -15,8 +15,10 @@ import {
   utils,
   Scope,
   Boundary,
+  Regulators,
   Error,
   Reason,
+  DisallowedError,
   Op,
   Operation,
 } from "chizu";
@@ -30,6 +32,7 @@ import type {
   Pk,
   Task,
   Tasks,
+  Regulator,
 } from "chizu";
 ```
 
@@ -113,34 +116,46 @@ Channel values must be non-nullable primitives: `string`, `number`, `bigint`, `b
 
 ## Lifecycle Actions
 
+Lifecycle actions are **factory functions** that return unique symbols per call. Assign them as static properties in your Actions class for per-component regulation support:
+
 ```ts
 import { Lifecycle } from "chizu";
 
-actions.useAction(Lifecycle.Mount, (context) => {
+export class Actions {
+  static Mount = Lifecycle.Mount();
+  static Unmount = Lifecycle.Unmount();
+  static Error = Lifecycle.Error();
+  static Update = Lifecycle.Update();
+  static Node = Lifecycle.Node();
+
+  static Increment = Action("Increment");
+}
+
+actions.useAction(Actions.Mount, (context) => {
   // Setup logic - runs once on mount (useLayoutEffect timing)
 });
 
-actions.useAction(Lifecycle.Unmount, (context) => {
+actions.useAction(Actions.Unmount, (context) => {
   // Cleanup - runs when component unmounts
   // All in-flight actions are automatically aborted before this runs
 });
 
-actions.useAction(Lifecycle.Error, (context, fault) => {
+actions.useAction(Actions.Error, (context, fault) => {
   // Handle errors from other actions locally
   // fault: { reason, error, action, handled, tasks }
 });
 
-actions.useAction(Lifecycle.Update, (context, changes) => {
+actions.useAction(Actions.Update, (context, changes) => {
   // Triggered when context.data changes (not on initial mount)
   // changes: Record<string, unknown> with changed keys
 });
 
-actions.useAction(Lifecycle.Node, (context, node) => {
+actions.useAction(Actions.Node, (context, node) => {
   // Triggered when any DOM node is captured via actions.node()
 });
 
 // Channeled node subscription for specific nodes
-actions.useAction(Lifecycle.Node({ Name: "input" }), (context, node) => {
+actions.useAction(Actions.Node({ Name: "input" }), (context, node) => {
   if (node) node.focus();
 });
 ```
@@ -348,7 +363,7 @@ import { Error, Reason } from "chizu";
     switch (reason) {
       case Reason.Timedout: // Action exceeded timeout
       case Reason.Supplanted: // Newer action instance dispatched
-      case Reason.Disallowed: // Blocked by regulator
+      case Reason.Disallowed: // Blocked by policy
       case Reason.Errored: // Uncaught error
     }
   }}
@@ -384,6 +399,19 @@ actions.useAction(Actions.Search, async (context, query) => {
 });
 ```
 
+## Action Regulator
+
+Control which actions may be dispatched across all components in a `<Boundary>`:
+
+```ts
+context.regulator.disallow(); // Block all actions
+context.regulator.disallow(Actions.Fetch, Actions.Save); // Block specific actions
+context.regulator.allow(); // Allow all actions (reset)
+context.regulator.allow(Actions.Critical); // Allow only specific actions
+```
+
+Each call replaces the previous policy entirely (last-write-wins). Blocked actions fire `Reason.Disallowed` through the error system without allocating resources.
+
 ## Context Providers
 
 ### `<Boundary>` - All-in-one Provider
@@ -391,7 +419,7 @@ actions.useAction(Actions.Search, async (context, query) => {
 ```tsx
 import { Boundary } from "chizu";
 
-// Wraps app with Broadcaster and Tasks providers
+// Wraps app with Broadcaster, Cache, Regulators, and Tasks providers
 <Boundary>
   <App />
 </Boundary>;
@@ -400,16 +428,16 @@ import { Boundary } from "chizu";
 ### Individual Providers (for isolation)
 
 ```tsx
-import { Broadcaster, Regulators, Scope } from "chizu";
+import { Broadcaster, Scope, Regulators } from "chizu";
 
 // Isolated broadcast context (for libraries)
 <Broadcaster>{children}</Broadcaster>
 
-// Isolated regulator context
-<Regulators>{children}</Regulators>
-
 // Multicast scope boundary
 <Scope name="ScopeName">{children}</Scope>
+
+// Isolated regulator context
+<Regulators>{children}</Regulators>
 ```
 
 ## Reactive Data (Avoiding Stale Closures)
@@ -548,18 +576,19 @@ docs: update the README file
 - `src/library/boundary/components/consumer/` - Consumer store (internal)
 - `src/library/boundary/components/tasks/` - Task tracking context
 - `src/library/boundary/components/cache/` - Cache store context
+- `src/library/boundary/components/regulators/` - Action regulator policy context
 - `src/library/cache/index.ts` - Entry factory and cache utilities
 
 ### Documentation
 
 - `recipes/` - Advanced usage patterns and documentation
   - `action-control-patterns.md` - Cancellation, timeouts, retries, debouncing
-  - `action-regulator.md` - Regulator API for abort/policy control
+  - `action-regulator.md` - Blocking/allowing actions with blacklist/whitelist policies
   - `broadcast-actions.md` - Cross-component communication
   - `caching.md` - TTL-based caching with cacheable/invalidate
   - `channeled-actions.md` - Targeted event delivery
   - `reading-actions.md` - Reading and streaming broadcast values: handler read(), peek(), and JSX stream()
-  - `context-providers.md` - Boundary, Broadcaster, Consumer, Regulators
+  - `context-providers.md` - Boundary, Broadcaster, Consumer
   - `error-handling.md` - Error component and fault handling
   - `ky-http-client.md` - Integration with ky HTTP client
   - `lifecycle-actions.md` - Mount, Unmount, Error, Update, Node

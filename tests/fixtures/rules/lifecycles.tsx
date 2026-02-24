@@ -15,6 +15,10 @@ import {
 } from "../../../src/library/index.ts";
 
 class LifecycleActions {
+  static Mount = Lifecycle.Mount();
+  static Unmount = Lifecycle.Unmount();
+  static Error = Lifecycle.Error();
+  static Node = Lifecycle.Node();
   static SetupComplete = Action("SetupComplete");
   static UserInteraction = Action<string>("UserInteraction");
 }
@@ -65,24 +69,24 @@ function useRule13Actions() {
     events: [],
   });
 
-  // Lifecycle.Mount - runs once on mount (like useLayoutEffect with [])
-  actions.useAction(Lifecycle.Mount, (context) => {
+  // Lifecycle.Mount() - runs once on mount (like useLayoutEffect with [])
+  actions.useAction(LifecycleActions.Mount, (context) => {
     context.actions.produce((draft) => {
       draft.model.mountTime = Date.now();
       draft.model.events = [...draft.model.events, "mount"];
     });
   });
 
-  // Lifecycle.Unmount - runs on unmount
-  actions.useAction(Lifecycle.Unmount, (context) => {
+  // Lifecycle.Unmount() - runs on unmount
+  actions.useAction(LifecycleActions.Unmount, (context) => {
     context.actions.produce((draft) => {
       draft.model.unmountTime = Date.now();
       draft.model.events = [...draft.model.events, "unmount"];
     });
   });
 
-  // Lifecycle.Error - local error handling
-  actions.useAction(Lifecycle.Error, (context, fault: Fault) => {
+  // Lifecycle.Error() - local error handling
+  actions.useAction(LifecycleActions.Error, (context, fault: Fault) => {
     context.actions.produce((draft) => {
       draft.model.lastError = fault.error.message;
       draft.model.events = [...draft.model.events, "error"];
@@ -109,7 +113,7 @@ function useRule14Actions() {
     interactions: [],
   });
 
-  actions.useAction(Lifecycle.Mount, (context) => {
+  actions.useAction(LifecycleActions.Mount, (context) => {
     // During mount, context.phase should be "mounting"
     context.actions.produce((draft) => {
       draft.model.phaseAtMount = context.phase;
@@ -138,18 +142,21 @@ function useNodeActions() {
   });
 
   // Subscribe to all node changes
-  actions.useAction(Lifecycle.Node, (context) => {
+  actions.useAction(LifecycleActions.Node, (context) => {
     context.actions.produce((draft) => {
       draft.model.nodeCallCount = draft.model.nodeCallCount + 1;
     });
   });
 
   // Subscribe to specific node by name (channeled)
-  actions.useAction(Lifecycle.Node({ Name: "testButton" }), (context, node) => {
-    context.actions.produce((draft) => {
-      draft.model.lastNodeName = node ? "testButton" : "null";
-    });
-  });
+  actions.useAction(
+    LifecycleActions.Node({ Name: "testButton" }),
+    (context, node) => {
+      context.actions.produce((draft) => {
+        draft.model.lastNodeName = node ? "testButton" : "null";
+      });
+    },
+  );
 
   return actions;
 }

@@ -8,14 +8,13 @@ import {
   matchesChannel,
   useRegisterHandler,
   useDispatchers,
+  findLifecycleAction,
 } from "./utils.ts";
 export { With } from "./utils.ts";
 import { useRerender } from "../utils/utils.ts";
 import type { Data, Handler, Scope } from "./types.ts";
 import {
   HandlerContext,
-  Lifecycle,
-  Brand,
   Phase,
   Model,
   HandlerPayload,
@@ -36,6 +35,11 @@ import {
 } from "../types/index.ts";
 
 import { getReason, getError } from "../error/utils.ts";
+import { DisallowedError, Reason } from "../error/types.ts";
+import {
+  useRegulators,
+  isAllowed,
+} from "../boundary/components/regulators/index.tsx";
 import EventEmitter from "eventemitter3";
 import { useBroadcast } from "../boundary/components/broadcast/index.tsx";
 import { useScope, getScope } from "../boundary/components/scope/index.tsx";
@@ -117,6 +121,7 @@ export function useActions<
   const error = useError();
   const tasks = useTasks();
   const cache = useCacheStore();
+  const regulatorPolicy = useRegulators();
   const rerender = useRerender();
   const initialised = React.useRef(false);
   const hydration = React.useRef<Process | null>(null);
@@ -163,6 +168,28 @@ export function useActions<
         data,
         tasks,
         nodes: nodes.refs.current,
+        regulator: {
+          disallow(...actions) {
+            regulatorPolicy.actions.clear();
+            if (actions.length === 0) {
+              regulatorPolicy.mode = "disallow-all";
+            } else {
+              regulatorPolicy.mode = "disallow-matching";
+              for (const a of actions)
+                regulatorPolicy.actions.add(getActionSymbol(a));
+            }
+          },
+          allow(...actions) {
+            regulatorPolicy.actions.clear();
+            if (actions.length === 0) {
+              regulatorPolicy.mode = "allow-all";
+            } else {
+              regulatorPolicy.mode = "allow-matching";
+              for (const a of actions)
+                regulatorPolicy.actions.add(getActionSymbol(a));
+            }
+          },
+        },
         actions: {
           produce(f) {
             if (controller.signal.aborted) return;
@@ -302,6 +329,24 @@ export function useActions<
         payload: HandlerPayload,
         dispatchChannel?: Filter,
       ) {
+        if (!isAllowed(action, regulatorPolicy)) {
+          const errorAction = findLifecycleAction(
+            registry.current.handlers,
+            "Error",
+          );
+          const handled = errorAction !== null;
+          const details = {
+            reason: Reason.Disallowed,
+            error: new DisallowedError(),
+            action: getName(action),
+            handled,
+            tasks,
+          };
+          error?.(details);
+          if (handled && errorAction) unicast.emit(errorAction, details);
+          return;
+        }
+
         const registeredChannel = getChannel();
 
         if (
@@ -317,7 +362,11 @@ export function useActions<
         try {
           await actionHandler(context, payload);
         } catch (caught) {
-          const handled = registry.current.handlers.has(Lifecycle.Error);
+          const errorAction = findLifecycleAction(
+            registry.current.handlers,
+            "Error",
+          );
+          const handled = errorAction !== null;
           const details = {
             reason: getReason(caught),
             error: getError(caught),
@@ -326,7 +375,7 @@ export function useActions<
             tasks,
           };
           error?.(details);
-          if (handled) unicast.emit(Lifecycle.Error, details);
+          if (handled && errorAction) unicast.emit(errorAction, details);
         } finally {
           for (const task of tasks) {
             if (task === context.task) {
@@ -391,7 +440,11 @@ export function useActions<
         localTasks.current.clear();
 
         phase.current = Phase.Unmounting;
-        unicast.emit(Lifecycle.Unmount);
+        const unmountAction = findLifecycleAction(
+          registry.current.handlers,
+          "Unmount",
+        );
+        if (unmountAction) unicast.emit(unmountAction);
         phase.current = Phase.Unmounted;
 
         for (const cleanup of pendingCleanups) cleanup();
@@ -400,11 +453,12 @@ export function useActions<
   }, [unicast]);
 
   React.useLayoutEffect(() => {
+    const nodeAction = findLifecycleAction(registry.current.handlers, "Node");
     for (const [name, node] of nodes.pending.current) {
       const latest = nodes.emitted.current.get(name);
       if (latest !== node) {
         nodes.emitted.current.set(name, node);
-        unicast.emit(Brand.Node, node, { Name: name });
+        if (nodeAction) unicast.emit(nodeAction, node, { Name: name });
       }
     }
     nodes.pending.current.clear();
@@ -418,6 +472,7 @@ export function useActions<
     scope,
     phase,
     data: getData(),
+    handlers: registry.current.handlers,
   });
 
   const result = React.useMemo(

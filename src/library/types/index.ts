@@ -8,6 +8,8 @@ import type {
 } from "../boundary/components/tasks/types.ts";
 import type { Option } from "@mobily/ts-belt/Option";
 import type { Result as TsBeltResult } from "@mobily/ts-belt/Result";
+import type { Regulator } from "../boundary/components/regulators/types.ts";
+import type { Fault } from "../error/types.ts";
 
 export type { ActionId, Box, Task, Tasks };
 /**
@@ -107,73 +109,105 @@ export type ChanneledCacheId<T = unknown, C = unknown> = {
 };
 
 /**
- * Lifecycle actions that trigger at specific points in a component's lifecycle.
- * Define handlers for these in your actions class to respond to lifecycle events.
+ * Creates a lifecycle action with the given name.
+ * Produces a branded `HandlerPayload` backed by a fresh
+ * `Symbol("chizu.action.lifecycle/${name}")` on each call.
+ *
+ * @internal
+ */
+function createLifecycleAction<P = never, C extends Filter = never>(
+  name: string,
+): HandlerPayload<P, C> {
+  const symbol = Symbol(`chizu.action.lifecycle/${name}`);
+  const action = function (channel: C): ChanneledAction<P, C> {
+    return {
+      [Brand.Action]: symbol,
+      [Brand.Payload]: <P>undefined,
+      [Brand.Channel]: channel,
+      channel,
+    };
+  };
+  // eslint-disable-next-line fp/no-mutating-methods
+  Object.defineProperty(action, Brand.Action, {
+    value: symbol,
+    enumerable: false,
+  });
+  // eslint-disable-next-line fp/no-mutating-methods
+  Object.defineProperty(action, Brand.Payload, {
+    value: undefined,
+    enumerable: false,
+  });
+  return <HandlerPayload<P, C>>action;
+}
+
+/**
+ * Factory functions for lifecycle actions.
+ *
+ * Each call returns a **unique** action symbol, enabling per-component
+ * regulation. Assign the result as a static property in your Actions class:
  *
  * @example
  * ```ts
- * class {
- *   [Lifecycle.Mount] = mountAction;
- *   [Lifecycle.Error] = errorAction;
- *   [Lifecycle.Unmount] = unmountAction;
+ * export class Actions {
+ *   static Mount = Lifecycle.Mount();
+ *   static Unmount = Lifecycle.Unmount();
+ *   static Error = Lifecycle.Error();
+ *   static Update = Lifecycle.Update();
+ *   static Node = Lifecycle.Node();
+ *
+ *   static Increment = Action("Increment");
  * }
+ *
+ * // Now regulating Lifecycle.Mount only blocks THIS component's mount:
+ * context.regulator.disallow(Actions.Mount);
  * ```
  */
 export class Lifecycle {
-  /** Triggered once when the component mounts (`useLayoutEffect`). */
-  static readonly Mount = Symbol("chizu.action.lifecycle/Mount");
-  /** Triggered when the component unmounts. */
-  static readonly Unmount = Symbol("chizu.action.lifecycle/Unmount");
-  /** Triggered when an action throws an error. Receives `Fault` as payload. */
-  static readonly Error = Symbol("chizu.action.lifecycle/Error");
-  /** Triggered when `context.data` has changed. Not fired on initial mount. Receives `Record<string, unknown>` payload with changed keys. */
-  static readonly Update = Symbol("chizu.action.lifecycle/Update");
+  /** Creates a Mount lifecycle action. Triggered once on component mount (`useLayoutEffect`). */
+  static Mount(): HandlerPayload<never> {
+    return createLifecycleAction("Mount");
+  }
+
+  /** Creates an Unmount lifecycle action. Triggered when the component unmounts. */
+  static Unmount(): HandlerPayload<never> {
+    return createLifecycleAction("Unmount");
+  }
+
+  /** Creates an Error lifecycle action. Triggered when an action throws. Receives `Fault` as payload. */
+  static Error(): HandlerPayload<Fault> {
+    return createLifecycleAction<Fault>("Error");
+  }
+
+  /** Creates an Update lifecycle action. Triggered when `context.data` changes (not on initial mount). */
+  static Update(): HandlerPayload<Record<string, unknown>> {
+    return createLifecycleAction<Record<string, unknown>>("Update");
+  }
 
   /**
-   * Triggered when a node is captured or released via `actions.node()`.
-   * Supports channeled subscriptions by node name.
-   *
-   * The payload is the captured node (or `null` when released).
+   * Creates a Node lifecycle action. Triggered when a DOM node is captured
+   * or released via `actions.node()`. Supports channeled subscriptions by
+   * node name.
    *
    * @example
    * ```ts
+   * export class Actions {
+   *   static Node = Lifecycle.Node();
+   * }
+   *
    * // Subscribe to ALL node changes
-   * actions.useAction(Lifecycle.Node, (context, node) => {
+   * actions.useAction(Actions.Node, (context, node) => {
    *   console.log("Node changed:", node);
    * });
    *
    * // Subscribe to a specific node by name (channeled)
-   * actions.useAction(Lifecycle.Node({ Name: "input" }), (context, node) => {
-   *   if (node) {
-   *     node.focus();
-   *   }
+   * actions.useAction(Actions.Node({ Name: "input" }), (context, node) => {
+   *   if (node) node.focus();
    * });
    * ```
    */
-  static Node = (() => {
-    const symbol = Brand.Node;
-    const action = function (channel: {
-      Name: string;
-    }): ChanneledAction<unknown, { Name: string }> {
-      return {
-        [Brand.Action]: symbol,
-        [Brand.Payload]: <unknown>undefined,
-        [Brand.Channel]: channel,
-        channel,
-      };
-    };
-    // eslint-disable-next-line fp/no-mutating-methods
-    Object.defineProperty(action, Brand.Action, {
-      value: symbol,
-      enumerable: false,
-    });
-    // eslint-disable-next-line fp/no-mutating-methods
-    Object.defineProperty(action, Brand.Payload, {
-      value: undefined,
-      enumerable: false,
-    });
-    return <HandlerPayload<unknown, { Name: string }>>action;
-  })();
+  static Node(): HandlerPayload<unknown, { Name: string }> {
+    return createLifecycleAction<unknown, { Name: string }>("Node");
+  }
 }
 
 /**
@@ -619,6 +653,26 @@ export type HandlerContext<
   readonly nodes: {
     [K in keyof Nodes<M>]: Nodes<M>[K] | null;
   };
+  /**
+   * The regulator API for controlling which actions may be dispatched.
+   *
+   * Each call replaces the previous policy entirely (last-write-wins).
+   * The policy is shared across all components within the same `<Boundary>`.
+   *
+   * @example
+   * ```ts
+   * actions.useAction(Actions.Mount, (context) => {
+   *   // Block all actions except Critical
+   *   context.regulator.allow(Actions.Critical);
+   * });
+   *
+   * actions.useAction(Actions.Unlock, (context) => {
+   *   // Re-allow all actions
+   *   context.regulator.allow();
+   * });
+   * ```
+   */
+  readonly regulator: Regulator;
   readonly actions: {
     produce<
       F extends (draft: {

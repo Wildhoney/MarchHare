@@ -5,10 +5,14 @@ Both the model and actions type parameters default to `void`, so you can omit th
 ```ts
 import { useActions, Lifecycle } from "chizu";
 
-// Bare call — both M and AC default to void
-const actions = useActions();
+class Actions {
+  static Mount = Lifecycle.Mount();
+}
 
-actions.useAction(Lifecycle.Mount, () => {
+// Bare call — M defaults to void
+const actions = useActions<void, typeof Actions>();
+
+actions.useAction(Actions.Mount, () => {
   console.log("Mounted!");
 });
 ```
@@ -44,16 +48,22 @@ const actions = useActions<Model, void>(initialModel);
 
 ## Lifecycle hooks
 
-Lifecycle actions work exactly as they do with a regular model:
+Lifecycle actions work exactly as they do with a regular model. Add lifecycle factories to your `Actions` class:
 
 ```ts
+class Actions {
+  static Mount = Lifecycle.Mount();
+  static Unmount = Lifecycle.Unmount();
+  static Ping = Action("Ping");
+}
+
 const actions = useActions<void, typeof Actions>();
 
-actions.useAction(Lifecycle.Mount, () => {
+actions.useAction(Actions.Mount, () => {
   console.log("Component mounted");
 });
 
-actions.useAction(Lifecycle.Unmount, () => {
+actions.useAction(Actions.Unmount, () => {
   console.log("Component unmounting");
 });
 ```

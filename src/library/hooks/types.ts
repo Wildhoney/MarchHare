@@ -113,4 +113,6 @@ export type LifecycleConfig = {
   phase: RefObject<Phase>;
   /** Current snapshot of reactive data props for change detection */
   data: Props;
+  /** Handler registry for lifecycle action discovery */
+  handlers: Map<ActionId, Set<unknown>>;
 };

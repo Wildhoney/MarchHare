@@ -13,6 +13,7 @@ type Model = {
 };
 
 class Actions {
+  static Mount = Lifecycle.Mount();
   static SetName = Action<string>("SetName");
   static Increment = Action("Increment");
 }
@@ -29,7 +30,7 @@ function StrictModeFixture(): React.ReactElement {
 
   const result = useActions<Model, typeof Actions>(model);
 
-  result.useAction(Lifecycle.Mount, () => {
+  result.useAction(Actions.Mount, () => {
     mountCountRef.current++;
     forceRender((n) => n + 1);
   });

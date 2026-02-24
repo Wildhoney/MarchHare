@@ -51,6 +51,22 @@ export class TimeoutError extends Error {
 }
 
 /**
+ * Error thrown when an action is blocked by the regulator policy.
+ * Works across all platforms including React Native where `DOMException` is unavailable.
+ *
+ * @example
+ * ```ts
+ * throw new DisallowedError("Action blocked by regulator");
+ * ```
+ */
+export class DisallowedError extends Error {
+  override name = "DisallowedError";
+  constructor(message = "Disallowed") {
+    super(message);
+  }
+}
+
+/**
  * Details about an error that occurred during action execution.
  * @template E Custom error types to include in the union with Error.
  */
@@ -61,7 +77,7 @@ export type Fault<E extends Error = never> = {
   error: Error | E;
   /** The name of the action that caused the error (e.g., "Increment"). */
   action: string;
-  /** Whether the component has a `Lifecycle.Error` handler registered. */
+  /** Whether the component has a `Lifecycle.Error()` handler registered. */
   handled: boolean;
   /**
    * All currently running tasks across the application.

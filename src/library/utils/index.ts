@@ -15,6 +15,8 @@ export const config = {
   channelPrefix: "chizu.channel/",
   /** Prefix for cache operation symbols. */
   cachePrefix: "chizu.cache/",
+  /** Prefix for lifecycle action symbols. */
+  lifecyclePrefix: "chizu.action.lifecycle/",
 };
 
 /**

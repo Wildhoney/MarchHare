@@ -1,58 +1,130 @@
 # Action regulator
 
-The regulator is accessed via `context.regulator` inside your action handlers. It provides fine-grained control over asynchronous actions by managing `AbortController` instances and action policies. You can programmatically allow or disallow actions, and abort running actions across all components in the context.
-
-## Usage
-
-```ts
-actions.useAction(Actions.Fetch, async (context) => {
-  // Disallow future dispatches of these actions
-  context.regulator.policy.disallow.matching([Actions.Fetch, Actions.Save]);
-
-  // Future dispatches via actions.useAction will be aborted immediately
-  // and the error handler will receive Reason.Disallowed
-});
-
-actions.useAction(Actions.Reset, async (context) => {
-  // Allow the actions again
-  context.regulator.policy.allow.matching([Actions.Fetch, Actions.Save]);
-});
-```
-
-You can also abort running actions:
-
-```ts
-// Abort specific actions across all components
-context.regulator.abort.matching([Actions.Fetch]);
-
-// Abort all actions across all components
-context.regulator.abort.all();
-
-// Abort only the current action instance
-context.regulator.abort.self();
-```
+The action regulator lets handlers control which actions may be dispatched across all components within a `<Boundary>`. Use it to lock down the UI during critical operations, implement permission gates, or prevent actions while an important workflow is in progress.
 
 ## API
 
-**Abort methods:**
+Every action handler receives `context.regulator` with two methods:
 
-- `abort.all()` — Aborts all running actions across all components in the context.
-- `abort.matching(actions)` — Aborts specific actions (array) across all components.
-- `abort.self()` — Aborts only the current action instance.
-- `abort.own()` — Aborts all actions belonging to the current component only (called automatically on unmount).
+```ts
+context.regulator.disallow(); // Block all actions
+context.regulator.disallow(Actions.Fetch, Actions.Save); // Block specific actions
+context.regulator.allow(); // Allow all actions (reset)
+context.regulator.allow(Actions.Critical); // Allow only specific actions
+```
 
-**Allow methods:**
+Each call **replaces** the previous policy entirely (last-write-wins). There is no stacking or merging of policies.
 
-- `policy.allow.all()` — Clears all disallow policies across all components.
-- `policy.allow.matching(actions)` — Allows specific actions (array) across all components.
-- `policy.allow.self()` — Allows the current action.
-- `policy.allow.own()` — Clears all disallow policies belonging to the current component only.
+For "except" patterns, compose two calls:
 
-**Disallow methods:**
+```ts
+// Block all except Critical (allow only Critical)
+context.regulator.allow(Actions.Critical);
 
-- `policy.disallow.all()` — Clears all allow policies across all components.
-- `policy.disallow.matching(actions)` — Disallows specific actions (array) across all components.
-- `policy.disallow.self()` — Disallows the current action.
-- `policy.disallow.own()` — Clears all allow policies belonging to the current component only.
+// Allow all except Fetch (block only Fetch)
+context.regulator.disallow(Actions.Fetch);
+```
 
-The regulator is useful for advanced scenarios where you need to centrally manage cancellation and permission of asynchronous actions, such as rate limiting, feature toggling, or global aborts.
+## How it works
+
+The regulator stores a single mutable policy object shared via React context across all components in a `<Boundary>`. The policy is checked **before** task creation, so blocked actions never allocate resources (no `AbortController`, no context object).
+
+When an action is blocked, the regulator:
+
+1. Constructs a `Fault` with `reason: Reason.Disallowed` and a `DisallowedError`.
+2. Fires the global `<Error>` handler (if present).
+3. Fires the local `Lifecycle.Error()` handler (if registered).
+4. Returns early &ndash; the action handler is never called.
+
+## Policy modes
+
+| Call                | Behaviour                             |
+| ------------------- | ------------------------------------- |
+| `allow()` (default) | Every action is permitted             |
+| `disallow()`        | Every action is blocked               |
+| `disallow(A, B)`    | Only the listed actions are blocked   |
+| `allow(A, B)`       | Only the listed actions are permitted |
+
+## Examples
+
+### Lock the UI during checkout
+
+```ts
+actions.useAction(Actions.Checkout, async (context) => {
+  // Allow only the cancel action during checkout
+  context.regulator.allow(Actions.Cancel);
+
+  try {
+    await processPayment(context.task.controller.signal);
+  } finally {
+    // Re-allow all actions regardless of success or failure
+    context.regulator.allow();
+  }
+});
+```
+
+### Permission gate on mount
+
+```ts
+actions.useAction(Actions.Mount, async (context) => {
+  const user = await context.actions.read(Actions.Broadcast.User);
+  if (!user) return;
+
+  if (user.role !== "admin") {
+    // Non-admin users can only view, not modify
+    context.regulator.allow(Actions.Broadcast.User);
+  }
+});
+```
+
+### Blocking specific expensive actions
+
+```ts
+actions.useAction(Actions.RateLimitHit, (context) => {
+  // Temporarily block the expensive actions
+  context.regulator.disallow(
+    Actions.Search,
+    Actions.Export,
+    Actions.BulkUpdate,
+  );
+});
+
+actions.useAction(Actions.RateLimitCleared, (context) => {
+  context.regulator.allow();
+});
+```
+
+### Handling blocked actions
+
+```ts
+actions.useAction(Actions.Error, (context, fault) => {
+  if (fault.reason === Reason.Disallowed) {
+    context.actions.produce(({ model }) => {
+      model.error = "This action is currently unavailable.";
+    });
+  }
+});
+```
+
+## Lifecycle actions
+
+The regulator applies to **all** actions, including lifecycle actions (`Lifecycle.Mount()`, `Lifecycle.Update()`, etc.). If you block everything with `disallow()`, lifecycle actions will also be blocked. Use `allow` with specific actions to carve out essentials:
+
+```ts
+// Allow only mount and unmount, block everything else
+context.regulator.allow(Actions.Mount, Actions.Unmount);
+```
+
+## Scope
+
+The policy is scoped to the nearest `<Boundary>` (or `<Regulators>` provider). Components in different boundaries have independent policies. If you need isolated regulation for a library, wrap it in its own `<Regulators>`:
+
+```tsx
+import { Regulators } from "chizu";
+
+function MyLibrary({ children }) {
+  return <Regulators>{children}</Regulators>;
+}
+```
+
+See the [context providers recipe](./context-providers.md) for more details on provider isolation.

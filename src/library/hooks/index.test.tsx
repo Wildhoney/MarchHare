@@ -503,6 +503,7 @@ describe("useActions() broadcast replay to child rendered after parent mount han
 
     // Separate Actions classes referencing same BroadcastActions (mirrors real app)
     class ParentActions {
+      static Mount = Lifecycle.Mount();
       static Broadcast = BroadcastActions;
     }
 
@@ -518,7 +519,7 @@ describe("useActions() broadcast replay to child rendered after parent mount han
         loading: true,
       });
 
-      result.useAction(Lifecycle.Mount, async (context) => {
+      result.useAction(ParentActions.Mount, async (context) => {
         // Simulate async fetch then dispatch broadcast
         await Promise.resolve();
         context.actions.dispatch(ParentActions.Broadcast.Counter, 42);
@@ -1016,6 +1017,7 @@ describe("useActions() StrictMode resilience", () => {
   const countModel: CountModel = { count: 0 };
 
   class CountActions {
+    static Mount = Lifecycle.Mount();
     static Increment = Action("Increment");
   }
 
@@ -1029,7 +1031,7 @@ describe("useActions() StrictMode resilience", () => {
     function TestComponent() {
       const actions = useActions<CountModel, typeof CountActions>(countModel);
 
-      actions.useAction(Lifecycle.Mount, () => {
+      actions.useAction(CountActions.Mount, () => {
         mountCount++;
       });
 
@@ -1157,7 +1159,7 @@ describe("useActions() StrictMode resilience", () => {
     function ParentComponent() {
       const actions = useActions<CountModel, typeof CountActions>(countModel);
 
-      actions.useAction(Lifecycle.Mount, () => {
+      actions.useAction(CountActions.Mount, () => {
         apiCalls.push("parent-mount");
       });
 
@@ -1167,7 +1169,7 @@ describe("useActions() StrictMode resilience", () => {
     function ChildComponent() {
       const actions = useActions<CountModel, typeof CountActions>(countModel);
 
-      actions.useAction(Lifecycle.Mount, () => {
+      actions.useAction(CountActions.Mount, () => {
         apiCalls.push("child-mount");
       });
 
@@ -1624,13 +1626,15 @@ describe("useActions() context.model freshness", () => {
 });
 
 describe("useActions() void actions", () => {
+  const Mount = Lifecycle.Mount();
+
   it("should work with void model and void actions using bare useActions()", async () => {
     let mounted = false;
 
     renderHook(() => {
       const actions = useActions();
 
-      actions.useAction(Lifecycle.Mount, () => {
+      actions.useAction(Mount, () => {
         mounted = true;
       });
 
@@ -1646,7 +1650,7 @@ describe("useActions() void actions", () => {
     renderHook(() => {
       const actions = useActions<void, void>();
 
-      actions.useAction(Lifecycle.Mount, () => {
+      actions.useAction(Mount, () => {
         mounted = true;
       });
 
@@ -1662,7 +1666,7 @@ describe("useActions() void actions", () => {
     const { result } = renderHook(() => {
       const actions = useActions<LocalModel, void>({ count: 0 });
 
-      actions.useAction(Lifecycle.Mount, (context) => {
+      actions.useAction(Mount, (context) => {
         context.actions.produce(({ model }) => {
           model.count = 42;
         });
@@ -1682,7 +1686,7 @@ describe("useActions() void actions", () => {
         query: "test",
       }));
 
-      actions.useAction(Lifecycle.Mount, (context) => {
+      actions.useAction(Mount, (context) => {
         capturedQuery = context.data.query;
       });
 
@@ -1696,6 +1700,7 @@ describe("useActions() void actions", () => {
 
 describe("useActions() void model", () => {
   class VoidActions {
+    static Mount = Lifecycle.Mount();
     static Ping = Action("Ping");
     static SetValue = Action<string>("SetValue");
   }
@@ -1746,7 +1751,7 @@ describe("useActions() void model", () => {
     renderHook(() => {
       const actions = useActions<void, typeof VoidActions>();
 
-      actions.useAction(Lifecycle.Mount, () => {
+      actions.useAction(VoidActions.Mount, () => {
         mounted = true;
       });
 
@@ -2027,6 +2032,7 @@ describe("useActions() actions.stream (JSX)", () => {
 
 describe("useActions() mount + broadcast replay deduplication", () => {
   class BroadcastUser {
+    static Mount = Lifecycle.Mount();
     static User = Action<{ id: number }>("User", Distribution.Broadcast);
   }
 
@@ -2057,7 +2063,7 @@ describe("useActions() mount + broadcast replay deduplication", () => {
         loaded: false,
       });
 
-      actions.useAction(Lifecycle.Mount, () => {
+      actions.useAction(BroadcastUser.Mount, () => {
         calls.push("mount");
       });
 
@@ -2123,7 +2129,7 @@ describe("useActions() mount + broadcast replay deduplication", () => {
       });
 
       // Guard: only fetch in mount if no broadcast value is cached
-      actions.useAction(Lifecycle.Mount, (context) => {
+      actions.useAction(BroadcastUser.Mount, (context) => {
         const user = context.actions.peek(BroadcastUser.User);
         if (!user) fetches.push("mount-fetch");
       });
@@ -2199,7 +2205,7 @@ describe("useActions() mount + broadcast replay deduplication", () => {
       });
 
       // Mount always fetches
-      actions.useAction(Lifecycle.Mount, () => {
+      actions.useAction(BroadcastUser.Mount, () => {
         fetches.push("mount-fetch");
       });
 
@@ -2257,7 +2263,7 @@ describe("useActions() mount + broadcast replay deduplication", () => {
       });
 
       // Guard: only fetch in mount if no broadcast value is cached
-      actions.useAction(Lifecycle.Mount, (context) => {
+      actions.useAction(BroadcastUser.Mount, (context) => {
         const user = context.actions.peek(BroadcastUser.User);
         if (!user) fetches.push("mount-fetch");
       });
@@ -2289,6 +2295,7 @@ describe("useActions() mount + broadcast replay deduplication", () => {
 
   it("should deduplicate with multicast actions using peek() and scope", async () => {
     class MulticastUser {
+      static Mount = Lifecycle.Mount();
       static User = Action<{ id: number }>("User", Distribution.Multicast);
     }
 
@@ -2318,7 +2325,7 @@ describe("useActions() mount + broadcast replay deduplication", () => {
         loaded: false,
       });
 
-      actions.useAction(Lifecycle.Mount, (context) => {
+      actions.useAction(MulticastUser.Mount, (context) => {
         const user = context.actions.peek(MulticastUser.User, {
           scope: "team",
         });

@@ -128,6 +128,7 @@ type User = { id: number; name: string; status: string };
 type Model = { user: User | null };
 
 class Actions {
+  static Mount = Lifecycle.Mount();
   static UserUpdated = Action<User, { UserId: number }>(
     "UserUpdated",
     Distribution.Broadcast,
@@ -138,7 +139,7 @@ class Actions {
 function UserWebSocket() {
   const actions = useActions<Model, typeof Actions>(model);
 
-  actions.useAction(Lifecycle.Mount, (context) => {
+  actions.useAction(Actions.Mount, (context) => {
     const ws = new WebSocket("/users/stream");
 
     ws.onmessage = (event) => {

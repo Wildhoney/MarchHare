@@ -315,6 +315,7 @@ function Rule19ChanneledBroadcast() {
 // ============================================================================
 
 class Rule40Actions {
+  static Mount = Lifecycle.Mount();
   static Trigger = Action("Trigger");
 }
 
@@ -348,7 +349,7 @@ function useRule40ConsumerActions() {
     consumed: "",
   });
 
-  actions.useAction(Lifecycle.Mount, async (context) => {
+  actions.useAction(Rule40Actions.Mount, async (context) => {
     const user = await context.actions.read(BroadcastActions.UserLoggedIn);
     if (!user) return;
     context.actions.produce(({ model }) => {

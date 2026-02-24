@@ -119,6 +119,33 @@ export function isChanneledAction(
 }
 
 /**
+ * Extracts the lifecycle type from an action's symbol description.
+ *
+ * Returns the lifecycle name (`"Mount"`, `"Unmount"`, `"Error"`, `"Update"`,
+ * `"Node"`) when the action symbol's description starts with the lifecycle
+ * prefix, or `null` for non-lifecycle actions.
+ *
+ * @param action The action to inspect.
+ * @returns The lifecycle name, or `null` if not a lifecycle action.
+ *
+ * @example
+ * ```typescript
+ * class Actions {
+ *   static Mount = Lifecycle.Mount();
+ * }
+ *
+ * getLifecycleType(Actions.Mount); // "Mount"
+ * getLifecycleType(Action("Increment")); // null
+ * ```
+ */
+export function getLifecycleType(action: AnyAction): string | null {
+  const symbol = getActionSymbol(action);
+  const description = isSymbol(symbol) ? (symbol.description ?? "") : symbol;
+  if (!description.startsWith(config.lifecyclePrefix)) return null;
+  return description.slice(config.lifecyclePrefix.length) || null;
+}
+
+/**
  * Checks whether an action is a multicast action.
  * Multicast actions are dispatched to all components within a named scope boundary.
  *

@@ -11,6 +11,7 @@ import { config } from "../utils/index.ts";
 
 export {
   getActionSymbol,
+  getLifecycleType,
   isBroadcastAction,
   isMulticastAction,
   getName,

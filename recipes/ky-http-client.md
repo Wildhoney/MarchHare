@@ -157,7 +157,7 @@ actions.useAction(Actions.FetchUser, async (context, userId) => {
         model.error = body.message;
       });
     } else {
-      throw error; // Re-throw non-HTTP errors for Lifecycle.Error
+      throw error; // Re-throw non-HTTP errors for Lifecycle.Error()
     }
   }
 });
@@ -195,4 +195,4 @@ Key patterns demonstrated:
 - **Abort signal integration** &ndash; Pass `context.task.controller.signal` to ky for automatic request cancellation on unmount or supplantation.
 - **Configured instances via data** &ndash; Use `context.data` to access a pre-configured ky instance with shared settings.
 - **Typed responses** &ndash; Use `.json<T>()` for type-safe response parsing.
-- **Granular error handling** &ndash; Catch `HTTPError` to handle API errors while letting other errors bubble to `Lifecycle.Error`.
+- **Granular error handling** &ndash; Catch `HTTPError` to handle API errors while letting other errors bubble to `Lifecycle.Error()`.
