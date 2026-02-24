@@ -2,12 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
-## [0.2.68](https://github.com/Wildhoney/Chizu/compare/v0.2.67...v0.2.68) (2026-02-24)
+## [0.2.69](https://github.com/Wildhoney/Chizu/compare/v0.2.68...v0.2.69) (2026-02-24)
 
+## [0.2.68](https://github.com/Wildhoney/Chizu/compare/v0.2.67...v0.2.68) (2026-02-24)
 
 ### Features
 
-* **hooks:** convert lifecycle actions to factory functions for per-component regulation ([2cd078f](https://github.com/Wildhoney/Chizu/commit/2cd078f20920e3da8839129bca1e07fdeaf5b148))
+- **hooks:** convert lifecycle actions to factory functions for per-component regulation ([2cd078f](https://github.com/Wildhoney/Chizu/commit/2cd078f20920e3da8839129bca1e07fdeaf5b148))
 
 ## [0.2.67](https://github.com/Wildhoney/Chizu/compare/v0.2.66...v0.2.67) (2026-02-23)
 
