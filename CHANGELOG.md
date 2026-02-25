@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.2.71](https://github.com/Wildhoney/Chizu/compare/v0.2.70...v0.2.71) (2026-02-25)
+
+
+### Features
+
+* added concept of features and made dispatch awaitable ([8049db3](https://github.com/Wildhoney/Chizu/commit/8049db30054b9899572de67b1a53ed4327b0bb67))
+
 ## [0.2.70](https://github.com/Wildhoney/Chizu/compare/v0.2.69...v0.2.70) (2026-02-24)
 
 ## [0.2.69](https://github.com/Wildhoney/Chizu/compare/v0.2.68...v0.2.69) (2026-02-24)
