@@ -215,6 +215,22 @@ actions.useAction(Actions.Check, (context) => {
 });
 ```
 
+Dispatch is awaitable &ndash; `context.actions.dispatch` returns a `Promise<void>` that resolves when all triggered handlers have completed. This prevents UI flashes where local state changes before upstream handlers finish:
+
+```tsx
+actions.useAction(Actions.Mount, async (context) => {
+  // Wait for all PaymentSent handlers across the app to finish.
+  await context.actions.dispatch(Actions.Broadcast.PaymentSent);
+
+  // Safe to update local state now — upstream work is done.
+  context.actions.produce(({ model }) => {
+    model.loading = false;
+  });
+});
+```
+
+Generator handlers are excluded from the await &mdash; they run in the background and do not block the dispatch promise, since they are typically long-lived (polling, SSE streams, etc.).
+
 You can also render broadcast values declaratively in JSX with `actions.stream`. The renderer callback receives `(value, inspect)` and returns React nodes:
 
 ```tsx
@@ -397,3 +413,28 @@ actions.useAction(Actions.Checkout, async (context) => {
 ```
 
 `disallow()` blocks all, `disallow(A, B)` blocks specific actions, `allow()` allows all (reset), and `allow(A, B)` allows only those actions. Each call replaces the previous policy (last-write-wins). Blocked actions fire `Reason.Disallowed` through the error system without allocating resources. See the [action regulator recipe](./recipes/action-regulator.md) for more details.
+
+Toggling boolean UI state &ndash; modals, sidebars, drawers &ndash; is one of the most common patterns. Instead of defining actions and handlers, use `actions.feature()` with the `Feature` enum:
+
+```tsx
+import { Feature, useActions } from "chizu";
+
+type Model = {
+  name: string;
+  features: { paymentDialog: boolean; sidebar: boolean };
+};
+
+const [model, actions] = useFeatureActions();
+
+// Mutate via actions.feature()
+actions.feature("paymentDialog", Feature.Toggle);
+actions.feature("paymentDialog", Feature.On);
+actions.feature("paymentDialog", Feature.Off);
+
+// Read from model
+{
+  model.features.paymentDialog && <PaymentDialog />;
+}
+```
+
+The method also works inside action handlers via `context.actions.feature()`. See the [feature toggles recipe](./recipes/feature-toggles.md) for more details.

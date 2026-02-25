@@ -1,6 +1,6 @@
 export { Action } from "./action/index.ts";
 export { Entry } from "./cache/index.ts";
-export { Distribution, Lifecycle } from "./types/index.ts";
+export { Distribution, Feature, Lifecycle } from "./types/index.ts";
 export { Error, Reason, DisallowedError } from "./error/index.tsx";
 export { Operation, Op, State } from "immertation";
 export { annotate } from "./annotate/index.ts";

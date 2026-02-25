@@ -9,6 +9,9 @@ import {
   useRegisterHandler,
   useDispatchers,
   findLifecycleAction,
+  isGenerator,
+  applyFeature,
+  emitAsync,
 } from "./utils.ts";
 export { With } from "./utils.ts";
 import { useRerender } from "../utils/utils.ts";
@@ -29,6 +32,7 @@ import {
   ChanneledAction,
   ActionOrChanneled,
   Nodes,
+  Feature,
   MulticastOptions,
   AnyAction,
   type CacheId,
@@ -210,8 +214,8 @@ export function useActions<
             action: ActionOrChanneled,
             payload?: HandlerPayload,
             options?: MulticastOptions,
-          ) {
-            if (controller.signal.aborted) return;
+          ): Promise<void> {
+            if (controller.signal.aborted) return Promise.resolve();
             const base = getActionSymbol(action);
             const channel = isChanneledAction(action)
               ? action.channel
@@ -219,12 +223,13 @@ export function useActions<
 
             if (isMulticastAction(action) && options?.scope) {
               const scoped = getScope(scope, options.scope);
-              if (scoped) scoped.emitter.emit(base, payload, channel);
-              return;
+              if (scoped)
+                return emitAsync(scoped.emitter, base, payload, channel);
+              return Promise.resolve();
             }
 
             const emitter = isBroadcastAction(action) ? broadcast : unicast;
-            emitter.emit(base, payload, channel);
+            return emitAsync(emitter, base, payload, channel);
           },
           annotate<T>(operation: Operation, value: T): T {
             return state.current.annotate(operation, value);
@@ -250,6 +255,18 @@ export function useActions<
           },
           invalidate(entry) {
             cache.delete(getCacheKey(<CacheId>(<unknown>entry)));
+          },
+          feature(name: string, operation: Feature) {
+            if (controller.signal.aborted) return;
+            const process = state.current.produce((draft) =>
+              applyFeature(<Record<string, unknown>>draft, name, operation),
+            );
+            setModel(<M>(<unknown>state.current.model));
+            result.processes.add(process);
+            if (hydration.current) {
+              result.processes.add(hydration.current);
+              hydration.current = null;
+            }
           },
           async read(action: AnyAction, options?: MulticastOptions) {
             if (controller.signal.aborted) return null;
@@ -325,7 +342,7 @@ export function useActions<
       actionHandler: Handler<M, A, D>,
       getChannel: () => Filter | undefined,
     ) {
-      return async function handler(
+      return function handler(
         payload: HandlerPayload,
         dispatchChannel?: Filter,
       ) {
@@ -359,9 +376,8 @@ export function useActions<
         const result = <Result>{ processes: new Set<Process>() };
         const completion = Promise.withResolvers<void>();
         const context = getContext(action, payload, result);
-        try {
-          await actionHandler(context, payload);
-        } catch (caught) {
+
+        function onError(caught: unknown) {
           const errorAction = findLifecycleAction(
             registry.current.handlers,
             "Error",
@@ -376,7 +392,9 @@ export function useActions<
           };
           error?.(details);
           if (handled && errorAction) unicast.emit(errorAction, details);
-        } finally {
+        }
+
+        function onSettled() {
           for (const task of tasks) {
             if (task === context.task) {
               tasks.delete(task);
@@ -388,6 +406,29 @@ export function useActions<
           if (result.processes.size > 0) rerender();
           completion.resolve();
         }
+
+        let returnValue: ReturnType<Handler<M, A, D>>;
+        try {
+          returnValue = actionHandler(context, payload);
+        } catch (caught) {
+          onError(caught);
+          onSettled();
+          return;
+        }
+
+        if (isGenerator(returnValue)) {
+          // Generator handlers run in the background and do not block dispatch.
+          (async () => {
+            for await (const _ of returnValue) void 0;
+          })()
+            .catch(onError)
+            .finally(onSettled);
+          return;
+        }
+
+        // Regular (sync/async) handlers block dispatch until completion.
+        Promise.resolve(returnValue).catch(onError).finally(onSettled);
+        return completion.promise;
       };
     }
 
@@ -484,7 +525,7 @@ export function useActions<
             action: ActionOrChanneled,
             payload?: HandlerPayload,
             options?: MulticastOptions,
-          ) {
+          ): Promise<void> {
             const base = getActionSymbol(action);
             const channel = isChanneledAction(action)
               ? action.channel
@@ -492,12 +533,13 @@ export function useActions<
 
             if (isMulticastAction(action) && options?.scope) {
               const scoped = getScope(scope, options.scope);
-              if (scoped) scoped.emitter.emit(base, payload, channel);
-              return;
+              if (scoped)
+                return emitAsync(scoped.emitter, base, payload, channel);
+              return Promise.resolve();
             }
 
             const emitter = isBroadcastAction(action) ? broadcast : unicast;
-            emitter.emit(base, payload, channel);
+            return emitAsync(emitter, base, payload, channel);
           },
           get inspect() {
             return state.current.inspect;
@@ -508,6 +550,13 @@ export function useActions<
           node<K extends keyof Nodes<M>>(name: K, value: Nodes<M>[K] | null) {
             nodes.refs.current[name] = value;
             nodes.pending.current.set(name, value);
+          },
+          feature(name: string, operation: Feature) {
+            const process = state.current.produce((draft) =>
+              applyFeature(<Record<string, unknown>>draft, name, operation),
+            );
+            setModel(<M>(<unknown>state.current.model));
+            state.current.prune(process);
           },
           stream(
             action: AnyAction,

@@ -10,6 +10,7 @@ import {
   Entry,
   Distribution,
   Lifecycle,
+  Feature,
   useActions,
   With,
   utils,
@@ -190,7 +191,9 @@ actions.useAction(Actions.Fetch, async (context, payload) => {
     // inspect.fieldName.draft() for reading current draft value
   });
 
-  context.actions.dispatch(action, payload, options?);
+  // Awaitable — resolves when all triggered handlers complete.
+  // Generator handlers run in the background and do not block.
+  await context.actions.dispatch(action, payload, options?);
 
   context.actions.annotate(Op.Update, value); // Mark async state
 
@@ -349,6 +352,37 @@ actions.useAction(Actions.Focus, (context) => {
 
 // Or access from actions object
 actions.nodes.input?.focus();
+```
+
+## Feature Toggles
+
+Toggle boolean UI state (modals, sidebars, drawers) without defining actions or handlers:
+
+```tsx
+import { Feature } from "chizu";
+
+type Model = {
+  name: string;
+  features: { paymentDialog: boolean; sidebar: boolean };
+};
+
+const [model, actions] = useMyActions();
+
+// Mutate via actions.feature()
+actions.feature("paymentDialog", Feature.Toggle);
+actions.feature("paymentDialog", Feature.On);
+actions.feature("paymentDialog", Feature.Off);
+
+// Read from model
+{
+  model.features.paymentDialog && <PaymentDialog />;
+}
+
+// In handlers
+actions.useAction(Actions.CloseAll, (context) => {
+  context.actions.feature("paymentDialog", Feature.Off);
+  context.actions.feature("sidebar", Feature.Off);
+});
 ```
 
 ## Error Handling
@@ -590,6 +624,7 @@ docs: update the README file
   - `reading-actions.md` - Reading and streaming broadcast values: handler read(), peek(), and JSX stream()
   - `context-providers.md` - Boundary, Broadcaster, Consumer
   - `error-handling.md` - Error component and fault handling
+  - `feature-toggles.md` - Boolean feature flags with Feature enum
   - `ky-http-client.md` - Integration with ky HTTP client
   - `lifecycle-actions.md` - Mount, Unmount, Error, Update, Node
   - `mount-broadcast-deduplication.md` - Avoiding duplicate fetches on mount with broadcast/multicast

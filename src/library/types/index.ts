@@ -266,6 +266,25 @@ export enum Phase {
 }
 
 /**
+ * Operations for toggling boolean feature flags via `actions.feature()`.
+ *
+ * @example
+ * ```ts
+ * actions.feature("sidebar", Feature.Toggle);
+ * actions.feature("sidebar", Feature.On);
+ * actions.feature("sidebar", Feature.Off);
+ * ```
+ */
+export enum Feature {
+  /** Sets the feature to `true`. */
+  On = "on",
+  /** Sets the feature to `false`. */
+  Off = "off",
+  /** Inverts the current boolean value. */
+  Toggle = "toggle",
+}
+
+/**
  * Primary key type for identifying entities in collections.
  * Can be undefined (not yet assigned), a symbol (temporary/local), or a concrete value T.
  *
@@ -530,7 +549,26 @@ export type Nodes<M> = M extends {
   nodes: infer N extends Record<string, unknown>;
 }
   ? N
-  : Record<string, never>;
+  : Record<never, unknown>;
+
+/**
+ * Extracts the `features` property from a Model type.
+ * If the model has a `features` property whose values are all booleans,
+ * returns its type. Otherwise returns an empty record, making the
+ * `feature()` method effectively uncallable.
+ *
+ * @example
+ * ```ts
+ * enum Feature { Sidebar = 'Sidebar', Modal = 'Modal' }
+ * type Model = { count: number; features: { [K in Feature]: boolean } };
+ * type F = Features<Model>; // { Sidebar: boolean; Modal: boolean }
+ * ```
+ */
+export type FeatureFlags<M> = M extends {
+  features: infer F extends Record<string, boolean>;
+}
+  ? F
+  : Record<never, boolean>;
 
 /**
  * Constraint type for action containers.
@@ -686,7 +724,7 @@ export type HandlerContext<
       action: ActionOrChanneled,
       payload?: unknown,
       options?: MulticastOptions,
-    ): void;
+    ): Promise<void>;
     annotate<T>(operation: Operation, value: T): T;
     /**
      * Fetches a value from the cache or executes the callback if not cached / expired.
@@ -731,6 +769,19 @@ export type HandlerContext<
      * ```
      */
     invalidate(entry: CacheId<unknown> | ChanneledCacheId<unknown>): void;
+    /**
+     * Mutates a boolean feature flag on the model and triggers a re-render.
+     *
+     * Requires the model to have a `features` property whose keys are the feature names.
+     * Read feature state from `model.features` directly.
+     *
+     * @example
+     * ```ts
+     * context.actions.feature(Feature.Sidebar, Feature.Toggle);
+     * context.actions.feature(Feature.Sidebar, Feature.Off);
+     * ```
+     */
+    feature<K extends keyof FeatureFlags<M>>(name: K, operation: Feature): void;
     /**
      * Reads the latest broadcast or multicast value, waiting for annotations to settle.
      *
@@ -912,22 +963,22 @@ export type UseActions<
       action: HandlerPayload<P>,
       payload?: P,
       options?: MulticastOptions,
-    ): void;
+    ): Promise<void>;
     dispatch<P>(
       action: BroadcastPayload<P>,
       payload?: P,
       options?: MulticastOptions,
-    ): void;
+    ): Promise<void>;
     dispatch<P>(
       action: MulticastPayload<P>,
       payload: P,
       options: MulticastOptions,
-    ): void;
+    ): Promise<void>;
     dispatch<P, C extends Filter>(
       action: ChanneledAction<P, C>,
       payload?: P,
       options?: MulticastOptions,
-    ): void;
+    ): Promise<void>;
     inspect: Inspect<M>;
     /**
      * Captured DOM nodes registered via `node()`.
@@ -973,6 +1024,19 @@ export type UseActions<
      * ```
      */
     node<K extends keyof Nodes<M>>(name: K, node: Nodes<M>[K] | null): void;
+    /**
+     * Mutates a boolean feature flag on the model and triggers a re-render.
+     *
+     * Read feature state from `model.features` directly.
+     *
+     * @example
+     * ```tsx
+     * actions.feature(Feature.Sidebar, Feature.Toggle);
+     *
+     * {model.features.Sidebar && <Sidebar />}
+     * ```
+     */
+    feature<K extends keyof FeatureFlags<M>>(name: K, operation: Feature): void;
     /**
      * Streams broadcast values declaratively in JSX using a render-prop pattern.
      *

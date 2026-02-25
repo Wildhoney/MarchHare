@@ -11,7 +11,10 @@ import {
   HandlerPayload,
   ChanneledAction,
   HandlerContext,
+  Feature,
 } from "../types/index.ts";
+import EventEmitter from "eventemitter3";
+import { BroadcastEmitter } from "../boundary/components/broadcast/index.tsx";
 
 import type {
   Dispatchers,
@@ -49,15 +52,63 @@ export function withGetters<P extends Props>(a: P, b: RefObject<P>): P {
 }
 
 /**
- * Checks if the given result is a generator or async generator.
+ * Checks if the given result is a generator or async generator object.
+ * Uses `Object.prototype.toString` which reliably returns
+ * `"[object Generator]"` or `"[object AsyncGenerator]"` regardless of
+ * the generator function's name.
  */
 export function isGenerator(
   result: unknown,
 ): result is Generator | AsyncGenerator {
-  if (!result) return false;
-  if (typeof result !== "object" || result === null) return false;
-  const name = (<object>result).constructor.name;
-  return name === "Generator" || name === "AsyncGenerator";
+  if (!result || typeof result !== "object") return false;
+  const tag = Object.prototype.toString.call(result);
+  return tag === "[object Generator]" || tag === "[object AsyncGenerator]";
+}
+
+/**
+ * Applies a Feature operation to a boolean feature flag on an Immertation draft.
+ * @internal
+ */
+export function applyFeature(
+  draft: Record<string, unknown>,
+  name: string,
+  operation: Feature,
+): void {
+  const features = <Record<string, boolean>>draft.features;
+  switch (operation) {
+    case Feature.On:
+      features[name] = true;
+      break;
+    case Feature.Off:
+      features[name] = false;
+      break;
+    case Feature.Toggle:
+      features[name] = !features[name];
+      break;
+  }
+}
+
+/**
+ * Invokes all listeners for an event and returns a promise that resolves
+ * when every handler has settled. For {@link BroadcastEmitter} instances the
+ * payload is cached before listeners fire so late-mounting components still
+ * see the latest value.
+ *
+ * @internal
+ */
+export function emitAsync(
+  emitter: EventEmitter,
+  event: string | symbol,
+  ...args: unknown[]
+): Promise<void> {
+  if (emitter instanceof BroadcastEmitter) emitter.setCache(event, args[0]);
+
+  const listeners = emitter.listeners(event);
+  if (listeners.length === 0) return Promise.resolve();
+
+  return Promise.all(listeners.map((fn) => Promise.resolve(fn(...args)))).then(
+    () => {},
+  );
 }
 
 /**
@@ -310,23 +361,12 @@ export function useRegisterHandler<
     actionRef.current = action;
   });
 
-  // Stable handler wrapper that always calls the latest handler
+  // Stable handler wrapper that always calls the latest handler.
+  // Generator detection and iteration is handled by createHandler in hooks/index.ts
+  // so that generators can be excluded from the awaitable dispatch promise.
   const stableHandler = React.useCallback(
-    async (context: HandlerContext<M, A, D>, payload: unknown) => {
-      const currentHandler = handlerRef.current;
-      const isGeneratorFn =
-        currentHandler.constructor.name === "GeneratorFunction" ||
-        currentHandler.constructor.name === "AsyncGeneratorFunction";
-
-      if (isGeneratorFn) {
-        const generator = <Generator | AsyncGenerator>(
-          currentHandler(context, payload)
-        );
-        for await (const _ of generator) void 0;
-      } else {
-        await currentHandler(context, payload);
-      }
-    },
+    (context: HandlerContext<M, A, D>, payload: unknown) =>
+      handlerRef.current(context, payload),
     [],
   );
 

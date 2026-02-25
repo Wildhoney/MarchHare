@@ -18,6 +18,14 @@ export class BroadcastEmitter extends EventEmitter {
   }
 
   /**
+   * Cache a value for a given event without emitting to listeners.
+   * Used by {@link emitAsync} to preserve caching when bypassing `emit()`.
+   */
+  setCache(event: string | symbol, value: unknown): void {
+    this.cache.set(event, value);
+  }
+
+  /**
    * Retrieve the last emitted payload for a given event.
    */
   getCached(event: string | symbol): unknown {

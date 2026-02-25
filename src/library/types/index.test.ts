@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Lifecycle, Pk, HandlerPayload, Brand } from ".";
-import type { Payload, Handlers, UseActions } from ".";
+import { Lifecycle, Pk, HandlerPayload, Brand, Feature } from ".";
+import type { Payload, Handlers, UseActions, FeatureFlags } from ".";
 import { Action, Distribution } from "..";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
@@ -121,5 +121,38 @@ describe("derive type inference", () => {
     // Each derive call returns a new UseActions with the model extended
     type Base = UseActions<Model, typeof Actions>;
     expectTypeOf<Base["derive"]>().toBeFunction();
+  });
+});
+
+describe("Feature", () => {
+  it("should have On, Off, and Toggle values", () => {
+    expect(Feature.On).toBe("on");
+    expect(Feature.Off).toBe("off");
+    expect(Feature.Toggle).toBe("toggle");
+  });
+});
+
+describe("FeatureFlags", () => {
+  it("should extract features from a model with a features property", () => {
+    type Model = {
+      count: number;
+      features: { sidebar: boolean; modal: boolean };
+    };
+    type F = FeatureFlags<Model>;
+    expectTypeOf<F>().toEqualTypeOf<{ sidebar: boolean; modal: boolean }>();
+  });
+
+  it("should produce never keys when model has no features property", () => {
+    type Model = { count: number };
+    type F = FeatureFlags<Model>;
+    type Keys = keyof F;
+    expectTypeOf<Keys>().toEqualTypeOf<never>();
+  });
+
+  it("should produce never keys when features is misspelled", () => {
+    type Model = { count: number; features2: { sidebar: boolean } };
+    type F = FeatureFlags<Model>;
+    type Keys = keyof F;
+    expectTypeOf<Keys>().toEqualTypeOf<never>();
   });
 });

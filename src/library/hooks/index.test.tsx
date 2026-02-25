@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { renderHook, act, render, screen } from "@testing-library/react";
 import { useActions } from "./index.ts";
 import { Action } from "../action/index.ts";
-import { Lifecycle, Distribution, Phase } from "../types/index.ts";
+import { Lifecycle, Distribution, Phase, Feature } from "../types/index.ts";
 import { Broadcaster } from "../boundary/components/broadcast/index.tsx";
 import { Scope } from "../boundary/components/scope/index.tsx";
 import { annotate } from "../annotate/index.ts";
@@ -2364,5 +2364,242 @@ describe("useActions() mount + broadcast replay deduplication", () => {
 
     // Mount handler skipped (peek found cached value), only multicast fires
     expect(fetches).toEqual(["multicast-fetch:3"]);
+  });
+});
+
+describe("useActions() feature toggles", () => {
+  type FeatureModel = {
+    count: number;
+    features: { Sidebar: boolean; Modal: boolean };
+  };
+
+  class FeatureActions {
+    static Mount = Lifecycle.Mount();
+    static Toggle = Action<"Sidebar" | "Modal">("Toggle");
+  }
+
+  const featureModel: FeatureModel = {
+    count: 0,
+    features: { Sidebar: false, Modal: false },
+  };
+
+  it("should toggle a feature with Feature.Toggle", () => {
+    const { result } = renderHook(() => {
+      const actions = useActions<FeatureModel, typeof FeatureActions>(
+        featureModel,
+      );
+      return actions;
+    });
+
+    act(() => {
+      result.current[1].feature("Sidebar", Feature.Toggle);
+    });
+
+    expect(result.current[0].features.Sidebar).toBe(true);
+  });
+
+  it("should set a feature to true with Feature.On", () => {
+    const { result } = renderHook(() => {
+      const actions = useActions<FeatureModel, typeof FeatureActions>(
+        featureModel,
+      );
+      return actions;
+    });
+
+    act(() => {
+      result.current[1].feature("Modal", Feature.On);
+    });
+
+    expect(result.current[0].features.Modal).toBe(true);
+  });
+
+  it("should set a feature to false with Feature.Off", () => {
+    const { result } = renderHook(() => {
+      const actions = useActions<FeatureModel, typeof FeatureActions>({
+        ...featureModel,
+        features: { Sidebar: true, Modal: true },
+      });
+      return actions;
+    });
+
+    act(() => {
+      result.current[1].feature("Sidebar", Feature.Off);
+    });
+
+    expect(result.current[0].features.Sidebar).toBe(false);
+  });
+
+  it("should be idempotent: Feature.On when already true stays true", () => {
+    const { result } = renderHook(() => {
+      const actions = useActions<FeatureModel, typeof FeatureActions>({
+        ...featureModel,
+        features: { Sidebar: true, Modal: false },
+      });
+      return actions;
+    });
+
+    act(() => {
+      result.current[1].feature("Sidebar", Feature.On);
+    });
+
+    expect(result.current[0].features.Sidebar).toBe(true);
+  });
+
+  it("should support feature() in handler context", async () => {
+    const { result } = renderHook(() => {
+      const actions = useActions<FeatureModel, typeof FeatureActions>(
+        featureModel,
+      );
+
+      actions.useAction(FeatureActions.Toggle, (context, name) => {
+        context.actions.feature(name, Feature.Toggle);
+      });
+
+      return actions;
+    });
+
+    await act(async () => {
+      result.current[1].dispatch(FeatureActions.Toggle, "Sidebar");
+    });
+
+    expect(result.current[0].features.Sidebar).toBe(true);
+  });
+});
+
+describe("useActions() awaitable dispatch", () => {
+  it("should await broadcast handlers before proceeding", async () => {
+    const executionOrder: string[] = [];
+
+    class PaymentActions {
+      static Mount = Lifecycle.Mount();
+      static PaymentSent = Action("PaymentSent", Distribution.Broadcast);
+    }
+
+    type ProducerModel = { loading: boolean };
+
+    function Producer() {
+      const actions = useActions<ProducerModel, typeof PaymentActions>({
+        loading: true,
+      });
+
+      actions.useAction(PaymentActions.Mount, async (context) => {
+        executionOrder.push("dispatch:start");
+        await context.actions.dispatch(PaymentActions.PaymentSent);
+        executionOrder.push("dispatch:settled");
+        context.actions.produce(({ model }) => {
+          model.loading = false;
+        });
+        executionOrder.push("loading:false");
+      });
+
+      return (
+        <div data-testid="loading">
+          {actions[0].loading ? "loading" : "done"}
+        </div>
+      );
+    }
+
+    function Consumer() {
+      const actions = useActions<void, typeof PaymentActions>();
+
+      actions.useAction(PaymentActions.PaymentSent, async () => {
+        executionOrder.push("handler:start");
+        await new Promise((r) => setTimeout(r, 50));
+        executionOrder.push("handler:end");
+      });
+
+      return null;
+    }
+
+    function App() {
+      return (
+        <Broadcaster>
+          <Consumer />
+          <Producer />
+        </Broadcaster>
+      );
+    }
+
+    render(<App />);
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 200));
+    });
+
+    expect(executionOrder).toEqual([
+      "dispatch:start",
+      "handler:start",
+      "handler:end",
+      "dispatch:settled",
+      "loading:false",
+    ]);
+    expect(screen.getByTestId("loading")).toHaveTextContent("done");
+  });
+
+  it("should not await generator handlers (they run in background)", async () => {
+    let dispatchSettled = false;
+    let generatorComplete = false;
+
+    class StreamActions {
+      static Start = Action("Start");
+      static Stream = Action("Stream", Distribution.Broadcast);
+    }
+
+    function Dispatcher() {
+      const actions = useActions<void, typeof StreamActions>();
+
+      actions.useAction(StreamActions.Start, async (context) => {
+        await context.actions.dispatch(StreamActions.Stream);
+        dispatchSettled = true;
+        // Generator should still be running at this point.
+        expect(generatorComplete).toBe(false);
+      });
+
+      return (
+        <button
+          data-testid="start"
+          onClick={() => actions[1].dispatch(StreamActions.Start)}
+        >
+          Start
+        </button>
+      );
+    }
+
+    function StreamConsumer() {
+      const actions = useActions<void, typeof StreamActions>();
+
+      actions.useAction(StreamActions.Stream, function* (_context) {
+        yield;
+        yield new Promise((r) => setTimeout(r, 100));
+        generatorComplete = true;
+      });
+
+      return null;
+    }
+
+    function App() {
+      return (
+        <Broadcaster>
+          <StreamConsumer />
+          <Dispatcher />
+        </Broadcaster>
+      );
+    }
+
+    render(<App />);
+
+    await act(async () => {
+      screen.getByTestId("start").click();
+    });
+
+    expect(dispatchSettled).toBe(true);
+    expect(generatorComplete).toBe(false);
+
+    // Let the generator finish.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 200));
+    });
+
+    expect(generatorComplete).toBe(true);
   });
 });
