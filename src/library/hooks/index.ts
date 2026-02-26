@@ -10,7 +10,7 @@ import {
   useDispatchers,
   findLifecycleAction,
   isGenerator,
-  applyFeature,
+  applyToggle,
   emitAsync,
 } from "./utils.ts";
 export { With } from "./utils.ts";
@@ -31,11 +31,14 @@ import {
   Filter,
   ChanneledAction,
   ActionOrChanneled,
-  Nodes,
+  ExtractNodes,
   Feature,
+  Property,
   MulticastOptions,
   AnyAction,
   type CacheId,
+  type ValidateFeatures,
+  type NullableNodes,
 } from "../types/index.ts";
 
 import { getReason, getError } from "../error/utils.ts";
@@ -108,7 +111,10 @@ export function useActions<
   M extends Model,
   A extends Actions | void = void,
   D extends Props = Props,
->(initialModel: M, getData?: Data<D>): UseActions<M, A, D>;
+>(
+  initialModel: NullableNodes<M> & ValidateFeatures<M>,
+  getData?: Data<D>,
+): UseActions<M, A, D>;
 export function useActions<
   M extends Model | void,
   A extends Actions | void,
@@ -130,10 +136,33 @@ export function useActions<
   const initialised = React.useRef(false);
   const hydration = React.useRef<Process | null>(null);
   const state = React.useRef(new State<Model>());
+  const symbolFeatures = React.useRef<Record<string, boolean> | null>(null);
+  const symbolNodes = React.useRef<Record<string, unknown> | null>(null);
+
+  /**
+   * Stamps symbol-keyed data back onto the Immer-managed model object.
+   * Immer strips symbol keys during produce, so we re-attach them after
+   * every model update to keep `model[Property.Features]` and
+   * `model[Property.Nodes]` accessible.
+   */
+  function stampSymbolKeys(): void {
+    const obj = <Record<string | symbol, unknown>>state.current.model;
+    if (symbolFeatures.current !== null)
+      obj[Property.Features] = symbolFeatures.current;
+    if (symbolNodes.current !== null) obj[Property.Nodes] = symbolNodes.current;
+  }
 
   if (!initialised.current) {
     initialised.current = true;
-    hydration.current = state.current.hydrate(initialModel);
+    const sym = <Record<string | symbol, unknown>>(<unknown>initialModel);
+    if (Property.Features in sym)
+      symbolFeatures.current = <Record<string, boolean>>sym[Property.Features];
+    if (Property.Nodes in sym)
+      symbolNodes.current = <Record<string, unknown>>sym[Property.Nodes];
+
+    const cleaned = Object.fromEntries(Object.entries(initialModel));
+    hydration.current = state.current.hydrate(cleaned);
+    stampSymbolKeys();
   }
   const [model, setModel] = React.useState<M>(
     () => <M>(<unknown>state.current.model),
@@ -171,7 +200,7 @@ export function useActions<
         task,
         data,
         tasks,
-        nodes: nodes.refs.current,
+        [Property.Nodes]: nodes.refs.current,
         regulator: {
           disallow(...actions) {
             regulatorPolicy.actions.clear();
@@ -203,6 +232,7 @@ export function useActions<
                 inspect: <Readonly<Inspect<M>>>(<unknown>state.current.inspect),
               });
             });
+            stampSymbolKeys();
             setModel(<M>(<unknown>state.current.model));
             result.processes.add(process);
             if (hydration.current) {
@@ -256,13 +286,15 @@ export function useActions<
           invalidate(entry) {
             cache.delete(getCacheKey(<CacheId>(<unknown>entry)));
           },
-          feature(name: string, operation: Feature) {
+          toggle(name: string, operation: Feature) {
             if (controller.signal.aborted) return;
-            const process = state.current.produce((draft) =>
-              applyFeature(<Record<string, unknown>>draft, name, operation),
-            );
+            const updated = <Record<string, boolean>>{
+              ...symbolFeatures.current,
+            };
+            applyToggle(updated, name, operation);
+            symbolFeatures.current = updated;
+            stampSymbolKeys();
             setModel(<M>(<unknown>state.current.model));
-            result.processes.add(process);
             if (hydration.current) {
               result.processes.add(hydration.current);
               hydration.current = null;
@@ -495,12 +527,23 @@ export function useActions<
 
   React.useLayoutEffect(() => {
     const nodeAction = findLifecycleAction(registry.current.handlers, "Node");
+    let modelChanged = false;
     for (const [name, node] of nodes.pending.current) {
       const latest = nodes.emitted.current.get(name);
       if (latest !== node) {
         nodes.emitted.current.set(name, node);
+        if (symbolNodes.current !== null) {
+          const updated = { ...symbolNodes.current };
+          updated[<string>name] = node;
+          symbolNodes.current = updated;
+          modelChanged = true;
+        }
         if (nodeAction) unicast.emit(nodeAction, node, { Name: name });
       }
+    }
+    if (modelChanged) {
+      stampSymbolKeys();
+      setModel(<M>(<unknown>state.current.model));
     }
     nodes.pending.current.clear();
   });
@@ -544,19 +587,24 @@ export function useActions<
           get inspect() {
             return state.current.inspect;
           },
-          get nodes() {
+          get [Property.Nodes]() {
             return nodes.refs.current;
           },
-          node<K extends keyof Nodes<M>>(name: K, value: Nodes<M>[K] | null) {
+          node<K extends keyof ExtractNodes<M>>(
+            name: K,
+            value: ExtractNodes<M>[K] | null,
+          ) {
             nodes.refs.current[name] = value;
             nodes.pending.current.set(name, value);
           },
-          feature(name: string, operation: Feature) {
-            const process = state.current.produce((draft) =>
-              applyFeature(<Record<string, unknown>>draft, name, operation),
-            );
+          toggle(name: string, operation: Feature) {
+            const updated = <Record<string, boolean>>{
+              ...symbolFeatures.current,
+            };
+            applyToggle(updated, name, operation);
+            symbolFeatures.current = updated;
+            stampSymbolKeys();
             setModel(<M>(<unknown>state.current.model));
-            state.current.prune(process);
           },
           stream(
             action: AnyAction,

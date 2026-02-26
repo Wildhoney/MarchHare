@@ -11,6 +11,7 @@ import {
   Distribution,
   Lifecycle,
   Feature,
+  Property,
   useActions,
   With,
   utils,
@@ -29,7 +30,9 @@ import type {
   ChanneledCacheId,
   Fault,
   Handler,
+  Features,
   Handlers,
+  Nodes,
   Pk,
   Task,
   Tasks,
@@ -182,8 +185,8 @@ actions.useAction(Actions.Fetch, async (context, payload) => {
   // Reactive data (always latest values, even after await)
   context.data;
 
-  // Captured DOM nodes
-  context.nodes;
+  // Captured DOM nodes (keyed by Property.Nodes symbol)
+  context[Property.Nodes];
 
   // Actions API
   context.actions.produce(({ model, inspect }) => {
@@ -327,15 +330,18 @@ actions.useAction(Actions.SetName, (context, name) => {
 
 ## DOM Node Capture
 
-Capture DOM nodes for access in handlers:
+Capture DOM nodes for access in handlers. When the model has a `[Property.Nodes]` property, `actions.node()` automatically writes the captured node to the model — no manual `Lifecycle.Node` handler is needed. Use the `Nodes<T>` utility type to define nodes — it auto-applies `| null` so you don't have to:
 
 ```tsx
+import { Property } from "chizu";
+import type { Nodes } from "chizu";
+
 type Model = {
   count: number;
-  nodes: {
+  [Property.Nodes]: Nodes<{
     input: HTMLInputElement;
     container: HTMLDivElement;
-  };
+  }>;
 };
 
 const [model, actions] = useActions<Model, typeof Actions>(initialModel);
@@ -347,11 +353,11 @@ const [model, actions] = useActions<Model, typeof Actions>(initialModel);
 
 // In handlers
 actions.useAction(Actions.Focus, (context) => {
-  context.nodes.input?.focus();
+  context[Property.Nodes].input?.focus();
 });
 
 // Or access from actions object
-actions.nodes.input?.focus();
+actions[Property.Nodes].input?.focus();
 ```
 
 ## Feature Toggles
@@ -359,31 +365,50 @@ actions.nodes.input?.focus();
 Toggle boolean UI state (modals, sidebars, drawers) without defining actions or handlers:
 
 ```tsx
-import { Feature } from "chizu";
+import { Feature, Property } from "chizu";
+import type { Features } from "chizu";
 
 type Model = {
   name: string;
-  features: { paymentDialog: boolean; sidebar: boolean };
+  [Property.Features]: Features<["paymentDialog", "sidebar"]>;
 };
 
 const [model, actions] = useMyActions();
 
-// Mutate via actions.feature()
-actions.feature("paymentDialog", Feature.Toggle);
-actions.feature("paymentDialog", Feature.On);
-actions.feature("paymentDialog", Feature.Off);
+// Mutate via actions.toggle()
+actions.toggle("paymentDialog", Feature.Invert);
+actions.toggle("paymentDialog", Feature.On);
+actions.toggle("paymentDialog", Feature.Off);
 
 // Read from model
 {
-  model.features.paymentDialog && <PaymentDialog />;
+  model[Property.Features].paymentDialog && <PaymentDialog />;
 }
 
 // In handlers
 actions.useAction(Actions.CloseAll, (context) => {
-  context.actions.feature("paymentDialog", Feature.Off);
-  context.actions.feature("sidebar", Feature.Off);
+  context.actions.toggle("paymentDialog", Feature.Off);
+  context.actions.toggle("sidebar", Feature.Off);
 });
 ```
+
+## Property
+
+The `Property` class provides unique symbol keys for reserved model properties:
+
+```ts
+import { Property } from "chizu";
+import type { Features, Nodes } from "chizu";
+
+type Model = {
+  count: number;
+  [Property.Features]: Features<["sidebar"]>;
+  [Property.Nodes]: Nodes<{ input: HTMLInputElement }>;
+};
+```
+
+- `Property.Features` — unique symbol, used by `actions.toggle()`
+- `Property.Nodes` — unique symbol, used by `actions.node()`
 
 ## Error Handling
 

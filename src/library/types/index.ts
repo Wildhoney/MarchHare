@@ -266,13 +266,13 @@ export enum Phase {
 }
 
 /**
- * Operations for toggling boolean feature flags via `actions.feature()`.
+ * Operations for toggling boolean feature flags via `actions.toggle()`.
  *
  * @example
  * ```ts
- * actions.feature("sidebar", Feature.Toggle);
- * actions.feature("sidebar", Feature.On);
- * actions.feature("sidebar", Feature.Off);
+ * actions.toggle("sidebar", Feature.Invert);
+ * actions.toggle("sidebar", Feature.On);
+ * actions.toggle("sidebar", Feature.Off);
  * ```
  */
 export enum Feature {
@@ -281,7 +281,31 @@ export enum Feature {
   /** Sets the feature to `false`. */
   Off = "off",
   /** Inverts the current boolean value. */
-  Toggle = "toggle",
+  Invert = "invert",
+}
+
+/**
+ * Reserved model property keys backed by unique symbols.
+ *
+ * Use as computed keys on your model type so the names are discoverable
+ * and refactor-safe:
+ *
+ * @example
+ * ```ts
+ * import { Property } from "chizu";
+ *
+ * type Model = {
+ *   count: number;
+ *   [Property.Features]: { sidebar: boolean };
+ *   [Property.Nodes]: { input: HTMLInputElement };
+ * };
+ * ```
+ */
+export class Property {
+  /** The key for boolean feature flags toggled via `actions.toggle()`. */
+  static readonly Features: unique symbol = Symbol("chizu.property/Features");
+  /** The key for captured DOM nodes registered via `actions.node()`. */
+  static readonly Nodes: unique symbol = Symbol("chizu.property/Nodes");
 }
 
 /**
@@ -531,44 +555,114 @@ type AssertSync<F> =
 export type Props = Record<string, unknown>;
 
 /**
+ * Utility type for `[Property.Features]` model values. Takes a tuple of
+ * string literal keys and produces a record mapping each to `boolean`.
+ *
+ * @example
+ * ```ts
+ * import { Property } from "chizu";
+ * import type { Features } from "chizu";
+ *
+ * type Model = {
+ *   count: number;
+ *   [Property.Features]: Features<["paymentDialog", "sidebar"]>;
+ * };
+ * // Equivalent to: { paymentDialog: boolean; sidebar: boolean }
+ * ```
+ */
+export type Features<T extends readonly string[]> = {
+  [K in T[number]]: boolean;
+};
+
+/**
+ * Utility type for `[Property.Nodes]` model values. Automatically adds
+ * `| null` to each value, reflecting that DOM refs are `null` until
+ * captured via `actions.node()`.
+ *
+ * @example
+ * ```ts
+ * import { Property } from "chizu";
+ * import type { Nodes } from "chizu";
+ *
+ * type Model = {
+ *   count: number;
+ *   [Property.Nodes]: Nodes<{ container: HTMLElement; input: HTMLInputElement }>;
+ * };
+ * // Equivalent to: { container: HTMLElement | null; input: HTMLInputElement | null }
+ * ```
+ */
+export type Nodes<T extends Record<string, unknown>> = {
+  [K in keyof T]: T[K] | null;
+};
+
+/**
  * Extracts the nodes type from a Model.
- * If the model has a `nodes` property, returns its type.
+ * If the model has a `[Property.Nodes]` property, returns its type.
  * Otherwise returns an empty record.
  *
  * @example
  * ```ts
  * type Model = {
  *   count: number;
- *   nodes: { button: HTMLButtonElement | null };
+ *   [Property.Nodes]: Nodes<{ container: HTMLButtonElement }>;
  * };
  *
- * type N = Nodes<Model>; // { button: HTMLButtonElement | null }
+ * type N = ExtractNodes<Model>; // { container: HTMLButtonElement | null }
  * ```
  */
-export type Nodes<M> = M extends {
-  nodes: infer N extends Record<string, unknown>;
+export type ExtractNodes<M> = M extends {
+  [Property.Nodes]: infer N extends Record<string, unknown>;
 }
   ? N
   : Record<never, unknown>;
 
 /**
- * Extracts the `features` property from a Model type.
- * If the model has a `features` property whose values are all booleans,
+ * Transforms `[Property.Nodes]` values to include `| null`, reflecting
+ * that node refs are initially `null` until a DOM element is captured.
+ * Models without `[Property.Nodes]` pass through unchanged.
+ *
+ * @internal
+ */
+export type NullableNodes<M> = M extends {
+  [Property.Nodes]: infer N extends Record<string, unknown>;
+}
+  ? Omit<M, typeof Property.Nodes> & {
+      [Property.Nodes]: { [K in keyof N]: N[K] | null };
+    }
+  : M;
+
+/**
+ * Extracts the `[Property.Features]` property from a Model type.
+ * If the model has a `[Property.Features]` property whose values are all booleans,
  * returns its type. Otherwise returns an empty record, making the
- * `feature()` method effectively uncallable.
+ * `toggle()` method effectively uncallable.
  *
  * @example
  * ```ts
  * enum Feature { Sidebar = 'Sidebar', Modal = 'Modal' }
- * type Model = { count: number; features: { [K in Feature]: boolean } };
- * type F = Features<Model>; // { Sidebar: boolean; Modal: boolean }
+ * type Model = { count: number; [Property.Features]: { [K in Feature]: boolean } };
+ * type F = FeatureFlags<Model>; // { Sidebar: boolean; Modal: boolean }
  * ```
  */
 export type FeatureFlags<M> = M extends {
-  features: infer F extends Record<string, boolean>;
+  [Property.Features]: infer F extends Record<string, boolean>;
 }
   ? F
   : Record<never, boolean>;
+
+/**
+ * Resolves to `unknown` when the model has no `[Property.Features]` or all
+ * feature values are booleans. Resolves to a descriptive string literal when
+ * any value is not a boolean, causing an intersection with the model type
+ * to become `never` and producing a compile-time error.
+ *
+ * @internal
+ */
+export type ValidateFeatures<M> = M extends { [Property.Features]: infer F }
+  ? F extends Record<string, boolean>
+    ? unknown
+    : "[Property.Features] values must all be boolean"
+  : unknown;
 
 /**
  * Constraint type for action containers.
@@ -684,12 +778,12 @@ export type HandlerContext<
    * @example
    * ```ts
    * actions.useAction(Actions.Focus, (context) => {
-   *   context.nodes.input?.focus();
+   *   context[Property.Nodes].input?.focus();
    * });
    * ```
    */
-  readonly nodes: {
-    [K in keyof Nodes<M>]: Nodes<M>[K] | null;
+  readonly [Property.Nodes]: {
+    [K in keyof ExtractNodes<M>]: ExtractNodes<M>[K] | null;
   };
   /**
    * The regulator API for controlling which actions may be dispatched.
@@ -772,16 +866,16 @@ export type HandlerContext<
     /**
      * Mutates a boolean feature flag on the model and triggers a re-render.
      *
-     * Requires the model to have a `features` property whose keys are the feature names.
-     * Read feature state from `model.features` directly.
+     * Requires the model to have a `[Property.Features]` property whose keys are the feature names.
+     * Read feature state from `model[Property.Features]` directly.
      *
      * @example
      * ```ts
-     * context.actions.feature(Feature.Sidebar, Feature.Toggle);
-     * context.actions.feature(Feature.Sidebar, Feature.Off);
+     * context.actions.toggle(Feature.Sidebar, Feature.Invert);
+     * context.actions.toggle(Feature.Sidebar, Feature.Off);
      * ```
      */
-    feature<K extends keyof FeatureFlags<M>>(name: K, operation: Feature): void;
+    toggle<K extends keyof FeatureFlags<M>>(name: K, operation: Feature): void;
     /**
      * Reads the latest broadcast or multicast value, waiting for annotations to settle.
      *
@@ -945,7 +1039,7 @@ export type UseActions<
   AC extends Actions | void,
   D extends Props = Props,
 > = [
-  Readonly<M>,
+  Readonly<NullableNodes<M>>,
   {
     /**
      * Dispatches an action with an optional payload.
@@ -981,37 +1075,42 @@ export type UseActions<
     ): Promise<void>;
     inspect: Inspect<M>;
     /**
-     * Captured DOM nodes registered via `node()`.
-     * Nodes may be `null` if not yet captured or if the node was unmounted.
+     * Captured DOM nodes registered via `actions.node()`.
+     * Access via the `Property.Nodes` symbol key.
      *
      * @example
      * ```tsx
+     * import { Property, Nodes } from "chizu";
+     *
      * type Model = {
      *   count: number;
-     *   nodes: { input: HTMLInputElement };
+     *   [Property.Nodes]: Nodes<{ input: HTMLInputElement }>;
      * };
      * const [model, actions] = useActions<Model, typeof Actions>(model);
      *
-     * // Access captured nodes
-     * actions.nodes.input?.focus();
+     * actions[Property.Nodes].input?.focus();
      * ```
      */
-    nodes: { [K in keyof Nodes<M>]: Nodes<M>[K] | null };
+    [Property.Nodes]: {
+      [K in keyof ExtractNodes<M>]: ExtractNodes<M>[K] | null;
+    };
     /**
-     * Captures a DOM node for later access via `nodes` or `context.nodes`.
-     * Use as a ref callback on JSX nodes.
+     * Captures a DOM node for later access via `[Property.Nodes]`.
+     * Use as a ref callback on JSX elements.
      *
-     * @param name - The node key (must match a key in Model['nodes'])
+     * @param name - The node key (must match a key in the model's `[Property.Nodes]`)
      * @param node - The DOM node or null (when unmounting)
      *
      * @example
      * ```tsx
+     * import { Property, Nodes } from "chizu";
+     *
      * type Model = {
      *   count: number;
-     *   nodes: {
+     *   [Property.Nodes]: Nodes<{
      *     container: HTMLDivElement;
      *     input: HTMLInputElement;
-     *   };
+     *   }>;
      * };
      *
      * const [model, actions] = useActions<Model, typeof Actions>(model);
@@ -1023,20 +1122,23 @@ export type UseActions<
      * );
      * ```
      */
-    node<K extends keyof Nodes<M>>(name: K, node: Nodes<M>[K] | null): void;
+    node<K extends keyof ExtractNodes<M>>(
+      name: K,
+      node: ExtractNodes<M>[K] | null,
+    ): void;
     /**
      * Mutates a boolean feature flag on the model and triggers a re-render.
      *
-     * Read feature state from `model.features` directly.
+     * Read feature state from `model[Property.Features]` directly.
      *
      * @example
      * ```tsx
-     * actions.feature(Feature.Sidebar, Feature.Toggle);
+     * actions.toggle(Feature.Sidebar, Feature.Invert);
      *
-     * {model.features.Sidebar && <Sidebar />}
+     * {model[Property.Features].Sidebar && <Sidebar />}
      * ```
      */
-    feature<K extends keyof FeatureFlags<M>>(name: K, operation: Feature): void;
+    toggle<K extends keyof FeatureFlags<M>>(name: K, operation: Feature): void;
     /**
      * Streams broadcast values declaratively in JSX using a render-prop pattern.
      *

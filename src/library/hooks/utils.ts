@@ -6,7 +6,7 @@ import {
   Model,
   Actions,
   Filter,
-  Nodes,
+  ExtractNodes,
   ActionId,
   HandlerPayload,
   ChanneledAction,
@@ -66,15 +66,15 @@ export function isGenerator(
 }
 
 /**
- * Applies a Feature operation to a boolean feature flag on an Immertation draft.
+ * Applies a Feature operation to a boolean feature flag record.
+ * Mutates the given record in place.
  * @internal
  */
-export function applyFeature(
-  draft: Record<string, unknown>,
+export function applyToggle(
+  features: Record<string, boolean>,
   name: string,
   operation: Feature,
 ): void {
-  const features = <Record<string, boolean>>draft.features;
   switch (operation) {
     case Feature.On:
       features[name] = true;
@@ -82,7 +82,7 @@ export function applyFeature(
     case Feature.Off:
       features[name] = false;
       break;
-    case Feature.Toggle:
+    case Feature.Invert:
       features[name] = !features[name];
       break;
   }
@@ -393,7 +393,7 @@ export function useRegisterHandler<
  * @returns Object containing refs for nodes, pending captures, and emitted nodes
  */
 export function useNodes<M extends Model | void>(): References<M> {
-  type N = Nodes<M>;
+  type N = ExtractNodes<M>;
   const refs = React.useRef<{ [K in keyof N]: N[K] | null }>(
     <{ [K in keyof N]: N[K] | null }>{},
   );

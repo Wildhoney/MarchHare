@@ -1,22 +1,23 @@
 # Feature Toggles
 
-Toggle boolean UI state (modals, sidebars, drawers) without defining dedicated actions or handlers. The `actions.feature()` method mutates a boolean flag on `model.features` using the `Feature` enum. Read feature state from the model directly.
+Toggle boolean UI state (modals, sidebars, drawers) without defining dedicated actions or handlers. The `actions.toggle()` method mutates a boolean flag on `model[Property.Features]` using the `Feature` enum. Read feature state from the model directly.
 
 ## Setup
 
-Include a `features` property in your model:
+Include a `[Property.Features]` property in your model:
 
 ```ts
-import { useActions, Action, Feature } from "chizu";
+import { useActions, Action, Feature, Property } from "chizu";
+import type { Features } from "chizu";
 
 type Model = {
   name: string;
-  features: { paymentDialog: boolean; sidebar: boolean };
+  [Property.Features]: Features<["paymentDialog", "sidebar"]>;
 };
 
 const model: Model = {
   name: "",
-  features: {
+  [Property.Features]: {
     paymentDialog: false,
     sidebar: false,
   },
@@ -29,23 +30,23 @@ Read feature state from the model:
 
 ```tsx
 {
-  model.features.paymentDialog && <PaymentDialog />;
+  model[Property.Features].paymentDialog && <PaymentDialog />;
 }
 ```
 
 ## Writing
 
-Call `actions.feature()` to mutate the flag and trigger a re-render:
+Call `actions.toggle()` to mutate the flag and trigger a re-render:
 
 ```ts
-// Toggle the current value
-actions.feature("paymentDialog", Feature.Toggle);
+// Invert the current value
+actions.toggle("paymentDialog", Feature.Invert);
 
 // Explicitly set to true
-actions.feature("paymentDialog", Feature.On);
+actions.toggle("paymentDialog", Feature.On);
 
 // Explicitly set to false
-actions.feature("paymentDialog", Feature.Off);
+actions.toggle("paymentDialog", Feature.Off);
 ```
 
 `Feature.On` and `Feature.Off` are idempotent &ndash; calling `Feature.On` when the feature is already `true` does not change the value.
@@ -61,22 +62,23 @@ class Actions {
 }
 
 actions.useAction(Actions.CloseAll, (context) => {
-  context.actions.feature("paymentDialog", Feature.Off);
-  context.actions.feature("sidebar", Feature.Off);
+  context.actions.toggle("paymentDialog", Feature.Off);
+  context.actions.toggle("sidebar", Feature.Off);
 });
 
 actions.useAction(Actions.ToggleSidebar, (context) => {
-  context.actions.feature("sidebar", Feature.Toggle);
+  context.actions.toggle("sidebar", Feature.Invert);
 });
 ```
 
 ## Full example
 
 ```tsx
-import { useActions, Action, Lifecycle, Feature } from "chizu";
+import { useActions, Action, Lifecycle, Feature, Property } from "chizu";
+import type { Features } from "chizu";
 
 type Model = {
-  features: { paymentDialog: boolean; sidebar: boolean };
+  [Property.Features]: Features<["paymentDialog", "sidebar"]>;
 };
 
 class Actions {
@@ -87,15 +89,15 @@ class Actions {
 
 function useAppActions() {
   const actions = useActions<Model, typeof Actions>({
-    features: { paymentDialog: false, sidebar: false },
+    [Property.Features]: { paymentDialog: false, sidebar: false },
   });
 
   actions.useAction(Actions.OpenPayment, (context) => {
-    context.actions.feature("paymentDialog", Feature.On);
+    context.actions.toggle("paymentDialog", Feature.On);
   });
 
   actions.useAction(Actions.ClosePayment, (context) => {
-    context.actions.feature("paymentDialog", Feature.Off);
+    context.actions.toggle("paymentDialog", Feature.Off);
   });
 
   return actions;
@@ -106,7 +108,7 @@ export default function App() {
 
   return (
     <div>
-      <button onClick={() => actions.feature("sidebar", Feature.Toggle)}>
+      <button onClick={() => actions.toggle("sidebar", Feature.Invert)}>
         Toggle Sidebar
       </button>
 
@@ -114,8 +116,8 @@ export default function App() {
         Pay Now
       </button>
 
-      {model.features.sidebar && <Sidebar />}
-      {model.features.paymentDialog && <PaymentDialog />}
+      {model[Property.Features].sidebar && <Sidebar />}
+      {model[Property.Features].paymentDialog && <PaymentDialog />}
     </div>
   );
 }
@@ -123,4 +125,4 @@ export default function App() {
 
 ## Type safety
 
-The `FeatureFlags<M>` utility type extracts the `features` property from your model. If your model does not have a `features` property, or its values are not booleans, the `feature()` method accepts `never` as the key &ndash; making it effectively uncallable and producing a compile-time error.
+The `FeatureFlags<M>` utility type extracts the `[Property.Features]` property from your model. If your model does not have a `[Property.Features]` property, or its values are not booleans, the `toggle()` method accepts `never` as the key &ndash; making it effectively uncallable and producing a compile-time error.

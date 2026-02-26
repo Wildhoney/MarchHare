@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import { renderHook, act, render, screen } from "@testing-library/react";
 import { useActions } from "./index.ts";
 import { Action } from "../action/index.ts";
-import { Lifecycle, Distribution, Phase, Feature } from "../types/index.ts";
+import {
+  Lifecycle,
+  Distribution,
+  Phase,
+  Feature,
+  Property,
+} from "../types/index.ts";
 import { Broadcaster } from "../boundary/components/broadcast/index.tsx";
 import { Scope } from "../boundary/components/scope/index.tsx";
 import { annotate } from "../annotate/index.ts";
@@ -2370,7 +2376,7 @@ describe("useActions() mount + broadcast replay deduplication", () => {
 describe("useActions() feature toggles", () => {
   type FeatureModel = {
     count: number;
-    features: { Sidebar: boolean; Modal: boolean };
+    [Property.Features]: { Sidebar: boolean; Modal: boolean };
   };
 
   class FeatureActions {
@@ -2380,10 +2386,10 @@ describe("useActions() feature toggles", () => {
 
   const featureModel: FeatureModel = {
     count: 0,
-    features: { Sidebar: false, Modal: false },
+    [Property.Features]: { Sidebar: false, Modal: false },
   };
 
-  it("should toggle a feature with Feature.Toggle", () => {
+  it("should toggle a feature with Feature.Invert", () => {
     const { result } = renderHook(() => {
       const actions = useActions<FeatureModel, typeof FeatureActions>(
         featureModel,
@@ -2392,10 +2398,10 @@ describe("useActions() feature toggles", () => {
     });
 
     act(() => {
-      result.current[1].feature("Sidebar", Feature.Toggle);
+      result.current[1].toggle("Sidebar", Feature.Invert);
     });
 
-    expect(result.current[0].features.Sidebar).toBe(true);
+    expect(result.current[0][Property.Features].Sidebar).toBe(true);
   });
 
   it("should set a feature to true with Feature.On", () => {
@@ -2407,52 +2413,52 @@ describe("useActions() feature toggles", () => {
     });
 
     act(() => {
-      result.current[1].feature("Modal", Feature.On);
+      result.current[1].toggle("Modal", Feature.On);
     });
 
-    expect(result.current[0].features.Modal).toBe(true);
+    expect(result.current[0][Property.Features].Modal).toBe(true);
   });
 
   it("should set a feature to false with Feature.Off", () => {
     const { result } = renderHook(() => {
       const actions = useActions<FeatureModel, typeof FeatureActions>({
         ...featureModel,
-        features: { Sidebar: true, Modal: true },
+        [Property.Features]: { Sidebar: true, Modal: true },
       });
       return actions;
     });
 
     act(() => {
-      result.current[1].feature("Sidebar", Feature.Off);
+      result.current[1].toggle("Sidebar", Feature.Off);
     });
 
-    expect(result.current[0].features.Sidebar).toBe(false);
+    expect(result.current[0][Property.Features].Sidebar).toBe(false);
   });
 
   it("should be idempotent: Feature.On when already true stays true", () => {
     const { result } = renderHook(() => {
       const actions = useActions<FeatureModel, typeof FeatureActions>({
         ...featureModel,
-        features: { Sidebar: true, Modal: false },
+        [Property.Features]: { Sidebar: true, Modal: false },
       });
       return actions;
     });
 
     act(() => {
-      result.current[1].feature("Sidebar", Feature.On);
+      result.current[1].toggle("Sidebar", Feature.On);
     });
 
-    expect(result.current[0].features.Sidebar).toBe(true);
+    expect(result.current[0][Property.Features].Sidebar).toBe(true);
   });
 
-  it("should support feature() in handler context", async () => {
+  it("should support toggle() in handler context", async () => {
     const { result } = renderHook(() => {
       const actions = useActions<FeatureModel, typeof FeatureActions>(
         featureModel,
       );
 
       actions.useAction(FeatureActions.Toggle, (context, name) => {
-        context.actions.feature(name, Feature.Toggle);
+        context.actions.toggle(name, Feature.Invert);
       });
 
       return actions;
@@ -2462,7 +2468,7 @@ describe("useActions() feature toggles", () => {
       result.current[1].dispatch(FeatureActions.Toggle, "Sidebar");
     });
 
-    expect(result.current[0].features.Sidebar).toBe(true);
+    expect(result.current[0][Property.Features].Sidebar).toBe(true);
   });
 });
 
@@ -2647,5 +2653,70 @@ describe("useActions() produce implicit return safety", () => {
 
     expect(result.current[0].name).toBe("Adam");
     expect(result.current[0].loading).toBe(true);
+  });
+});
+
+describe("node capture writes to model", () => {
+  type NodeModel = {
+    count: number;
+    [Property.Nodes]: { container: HTMLDivElement | null };
+  };
+
+  it("should update model.nodes when actions.node() is called", () => {
+    let captured: NodeModel = {
+      count: 0,
+      [Property.Nodes]: { container: null },
+    };
+
+    function TestComponent() {
+      const [nodeModel, actions] = useActions<NodeModel, typeof Actions>({
+        count: 0,
+        [Property.Nodes]: { container: null },
+      });
+      captured = nodeModel;
+      return <div ref={(node) => actions.node("container", node)} />;
+    }
+
+    render(<TestComponent />);
+    expect(captured[Property.Nodes].container).toBeInstanceOf(HTMLDivElement);
+  });
+
+  it("should set model.nodes back to null when node is released", () => {
+    let captured: NodeModel = {
+      count: 0,
+      [Property.Nodes]: { container: null },
+    };
+
+    function TestComponent({ show }: { show: boolean }) {
+      const [nodeModel, actions] = useActions<NodeModel, typeof Actions>({
+        count: 0,
+        [Property.Nodes]: { container: null },
+      });
+      captured = nodeModel;
+      return show ? (
+        <div ref={(node) => actions.node("container", node)} />
+      ) : null;
+    }
+
+    const { rerender } = render(<TestComponent show={true} />);
+    expect(captured[Property.Nodes].container).toBeInstanceOf(HTMLDivElement);
+
+    rerender(<TestComponent show={false} />);
+    expect(captured[Property.Nodes].container).toBeNull();
+  });
+
+  it("should not throw when model has no nodes property", () => {
+    const { result } = renderHook(() => {
+      const actions = useActions<Model, typeof Actions>(model);
+      return actions;
+    });
+
+    expect(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (result.current[1] as any).node(
+        "container",
+        document.createElement("div"),
+      );
+    }).not.toThrow();
   });
 });

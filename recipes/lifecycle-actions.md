@@ -53,11 +53,14 @@ The `<Error>` component is a catch-all for errors from **any** action in your ap
 `Lifecycle.Node()` fires whenever a DOM node is captured or released via `actions.node()`. Since it's a channeled action, you can subscribe to specific nodes by name:
 
 ```tsx
+import { Property } from "chizu";
+import type { Nodes } from "chizu";
+
 type Model = {
   count: number;
-  nodes: {
+  [Property.Nodes]: Nodes<{
     searchInput: HTMLInputElement;
-  };
+  }>;
 };
 
 export class Actions {

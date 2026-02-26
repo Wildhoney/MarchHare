@@ -414,27 +414,28 @@ actions.useAction(Actions.Checkout, async (context) => {
 
 `disallow()` blocks all, `disallow(A, B)` blocks specific actions, `allow()` allows all (reset), and `allow(A, B)` allows only those actions. Each call replaces the previous policy (last-write-wins). Blocked actions fire `Reason.Disallowed` through the error system without allocating resources. See the [action regulator recipe](./recipes/action-regulator.md) for more details.
 
-Toggling boolean UI state &ndash; modals, sidebars, drawers &ndash; is one of the most common patterns. Instead of defining actions and handlers, use `actions.feature()` with the `Feature` enum:
+Toggling boolean UI state &ndash; modals, sidebars, drawers &ndash; is one of the most common patterns. Instead of defining actions and handlers, use `actions.toggle()` with the `Feature` enum:
 
 ```tsx
-import { Feature, useActions } from "chizu";
+import { Feature, Property, useActions } from "chizu";
+import type { Features } from "chizu";
 
 type Model = {
   name: string;
-  features: { paymentDialog: boolean; sidebar: boolean };
+  [Property.Features]: Features<["paymentDialog", "sidebar"]>;
 };
 
 const [model, actions] = useFeatureActions();
 
-// Mutate via actions.feature()
-actions.feature("paymentDialog", Feature.Toggle);
-actions.feature("paymentDialog", Feature.On);
-actions.feature("paymentDialog", Feature.Off);
+// Mutate via actions.toggle()
+actions.toggle("paymentDialog", Feature.Invert);
+actions.toggle("paymentDialog", Feature.On);
+actions.toggle("paymentDialog", Feature.Off);
 
 // Read from model
 {
-  model.features.paymentDialog && <PaymentDialog />;
+  model[Property.Features].paymentDialog && <PaymentDialog />;
 }
 ```
 
-The method also works inside action handlers via `context.actions.feature()`. See the [feature toggles recipe](./recipes/feature-toggles.md) for more details.
+The method also works inside action handlers via `context.actions.toggle()`. See the [feature toggles recipe](./recipes/feature-toggles.md) for more details.

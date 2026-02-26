@@ -9,7 +9,7 @@ import type {
   ActionId,
   Phase,
   Filter,
-  Nodes,
+  ExtractNodes,
 } from "../types/index.ts";
 import type { BroadcastEmitter } from "../boundary/components/broadcast/utils.ts";
 import type { ScopeContext } from "../boundary/components/scope/types.ts";
@@ -22,11 +22,15 @@ import type { ScopeContext } from "../boundary/components/scope/types.ts";
  */
 export type References<M extends Model | void> = {
   /** Ref containing captured DOM nodes by name */
-  refs: RefObject<{ [K in keyof Nodes<M>]: Nodes<M>[K] | null }>;
+  refs: RefObject<{ [K in keyof ExtractNodes<M>]: ExtractNodes<M>[K] | null }>;
   /** Ref containing pending node captures to be processed after render */
-  pending: RefObject<Map<keyof Nodes<M>, Nodes<M>[keyof Nodes<M>] | null>>;
+  pending: RefObject<
+    Map<keyof ExtractNodes<M>, ExtractNodes<M>[keyof ExtractNodes<M>] | null>
+  >;
   /** Ref containing last emitted node values to detect true changes */
-  emitted: RefObject<Map<keyof Nodes<M>, Nodes<M>[keyof Nodes<M>] | null>>;
+  emitted: RefObject<
+    Map<keyof ExtractNodes<M>, ExtractNodes<M>[keyof ExtractNodes<M>] | null>
+  >;
 };
 
 /**
