@@ -197,12 +197,12 @@ export function useActions<
         actions: {
           produce(f) {
             if (controller.signal.aborted) return;
-            const process = state.current.produce((draft) =>
+            const process = state.current.produce((draft) => {
               f({
                 model: <M>(<unknown>draft),
                 inspect: <Readonly<Inspect<M>>>(<unknown>state.current.inspect),
-              }),
-            );
+              });
+            });
             setModel(<M>(<unknown>state.current.model));
             result.processes.add(process);
             if (hydration.current) {

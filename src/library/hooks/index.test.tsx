@@ -2603,3 +2603,49 @@ describe("useActions() awaitable dispatch", () => {
     expect(generatorComplete).toBe(true);
   });
 });
+
+describe("useActions() produce implicit return safety", () => {
+  it("should discard implicit return values from produce callbacks", async () => {
+    type ImplicitModel = { loading: boolean; name: string };
+
+    class ImplicitActions {
+      static Mount = Lifecycle.Mount();
+      static SetName = Action<string>("SetName");
+    }
+
+    const implicitModel: ImplicitModel = { loading: false, name: "" };
+
+    const { result } = renderHook(() => {
+      const actions = useActions<ImplicitModel, typeof ImplicitActions>(
+        implicitModel,
+      );
+
+      // This arrow function implicitly returns `true` (the assignment result).
+      // Without the framework-level fix, Immer would replace the entire state
+      // with `true`, destroying the model object.
+      actions.useAction(ImplicitActions.Mount, (context) => {
+        context.actions.produce((draft) => (draft.model.loading = true));
+      });
+
+      actions.useAction(ImplicitActions.SetName, (context, name) => {
+        context.actions.produce((draft) => {
+          draft.model.name = name;
+        });
+      });
+
+      return actions;
+    });
+
+    // After Mount, loading should be true and the model should still be an object.
+    expect(result.current[0].loading).toBe(true);
+    expect(result.current[0].name).toBe("");
+
+    // Dispatch SetName — this would throw if the model was replaced with `true`.
+    await act(async () => {
+      result.current[1].dispatch(ImplicitActions.SetName, "Adam");
+    });
+
+    expect(result.current[0].name).toBe("Adam");
+    expect(result.current[0].loading).toBe(true);
+  });
+});
