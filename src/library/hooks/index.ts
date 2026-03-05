@@ -10,7 +10,6 @@ import {
   useDispatchers,
   findLifecycleAction,
   isGenerator,
-  applyToggle,
   emitAsync,
 } from "./utils.ts";
 export { With } from "./utils.ts";
@@ -32,8 +31,6 @@ import {
   ChanneledAction,
   ActionOrChanneled,
   ExtractNodes,
-  Feature,
-  Property,
   MulticastOptions,
   AnyAction,
   type CacheId,
@@ -136,33 +133,43 @@ export function useActions<
   const initialised = React.useRef(false);
   const hydration = React.useRef<Process | null>(null);
   const state = React.useRef(new State<Model>());
-  const symbolFeatures = React.useRef<Record<string, boolean> | null>(null);
-  const symbolNodes = React.useRef<Record<string, unknown> | null>(null);
+  const meta = React.useRef<{
+    features: Record<string, boolean> | null;
+    nodes: Record<string, unknown> | null;
+  }>({ features: null, nodes: null });
 
   /**
-   * Stamps symbol-keyed data back onto the Immer-managed model object.
-   * Immer strips symbol keys during produce, so we re-attach them after
-   * every model update to keep `model[Property.Features]` and
-   * `model[Property.Nodes]` accessible.
+   * Stamps the `meta` string key back onto the Immer-managed model object.
+   * Immer would see `meta` during produce, so we strip it before hydration
+   * and re-attach after every model update to keep `model.meta.features`
+   * and `model.meta.nodes` accessible.
    */
-  function stampSymbolKeys(): void {
-    const obj = <Record<string | symbol, unknown>>state.current.model;
-    if (symbolFeatures.current !== null)
-      obj[Property.Features] = symbolFeatures.current;
-    if (symbolNodes.current !== null) obj[Property.Nodes] = symbolNodes.current;
+  function stampMeta(): void {
+    const obj = <Record<string, unknown>>state.current.model;
+    if (meta.current.features !== null || meta.current.nodes !== null) {
+      obj.meta = {
+        ...(meta.current.features !== null
+          ? { features: meta.current.features }
+          : {}),
+        ...(meta.current.nodes !== null ? { nodes: meta.current.nodes } : {}),
+      };
+    }
   }
 
   if (!initialised.current) {
     initialised.current = true;
-    const sym = <Record<string | symbol, unknown>>(<unknown>initialModel);
-    if (Property.Features in sym)
-      symbolFeatures.current = <Record<string, boolean>>sym[Property.Features];
-    if (Property.Nodes in sym)
-      symbolNodes.current = <Record<string, unknown>>sym[Property.Nodes];
+    const raw = <Record<string, unknown>>(<unknown>initialModel);
+    const rawMeta = <
+      | { features?: Record<string, boolean>; nodes?: Record<string, unknown> }
+      | undefined
+    >raw.meta;
+    if (rawMeta?.features) meta.current.features = rawMeta.features;
+    if (rawMeta?.nodes) meta.current.nodes = rawMeta.nodes;
 
-    const cleaned = Object.fromEntries(Object.entries(initialModel));
+    // Strip meta before Immer hydration — Immer must not manage it.
+    const { meta: _meta, ...cleaned } = raw;
     hydration.current = state.current.hydrate(cleaned);
-    stampSymbolKeys();
+    stampMeta();
   }
   const [model, setModel] = React.useState<M>(
     () => <M>(<unknown>state.current.model),
@@ -192,7 +199,7 @@ export function useActions<
       tasks.add(task);
       localTasks.current.add(task);
 
-      return <HandlerContext<M, A, D>>{
+      return <HandlerContext<M, A, D>>(<unknown>{
         model: state.current.model,
         get phase() {
           return phase.current;
@@ -200,9 +207,14 @@ export function useActions<
         task,
         data,
         tasks,
-        [Property.Nodes]: nodes.refs.current,
+        get meta() {
+          return {
+            nodes: nodes.refs.current,
+            features: meta.current.features ?? {},
+          };
+        },
         regulator: {
-          disallow(...actions) {
+          disallow(...actions: AnyAction[]) {
             regulatorPolicy.actions.clear();
             if (actions.length === 0) {
               regulatorPolicy.mode = "disallow-all";
@@ -212,7 +224,7 @@ export function useActions<
                 regulatorPolicy.actions.add(getActionSymbol(a));
             }
           },
-          allow(...actions) {
+          allow(...actions: AnyAction[]) {
             regulatorPolicy.actions.clear();
             if (actions.length === 0) {
               regulatorPolicy.mode = "allow-all";
@@ -224,7 +236,8 @@ export function useActions<
           },
         },
         actions: {
-          produce(f) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          produce(f: any) {
             if (controller.signal.aborted) return;
             const process = state.current.produce((draft) => {
               f({
@@ -232,7 +245,7 @@ export function useActions<
                 inspect: <Readonly<Inspect<M>>>(<unknown>state.current.inspect),
               });
             });
-            stampSymbolKeys();
+            stampMeta();
             setModel(<M>(<unknown>state.current.model));
             result.processes.add(process);
             if (hydration.current) {
@@ -264,7 +277,11 @@ export function useActions<
           annotate<T>(operation: Operation, value: T): T {
             return state.current.annotate(operation, value);
           },
-          async cacheable(entry, ttl, fn) {
+          async cacheable(
+            entry: CacheId,
+            ttl: number,
+            fn: () => Promise<unknown>,
+          ) {
             if (controller.signal.aborted) return { data: null };
 
             const key = getCacheKey(<CacheId>(<unknown>entry));
@@ -283,22 +300,50 @@ export function useActions<
             });
             return { data: outcome.value };
           },
-          invalidate(entry) {
+          invalidate(entry: CacheId) {
             cache.delete(getCacheKey(<CacheId>(<unknown>entry)));
           },
-          toggle(name: string, operation: Feature) {
-            if (controller.signal.aborted) return;
-            const updated = <Record<string, boolean>>{
-              ...symbolFeatures.current,
-            };
-            applyToggle(updated, name, operation);
-            symbolFeatures.current = updated;
-            stampSymbolKeys();
-            setModel(<M>(<unknown>state.current.model));
-            if (hydration.current) {
-              result.processes.add(hydration.current);
-              hydration.current = null;
-            }
+          features: {
+            on(name: string) {
+              if (controller.signal.aborted) return;
+              meta.current.features = {
+                ...meta.current.features,
+                [name]: true,
+              };
+              stampMeta();
+              setModel(<M>(<unknown>state.current.model));
+              if (hydration.current) {
+                result.processes.add(hydration.current);
+                hydration.current = null;
+              }
+            },
+            off(name: string) {
+              if (controller.signal.aborted) return;
+              meta.current.features = {
+                ...meta.current.features,
+                [name]: false,
+              };
+              stampMeta();
+              setModel(<M>(<unknown>state.current.model));
+              if (hydration.current) {
+                result.processes.add(hydration.current);
+                hydration.current = null;
+              }
+            },
+            invert(name: string) {
+              if (controller.signal.aborted) return;
+              const current = meta.current.features?.[name] ?? false;
+              meta.current.features = {
+                ...meta.current.features,
+                [name]: !current,
+              };
+              stampMeta();
+              setModel(<M>(<unknown>state.current.model));
+              if (hydration.current) {
+                result.processes.add(hydration.current);
+                hydration.current = null;
+              }
+            },
           },
           async read(action: AnyAction, options?: MulticastOptions) {
             if (controller.signal.aborted) return null;
@@ -361,7 +406,7 @@ export function useActions<
             return emitter.getCached(key) ?? null;
           },
         },
-      };
+      });
     },
     [model],
   );
@@ -532,17 +577,17 @@ export function useActions<
       const latest = nodes.emitted.current.get(name);
       if (latest !== node) {
         nodes.emitted.current.set(name, node);
-        if (symbolNodes.current !== null) {
-          const updated = { ...symbolNodes.current };
+        if (meta.current.nodes !== null) {
+          const updated = { ...meta.current.nodes };
           updated[<string>name] = node;
-          symbolNodes.current = updated;
+          meta.current.nodes = updated;
           modelChanged = true;
         }
         if (nodeAction) unicast.emit(nodeAction, node, { Name: name });
       }
     }
     if (modelChanged) {
-      stampSymbolKeys();
+      stampMeta();
       setModel(<M>(<unknown>state.current.model));
     }
     nodes.pending.current.clear();
@@ -587,8 +632,11 @@ export function useActions<
           get inspect() {
             return state.current.inspect;
           },
-          get [Property.Nodes]() {
-            return nodes.refs.current;
+          get meta() {
+            return {
+              nodes: nodes.refs.current,
+              features: meta.current.features ?? {},
+            };
           },
           node<K extends keyof ExtractNodes<M>>(
             name: K,
@@ -597,14 +645,32 @@ export function useActions<
             nodes.refs.current[name] = value;
             nodes.pending.current.set(name, value);
           },
-          toggle(name: string, operation: Feature) {
-            const updated = <Record<string, boolean>>{
-              ...symbolFeatures.current,
-            };
-            applyToggle(updated, name, operation);
-            symbolFeatures.current = updated;
-            stampSymbolKeys();
-            setModel(<M>(<unknown>state.current.model));
+          features: {
+            on(name: string) {
+              meta.current.features = {
+                ...meta.current.features,
+                [name]: true,
+              };
+              stampMeta();
+              setModel(<M>(<unknown>state.current.model));
+            },
+            off(name: string) {
+              meta.current.features = {
+                ...meta.current.features,
+                [name]: false,
+              };
+              stampMeta();
+              setModel(<M>(<unknown>state.current.model));
+            },
+            invert(name: string) {
+              const current = meta.current.features?.[name] ?? false;
+              meta.current.features = {
+                ...meta.current.features,
+                [name]: !current,
+              };
+              stampMeta();
+              setModel(<M>(<unknown>state.current.model));
+            },
           },
           stream(
             action: AnyAction,

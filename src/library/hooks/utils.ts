@@ -11,7 +11,6 @@ import {
   HandlerPayload,
   ChanneledAction,
   HandlerContext,
-  Feature,
 } from "../types/index.ts";
 import EventEmitter from "eventemitter3";
 import { BroadcastEmitter } from "../boundary/components/broadcast/index.tsx";
@@ -63,29 +62,6 @@ export function isGenerator(
   if (!result || typeof result !== "object") return false;
   const tag = Object.prototype.toString.call(result);
   return tag === "[object Generator]" || tag === "[object AsyncGenerator]";
-}
-
-/**
- * Applies a Feature operation to a boolean feature flag record.
- * Mutates the given record in place.
- * @internal
- */
-export function applyToggle(
-  features: Record<string, boolean>,
-  name: string,
-  operation: Feature,
-): void {
-  switch (operation) {
-    case Feature.On:
-      features[name] = true;
-      break;
-    case Feature.Off:
-      features[name] = false;
-      break;
-    case Feature.Invert:
-      features[name] = !features[name];
-      break;
-  }
 }
 
 /**
@@ -231,7 +207,8 @@ export function With<K extends string>(
 ) => void {
   return (context, payload) => {
     context.actions.produce((draft) => {
-      draft.model[<keyof typeof draft.model>key] = payload;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (<any>draft.model)[key] = payload;
     });
   };
 }

@@ -266,49 +266,6 @@ export enum Phase {
 }
 
 /**
- * Operations for toggling boolean feature flags via `actions.toggle()`.
- *
- * @example
- * ```ts
- * actions.toggle("sidebar", Feature.Invert);
- * actions.toggle("sidebar", Feature.On);
- * actions.toggle("sidebar", Feature.Off);
- * ```
- */
-export enum Feature {
-  /** Sets the feature to `true`. */
-  On = "on",
-  /** Sets the feature to `false`. */
-  Off = "off",
-  /** Inverts the current boolean value. */
-  Invert = "invert",
-}
-
-/**
- * Reserved model property keys backed by unique symbols.
- *
- * Use as computed keys on your model type so the names are discoverable
- * and refactor-safe:
- *
- * @example
- * ```ts
- * import { Property } from "chizu";
- *
- * type Model = {
- *   count: number;
- *   [Property.Features]: { sidebar: boolean };
- *   [Property.Nodes]: { input: HTMLInputElement };
- * };
- * ```
- */
-export class Property {
-  /** The key for boolean feature flags toggled via `actions.toggle()`. */
-  static readonly Features: unique symbol = Symbol("chizu.property/Features");
-  /** The key for captured DOM nodes registered via `actions.node()`. */
-  static readonly Nodes: unique symbol = Symbol("chizu.property/Nodes");
-}
-
-/**
  * Primary key type for identifying entities in collections.
  * Can be undefined (not yet assigned), a symbol (temporary/local), or a concrete value T.
  *
@@ -555,114 +512,113 @@ type AssertSync<F> =
 export type Props = Record<string, unknown>;
 
 /**
- * Utility type for `[Property.Features]` model values. Takes a tuple of
- * string literal keys and produces a record mapping each to `boolean`.
- *
- * @example
- * ```ts
- * import { Property } from "chizu";
- * import type { Features } from "chizu";
- *
- * type Model = {
- *   count: number;
- *   [Property.Features]: Features<["paymentDialog", "sidebar"]>;
- * };
- * // Equivalent to: { paymentDialog: boolean; sidebar: boolean }
- * ```
- */
-export type Features<T extends readonly string[]> = {
-  [K in T[number]]: boolean;
-};
-
-/**
- * Utility type for `[Property.Nodes]` model values. Automatically adds
- * `| null` to each value, reflecting that DOM refs are `null` until
- * captured via `actions.node()`.
- *
- * @example
- * ```ts
- * import { Property } from "chizu";
- * import type { Nodes } from "chizu";
- *
- * type Model = {
- *   count: number;
- *   [Property.Nodes]: Nodes<{ container: HTMLElement; input: HTMLInputElement }>;
- * };
- * // Equivalent to: { container: HTMLElement | null; input: HTMLInputElement | null }
- * ```
- */
-export type Nodes<T extends Record<string, unknown>> = {
-  [K in keyof T]: T[K] | null;
-};
-
-/**
  * Extracts the nodes type from a Model.
- * If the model has a `[Property.Nodes]` property, returns its type.
+ * If the model has a `meta.nodes` property, returns its type.
  * Otherwise returns an empty record.
  *
  * @example
  * ```ts
  * type Model = {
  *   count: number;
- *   [Property.Nodes]: Nodes<{ container: HTMLButtonElement }>;
+ *   meta: { nodes: { container: HTMLButtonElement | null } };
  * };
  *
  * type N = ExtractNodes<Model>; // { container: HTMLButtonElement | null }
  * ```
  */
 export type ExtractNodes<M> = M extends {
-  [Property.Nodes]: infer N extends Record<string, unknown>;
+  meta: { nodes: infer N extends Record<string, unknown> };
 }
   ? N
   : Record<never, unknown>;
 
 /**
- * Transforms `[Property.Nodes]` values to include `| null`, reflecting
+ * Transforms `meta.nodes` values to include `| null`, reflecting
  * that node refs are initially `null` until a DOM element is captured.
- * Models without `[Property.Nodes]` pass through unchanged.
+ * Models without `meta.nodes` pass through unchanged.
  *
  * @internal
  */
 export type NullableNodes<M> = M extends {
-  [Property.Nodes]: infer N extends Record<string, unknown>;
+  meta: infer Meta & { nodes: infer N extends Record<string, unknown> };
 }
-  ? Omit<M, typeof Property.Nodes> & {
-      [Property.Nodes]: { [K in keyof N]: N[K] | null };
+  ? Omit<M, "meta"> & {
+      meta: Omit<Meta, "nodes"> & {
+        nodes: { [K in keyof N]: N[K] | null };
+      };
     }
   : M;
 
 /**
- * Extracts the `[Property.Features]` property from a Model type.
- * If the model has a `[Property.Features]` property whose values are all booleans,
+ * Extracts the `meta.features` property from a Model type.
+ * If the model has a `meta.features` property whose values are all booleans,
  * returns its type. Otherwise returns an empty record, making the
- * `toggle()` method effectively uncallable.
+ * `features` methods effectively uncallable.
  *
  * @example
  * ```ts
- * enum Feature { Sidebar = 'Sidebar', Modal = 'Modal' }
- * type Model = { count: number; [Property.Features]: { [K in Feature]: boolean } };
- * type F = FeatureFlags<Model>; // { Sidebar: boolean; Modal: boolean }
+ * type Model = { count: number; meta: { features: { sidebar: boolean; modal: boolean } } };
+ * type F = FeatureFlags<Model>; // { sidebar: boolean; modal: boolean }
  * ```
  */
 export type FeatureFlags<M> = M extends {
-  [Property.Features]: infer F extends Record<string, boolean>;
+  meta: { features: infer F extends Record<string, boolean> };
 }
   ? F
   : Record<never, boolean>;
 
 /**
- * Resolves to `unknown` when the model has no `[Property.Features]` or all
+ * Resolves to `unknown` when the model has no `meta.features` or all
  * feature values are booleans. Resolves to a descriptive string literal when
  * any value is not a boolean, causing an intersection with the model type
  * to become `never` and producing a compile-time error.
  *
  * @internal
  */
-export type ValidateFeatures<M> = M extends { [Property.Features]: infer F }
+export type ValidateFeatures<M> = M extends {
+  meta: { features: infer F };
+}
   ? F extends Record<string, boolean>
     ? unknown
-    : "[Property.Features] values must all be boolean"
+    : "meta.features values must all be boolean"
   : unknown;
+
+/**
+ * Utility type for the `meta` model property. Combines optional `nodes`
+ * and `features` sub-objects into a single meta shape.
+ *
+ * - When `N` is provided, produces `{ nodes: { [K in keyof N]: N[K] | null } }`.
+ * - When `F` is provided, produces `{ features: F }`.
+ * - Pass `void` to omit either sub-object.
+ *
+ * @template N - Node type record (e.g. `{ input: HTMLInputElement }`)
+ * @template F - Feature flags record (e.g. `{ sidebar: boolean }`)
+ *
+ * @example
+ * ```ts
+ * import type { Meta } from "chizu";
+ *
+ * type Model = {
+ *   count: number;
+ *   meta: Meta<{ input: HTMLInputElement }, { sidebar: boolean }>;
+ * };
+ * // Equivalent to:
+ * // meta: { nodes: { input: HTMLInputElement | null }; features: { sidebar: boolean } }
+ * ```
+ */
+export type Meta<
+  N extends Record<string, unknown> | void = void,
+  F extends Record<string, boolean> | void = void,
+> = ([N] extends [void]
+  ? unknown
+  : { nodes: { [K in keyof N]: N[K] | null } }) &
+  ([F] extends [void] ? unknown : { features: F });
+
+// eslint-disable-next-line @typescript-eslint/no-namespace
+export namespace Meta {
+  export type Nodes<N extends Record<string, unknown>> = Meta<N>;
+  export type Features<F extends Record<string, boolean>> = Meta<void, F>;
+}
 
 /**
  * Constraint type for action containers.
@@ -772,18 +728,20 @@ export type HandlerContext<
    */
   readonly tasks: ReadonlySet<Task>;
   /**
-   * Captured DOM nodes registered via `actions.node()`.
-   * Nodes may be `null` if not yet captured or if the node was unmounted.
+   * Meta properties including captured DOM nodes and feature flags.
    *
    * @example
    * ```ts
    * actions.useAction(Actions.Focus, (context) => {
-   *   context[Property.Nodes].input?.focus();
+   *   context.meta.nodes.input?.focus();
    * });
    * ```
    */
-  readonly [Property.Nodes]: {
-    [K in keyof ExtractNodes<M>]: ExtractNodes<M>[K] | null;
+  readonly meta: {
+    readonly nodes: {
+      [K in keyof ExtractNodes<M>]: ExtractNodes<M>[K] | null;
+    };
+    readonly features: Readonly<FeatureFlags<M>>;
   };
   /**
    * The regulator API for controlling which actions may be dispatched.
@@ -808,7 +766,7 @@ export type HandlerContext<
   readonly actions: {
     produce<
       F extends (draft: {
-        model: M;
+        model: Omit<M, "meta">;
         readonly inspect: Readonly<Inspect<M>>;
       }) => void,
     >(
@@ -864,18 +822,20 @@ export type HandlerContext<
      */
     invalidate(entry: CacheId<unknown> | ChanneledCacheId<unknown>): void;
     /**
-     * Mutates a boolean feature flag on the model and triggers a re-render.
-     *
-     * Requires the model to have a `[Property.Features]` property whose keys are the feature names.
-     * Read feature state from `model[Property.Features]` directly.
+     * Feature toggle methods for mutating boolean flags on the model.
      *
      * @example
      * ```ts
-     * context.actions.toggle(Feature.Sidebar, Feature.Invert);
-     * context.actions.toggle(Feature.Sidebar, Feature.Off);
+     * context.actions.features.on("sidebar");
+     * context.actions.features.off("sidebar");
+     * context.actions.features.invert("sidebar");
      * ```
      */
-    toggle<K extends keyof FeatureFlags<M>>(name: K, operation: Feature): void;
+    features: {
+      on<K extends keyof FeatureFlags<M>>(name: K): void;
+      off<K extends keyof FeatureFlags<M>>(name: K): void;
+      invert<K extends keyof FeatureFlags<M>>(name: K): void;
+    };
     /**
      * Reads the latest broadcast or multicast value, waiting for annotations to settle.
      *
@@ -1075,42 +1035,32 @@ export type UseActions<
     ): Promise<void>;
     inspect: Inspect<M>;
     /**
-     * Captured DOM nodes registered via `actions.node()`.
-     * Access via the `Property.Nodes` symbol key.
+     * Meta properties including captured DOM nodes and feature flags.
      *
      * @example
      * ```tsx
-     * import { Property, Nodes } from "chizu";
-     *
-     * type Model = {
-     *   count: number;
-     *   [Property.Nodes]: Nodes<{ input: HTMLInputElement }>;
-     * };
-     * const [model, actions] = useActions<Model, typeof Actions>(model);
-     *
-     * actions[Property.Nodes].input?.focus();
+     * actions.meta.nodes.input?.focus();
+     * actions.meta.features.sidebar; // boolean
      * ```
      */
-    [Property.Nodes]: {
-      [K in keyof ExtractNodes<M>]: ExtractNodes<M>[K] | null;
+    meta: {
+      readonly nodes: {
+        [K in keyof ExtractNodes<M>]: ExtractNodes<M>[K] | null;
+      };
+      readonly features: Readonly<FeatureFlags<M>>;
     };
     /**
-     * Captures a DOM node for later access via `[Property.Nodes]`.
+     * Captures a DOM node for later access via `meta.nodes`.
      * Use as a ref callback on JSX elements.
      *
-     * @param name - The node key (must match a key in the model's `[Property.Nodes]`)
+     * @param name - The node key (must match a key in the model's `meta.nodes`)
      * @param node - The DOM node or null (when unmounting)
      *
      * @example
      * ```tsx
-     * import { Property, Nodes } from "chizu";
-     *
      * type Model = {
      *   count: number;
-     *   [Property.Nodes]: Nodes<{
-     *     container: HTMLDivElement;
-     *     input: HTMLInputElement;
-     *   }>;
+     *   meta: Meta<{ container: HTMLDivElement; input: HTMLInputElement }>;
      * };
      *
      * const [model, actions] = useActions<Model, typeof Actions>(model);
@@ -1127,18 +1077,21 @@ export type UseActions<
       node: ExtractNodes<M>[K] | null,
     ): void;
     /**
-     * Mutates a boolean feature flag on the model and triggers a re-render.
-     *
-     * Read feature state from `model[Property.Features]` directly.
+     * Feature toggle methods for mutating boolean flags on the model.
      *
      * @example
      * ```tsx
-     * actions.toggle(Feature.Sidebar, Feature.Invert);
+     * actions.features.on("sidebar");
+     * actions.features.invert("sidebar");
      *
-     * {model[Property.Features].Sidebar && <Sidebar />}
+     * {model.meta.features.sidebar && <Sidebar />}
      * ```
      */
-    toggle<K extends keyof FeatureFlags<M>>(name: K, operation: Feature): void;
+    features: {
+      on<K extends keyof FeatureFlags<M>>(name: K): void;
+      off<K extends keyof FeatureFlags<M>>(name: K): void;
+      invert<K extends keyof FeatureFlags<M>>(name: K): void;
+    };
     /**
      * Streams broadcast values declaratively in JSX using a render-prop pattern.
      *

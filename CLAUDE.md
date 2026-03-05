@@ -10,8 +10,6 @@ import {
   Entry,
   Distribution,
   Lifecycle,
-  Feature,
-  Property,
   useActions,
   With,
   utils,
@@ -30,9 +28,8 @@ import type {
   ChanneledCacheId,
   Fault,
   Handler,
-  Features,
   Handlers,
-  Nodes,
+  Meta,
   Pk,
   Task,
   Tasks,
@@ -185,8 +182,9 @@ actions.useAction(Actions.Fetch, async (context, payload) => {
   // Reactive data (always latest values, even after await)
   context.data;
 
-  // Captured DOM nodes (keyed by Property.Nodes symbol)
-  context[Property.Nodes];
+  // Captured DOM nodes and feature flags
+  context.meta.nodes;
+  context.meta.features;
 
   // Actions API
   context.actions.produce(({ model, inspect }) => {
@@ -330,18 +328,19 @@ actions.useAction(Actions.SetName, (context, name) => {
 
 ## DOM Node Capture
 
-Capture DOM nodes for access in handlers. When the model has a `[Property.Nodes]` property, `actions.node()` automatically writes the captured node to the model — no manual `Lifecycle.Node` handler is needed. Use the `Nodes<T>` utility type to define nodes — it auto-applies `| null` so you don't have to:
+Capture DOM nodes for access in handlers. When the model has a `meta.nodes` property, `actions.node()` automatically writes the captured node to the model — no manual `Lifecycle.Node` handler is needed:
 
 ```tsx
-import { Property } from "chizu";
-import type { Nodes } from "chizu";
+import type { Meta } from "chizu";
+
+type N = {
+  input: HTMLInputElement;
+  container: HTMLDivElement;
+};
 
 type Model = {
   count: number;
-  [Property.Nodes]: Nodes<{
-    input: HTMLInputElement;
-    container: HTMLDivElement;
-  }>;
+  meta: Meta.Nodes<N>;
 };
 
 const [model, actions] = useActions<Model, typeof Actions>(initialModel);
@@ -353,11 +352,11 @@ const [model, actions] = useActions<Model, typeof Actions>(initialModel);
 
 // In handlers
 actions.useAction(Actions.Focus, (context) => {
-  context[Property.Nodes].input?.focus();
+  context.meta.nodes.input?.focus();
 });
 
 // Or access from actions object
-actions[Property.Nodes].input?.focus();
+actions.meta.nodes.input?.focus();
 ```
 
 ## Feature Toggles
@@ -365,50 +364,66 @@ actions[Property.Nodes].input?.focus();
 Toggle boolean UI state (modals, sidebars, drawers) without defining actions or handlers:
 
 ```tsx
-import { Feature, Property } from "chizu";
-import type { Features } from "chizu";
+import type { Meta } from "chizu";
+
+type F = {
+  paymentDialog: boolean;
+  sidebar: boolean;
+};
 
 type Model = {
   name: string;
-  [Property.Features]: Features<["paymentDialog", "sidebar"]>;
+  meta: Meta.Features<F>;
 };
 
 const [model, actions] = useMyActions();
 
-// Mutate via actions.toggle()
-actions.toggle("paymentDialog", Feature.Invert);
-actions.toggle("paymentDialog", Feature.On);
-actions.toggle("paymentDialog", Feature.Off);
+// Mutate via actions.features
+actions.features.invert("paymentDialog");
+actions.features.on("paymentDialog");
+actions.features.off("paymentDialog");
 
 // Read from model
 {
-  model[Property.Features].paymentDialog && <PaymentDialog />;
+  model.meta.features.paymentDialog && <PaymentDialog />;
 }
 
 // In handlers
 actions.useAction(Actions.CloseAll, (context) => {
-  context.actions.toggle("paymentDialog", Feature.Off);
-  context.actions.toggle("sidebar", Feature.Off);
+  context.actions.features.off("paymentDialog");
+  context.actions.features.off("sidebar");
 });
 ```
 
-## Property
+## Meta
 
-The `Property` class provides unique symbol keys for reserved model properties:
+The `Meta` utility type combines optional `nodes` and `features` into a single `meta` model property. Use `Meta.Nodes<N>` or `Meta.Features<F>` when only one is needed:
 
 ```ts
-import { Property } from "chizu";
-import type { Features, Nodes } from "chizu";
+import type { Meta } from "chizu";
 
+type N = { input: HTMLInputElement };
+type F = { sidebar: boolean };
+
+// Both nodes and features
 type Model = {
   count: number;
-  [Property.Features]: Features<["sidebar"]>;
-  [Property.Nodes]: Nodes<{ input: HTMLInputElement }>;
+  meta: Meta<N, F>;
+};
+
+// Features only
+type FeaturesOnly = {
+  meta: Meta.Features<F>;
+};
+
+// Nodes only
+type NodesOnly = {
+  meta: Meta.Nodes<N>;
 };
 ```
 
-- `Property.Features` — unique symbol, used by `actions.toggle()`
-- `Property.Nodes` — unique symbol, used by `actions.node()`
+- `meta.features` — boolean flags toggled via `actions.features.on/off/invert()`
+- `meta.nodes` — captured DOM nodes registered via `actions.node()`
 
 ## Error Handling
 
@@ -649,7 +664,7 @@ docs: update the README file
   - `reading-actions.md` - Reading and streaming broadcast values: handler read(), peek(), and JSX stream()
   - `context-providers.md` - Boundary, Broadcaster, Consumer
   - `error-handling.md` - Error component and fault handling
-  - `feature-toggles.md` - Boolean feature flags with Feature enum
+  - `feature-toggles.md` - Boolean feature flags with actions.features methods
   - `ky-http-client.md` - Integration with ky HTTP client
   - `lifecycle-actions.md` - Mount, Unmount, Error, Update, Node
   - `mount-broadcast-deduplication.md` - Avoiding duplicate fetches on mount with broadcast/multicast

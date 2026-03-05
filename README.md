@@ -414,28 +414,33 @@ actions.useAction(Actions.Checkout, async (context) => {
 
 `disallow()` blocks all, `disallow(A, B)` blocks specific actions, `allow()` allows all (reset), and `allow(A, B)` allows only those actions. Each call replaces the previous policy (last-write-wins). Blocked actions fire `Reason.Disallowed` through the error system without allocating resources. See the [action regulator recipe](./recipes/action-regulator.md) for more details.
 
-Toggling boolean UI state &ndash; modals, sidebars, drawers &ndash; is one of the most common patterns. Instead of defining actions and handlers, use `actions.toggle()` with the `Feature` enum:
+Toggling boolean UI state &ndash; modals, sidebars, drawers &ndash; is one of the most common patterns. Instead of defining actions and handlers, use the `actions.features` methods:
 
 ```tsx
-import { Feature, Property, useActions } from "chizu";
-import type { Features } from "chizu";
+import { useActions } from "chizu";
+import type { Meta } from "chizu";
+
+type F = {
+  paymentDialog: boolean;
+  sidebar: boolean;
+};
 
 type Model = {
   name: string;
-  [Property.Features]: Features<["paymentDialog", "sidebar"]>;
+  meta: Meta.Features<F>;
 };
 
 const [model, actions] = useFeatureActions();
 
-// Mutate via actions.toggle()
-actions.toggle("paymentDialog", Feature.Invert);
-actions.toggle("paymentDialog", Feature.On);
-actions.toggle("paymentDialog", Feature.Off);
+// Mutate via actions.features
+actions.features.invert("paymentDialog");
+actions.features.on("paymentDialog");
+actions.features.off("paymentDialog");
 
 // Read from model
 {
-  model[Property.Features].paymentDialog && <PaymentDialog />;
+  model.meta.features.paymentDialog && <PaymentDialog />;
 }
 ```
 
-The method also works inside action handlers via `context.actions.toggle()`. See the [feature toggles recipe](./recipes/feature-toggles.md) for more details.
+The methods also work inside action handlers via `context.actions.features`. See the [feature toggles recipe](./recipes/feature-toggles.md) for more details.

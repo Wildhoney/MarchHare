@@ -2,13 +2,7 @@ import { describe, expect, it } from "vitest";
 import { renderHook, act, render, screen } from "@testing-library/react";
 import { useActions } from "./index.ts";
 import { Action } from "../action/index.ts";
-import {
-  Lifecycle,
-  Distribution,
-  Phase,
-  Feature,
-  Property,
-} from "../types/index.ts";
+import { Lifecycle, Distribution, Phase } from "../types/index.ts";
 import { Broadcaster } from "../boundary/components/broadcast/index.tsx";
 import { Scope } from "../boundary/components/scope/index.tsx";
 import { annotate } from "../annotate/index.ts";
@@ -2376,7 +2370,7 @@ describe("useActions() mount + broadcast replay deduplication", () => {
 describe("useActions() feature toggles", () => {
   type FeatureModel = {
     count: number;
-    [Property.Features]: { Sidebar: boolean; Modal: boolean };
+    meta: { features: { Sidebar: boolean; Modal: boolean } };
   };
 
   class FeatureActions {
@@ -2386,10 +2380,10 @@ describe("useActions() feature toggles", () => {
 
   const featureModel: FeatureModel = {
     count: 0,
-    [Property.Features]: { Sidebar: false, Modal: false },
+    meta: { features: { Sidebar: false, Modal: false } },
   };
 
-  it("should toggle a feature with Feature.Invert", () => {
+  it("should invert a feature with features.invert()", () => {
     const { result } = renderHook(() => {
       const actions = useActions<FeatureModel, typeof FeatureActions>(
         featureModel,
@@ -2398,13 +2392,13 @@ describe("useActions() feature toggles", () => {
     });
 
     act(() => {
-      result.current[1].toggle("Sidebar", Feature.Invert);
+      result.current[1].features.invert("Sidebar");
     });
 
-    expect(result.current[0][Property.Features].Sidebar).toBe(true);
+    expect(result.current[0].meta.features.Sidebar).toBe(true);
   });
 
-  it("should set a feature to true with Feature.On", () => {
+  it("should set a feature to true with features.on()", () => {
     const { result } = renderHook(() => {
       const actions = useActions<FeatureModel, typeof FeatureActions>(
         featureModel,
@@ -2413,52 +2407,52 @@ describe("useActions() feature toggles", () => {
     });
 
     act(() => {
-      result.current[1].toggle("Modal", Feature.On);
+      result.current[1].features.on("Modal");
     });
 
-    expect(result.current[0][Property.Features].Modal).toBe(true);
+    expect(result.current[0].meta.features.Modal).toBe(true);
   });
 
-  it("should set a feature to false with Feature.Off", () => {
+  it("should set a feature to false with features.off()", () => {
     const { result } = renderHook(() => {
       const actions = useActions<FeatureModel, typeof FeatureActions>({
         ...featureModel,
-        [Property.Features]: { Sidebar: true, Modal: true },
+        meta: { features: { Sidebar: true, Modal: true } },
       });
       return actions;
     });
 
     act(() => {
-      result.current[1].toggle("Sidebar", Feature.Off);
+      result.current[1].features.off("Sidebar");
     });
 
-    expect(result.current[0][Property.Features].Sidebar).toBe(false);
+    expect(result.current[0].meta.features.Sidebar).toBe(false);
   });
 
-  it("should be idempotent: Feature.On when already true stays true", () => {
+  it("should be idempotent: features.on() when already true stays true", () => {
     const { result } = renderHook(() => {
       const actions = useActions<FeatureModel, typeof FeatureActions>({
         ...featureModel,
-        [Property.Features]: { Sidebar: true, Modal: false },
+        meta: { features: { Sidebar: true, Modal: false } },
       });
       return actions;
     });
 
     act(() => {
-      result.current[1].toggle("Sidebar", Feature.On);
+      result.current[1].features.on("Sidebar");
     });
 
-    expect(result.current[0][Property.Features].Sidebar).toBe(true);
+    expect(result.current[0].meta.features.Sidebar).toBe(true);
   });
 
-  it("should support toggle() in handler context", async () => {
+  it("should support features in handler context", async () => {
     const { result } = renderHook(() => {
       const actions = useActions<FeatureModel, typeof FeatureActions>(
         featureModel,
       );
 
       actions.useAction(FeatureActions.Toggle, (context, name) => {
-        context.actions.toggle(name, Feature.Invert);
+        context.actions.features.invert(name);
       });
 
       return actions;
@@ -2468,7 +2462,7 @@ describe("useActions() feature toggles", () => {
       result.current[1].dispatch(FeatureActions.Toggle, "Sidebar");
     });
 
-    expect(result.current[0][Property.Features].Sidebar).toBe(true);
+    expect(result.current[0].meta.features.Sidebar).toBe(true);
   });
 });
 
@@ -2659,38 +2653,38 @@ describe("useActions() produce implicit return safety", () => {
 describe("node capture writes to model", () => {
   type NodeModel = {
     count: number;
-    [Property.Nodes]: { container: HTMLDivElement | null };
+    meta: { nodes: { container: HTMLDivElement | null } };
   };
 
-  it("should update model.nodes when actions.node() is called", () => {
+  it("should update model.meta.nodes when actions.node() is called", () => {
     let captured: NodeModel = {
       count: 0,
-      [Property.Nodes]: { container: null },
+      meta: { nodes: { container: null } },
     };
 
     function TestComponent() {
       const [nodeModel, actions] = useActions<NodeModel, typeof Actions>({
         count: 0,
-        [Property.Nodes]: { container: null },
+        meta: { nodes: { container: null } },
       });
       captured = nodeModel;
       return <div ref={(node) => actions.node("container", node)} />;
     }
 
     render(<TestComponent />);
-    expect(captured[Property.Nodes].container).toBeInstanceOf(HTMLDivElement);
+    expect(captured.meta.nodes.container).toBeInstanceOf(HTMLDivElement);
   });
 
-  it("should set model.nodes back to null when node is released", () => {
+  it("should set model.meta.nodes back to null when node is released", () => {
     let captured: NodeModel = {
       count: 0,
-      [Property.Nodes]: { container: null },
+      meta: { nodes: { container: null } },
     };
 
     function TestComponent({ show }: { show: boolean }) {
       const [nodeModel, actions] = useActions<NodeModel, typeof Actions>({
         count: 0,
-        [Property.Nodes]: { container: null },
+        meta: { nodes: { container: null } },
       });
       captured = nodeModel;
       return show ? (
@@ -2699,13 +2693,13 @@ describe("node capture writes to model", () => {
     }
 
     const { rerender } = render(<TestComponent show={true} />);
-    expect(captured[Property.Nodes].container).toBeInstanceOf(HTMLDivElement);
+    expect(captured.meta.nodes.container).toBeInstanceOf(HTMLDivElement);
 
     rerender(<TestComponent show={false} />);
-    expect(captured[Property.Nodes].container).toBeNull();
+    expect(captured.meta.nodes.container).toBeNull();
   });
 
-  it("should not throw when model has no nodes property", () => {
+  it("should not throw when model has no meta.nodes property", () => {
     const { result } = renderHook(() => {
       const actions = useActions<Model, typeof Actions>(model);
       return actions;
