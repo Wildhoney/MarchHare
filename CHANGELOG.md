@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.2.72](https://github.com/Wildhoney/Chizu/compare/v0.2.71...v0.2.72) (2026-03-06)
+
+
+### Features
+
+* **types:** add Features and Nodes utility types with Property symbol keys ([b2d9f72](https://github.com/Wildhoney/Chizu/commit/b2d9f72394ba5bdb9781765c40e6a37790ccd0e5))
+
+
+### Bug Fixes
+
+* **hooks:** discard implicit return values from produce callbacks ([dfa02b4](https://github.com/Wildhoney/Chizu/commit/dfa02b4e37cdfb657c9826e98baef48e2095e16b))
+
 ## [0.2.71](https://github.com/Wildhoney/Chizu/compare/v0.2.70...v0.2.71) (2026-02-25)
 
 ### Features
