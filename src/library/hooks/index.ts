@@ -11,6 +11,7 @@ import {
   findLifecycleAction,
   isGenerator,
   emitAsync,
+  replay,
 } from "./utils.ts";
 export { With } from "./utils.ts";
 import { useRerender } from "../utils/utils.ts";
@@ -33,10 +34,11 @@ import {
   ExtractNodes,
   MulticastOptions,
   AnyAction,
-  type CacheId,
+  BroadcastPayload,
   type ValidateFeatures,
   type NullableNodes,
 } from "../types/index.ts";
+import type { ResourceDispatch, ResourceHandle } from "../resource/index.ts";
 
 import { getReason, getError } from "../error/utils.ts";
 import { DisallowedError, Reason } from "../error/types.ts";
@@ -55,10 +57,8 @@ import {
 import { useError } from "../error/index.tsx";
 import { State, Operation, Process, Inspect } from "immertation";
 import { useTasks } from "../boundary/components/tasks/utils.ts";
-import { useCacheStore } from "../boundary/components/cache/index.tsx";
 import { Partition } from "../boundary/components/consumer/index.tsx";
 import type { ConsumerRenderer } from "../boundary/components/consumer/types.ts";
-import { getCacheKey, unwrap } from "../cache/index.ts";
 import { G } from "@mobily/ts-belt";
 
 /**
@@ -127,7 +127,6 @@ export function useActions<
   const scope = useScope();
   const error = useError();
   const tasks = useTasks();
-  const cache = useCacheStore();
   const regulatorPolicy = useRegulators();
   const rerender = useRerender();
   const initialised = React.useRef(false);
@@ -265,7 +264,7 @@ export function useActions<
               : undefined;
 
             if (isMulticastAction(action) && options?.scope) {
-              const scoped = getScope(scope, options.scope);
+              const scoped = getScope(scope, options.scope.Scope);
               if (scoped)
                 return emitAsync(scoped.emitter, base, payload, channel);
               return Promise.resolve();
@@ -276,32 +275,6 @@ export function useActions<
           },
           annotate<T>(operation: Operation, value: T): T {
             return state.current.annotate(operation, value);
-          },
-          async cacheable(
-            entry: CacheId,
-            ttl: number,
-            fn: () => Promise<unknown>,
-          ) {
-            if (controller.signal.aborted) return { data: null };
-
-            const key = getCacheKey(<CacheId>(<unknown>entry));
-            const cached = cache.get(key);
-            if (cached && Date.now() < cached.expiry) {
-              return { data: cached.value };
-            }
-
-            const raw = await fn();
-            const outcome = unwrap(raw);
-
-            if (!outcome.ok) return { data: null };
-            cache.set(key, {
-              value: outcome.value,
-              expiry: Date.now() + ttl,
-            });
-            return { data: outcome.value };
-          },
-          invalidate(entry: CacheId) {
-            cache.delete(getCacheKey(<CacheId>(<unknown>entry)));
           },
           features: {
             on(name: string) {
@@ -345,14 +318,14 @@ export function useActions<
               }
             },
           },
-          async read(action: AnyAction, options?: MulticastOptions) {
+          async resolution(action: AnyAction, options?: MulticastOptions) {
             if (controller.signal.aborted) return null;
 
             const key = getActionSymbol(action);
 
             const emitter =
               isMulticastAction(action) && options?.scope
-                ? (getScope(scope, options.scope)?.emitter ?? null)
+                ? (getScope(scope, options.scope.Scope)?.emitter ?? null)
                 : broadcast;
 
             if (!emitter) return null;
@@ -398,7 +371,7 @@ export function useActions<
 
             const emitter =
               isMulticastAction(action) && options?.scope
-                ? (getScope(scope, options.scope)?.emitter ?? null)
+                ? (getScope(scope, options.scope.Scope)?.emitter ?? null)
                 : broadcast;
 
             if (!emitter) return null;
@@ -421,7 +394,7 @@ export function useActions<
     ) {
       return function handler(
         payload: HandlerPayload,
-        dispatchChannel?: Filter,
+        dispatchChannel?: Filter | typeof replay,
       ) {
         if (!isAllowed(action, regulatorPolicy)) {
           const errorAction = findLifecycleAction(
@@ -443,8 +416,14 @@ export function useActions<
 
         const registeredChannel = getChannel();
 
+        // Skip channeled handlers during replay — they require specific
+        // channel context and cannot process a replay without it.
+        if (dispatchChannel === replay && G.isNotNullable(registeredChannel))
+          return;
+
         if (
           G.isNotNullable(dispatchChannel) &&
+          dispatchChannel !== replay &&
           G.isNotNullable(registeredChannel)
         ) {
           if (!matchesChannel(dispatchChannel, registeredChannel)) return;
@@ -620,7 +599,7 @@ export function useActions<
               : undefined;
 
             if (isMulticastAction(action) && options?.scope) {
-              const scoped = getScope(scope, options.scope);
+              const scoped = getScope(scope, options.scope.Scope);
               if (scoped)
                 return emitAsync(scoped.emitter, base, payload, channel);
               return Promise.resolve();
@@ -699,6 +678,30 @@ export function useActions<
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void => {
     useRegisterHandler<M, A, D>(registry, action, <Handler<M, A, D>>handler);
+  };
+
+  (<UseActions<M, A, D>>result).useResource = <
+    T,
+    E,
+    Args extends readonly unknown[],
+  >(
+    resource: ResourceHandle<T, E, Args>,
+  ): ((...args: Args) => Promise<T>) => {
+    const dispatch = React.useMemo<ResourceDispatch>(() => {
+      const fn = <P>(
+        action: BroadcastPayload<P> | ChanneledAction<P, Filter>,
+        payload?: P,
+      ): Promise<void> => {
+        const channel = isChanneledAction(action) ? action.channel : undefined;
+        return emitAsync(broadcast, getActionSymbol(action), payload, channel);
+      };
+      return <ResourceDispatch>fn;
+    }, [broadcast]);
+
+    return React.useCallback(
+      (...args: Args) => resource.fetch(dispatch, data, ...args),
+      [resource, dispatch, data],
+    );
   };
 
   return <UseActions<M, A, D>>result;

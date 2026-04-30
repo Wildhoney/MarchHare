@@ -6,8 +6,6 @@ import type {
   Task,
   Tasks,
 } from "../boundary/components/tasks/types.ts";
-import type { Option } from "@mobily/ts-belt/Option";
-import type { Result as TsBeltResult } from "@mobily/ts-belt/Result";
 import type { Regulator } from "../boundary/components/regulators/types.ts";
 import type { Fault } from "../error/types.ts";
 
@@ -65,48 +63,7 @@ export class Brand {
   static readonly Channel = Symbol("chizu.brand/Channel");
   /** Node capture events used by Lifecycle.Node */
   static readonly Node = Symbol("chizu.action.lifecycle/Node");
-  /** Identifies cache entry identifiers created with Entry() */
-  static readonly Cache = Symbol("chizu.brand/Cache");
 }
-
-/**
- * Phantom brand symbol for value type tracking on cache entry identifiers.
- * Uses a function type `(t: T) => T` to enforce invariance, preventing
- * a cache entry declared for one type from being used with a different type.
- * @internal
- */
-declare const CacheValueBrand: unique symbol;
-
-/**
- * A branded cache entry identifier.
- *
- * When the second type parameter `C` is provided, the entry becomes callable
- * to produce channeled identifiers for independent cache slots per channel.
- *
- * @template T - The cached value type.
- * @template C - The channel type for channeled entries (defaults to never).
- */
-export type CacheId<T = unknown, C extends Filter = never> = {
-  readonly [Brand.Cache]: symbol;
-  readonly [CacheValueBrand]?: (t: T) => T;
-} & ([C] extends [never]
-  ? unknown
-  : {
-      (channel: C): ChanneledCacheId<T, C>;
-    });
-
-/**
- * Result of calling a channeled cache entry with a channel argument.
- * Contains the entry identity and the channel data for scoped cache access.
- *
- * @template T - The cached value type.
- * @template C - The channel type.
- */
-export type ChanneledCacheId<T = unknown, C = unknown> = {
-  readonly [Brand.Cache]: symbol;
-  readonly [CacheValueBrand]?: (t: T) => T;
-  readonly channel: C;
-};
 
 /**
  * Creates a lifecycle action with the given name.
@@ -340,8 +297,12 @@ export type ChanneledAction<P = unknown, C = unknown> = {
  * Broadcast actions are sent to all mounted components. Values are cached so that
  * late-mounting components receive the most recent payload.
  *
+ * Late-mounting components receive the most recent cached payload via their
+ * `useAction` handler during mount. Use `peek()` in a `Lifecycle.Mount` handler
+ * to check whether a cached value exists before performing default fetches.
+ *
  * This type extends `HandlerPayload<P, C>` with an additional brand to enforce at compile-time
- * that only broadcast actions can be passed to `context.actions.read()`.
+ * that only broadcast actions can be passed to `context.actions.resolution()`.
  *
  * @template P - The payload type for the action
  * @template C - The channel type for channeled dispatches (defaults to never)
@@ -350,8 +311,8 @@ export type ChanneledAction<P = unknown, C = unknown> = {
  * ```ts
  * const SignedOut = Action<User>("SignedOut", Distribution.Broadcast);
  *
- * // Read the latest value inside a handler
- * const user = await context.actions.read(SignedOut);
+ * // Resolve the latest value inside a handler
+ * const user = await context.actions.resolution(SignedOut);
  * ```
  */
 export type BroadcastPayload<
@@ -365,20 +326,21 @@ export type BroadcastPayload<
  * Branded type for multicast action objects created with `Action()` and `Distribution.Multicast`.
  * Multicast actions are dispatched to all components within a named scope boundary.
  *
- * When dispatching a multicast action, you MUST provide the scope name as the third argument:
+ * When dispatching a multicast action, you MUST provide the scope carrier as the third argument:
  * ```ts
- * actions.dispatch(Actions.Multicast.Update, payload, { scope: "MyScope" });
+ * actions.dispatch(Actions.Multicast.Update, payload, { scope: Actions.Multicast });
  * ```
  *
- * Components receive multicast events only if they are descendants of a `<Scope name="...">`.
+ * Components receive multicast events only if they are descendants of a `<Scope of={...}>`.
  *
  * @template P - The payload type for the action
  * @template C - The channel type for channeled dispatches (defaults to never)
  *
  * @example
  * ```tsx
- * // Define multicast actions in a shared class
+ * // Define multicast actions and their scope together
  * class MulticastActions {
+ *   static Scope = "Counter" as const;
  *   static Update = Action<number>("Update", Distribution.Multicast);
  * }
  *
@@ -388,13 +350,13 @@ export type BroadcastPayload<
  * }
  *
  * // In JSX - create a named scope boundary
- * <Scope name="Counter">
+ * <Scope of={MulticastActions}>
  *   <CounterA />
  *   <CounterB />
  * </Scope>
  *
- * // Inside CounterA - dispatch to all components in "Counter" scope
- * actions.dispatch(Actions.Multicast.Update, 42, { scope: "Counter" });
+ * // Inside CounterA - dispatch to all components in the scope
+ * actions.dispatch(Actions.Multicast.Update, 42, { scope: Actions.Multicast });
  * // CounterA and CounterB both receive the event
  * ```
  */
@@ -406,12 +368,34 @@ export type MulticastPayload<
 };
 
 /**
+ * A scope carrier — any object exposing a `Scope` string literal.
+ *
+ * By convention this is the feature's `MulticastActions` class, which owns
+ * the scope name alongside its multicast action declarations:
+ *
+ * ```ts
+ * export class MulticastActions {
+ *   static Scope = "my-feature" as const;
+ *   static Update = Action<T>("Update", Distribution.Multicast);
+ * }
+ * ```
+ *
+ * Requiring a carrier (rather than a bare string) prevents typos and enforces
+ * a single source of truth for each scope name.
+ *
+ * @template S - The scope name literal type.
+ */
+export type ScopeCarrier<S extends string = string> = {
+  readonly Scope: S;
+};
+
+/**
  * Options for multicast dispatch.
  * Required when dispatching a multicast action.
  */
 export type MulticastOptions = {
-  /** The name of the scope to multicast to. Must match a `<Scope name="...">` ancestor. */
-  scope: string;
+  /** Carrier object exposing the scope name via `.Scope`. Typically the feature's `MulticastActions` class. */
+  scope: ScopeCarrier;
 };
 
 /**
@@ -779,49 +763,6 @@ export type HandlerContext<
     ): Promise<void>;
     annotate<T>(operation: Operation, value: T): T;
     /**
-     * Fetches a value from the cache or executes the callback if not cached / expired.
-     *
-     * The callback must return an `Option<T>` or `Result<T, E>`. Only `Some` / `Ok`
-     * values are stored; `None` / `Error` results are skipped and `{ data: null }`
-     * is returned. Exactly one layer of `Option` / `Result` is unwrapped.
-     *
-     * @param entry - The cache entry identifier (from `Entry()`).
-     * @param ttl - Time-to-live in milliseconds.
-     * @param fn - Async callback that produces the value to cache.
-     * @returns An object with `data` set to the cached or freshly-fetched value, or `null`.
-     *
-     * @example
-     * ```ts
-     * const { data } = await context.actions.cacheable(
-     *   CacheStore.Pairs,
-     *   30_000,
-     *   async () => Some(await api.fetchPairs()),
-     * );
-     * ```
-     */
-    cacheable<T>(
-      entry: CacheId<T> | ChanneledCacheId<T>,
-      ttl: number,
-      fn: () => Promise<Option<T>>,
-    ): Promise<{ data: T | null }>;
-    cacheable<T>(
-      entry: CacheId<T> | ChanneledCacheId<T>,
-      ttl: number,
-      fn: () => Promise<TsBeltResult<T, unknown>>,
-    ): Promise<{ data: T | null }>;
-    /**
-     * Removes a cached value from the store.
-     *
-     * @param entry - The cache entry identifier to invalidate.
-     *
-     * @example
-     * ```ts
-     * context.actions.invalidate(CacheStore.Pairs);
-     * context.actions.invalidate(CacheStore.User({ UserId: 5 }));
-     * ```
-     */
-    invalidate(entry: CacheId<unknown> | ChanneledCacheId<unknown>): void;
-    /**
      * Feature toggle methods for mutating boolean flags on the model.
      *
      * @example
@@ -837,20 +778,21 @@ export type HandlerContext<
       invert<K extends keyof FeatureFlags<M>>(name: K): void;
     };
     /**
-     * Reads the latest broadcast or multicast value, waiting for annotations to settle.
+     * Returns the resolved broadcast or multicast value, waiting for any
+     * pending annotations to settle before resolving.
      *
      * If a value has already been dispatched it resolves immediately.
      * Otherwise it waits until the next dispatch of the action.
      * Resolves with `null` if the task is aborted before a value arrives.
      *
-     * @param action - The broadcast or multicast action to read.
-     * @param options - For multicast actions, must include `{ scope: "ScopeName" }`.
+     * @param action - The broadcast or multicast action to resolve.
+     * @param options - For multicast actions, must include `{ scope: MulticastActions }`.
      * @returns The dispatched value, or `null` if aborted.
      *
      * @example
      * ```ts
      * actions.useAction(Actions.FetchPosts, async (context) => {
-     *   const user = await context.actions.read(Actions.Broadcast.User);
+     *   const user = await context.actions.resolution(Actions.Broadcast.User);
      *   if (!user) return;
      *   const posts = await fetchPosts(user.id, {
      *     signal: context.task.controller.signal,
@@ -859,8 +801,8 @@ export type HandlerContext<
      * });
      * ```
      */
-    read<T>(action: BroadcastPayload<T>): Promise<T | null>;
-    read<T>(
+    resolution<T>(action: BroadcastPayload<T>): Promise<T | null>;
+    resolution<T>(
       action: MulticastPayload<T>,
       options: MulticastOptions,
     ): Promise<T | null>;
@@ -871,7 +813,7 @@ export type HandlerContext<
      * cached value and do not need to wait for pending operations to complete.
      *
      * @param action - The broadcast or multicast action to peek at.
-     * @param options - For multicast actions, must include `{ scope: "ScopeName" }`.
+     * @param options - For multicast actions, must include `{ scope: MulticastActions }`.
      * @returns The cached value, or `null` if no value has been dispatched.
      *
      * @example
@@ -1004,14 +946,14 @@ export type UseActions<
     /**
      * Dispatches an action with an optional payload.
      *
-     * For multicast actions, you MUST provide the scope as the third argument:
+     * For multicast actions, you MUST provide the scope carrier as the third argument:
      * ```ts
-     * actions.dispatch(Actions.Multicast.Update, payload, { scope: "MyScope" });
+     * actions.dispatch(Actions.Multicast.Update, payload, { scope: Actions.Multicast });
      * ```
      *
      * @param action - The action to dispatch
      * @param payload - The payload to send with the action
-     * @param options - For multicast actions, must include `{ scope: "ScopeName" }`
+     * @param options - For multicast actions, must include `{ scope: MulticastActions }`
      */
     dispatch<P>(
       action: HandlerPayload<P>,
@@ -1153,4 +1095,24 @@ export type UseActions<
       ...args: [Payload<A>] extends [never] ? [] : [payload: Payload<A>]
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void;
+  /**
+   * Connects a {@link Resource} declared at module scope to this component.
+   * Returns a thunk that fetches fresh data on every call &ndash; concurrent
+   * calls share the in-flight promise. The Resource's `onSuccess` and
+   * `onError` callbacks receive `(response, data, dispatch)` where `data`
+   * is this component's reactive `data` proxy.
+   *
+   * @example
+   * ```ts
+   * const fetchUser = actions.useResource(resources.user);
+   *
+   * actions.useAction(Actions.Mount, async (context) => {
+   *   const data = await fetchUser();
+   *   context.actions.produce(({ model }) => { model.user = data; });
+   * });
+   * ```
+   */
+  useResource<T, E, Args extends readonly unknown[]>(
+    resource: import("../resource/index.ts").ResourceHandle<T, E, Args>,
+  ): (...args: Args) => Promise<T>;
 };

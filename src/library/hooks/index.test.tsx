@@ -1191,12 +1191,13 @@ describe("useActions() StrictMode resilience", () => {
   });
 });
 
-describe("useActions() context.actions.read", () => {
+describe("useActions() context.actions.resolution", () => {
   class BroadcastReadActions {
     static Name = Action<string>("Name", Distribution.Broadcast);
   }
 
   class MulticastReadActions {
+    static Scope = "test" as const;
     static Score = Action<number>("Score", Distribution.Multicast);
   }
 
@@ -1227,7 +1228,9 @@ describe("useActions() context.actions.read", () => {
       });
 
       result.useAction(BroadcastReadActions.Name, async (context, _name) => {
-        const value = await context.actions.read(BroadcastReadActions.Name);
+        const value = await context.actions.resolution(
+          BroadcastReadActions.Name,
+        );
         readValue = value;
         context.actions.produce(({ model }) => {
           model.result = value;
@@ -1270,7 +1273,9 @@ describe("useActions() context.actions.read", () => {
       const result = useActions<Record<string, never>, typeof LocalActions>({});
 
       result.useAction(LocalActions.Trigger, async (context) => {
-        const value = await context.actions.read(BroadcastReadActions.Name);
+        const value = await context.actions.resolution(
+          BroadcastReadActions.Name,
+        );
         readValue = value;
       });
 
@@ -1319,7 +1324,7 @@ describe("useActions() context.actions.read", () => {
           data-testid="publish-mc"
           onClick={() =>
             actions.dispatch(MulticastReadActions.Score, 99, {
-              scope: "test",
+              scope: MulticastReadActions,
             })
           }
         >
@@ -1335,9 +1340,12 @@ describe("useActions() context.actions.read", () => {
       >({});
 
       result.useAction(MulticastReadActions.Score, async (context) => {
-        const value = await context.actions.read(MulticastReadActions.Score, {
-          scope: "test",
-        });
+        const value = await context.actions.resolution(
+          MulticastReadActions.Score,
+          {
+            scope: MulticastReadActions,
+          },
+        );
         readValue = value;
       });
 
@@ -1347,7 +1355,7 @@ describe("useActions() context.actions.read", () => {
     function App() {
       return (
         <Broadcaster>
-          <Scope name="test">
+          <Scope of={MulticastReadActions}>
             <Publisher />
             <Reader />
           </Scope>
@@ -1424,7 +1432,9 @@ describe("useActions() context.actions.read", () => {
 
       // Read should await until the annotations on `name` have settled.
       actions.useAction(LocalActions.Read, async (context) => {
-        const value = await context.actions.read(BroadcastReadActions.Name);
+        const value = await context.actions.resolution(
+          BroadcastReadActions.Name,
+        );
         readValue = value;
       });
 
@@ -2295,6 +2305,7 @@ describe("useActions() mount + broadcast replay deduplication", () => {
 
   it("should deduplicate with multicast actions using peek() and scope", async () => {
     class MulticastUser {
+      static Scope = "team" as const;
       static Mount = Lifecycle.Mount();
       static User = Action<{ id: number }>("User", Distribution.Multicast);
     }
@@ -2311,7 +2322,11 @@ describe("useActions() mount + broadcast replay deduplication", () => {
         <button
           data-testid="dispatch-mc-dedup"
           onClick={() => {
-            actions.dispatch(MulticastUser.User, { id: 3 }, { scope: "team" });
+            actions.dispatch(
+              MulticastUser.User,
+              { id: 3 },
+              { scope: MulticastUser },
+            );
             onShowLate();
           }}
         >
@@ -2327,7 +2342,7 @@ describe("useActions() mount + broadcast replay deduplication", () => {
 
       actions.useAction(MulticastUser.Mount, (context) => {
         const user = context.actions.peek(MulticastUser.User, {
-          scope: "team",
+          scope: MulticastUser,
         });
         if (!user) fetches.push("mount-fetch");
       });
@@ -2344,7 +2359,7 @@ describe("useActions() mount + broadcast replay deduplication", () => {
 
       return (
         <Broadcaster>
-          <Scope name="team">
+          <Scope of={MulticastUser}>
             <Producer onShowLate={() => setShow(true)} />
             {show && <Late />}
           </Scope>

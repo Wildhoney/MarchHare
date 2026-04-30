@@ -7,7 +7,7 @@ import {
   AnyAction,
 } from "../types/index.ts";
 import type { ActionId } from "../boundary/components/tasks/types.ts";
-import { config } from "../utils/index.ts";
+import { describe } from "../utils.ts";
 import { G } from "@mobily/ts-belt";
 
 const isSymbol = (value: unknown): value is symbol => typeof value === "symbol";
@@ -43,13 +43,10 @@ export function getActionSymbol(action: AnyAction): ActionId {
  * @returns True if the action is a broadcast action, false otherwise.
  */
 export function isBroadcastAction(action: AnyAction): boolean {
-  if (G.isString(action))
-    return action.startsWith(config.broadcastActionPrefix);
+  if (G.isString(action)) return action.startsWith(describe.broadcast());
 
   if (isSymbol(action))
-    return (
-      action.description?.startsWith(config.broadcastActionPrefix) ?? false
-    );
+    return action.description?.startsWith(describe.broadcast()) ?? false;
 
   if (G.isObject(action) || G.isFunction(action)) {
     if (
@@ -62,8 +59,7 @@ export function isBroadcastAction(action: AnyAction): boolean {
     if (Brand.Action in action) {
       const actionSymbol = (<BrandedAction>action)[Brand.Action];
       return (
-        actionSymbol.description?.startsWith(config.broadcastActionPrefix) ??
-        false
+        actionSymbol.description?.startsWith(describe.broadcast()) ?? false
       );
     }
   }
@@ -93,7 +89,7 @@ export function isBroadcastAction(action: AnyAction): boolean {
 export function getName(action: AnyAction): string {
   const symbol = getActionSymbol(action);
   const description = G.isString(symbol) ? symbol : (symbol.description ?? "");
-  if (!description.startsWith(config.actionPrefix)) return "unknown";
+  if (!description.startsWith(describe.action())) return "unknown";
   const name = description.slice(description.lastIndexOf("/") + 1);
   return name || "unknown";
 }
@@ -141,8 +137,8 @@ export function isChanneledAction(
 export function getLifecycleType(action: AnyAction): string | null {
   const symbol = getActionSymbol(action);
   const description = isSymbol(symbol) ? (symbol.description ?? "") : symbol;
-  if (!description.startsWith(config.lifecyclePrefix)) return null;
-  return description.slice(config.lifecyclePrefix.length) || null;
+  if (!description.startsWith(describe.lifecycle())) return null;
+  return description.slice(describe.lifecycle().length) || null;
 }
 
 /**
@@ -153,13 +149,10 @@ export function getLifecycleType(action: AnyAction): string | null {
  * @returns True if the action is a multicast action, false otherwise.
  */
 export function isMulticastAction(action: AnyAction): boolean {
-  if (G.isString(action))
-    return action.startsWith(config.multicastActionPrefix);
+  if (G.isString(action)) return action.startsWith(describe.multicast());
 
   if (isSymbol(action))
-    return (
-      action.description?.startsWith(config.multicastActionPrefix) ?? false
-    );
+    return action.description?.startsWith(describe.multicast()) ?? false;
 
   if (G.isObject(action) || G.isFunction(action)) {
     if (
@@ -172,8 +165,7 @@ export function isMulticastAction(action: AnyAction): boolean {
     if (Brand.Action in action) {
       const actionSymbol = (<BrandedAction>action)[Brand.Action];
       return (
-        actionSymbol.description?.startsWith(config.multicastActionPrefix) ??
-        false
+        actionSymbol.description?.startsWith(describe.multicast()) ?? false
       );
     }
   }

@@ -196,7 +196,7 @@ Both `read` and `peek` access the latest cached broadcast value without subscrib
 
 ```tsx
 actions.useAction(Actions.FetchFriends, async (context) => {
-  const name = await context.actions.read(Actions.Broadcast.Name);
+  const name = await context.actions.resolution(Actions.Broadcast.Name);
   if (!name) return;
   const friends = await fetch(api.friends(name));
   context.actions.produce(({ model }) => {
@@ -249,6 +249,78 @@ function Dashboard() {
 
 Components that mount after a broadcast has already been dispatched automatically receive the cached value via their `useAction` handler. If you also fetch data in `Lifecycle.Mount()`, see the [mount deduplication recipe](./recipes/mount-broadcast-deduplication.md) to avoid duplicate requests.
 
+For remote data, declare a `Resource` at module scope &ndash; same shape as `Action` &ndash; and consume it via `actions.useResource` inside a component. Convention is to keep all resources in `resources.ts` and import them as a namespace:
+
+```ts
+// resources.ts
+import { Resource } from "chizu";
+
+export const user = Resource("user", () => ky.get("/api/user").json<User>());
+```
+
+```tsx
+// actions.ts
+import * as resource from "./resources";
+
+function useUserActions() {
+  const actions = useActions<Model, typeof Actions>(initialModel);
+  const fetchUser = actions.useResource(resource.user);
+
+  actions.useAction(Actions.Mount, async (context) => {
+    const data = await fetchUser();
+    context.actions.produce(({ model }) => {
+      model.user = data;
+    });
+  });
+
+  return actions;
+}
+```
+
+Every call to the thunk fetches fresh &ndash; concurrent calls share one in-flight request, but there is no stale cache. Coordination across components happens at the broadcast layer.
+
+The fetcher may take arguments &ndash; the thunk forwards them, and in-flight dedup keys per arg-tuple. This is how you build pagination, search, and other dynamic-param fetches:
+
+```ts
+export const feed = Resource("feed", (cursor: string | null) =>
+  http
+    .get("feed", { searchParams: { cursor: cursor ?? "" } })
+    .json<Page<Item>>(),
+);
+
+const fetchFeed = actions.useResource(resource.feed);
+const page = await fetchFeed(context.model.cursor);
+```
+
+A complete IntersectionObserver-driven infinite-scroll demo lives at [`src/example/transactions/`](./src/example/transactions/) &ndash; mock paginated API, scroll-triggered `LoadMore`, `pending()` guard, broadcast on success.
+
+Pass an `onSuccess` callback to fan a fresh fetch out as a broadcast event &ndash; the callback receives a `context` with `response`, `data` (the consuming component's reactive proxy), and `dispatch` (pre-bound to the surrounding `<Boundary>`'s broadcaster):
+
+```ts
+export const user = Resource(
+  "user",
+  () => ky.get("/api/user").json<User>(),
+  ({ response, dispatch }) => dispatch(Actions.Broadcast.UserUpdated, response),
+);
+```
+
+For typed error handling, supply the second generic and an `onError` callback &ndash; the parameter narrows to your error union, so `instanceof` discrimination on a typed `HttpError` hierarchy is clean:
+
+```ts
+export const user = Resource<User, ApiError>(
+  "user",
+  () => http.get("user").json<User>(),
+  ({ response, dispatch }) => dispatch(Actions.Broadcast.UserUpdated, response),
+  ({ error, dispatch }) => {
+    if (error instanceof RateLimitedError) {
+      dispatch(Actions.Broadcast.RateLimited, error.retryAfter);
+    }
+  },
+);
+```
+
+See the [Resource recipe](./recipes/use-resource.md) for the three-tier error handling model, parameterised resources, and limitations.
+
 For targeted event delivery, use channeled actions. Define a channel type as the second generic argument and call the action with a channel object &ndash; handlers fire when the dispatch channel matches:
 
 ```tsx
@@ -285,17 +357,18 @@ actions.dispatch(Actions.UserUpdated, user);
 
 Channel values support non-nullable primitives: `string`, `number`, `boolean`, or `symbol`. By convention, use uppercase keys like `{UserId: 4}` to distinguish channel keys from payload properties.
 
-For scoped communication between component groups, use multicast actions with the `<Scope>` component:
+For scoped communication between component groups, use multicast actions with the `<Scope>` component. The scope name lives as a `static Scope` literal on the same class as the multicast actions &ndash; passing the class as a carrier prevents typos and keeps a single source of truth:
 
 ```tsx
 import { Action, Distribution, Scope } from "chizu";
 
-// Shared multicast actions
+// Scope name and multicast actions live on the same class
 class MulticastActions {
+  static Scope = "scoreboard" as const;
   static Update = Action<number>("Update", Distribution.Multicast);
 }
 
-// Component-level actions reference shared multicast
+// Component-level actions reference the shared multicast
 class Actions {
   static Multicast = MulticastActions;
   static Increment = Action("Increment");
@@ -303,22 +376,15 @@ class Actions {
 
 function App() {
   return (
-    <>
-      <Scope name="TeamA">
-        <ScoreBoard />
-        <PlayerList />
-      </Scope>
-
-      <Scope name="TeamB">
-        <ScoreBoard />
-        <PlayerList />
-      </Scope>
-    </>
+    <Scope of={MulticastActions}>
+      <ScoreBoard />
+      <PlayerList />
+    </Scope>
   );
 }
 
-// Dispatch to all components within "TeamA" scope
-actions.dispatch(Actions.Multicast.Update, 42, { scope: "TeamA" });
+// Dispatch to every component inside the scope
+actions.dispatch(Actions.Multicast.Update, 42, { scope: Actions.Multicast });
 ```
 
 Unlike broadcast which reaches all components, multicast is scoped to the named boundary &ndash; perfect for isolated widget groups, form sections, or distinct UI regions. Like broadcast, multicast caches dispatched values per scope &ndash; components that mount later automatically receive the cached value. See the [mount deduplication recipe](./recipes/mount-broadcast-deduplication.md) if you also fetch data in `Lifecycle.Mount()`.
@@ -327,8 +393,9 @@ For components that always render inside a scope, use the `withScope` HOC to eli
 
 ```tsx
 import { withScope } from "chizu";
+import { MulticastActions } from "./types";
 
-export default withScope("payment-link", function Layout(): ReactElement {
+export default withScope(MulticastActions, function Layout(): ReactElement {
   return (
     <div>
       <PaymentLink />
@@ -339,63 +406,6 @@ export default withScope("payment-link", function Layout(): ReactElement {
 ```
 
 See the [multicast recipe](./recipes/multicast-actions.md) for more details.
-
-For data that is expensive to fetch, use `cacheable` to cache values with a TTL. Define typed cache entries with `Entry` and call `context.actions.cacheable` inside a handler &ndash; the callback only runs when the cache is empty or expired:
-
-```ts
-import { Entry, useActions, Action } from "chizu";
-import { O } from "@mobily/ts-belt";
-
-class CacheStore {
-  static Pairs = Entry<CryptoPair[]>();
-  static User = Entry<User, { UserId: number }>();
-}
-
-class Actions {
-  static FetchPairs = Action("FetchPairs");
-  static FetchUser = Action("FetchUser");
-}
-```
-
-```ts
-actions.useAction(Actions.FetchPairs, async (context) => {
-  const { data } = await context.actions.cacheable(
-    CacheStore.Pairs,
-    30_000,
-    async () => O.Some(await api.fetchPairs()),
-  );
-
-  if (data) {
-    context.actions.produce(({ model }) => {
-      model.pairs = data;
-    });
-  }
-});
-
-// Channeled &ndash; independent cache per user
-actions.useAction(Actions.FetchUser, async (context) => {
-  const { data } = await context.actions.cacheable(
-    CacheStore.User({ UserId: context.data.userId }),
-    60_000,
-    async () => O.Some(await api.fetchUser(context.data.userId)),
-  );
-
-  if (data) {
-    context.actions.produce(({ model }) => {
-      model.user = data;
-    });
-  }
-});
-```
-
-Only `Some` / `Ok` values are stored in the cache. `None` and `Error` results are skipped. Use `context.actions.invalidate` to clear a specific entry so the next `cacheable` call fetches fresh data:
-
-```ts
-context.actions.invalidate(CacheStore.Pairs);
-context.actions.invalidate(CacheStore.User({ UserId: 5 }));
-```
-
-The cache is scoped to the nearest `<Boundary>`. See the [caching recipe](./recipes/caching.md) for more details.
 
 The action regulator lets handlers control which actions may be dispatched across all components within a `<Boundary>`. Use `context.regulator` to block or allow actions:
 

@@ -1,119 +1,89 @@
-# Mount and broadcast/multicast deduplication
+# Mount and broadcast replay deduplication
 
-When a component needs data that depends on a broadcast or multicast value, it is tempting to fetch in both `Lifecycle.Mount()` (in case no event has fired yet) and in the broadcast/multicast handler (to react when the value arrives). However, because cached values are replayed during mount for both broadcast and multicast actions, both handlers fire &mdash; causing duplicate work.
+When a component uses both `Lifecycle.Mount()` and a broadcast (or multicast) `useAction` handler, both fire during mount if a cached value exists. This can cause duplicate work &mdash; for example, fetching data twice.
 
 ## The problem
 
 ```ts
-class Actions {
-  static Mount = Lifecycle.Mount();
-  static Broadcast = BroadcastActions;
-}
-
 actions.useAction(Actions.Mount, async (context) => {
-  // Fetch because we don't know if a broadcast has fired yet.
-  const users = await fetchUsers(context.task.controller.signal);
+  // Always runs on mount
+  const data = await fetchData(context.task.controller.signal);
   context.actions.produce(({ model }) => {
-    model.users = users;
+    model.data = data;
   });
 });
 
-actions.useAction(Actions.Broadcast.Team, async (context, team) => {
-  // Fetch when the broadcast arrives.
-  const users = await fetchUsers(context.task.controller.signal, team.id);
+actions.useAction(Actions.Broadcast.User, async (context, user) => {
+  // Also runs on mount if a cached value exists
+  const data = await fetchData(context.task.controller.signal, user.id);
   context.actions.produce(({ model }) => {
-    model.users = users;
+    model.data = data;
   });
 });
 ```
 
-If a cached broadcast value exists when the component mounts, the mount replay mechanism fires the broadcast handler immediately after `Lifecycle.Mount()` &mdash; both still within `Phase.Mounting`. This results in two fetches for the same data.
+If a broadcast value is already cached when the component mounts, **both** handlers fire &mdash; resulting in two fetches.
 
-## Why it happens
+## Solution 1: `peek()` guard in Mount
 
-During mount, Chizu executes the following sequence inside a single `useLayoutEffect`:
+Use `peek()` in the Mount handler to skip work when a cached broadcast value exists:
 
-1. Emit `Lifecycle.Mount()` (handlers run with `phase = Mounting`).
-2. For each registered broadcast action, check the `BroadcastEmitter` cache.
-3. If a cached value exists, emit the action to the unicast emitter (handlers run with `phase = Mounting`).
-4. Transition phase to `Mounted`.
+```ts
+actions.useAction(Actions.Mount, (context) => {
+  const user = context.actions.peek(Actions.Broadcast.User);
+  if (user) return; // Broadcast handler will handle it
+  fetchDefaultData(context.task.controller.signal);
+});
 
-Both steps 1 and 3 happen synchronously before the phase transitions, so both handlers fire during the same mount cycle.
+actions.useAction(Actions.Broadcast.User, async (context, user) => {
+  const data = await fetchData(context.task.controller.signal, user.id);
+  context.actions.produce(({ model }) => {
+    model.data = data;
+  });
+});
+```
 
-## Solution A: Guard mount with `peek()`
+The Mount handler only fetches when no broadcast value is cached. When a cached value exists, only the broadcast handler runs.
 
-Use `peek()` in `Lifecycle.Mount()` to check whether a broadcast value already exists. If it does, skip the mount fetch and let the broadcast handler do the work:
+## Solution 2: `context.phase` guard in broadcast handler
+
+Skip the cached replay in the broadcast handler, letting Mount handle initial data:
 
 ```ts
 actions.useAction(Actions.Mount, async (context) => {
-  const team = context.actions.peek(Actions.Broadcast.Team);
-  if (team) return; // Broadcast replay will handle it.
-
-  const users = await fetchUsers(context.task.controller.signal);
+  const data = await fetchDefaultData(context.task.controller.signal);
   context.actions.produce(({ model }) => {
-    model.users = users;
+    model.data = data;
   });
 });
 
-actions.useAction(Actions.Broadcast.Team, async (context, team) => {
-  const users = await fetchUsers(context.task.controller.signal, team.id);
+actions.useAction(Actions.Broadcast.User, (context, user) => {
+  if (context.phase === Phase.Mounting) return; // Skip cached replay
   context.actions.produce(({ model }) => {
-    model.users = users;
+    model.data = user;
   });
 });
 ```
 
-`peek()` reads from the `BroadcastEmitter` cache directly &mdash; the value is available even before the replay mechanism runs, because the cache was populated by the original dispatch.
-
-**When to use:** The broadcast payload is needed for the fetch (e.g. a team ID), so the broadcast handler is the primary path and mount is only a fallback for when no broadcast has been dispatched yet.
-
-## Solution B: Guard broadcast with `context.phase`
-
-Use `context.phase` in the broadcast handler to skip the cached replay and let `Lifecycle.Mount()` handle the initial fetch:
-
-```ts
-actions.useAction(Actions.Mount, async (context) => {
-  const users = await fetchUsers(context.task.controller.signal);
-  context.actions.produce(({ model }) => {
-    model.users = users;
-  });
-});
-
-actions.useAction(Actions.Broadcast.Team, async (context, team) => {
-  if (context.phase === Phase.Mounting) return; // Mount already handled it.
-
-  const users = await fetchUsers(context.task.controller.signal, team.id);
-  context.actions.produce(({ model }) => {
-    model.users = users;
-  });
-});
-```
-
-Cached values replayed during mount arrive with `Phase.Mounting`. Live dispatches after mount arrive with `Phase.Mounted`. Checking the phase skips the replay without affecting future dispatches.
-
-**When to use:** The mount fetch does not depend on the broadcast payload (e.g. loading a default dataset), and subsequent broadcasts should trigger fresh fetches with updated data.
-
-## Comparison
-
-| Approach                     | Mount fetches when&hellip; | Broadcast fetches when&hellip;   | Best for                           |
-| ---------------------------- | -------------------------- | -------------------------------- | ---------------------------------- |
-| **A &ndash; `peek()` guard** | No cached broadcast value  | Always (including replay)        | Broadcast payload drives the fetch |
-| **B &ndash; `phase` guard**  | Always                     | Only live dispatches (`Mounted`) | Mount fetch is self-sufficient     |
+During mount, `context.phase` is `Phase.Mounting`. Live dispatches after mount arrive with `Phase.Mounted`.
 
 ## Multicast support
 
-Both patterns work identically with multicast actions. Pass the scope name to `peek()`:
+Both patterns work identically with multicast actions. Pass the carrier class to `peek()`:
 
 ```ts
-actions.useAction(Actions.Mount, async (context) => {
-  const team = context.actions.peek(Actions.Multicast.Team, {
-    scope: "dashboard",
+actions.useAction(Actions.Mount, (context) => {
+  const user = context.actions.peek(Actions.Multicast.User, {
+    scope: Actions.Multicast,
   });
-  if (team) return;
-
-  const users = await fetchUsers(context.task.controller.signal);
-  context.actions.produce(({ model }) => {
-    model.users = users;
-  });
+  if (user) return;
+  fetchDefaultData(context.task.controller.signal);
 });
 ```
+
+## Which pattern to use
+
+| Pattern        | Best when                                         |
+| -------------- | ------------------------------------------------- |
+| `peek()` guard | Mount fetches default data, broadcast overrides   |
+| `phase` guard  | Mount always fetches, broadcast only handles live |

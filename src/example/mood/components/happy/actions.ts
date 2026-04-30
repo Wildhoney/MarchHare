@@ -10,7 +10,9 @@ export function useHappyActions() {
   const actions = useActions<Model, typeof Actions>(model);
 
   actions.useAction(Actions.Select, (context, mood) => {
-    context.actions.dispatch(Actions.Multicast.Mood, mood, { scope: "mood" });
+    context.actions.dispatch(Actions.Multicast.Mood, mood, {
+      scope: Actions.Multicast,
+    });
   });
 
   actions.useAction(Actions.Multicast.Mood, (context, mood) => {

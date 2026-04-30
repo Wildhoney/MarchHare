@@ -14,6 +14,7 @@ import {
 } from "../types/index.ts";
 import EventEmitter from "eventemitter3";
 import { BroadcastEmitter } from "../boundary/components/broadcast/index.tsx";
+import { describe } from "../utils.ts";
 
 import type {
   Dispatchers,
@@ -63,6 +64,15 @@ export function isGenerator(
   const tag = Object.prototype.toString.call(result);
   return tag === "[object Generator]" || tag === "[object AsyncGenerator]";
 }
+
+/**
+ * Sentinel passed as the dispatch channel during mount replay. Channeled
+ * handlers check for this to skip replay &mdash; they require specific
+ * channel context and cannot meaningfully process a replay without it.
+ *
+ * @internal
+ */
+export const replay: unique symbol = Symbol(describe.replay());
 
 /**
  * Invokes all listeners for an event and returns a promise that resolves
@@ -118,14 +128,14 @@ export function useLifecycles({
 
     dispatchers.broadcast.forEach((action) => {
       const cached = broadcast.getCached(action);
-      if (!G.isNullable(cached)) unicast.emit(action, cached);
+      if (!G.isNullable(cached)) unicast.emit(action, cached, replay);
     });
 
     if (scope) {
       dispatchers.multicast.forEach((action) => {
         for (const entry of scope.values()) {
           const cached = entry.emitter.getCached(action);
-          if (!G.isNullable(cached)) unicast.emit(action, cached);
+          if (!G.isNullable(cached)) unicast.emit(action, cached, replay);
         }
       });
     }

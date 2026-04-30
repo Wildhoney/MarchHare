@@ -67,7 +67,7 @@ actions.useAction(Actions.Checkout, async (context) => {
 
 ```ts
 actions.useAction(Actions.Mount, async (context) => {
-  const user = await context.actions.read(Actions.Broadcast.User);
+  const user = await context.actions.resolution(Actions.Broadcast.User);
   if (!user) return;
 
   if (user.role !== "admin") {
