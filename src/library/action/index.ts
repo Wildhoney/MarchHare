@@ -7,7 +7,7 @@ import {
   Brand,
   Filter,
 } from "../types/index.ts";
-import { config } from "../utils/index.ts";
+import { describe } from "../utils.ts";
 
 export {
   getActionSymbol,
@@ -104,10 +104,10 @@ export const Action = <ActionFactory>(<unknown>(<
 ): HandlerPayload<P, C> | BroadcastPayload<P, C> | MulticastPayload<P, C> => {
   const symbol =
     distribution === Distribution.Broadcast
-      ? Symbol(`${config.broadcastActionPrefix}${name}`)
+      ? Symbol(describe.broadcast(name))
       : distribution === Distribution.Multicast
-        ? Symbol(`${config.multicastActionPrefix}${name}`)
-        : Symbol(`${config.actionPrefix}${name}`);
+        ? Symbol(describe.multicast(name))
+        : Symbol(describe.action(name));
 
   const action = function (channel: C): ChanneledAction<P, C> {
     return {

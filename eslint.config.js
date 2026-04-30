@@ -74,6 +74,7 @@ export default defineConfig([
       "src/library/utils/index.ts",
       "src/library/hooks/index.ts",
       "src/library/hooks/utils.ts",
+      "src/library/resource/index.ts",
       "src/library/boundary/components/consumer/components/partition/index.tsx",
     ],
     rules: {

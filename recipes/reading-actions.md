@@ -2,16 +2,16 @@
 
 There are two ways to access broadcast values:
 
-1. **In handlers** &ndash; `context.actions.read(action)` returns `Promise<T | null>` for imperative reads inside action handlers.
+1. **In handlers** &ndash; `context.actions.resolution(action)` returns `Promise<T | null>`, waiting for annotations to settle.
 2. **In JSX** &ndash; `actions.stream(action, renderer)` returns `React.ReactNode` for declarative rendering in component output.
 
-## Handler-side read
+## Handler-side resolution
 
-Use `context.actions.read` to read the latest broadcast or multicast value directly inside an action handler, without subscribing via `useAction` and storing it in the local model.
+Use `context.actions.resolution` to get the latest broadcast or multicast value inside an action handler, waiting for any pending annotations to settle before resolving.
 
 ```ts
 actions.useAction(Actions.FetchPosts, async (context) => {
-  const user = await context.actions.read(Actions.Broadcast.User);
+  const user = await context.actions.resolution(Actions.Broadcast.User);
   if (!user) return;
   const posts = await fetchPosts(user.id, {
     signal: context.task.controller.signal,
@@ -22,11 +22,11 @@ actions.useAction(Actions.FetchPosts, async (context) => {
 });
 ```
 
-> **Important:** The `read()` method only accepts broadcast or multicast actions. Attempting to pass a unicast action returns `null` as unicast values are not cached.
+> **Important:** `resolution()` only accepts broadcast or multicast actions. Attempting to pass a unicast action returns `null` as unicast values are not cached.
 
 ## Key details
 
-- **Async** &ndash; returns `Promise<T | null>`. If the corresponding model field has pending Immertation annotations, `read` waits for them to settle before resolving.
+- **Async** &ndash; returns `Promise<T | null>`. If the corresponding model field has pending Immertation annotations, `resolution` waits for them to settle before resolving.
 - **Raw value** &ndash; returns `T`, not a `Box<T>`. Handlers need the data, not the reactive wrapper.
 - **Null when empty** &ndash; returns `null` if no value has been dispatched for that action.
 - **Abort-safe** &ndash; returns `null` if the task's abort signal has fired.
@@ -44,18 +44,18 @@ actions.useAction(Actions.Check, (context) => {
 });
 ```
 
-| Method | Returns              | Waits for settled | Use case                       |
-| ------ | -------------------- | ----------------- | ------------------------------ |
-| `read` | `Promise<T \| null>` | Yes               | Need the resolved value        |
-| `peek` | `T \| null`          | No                | Quick guard check or sync read |
+| Method       | Returns              | Waits for settled | Use case                       |
+| ------------ | -------------------- | ----------------- | ------------------------------ |
+| `resolution` | `Promise<T \| null>` | Yes               | Need the resolved value        |
+| `peek`       | `T \| null`          | No                | Quick guard check or sync read |
 
 ## Multicast support
 
-For multicast actions, pass the scope name via the `options` argument:
+For multicast actions, pass the carrier class (the same one that owns the multicast action declarations) via the `options` argument:
 
 ```ts
-const score = await context.actions.read(Actions.Multicast.Score, {
-  scope: "game",
+const score = await context.actions.resolution(Actions.Multicast.Score, {
+  scope: Actions.Multicast,
 });
 ```
 
@@ -119,7 +119,7 @@ function Dashboard() {
 
 ### When to use which
 
-| Scenario                                   | Method                             |
-| ------------------------------------------ | ---------------------------------- |
-| Reading a broadcast value inside a handler | `context.actions.read(action)`     |
-| Rendering a broadcast value in JSX output  | `actions.stream(action, renderer)` |
+| Scenario                                   | Method                               |
+| ------------------------------------------ | ------------------------------------ |
+| Reading a broadcast value inside a handler | `context.actions.resolution(action)` |
+| Rendering a broadcast value in JSX output  | `actions.stream(action, renderer)`   |

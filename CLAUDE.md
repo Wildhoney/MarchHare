@@ -7,7 +7,6 @@ Strongly typed React framework using generators and efficiently updated views al
 ```ts
 import {
   Action,
-  Entry,
   Distribution,
   Lifecycle,
   useActions,
@@ -24,13 +23,12 @@ import {
 } from "chizu";
 import type {
   Box,
-  CacheId,
-  ChanneledCacheId,
   Fault,
   Handler,
   Handlers,
   Meta,
   Pk,
+  ScopeCarrier,
   Task,
   Tasks,
   Regulator,
@@ -198,8 +196,8 @@ actions.useAction(Actions.Fetch, async (context, payload) => {
 
   context.actions.annotate(Op.Update, value); // Mark async state
 
-  // Read latest broadcast/multicast value (waits for settled annotations)
-  const user = await context.actions.read(Actions.Broadcast.User);
+  // Resolve latest broadcast/multicast value (waits for settled annotations)
+  const user = await context.actions.resolution(Actions.Broadcast.User);
   // Returns Promise<T | null>
 
   // Peek at latest value immediately (no waiting)
@@ -261,8 +259,9 @@ actions.inspect.user.is(Op.Update); // check specific operation
 For scoped component communication:
 
 ```tsx
-// types.ts - shared multicast actions
+// types.ts - shared multicast actions (scope name lives on the class)
 export class MulticastActions {
+  static Scope = "mood" as const;
   static Mood = Action<Mood>("Mood", Distribution.Multicast);
 }
 
@@ -271,14 +270,14 @@ export class Actions {
   static Multicast = MulticastActions; // Always at top of class
 }
 
-// Parent defines scope boundary
-<Scope name="mood">
+// Parent defines scope boundary by passing the carrier class
+<Scope of={MulticastActions}>
   <Happy />
   <Sad />
 </Scope>;
 
-// Dispatch multicast directly to scope
-actions.dispatch(Actions.Multicast.Mood, mood, { scope: "mood" });
+// Dispatch multicast by passing the carrier class as `scope`
+actions.dispatch(Actions.Multicast.Mood, mood, { scope: Actions.Multicast });
 
 // Handle multicast from any component in scope
 actions.useAction(Actions.Multicast.Mood, (context, mood) => {
@@ -507,8 +506,8 @@ import { Broadcaster, Scope, Regulators } from "chizu";
 // Isolated broadcast context (for libraries)
 <Broadcaster>{children}</Broadcaster>
 
-// Multicast scope boundary
-<Scope name="ScopeName">{children}</Scope>
+// Multicast scope boundary — pass the MulticastActions class as the carrier
+<Scope of={MulticastActions}>{children}</Scope>
 
 // Isolated regulator context
 <Regulators>{children}</Regulators>
@@ -649,9 +648,7 @@ docs: update the README file
 - `src/library/boundary/components/broadcast/` - Broadcast system
 - `src/library/boundary/components/consumer/` - Consumer store (internal)
 - `src/library/boundary/components/tasks/` - Task tracking context
-- `src/library/boundary/components/cache/` - Cache store context
 - `src/library/boundary/components/regulators/` - Action regulator policy context
-- `src/library/cache/index.ts` - Entry factory and cache utilities
 
 ### Documentation
 
@@ -659,9 +656,8 @@ docs: update the README file
   - `action-control-patterns.md` - Cancellation, timeouts, retries, debouncing
   - `action-regulator.md` - Blocking/allowing actions with blacklist/whitelist policies
   - `broadcast-actions.md` - Cross-component communication
-  - `caching.md` - TTL-based caching with cacheable/invalidate
   - `channeled-actions.md` - Targeted event delivery
-  - `reading-actions.md` - Reading and streaming broadcast values: handler read(), peek(), and JSX stream()
+  - `reading-actions.md` - Reading and streaming broadcast values: handler resolution(), peek(), and JSX stream()
   - `context-providers.md` - Boundary, Broadcaster, Consumer
   - `error-handling.md` - Error component and fault handling
   - `feature-toggles.md` - Boolean feature flags with actions.features methods
@@ -674,6 +670,7 @@ docs: update the README file
   - `real-time-applications.md` - SSE/WebSocket patterns
   - `referential-equality.md` - Avoiding stale closures
   - `stateful-props.md` - Box<T> type for stateful props
+  - `use-resource.md` - useResource for cached fetches with subscriptions and typed errors
   - `utility-functions.md` - sleep, pk utilities
   - `utility-types.md` - Handler, Handlers types
   - `void-model.md` - Actions without local state

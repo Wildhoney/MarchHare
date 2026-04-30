@@ -895,13 +895,13 @@ context.actions.dispatch(Actions.PriceUpdate({ Symbol: price.symbol }), price);
 
 Late-mounting components receive the last cached value during `Phase.Mounting`.
 
-### Rule 40: Use `context.actions.read` to read broadcast values in handlers
+### Rule 40: Use `context.actions.resolution` to resolve broadcast values in handlers
 
-When an action handler needs the latest broadcast or multicast value imperatively, use `context.actions.read` instead of subscribing with `useAction` and storing it in the local model.
+When an action handler needs the latest broadcast or multicast value imperatively, use `context.actions.resolution` instead of subscribing with `useAction` and storing it in the local model.
 
 ```ts
 actions.useAction(Actions.FetchPosts, async (context) => {
-  const user = await context.actions.read(Actions.Broadcast.User);
+  const user = await context.actions.resolution(Actions.Broadcast.User);
   if (!user) return;
   const posts = await fetchPosts(user.id, {
     signal: context.task.controller.signal,
@@ -919,12 +919,12 @@ Key details:
 - Waits for pending Immertation annotations to settle before resolving
 - Respects the task's abort signal (resolves with `null` if aborted)
 - Reads from the broadcast/scope cache
-- Supports multicast with `{ scope: "name" }` option
+- Supports multicast with `{ scope: Actions.Multicast }` option
 
 ```ts
-// Multicast read in handler
-const score = await context.actions.read(Actions.Multicast.Score, {
-  scope: "game",
+// Multicast resolution in handler — pass the carrier class, not a string
+const score = await context.actions.resolution(Actions.Multicast.Score, {
+  scope: Actions.Multicast,
 });
 ```
 
@@ -938,10 +938,10 @@ actions.useAction(Actions.Check, (context) => {
 });
 ```
 
-| Method | Returns              | Waits for settled | Use case                       |
-| ------ | -------------------- | ----------------- | ------------------------------ |
-| `read` | `Promise<T \| null>` | Yes               | Need the resolved value        |
-| `peek` | `T \| null`          | No                | Quick guard check or sync read |
+| Method       | Returns              | Waits for settled | Use case                       |
+| ------------ | -------------------- | ----------------- | ------------------------------ |
+| `resolution` | `Promise<T \| null>` | Yes               | Need the resolved value        |
+| `peek`       | `T \| null`          | No                | Quick guard check or sync read |
 
 ### Rule 41: Use `actions.stream` to render broadcast values declaratively in JSX
 
@@ -968,7 +968,7 @@ Key details:
 - Re-renders only the streamed portion when a new value arrives
 - The renderer receives `(value, inspect)` &mdash; use `inspect` for annotation status (e.g. `inspect.pending()`)
 - Payload type must be an object (`T extends object`) for annotation tracking
-- Use `context.actions.read` (Rule 40) for imperative reads inside handlers; use `actions.stream` (this rule) for declarative rendering in JSX
+- Use `context.actions.resolution` (Rule 40) for imperative reads inside handlers; use `actions.stream` (this rule) for declarative rendering in JSX
 
 ---
 
@@ -1027,15 +1027,15 @@ console.log(context.data.userId); // Always fresh
 
 ## Summary
 
-| Concept      | Rule                                                              |
-| ------------ | ----------------------------------------------------------------- |
-| Actions      | Static class members with `Action<T>()`                           |
-| Filters      | `[Action, { Key: value }]` for targeted delivery                  |
-| Broadcast    | `Distribution.Broadcast` for cross-component                      |
-| State        | Always via `produce()`, use annotations                           |
-| Handlers     | Sync, async, or generator signatures                              |
-| Lifecycles   | `Mount`, `Unmount`, `Error`, `Node`                               |
-| Data access  | Use `context.data` after await                                    |
-| Cancellation | Use `context.task.controller.signal`                              |
-| Read/Stream  | `actions.stream()` for JSX, `context.actions.read()` for handlers |
-| Types        | Strict models, `Pk<T>` for optimistic keys                        |
+| Concept      | Rule                                                                    |
+| ------------ | ----------------------------------------------------------------------- |
+| Actions      | Static class members with `Action<T>()`                                 |
+| Filters      | `[Action, { Key: value }]` for targeted delivery                        |
+| Broadcast    | `Distribution.Broadcast` for cross-component                            |
+| State        | Always via `produce()`, use annotations                                 |
+| Handlers     | Sync, async, or generator signatures                                    |
+| Lifecycles   | `Mount`, `Unmount`, `Error`, `Node`                                     |
+| Data access  | Use `context.data` after await                                          |
+| Cancellation | Use `context.task.controller.signal`                                    |
+| Read/Stream  | `actions.stream()` for JSX, `context.actions.resolution()` for handlers |
+| Types        | Strict models, `Pk<T>` for optimistic keys                              |

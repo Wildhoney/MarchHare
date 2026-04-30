@@ -78,7 +78,7 @@ function ComponentB() {
 
 ## Reading and streaming broadcast values
 
-For reading broadcast values imperatively in handlers (`context.actions.read`, `context.actions.peek`) or rendering them declaratively in JSX (`actions.stream`), see the [reading broadcast values recipe](./reading-actions.md).
+For reading broadcast values imperatively in handlers (`context.actions.resolution`, `context.actions.peek`) or rendering them declaratively in JSX (`actions.stream`), see the [reading broadcast values recipe](./reading-actions.md).
 
 ## Direct broadcast access
 

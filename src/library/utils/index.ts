@@ -2,24 +2,6 @@ import { Pk } from "../types/index.ts";
 import { AbortError } from "../error/types.ts";
 
 /**
- * Configuration constants for Chizu action symbols.
- */
-export const config = {
-  /** Prefix for all Chizu action symbols. */
-  actionPrefix: "chizu.action/",
-  /** Prefix for broadcast action symbols. */
-  broadcastActionPrefix: "chizu.action/broadcast/",
-  /** Prefix for multicast action symbols. */
-  multicastActionPrefix: "chizu.action/multicast/",
-  /** Prefix for channeled action symbols. */
-  channelPrefix: "chizu.channel/",
-  /** Prefix for cache operation symbols. */
-  cachePrefix: "chizu.cache/",
-  /** Prefix for lifecycle action symbols. */
-  lifecyclePrefix: "chizu.action.lifecycle/",
-};
-
-/**
  * Returns a promise that resolves after the specified number of milliseconds.
  * The sleep will reject with an AbortError when the signal is aborted,
  * allowing cleanup of pending operations.

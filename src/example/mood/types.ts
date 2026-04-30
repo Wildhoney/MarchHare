@@ -10,5 +10,6 @@ export type Model = {
 };
 
 export class MulticastActions {
+  static Scope = <const>"mood";
   static Mood = Action<Mood>("Mood", Distribution.Multicast);
 }
