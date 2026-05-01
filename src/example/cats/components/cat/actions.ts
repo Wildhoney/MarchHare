@@ -15,7 +15,7 @@ export function useCatActions({ index }: { index: number }) {
   const cat = actions.useResource(resources.cat);
 
   actions.useAction(Actions.Mount, async (context) => {
-    const data = await cat(context.data.index);
+    const data = await cat();
 
     context.actions.produce(({ model }) => {
       model.cat = data;
@@ -23,7 +23,7 @@ export function useCatActions({ index }: { index: number }) {
   });
 
   actions.useAction(Actions.Refresh, async (context) => {
-    const data = await cat(context.data.index);
+    const data = await cat();
 
     context.actions.produce(({ model }) => {
       model.cat = data;
