@@ -82,7 +82,7 @@
     "react-flip-numbers": "^3.0.9",
     "react-router-dom": "^7.13.0",
     "react-test-renderer": "^19.2.4",
-    "react-wayfinder": "^0.0.4",
+    "react-wayfinder": "^0.1.1",
     "rollup-plugin-visualizer": "^6.0.5",
     "terser": "^5.46.0",
     "traverse": "^0.6.11",

@@ -11,6 +11,9 @@ export default defineConfig({
       },
     }),
   ],
+  resolve: {
+    dedupe: ["react", "react-dom"],
+  },
   test: {
     environment: "happy-dom",
     include: ["src/**/*.test.{ts,tsx}"],
