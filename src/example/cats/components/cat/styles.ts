@@ -41,7 +41,6 @@ export const image = css`
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: opacity 0.2s ease;
 `;
 
 export const skeleton = css`
@@ -57,35 +56,6 @@ export const skeleton = css`
     }
     100% {
       background-position: -200% 0;
-    }
-  }
-`;
-
-export const error = css`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  color: #c0392b;
-  font-size: 14px;
-  font-weight: 500;
-`;
-
-export const spinner = css`
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 18px;
-  height: 18px;
-  border: 2px solid rgba(255, 255, 255, 0.4);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
     }
   }
 `;
@@ -128,40 +98,5 @@ export const primary = css`
   &:hover:not(:disabled) {
     color: white;
     filter: brightness(1.1);
-  }
-`;
-
-export const history = css`
-  padding: 16px 20px;
-  background: #fafafb;
-  border-radius: 10px;
-
-  h2 {
-    margin: 0 0 8px;
-    font-size: 12px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: #888;
-  }
-
-  ol {
-    margin: 0;
-    padding-left: 20px;
-    font-size: 12px;
-    color: #555;
-
-    li {
-      padding: 2px 0;
-    }
-
-    code {
-      font-family:
-        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      background: white;
-      padding: 1px 6px;
-      border-radius: 4px;
-      border: 1px solid #eee;
-    }
   }
 `;

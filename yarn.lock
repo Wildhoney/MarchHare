@@ -7981,12 +7981,13 @@ react-test-renderer@^19.2.4:
     react-is "^19.2.4"
     scheduler "^0.27.0"
 
-react-wayfinder@^0.0.4:
-  version "0.0.4"
-  resolved "https://registry.yarnpkg.com/react-wayfinder/-/react-wayfinder-0.0.4.tgz#267bd35675fd9a9dab0be02055e34e85ce27f627"
-  integrity sha512-uSiE5J27S+4CP2pvoeX5vCVT0HdIFQuXgNGIu+vabAtu+RwYRD1jp0yb6tPwogPkI22FG4eQoA1+52VIcwOU7A==
+react-wayfinder@^0.1.1:
+  version "0.1.1"
+  resolved "https://registry.yarnpkg.com/react-wayfinder/-/react-wayfinder-0.1.1.tgz#a149f126e275a4b231c7ece66738cd46769cb16b"
+  integrity sha512-WLsfsdP2884GMWzyL6XJFsKk5YzRwyOU5TKqIP1oY0oBfUChnFD9k7M5yfa7ujl5vPzAOyZ4bCbU8Plo6VOpHg==
   dependencies:
     "@tanem/react-nprogress" "^6.0.3"
+    "@types/dom-navigation" "^1.0.7"
     antd "^6.3.4"
 
 react@^19.2.4:
