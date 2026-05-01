@@ -1,5 +1,5 @@
 import { Action, Lifecycle } from "../../../../library/index.ts";
-import type { RouterHandle } from "react-wayfinder";
+import type { Router } from "react-wayfinder";
 
 export type Cat = {
   id: string;
@@ -20,4 +20,4 @@ export type Model = {
   cat: Cat | null;
 };
 
-export type Data = { index: number; router: RouterHandle };
+export type Data = { index: number; router: Router };
