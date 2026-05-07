@@ -35,6 +35,7 @@ import {
   MulticastOptions,
   AnyAction,
   BroadcastPayload,
+  FaultSymbol,
   type ValidateFeatures,
   type NullableNodes,
 } from "../types/index.ts";
@@ -54,7 +55,6 @@ import {
   isMulticastAction,
   getName,
 } from "../action/index.ts";
-import { useError } from "../error/index.tsx";
 import { State, Operation, Process, Inspect } from "immertation";
 import { useTasks } from "../boundary/components/tasks/utils.ts";
 import { Partition } from "../boundary/components/consumer/index.tsx";
@@ -125,7 +125,6 @@ export function useActions<
 
   const broadcast = useBroadcast();
   const scope = useScope();
-  const error = useError();
   const tasks = useTasks();
   const regulatorPolicy = useRegulators();
   const rerender = useRerender();
@@ -396,7 +395,8 @@ export function useActions<
         payload: HandlerPayload,
         dispatchChannel?: Filter | typeof replay,
       ) {
-        if (!isAllowed(action, regulatorPolicy)) {
+        const isFaultAction = action === FaultSymbol;
+        if (!isFaultAction && !isAllowed(action, regulatorPolicy)) {
           const errorAction = findLifecycleAction(
             registry.current.handlers,
             "Error",
@@ -409,7 +409,7 @@ export function useActions<
             handled,
             tasks,
           };
-          error?.(details);
+          broadcast.fire(FaultSymbol, details);
           if (handled && errorAction) unicast.emit(errorAction, details);
           return;
         }
@@ -446,7 +446,7 @@ export function useActions<
             handled,
             tasks,
           };
-          error?.(details);
+          broadcast.fire(FaultSymbol, details);
           if (handled && errorAction) unicast.emit(errorAction, details);
         }
 

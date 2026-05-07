@@ -8,6 +8,7 @@ import type {
 } from "../boundary/components/tasks/types.ts";
 import type { Regulator } from "../boundary/components/regulators/types.ts";
 import type { Fault } from "../error/types.ts";
+import { describe } from "../utils.ts";
 
 export type { ActionId, Box, Task, Tasks };
 /**
@@ -98,6 +99,17 @@ function createLifecycleAction<P = never, C extends Filter = never>(
 }
 
 /**
+ * Internal symbol for the global `Lifecycle.Fault` broadcast. Exposed so the
+ * dispatch pipeline can fire faults and short-circuit the regulator policy
+ * without depending on the `Lifecycle` class at runtime.
+ *
+ * @internal
+ */
+export const FaultSymbol: unique symbol = <typeof FaultSymbol>(
+  Symbol(describe.broadcast("Fault"))
+);
+
+/**
  * Factory functions for lifecycle actions.
  *
  * Each call returns a **unique** action symbol, enabling per-component
@@ -118,6 +130,9 @@ function createLifecycleAction<P = never, C extends Filter = never>(
  * // Now regulating Lifecycle.Mount only blocks THIS component's mount:
  * context.regulator.disallow(Actions.Mount);
  * ```
+ *
+ * `Lifecycle.Fault` is a singleton broadcast (not a factory). All components
+ * subscribe to the same shared symbol to receive global fault notifications.
  */
 export class Lifecycle {
   /** Creates a Mount lifecycle action. Triggered once on component mount (`useLayoutEffect`). */
@@ -165,6 +180,47 @@ export class Lifecycle {
   static Node(): HandlerPayload<unknown, { Name: string }> {
     return createLifecycleAction<unknown, { Name: string }>("Node");
   }
+
+  /**
+   * Global fault broadcast. Receives a `Fault` whenever any action in the
+   * `<Boundary>` errors, times out, is supplanted, or is blocked by the
+   * regulator. Subscribe via `actions.useAction(Lifecycle.Fault, handler)`.
+   *
+   * Unlike the per-component `Lifecycle.Error()` factory, `Fault` is a single
+   * shared broadcast — every subscriber points at the same symbol. The
+   * regulator policy does not apply to `Fault`; faults always reach
+   * subscribers so error visibility cannot be silenced.
+   *
+   * @example
+   * ```tsx
+   * const actions = useActions<void, typeof Actions>();
+   *
+   * actions.useAction(Lifecycle.Fault, (context, fault) => {
+   *   if (fault.reason === Reason.Errored) {
+   *     console.error(`Action "${fault.action}" failed`, fault.error);
+   *   }
+   * });
+   * ```
+   */
+  static Fault: BroadcastPayload<Fault> = (() => {
+    const action: Record<symbol, unknown> = {};
+    // eslint-disable-next-line fp/no-mutating-methods
+    Object.defineProperty(action, Brand.Action, {
+      value: FaultSymbol,
+      enumerable: false,
+    });
+    // eslint-disable-next-line fp/no-mutating-methods
+    Object.defineProperty(action, Brand.Payload, {
+      value: undefined,
+      enumerable: false,
+    });
+    // eslint-disable-next-line fp/no-mutating-methods
+    Object.defineProperty(action, Brand.Broadcast, {
+      value: true,
+      enumerable: false,
+    });
+    return <BroadcastPayload<Fault>>(<unknown>action);
+  })();
 }
 
 /**

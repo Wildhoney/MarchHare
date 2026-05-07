@@ -37,16 +37,28 @@ export function useMyActions() {
 ```
 
 - **`Lifecycle.Mount()`** &ndash; Triggered once when the component mounts (`useLayoutEffect`). Protected against React Strict Mode double-invocation.
-- **`Lifecycle.Error()`** &ndash; Triggered when an action throws an error. Receives `Fault` as payload.
+- **`Lifecycle.Error()`** &ndash; Triggered when an action **in this component** throws. Receives `Fault` as payload. Each call returns a unique per-component symbol.
 - **`Lifecycle.Unmount()`** &ndash; Triggered when the component unmounts. All in-flight actions are automatically aborted before this handler runs. Protected against React Strict Mode double-invocation via deferred microtask cancellation.
 - **`Lifecycle.Update()`** &ndash; Triggered when `context.data` changes. Receives an object with the changed keys.
 - **`Lifecycle.Node()`** &ndash; Triggered when a DOM node is captured via `actions.node()`. Supports channeled subscriptions by node name.
 
-Because each call returns a unique symbol, `context.regulator.disallow(Actions.Mount)` only blocks **this** component's mount — not every component in the boundary.
+Because each factory call returns a unique symbol, `context.regulator.disallow(Actions.Mount)` only blocks **this** component's mount — not every component in the boundary.
 
 **Note:** Actions should ideally be self-contained and handle expected errors internally using patterns like [Option](https://mobily.github.io/ts-belt/api/option) or [Result](https://mobily.github.io/ts-belt/api/result) types to update the model accordingly. `Lifecycle.Error()` is intended for timeouts, aborts, and uncaught catastrophic errors &ndash; not routine error handling.
 
-The `<Error>` component is a catch-all for errors from **any** action in your application, useful for global error reporting or logging. A `Lifecycle.Error()` handler handles errors **locally** where they occurred, allowing component-specific error recovery or UI updates.
+`Lifecycle.Error()` handles errors **locally** where they occurred, allowing component-specific recovery or UI updates. For an app-level catch-all across every component in the boundary, subscribe to the global [`Lifecycle.Fault`](./error-handling.md) broadcast instead.
+
+## `Lifecycle.Fault` (global broadcast)
+
+`Lifecycle.Fault` is a **singleton broadcast** &ndash; not a factory. Every component that subscribes to it receives every fault from anywhere in the surrounding `<Boundary>`:
+
+```ts
+actions.useAction(Lifecycle.Fault, (_context, fault) => {
+  console.error(`${fault.action} failed:`, fault.error);
+});
+```
+
+It does not need to be assigned as a static action property &ndash; reference it directly. See [error-handling.md](./error-handling.md) for the full contract.
 
 ## Node capture events
 

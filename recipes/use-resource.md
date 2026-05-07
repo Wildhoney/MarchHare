@@ -86,7 +86,7 @@ export const user = Resource<User, ApiError>(
 );
 ```
 
-The awaiter's promise still rejects with the original value, so try/catch and the global `<Error>` boundary continue to work &ndash; the subscription is purely additive.
+The awaiter's promise still rejects with the original value, so try/catch and a global `Lifecycle.Fault` subscriber continue to work &ndash; the subscription is purely additive.
 
 > **Note:** TypeScript cannot type promise rejections, so `await fetchUser()` itself still rejects with `unknown`. The typing only narrows the `onError` callback. To recover inline, narrow within a `try/catch` block in the handler.
 
@@ -125,27 +125,24 @@ actions.useAction(Actions.Mount, async (context) => {
   }
 });
 
-// Tier 3: <Error> boundary — global catch-all
-<Error<ApiError>
-  handler={({ reason, error, tasks }) => {
-    if (reason !== Reason.Errored) return;
-    if (error instanceof UnauthorisedError) {
-      for (const task of tasks) task.controller.abort();
-      redirectToLogin();
-    }
-  }}
->
-  <App />
-</Error>;
+// Tier 3: Lifecycle.Fault — global catch-all
+const actions = useActions();
+actions.useAction(Lifecycle.Fault, (_context, { reason, error, tasks }) => {
+  if (reason !== Reason.Errored) return;
+  if (error instanceof UnauthorisedError) {
+    for (const task of tasks) task.controller.abort();
+    redirectToLogin();
+  }
+});
 ```
 
-| Tier      | Use for                                                                               |
-| --------- | ------------------------------------------------------------------------------------- |
-| `onError` | Cross-component reactions to fresh failures &ndash; toast, retry banner, analytics    |
-| try/catch | Component-specific recovery where the error becomes part of the model state           |
-| `<Error>` | App-level concerns &ndash; sign-out on auth failure, sentry reporting, abort cascades |
+| Tier              | Use for                                                                               |
+| ----------------- | ------------------------------------------------------------------------------------- |
+| `onError`         | Cross-component reactions to fresh failures &ndash; toast, retry banner, analytics    |
+| try/catch         | Component-specific recovery where the error becomes part of the model state           |
+| `Lifecycle.Fault` | App-level concerns &ndash; sign-out on auth failure, sentry reporting, abort cascades |
 
-Pick the lowest tier that suits the concern. Routine, expected failures (404 means "deleted") belong in tier 2. Authentication and network-level failures usually belong in tier 3. Tier 1 is for events other components need to react to without awaiting the resource themselves. See [error-handling.md](./error-handling.md) for the boundary contract.
+Pick the lowest tier that suits the concern. Routine, expected failures (404 means "deleted") belong in tier 2. Authentication and network-level failures usually belong in tier 3. Tier 1 is for events other components need to react to without awaiting the resource themselves. See [error-handling.md](./error-handling.md) for the global fault contract.
 
 ## Mount-time pattern
 

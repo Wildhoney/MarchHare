@@ -1,4 +1,3 @@
-import { ReactNode } from "react";
 import type { Task } from "../boundary/components/tasks/types.ts";
 
 /**
@@ -68,6 +67,13 @@ export class DisallowedError extends Error {
 
 /**
  * Details about an error that occurred during action execution.
+ *
+ * Faults are delivered through the global `Lifecycle.Fault` broadcast.
+ * Subscribe with `actions.useAction(Lifecycle.Fault, handler)` near the
+ * root of your application for app-level concerns (logging, sign-out on
+ * auth failure, abort cascades). For component-local recovery, use a
+ * `Lifecycle.Error()` factory instead.
+ *
  * @template E Custom error types to include in the union with Error.
  */
 export type Fault<E extends Error = never> = {
@@ -85,37 +91,13 @@ export type Fault<E extends Error = never> = {
    * (e.g., on 403/500 responses to prevent cascading failures).
    *
    * @example
-   * ```tsx
-   * <Error handler={({ reason, tasks }) => {
-   *   if (reason === Reason.Errored) {
-   *     // Abort all in-flight tasks to prevent cascading errors
-   *     for (const task of tasks) {
-   *       task.controller.abort();
-   *     }
-   *     // Trigger re-authentication flow
+   * ```ts
+   * actions.useAction(Lifecycle.Fault, (context, fault) => {
+   *   if (fault.reason === Reason.Errored) {
+   *     for (const task of fault.tasks) task.controller.abort();
    *   }
-   * }}>
-   *   {children}
-   * </Error>
+   * });
    * ```
    */
   tasks: ReadonlySet<Task>;
-};
-
-/**
- * Catcher function called when an action error occurs.
- * @template E Custom error types to include in the union with Error.
- * @param details Information about the error.
- */
-export type Catcher<E extends Error = never> = (details: Fault<E>) => void;
-
-/**
- * Props for the Error boundary component.
- * @template E Custom error types to include in the union with Error.
- */
-export type Props<E extends Error = never> = {
-  /** Catcher function called when an action error occurs. */
-  handler: Catcher<E>;
-  /** Child components to wrap with error handling. */
-  children?: ReactNode;
 };

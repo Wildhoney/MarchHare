@@ -42,7 +42,7 @@ export const features = [
   {
     icon: "🛡️",
     title: "Error Handling",
-    desc: "Centralised error handling via Error component",
+    desc: "Centralised error handling via Lifecycle.Fault broadcast",
   },
   {
     icon: "✨",

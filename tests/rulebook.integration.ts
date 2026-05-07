@@ -672,7 +672,7 @@ test.describe("Chizu Rulebook", () => {
       await expect(error).toHaveText("");
     });
 
-    it("Rule 24: Use the <Error> boundary for global error handling - should propagate unhandled errors to boundary", async ({
+    it("Rule 24: Subscribe to Lifecycle.Fault for global error handling - should propagate unhandled errors to boundary", async ({
       page,
     }) => {
       const errors = page.getByTestId("rule-24-errors");
@@ -686,7 +686,7 @@ test.describe("Chizu Rulebook", () => {
       await expect(errors).toContainText("Boundary test", { timeout: 1000 });
     });
 
-    it("Rule 24: Use the <Error> boundary for global error handling - should accumulate multiple errors", async ({
+    it("Rule 24: Subscribe to Lifecycle.Fault for global error handling - should accumulate multiple errors", async ({
       page,
     }) => {
       const errors = page.getByTestId("rule-24-errors");

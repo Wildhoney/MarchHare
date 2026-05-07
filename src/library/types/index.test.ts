@@ -27,6 +27,12 @@ describe("Lifecycle", () => {
     expect(typeof Lifecycle.Update).toBe("function");
     expect(typeof Lifecycle.Node).toBe("function");
   });
+
+  it("should expose Fault as a singleton broadcast action", () => {
+    expect(Lifecycle.Fault).toBe(Lifecycle.Fault);
+    expect(typeof Lifecycle.Fault[Brand.Action]).toBe("symbol");
+    expect(Lifecycle.Fault[Brand.Broadcast]).toBe(true);
+  });
 });
 
 describe("Pk", () => {

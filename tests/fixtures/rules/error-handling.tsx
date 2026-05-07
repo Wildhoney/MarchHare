@@ -2,16 +2,16 @@
  * E2E Test Fixtures for Rules 23-26: Error Handling
  *
  * Rule 23: Use Lifecycle.Error for local error recovery
- * Rule 24: Use the <Error> boundary for global error handling
+ * Rule 24: Subscribe to Lifecycle.Fault for global error handling
  * Rule 25: Know the error reasons (Timedout, Supplanted, Disallowed, Errored, Unmounted)
  * Rule 26: Use Option or Result for fallible model properties
  */
 import * as React from "react";
 import {
   Action,
+  Boundary,
   useActions,
   Lifecycle,
-  Error as ErrorBoundary,
   Reason,
   utils,
 } from "../../../src/library/index.ts";
@@ -246,32 +246,40 @@ function Rule23LocalErrorRecovery() {
 }
 
 /**
- * Rule 24 Test: <Error> boundary for global error handling
- * The parent fixture already wraps this in an <Error> boundary,
- * but we'll test a nested one here.
+ * Rule 24 Test: Lifecycle.Fault for global error handling.
+ *
+ * The parent fixture already subscribes to Lifecycle.Fault near the root.
+ * Here we wrap the throwing component in its own <Boundary> so the nested
+ * Fault broadcast is isolated from the rest of the app.
  */
 function Rule24GlobalErrorBoundary() {
   const [globalErrors, setGlobalErrors] = React.useState<string[]>([]);
 
   return (
     <section data-testid="rule-24">
-      <h3>Rule 24: Error Boundary</h3>
-      <ErrorBoundary
-        handler={({ reason, error, action }) => {
-          setGlobalErrors((prev) => [
-            ...prev,
-            `${action}:${Reason[reason]?.toLowerCase()}:${error.message}`,
-          ]);
-        }}
-      >
+      <h3>Rule 24: Lifecycle.Fault</h3>
+      <Boundary>
+        <Rule24FaultLogger
+          onFault={(entry) => setGlobalErrors((prev) => [...prev, entry])}
+        />
         <ErrorBoundaryChild />
-      </ErrorBoundary>
+      </Boundary>
       <div data-testid="rule-24-errors">{globalErrors.join(" | ")}</div>
       <button data-testid="rule-24-clear" onClick={() => setGlobalErrors([])}>
         Clear Errors
       </button>
     </section>
   );
+}
+
+function Rule24FaultLogger({ onFault }: { onFault: (entry: string) => void }) {
+  const actions = useActions(() => ({ onFault }));
+  actions.useAction(Lifecycle.Fault, (context, fault) => {
+    context.data.onFault(
+      `${fault.action}:${Reason[fault.reason]?.toLowerCase()}:${fault.error.message}`,
+    );
+  });
+  return null;
 }
 
 function ErrorBoundaryChild() {

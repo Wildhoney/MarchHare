@@ -1,5 +1,4 @@
-import { createContext, useContext } from "react";
-import { Catcher, Reason } from "./types.ts";
+import { Reason } from "./types.ts";
 
 /**
  * Determines the error reason based on what was thrown.
@@ -24,18 +23,4 @@ export function getReason(error: unknown): Reason {
  */
 export function getError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
-}
-
-/**
- * React context for handling errors that occur within actions.
- */
-export const ErrorContext = createContext<Catcher | undefined>(undefined);
-
-/**
- * Hook to access the error handler from the nearest Error provider.
- *
- * @returns The error handler function, or undefined if not within an Error provider.
- */
-export function useError() {
-  return useContext(ErrorContext);
 }

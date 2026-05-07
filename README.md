@@ -31,7 +31,7 @@ For advanced topics, see the [recipes directory](./recipes/).
 - Built-in request cancellation with `AbortController`.
 - Granular async state tracking per model field.
 - Declarative lifecycle hooks without `useEffect`.
-- Centralised error handling via the `Error` component.
+- Centralised error handling via the global `Lifecycle.Fault` broadcast.
 - React Native compatible &ndash; uses [eventemitter3](https://github.com/primus/eventemitter3) for cross-platform pub/sub.
 
 ## Getting started
