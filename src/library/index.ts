@@ -25,12 +25,5 @@ export * as utils from "./utils/index.ts";
 
 export type { Box } from "immertation";
 export type { Fault } from "./error/index.ts";
-export type {
-  Pk,
-  Task,
-  Tasks,
-  Handlers,
-  Meta,
-  ScopeCarrier,
-} from "./types/index.ts";
+export type { Pk, Task, Tasks, Handlers, Meta } from "./types/index.ts";
 export type { Regulator } from "./boundary/components/regulators/index.tsx";

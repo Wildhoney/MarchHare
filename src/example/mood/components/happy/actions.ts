@@ -11,7 +11,7 @@ export function useHappyActions() {
 
   actions.useAction(Actions.Select, (context, mood) => {
     context.actions.dispatch(Actions.Multicast.Mood, mood, {
-      scope: Actions.Multicast,
+      scope: Actions.Multicast.Scope,
     });
   });
 

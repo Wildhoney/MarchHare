@@ -263,7 +263,7 @@ export function useActions<
               : undefined;
 
             if (isMulticastAction(action) && options?.scope) {
-              const scoped = getScope(scope, options.scope.Scope);
+              const scoped = getScope(scope, options.scope);
               if (scoped)
                 return emitAsync(scoped.emitter, base, payload, channel);
               return Promise.resolve();
@@ -324,7 +324,7 @@ export function useActions<
 
             const emitter =
               isMulticastAction(action) && options?.scope
-                ? (getScope(scope, options.scope.Scope)?.emitter ?? null)
+                ? (getScope(scope, options.scope)?.emitter ?? null)
                 : broadcast;
 
             if (!emitter) return null;
@@ -370,7 +370,7 @@ export function useActions<
 
             const emitter =
               isMulticastAction(action) && options?.scope
-                ? (getScope(scope, options.scope.Scope)?.emitter ?? null)
+                ? (getScope(scope, options.scope)?.emitter ?? null)
                 : broadcast;
 
             if (!emitter) return null;
@@ -599,7 +599,7 @@ export function useActions<
               : undefined;
 
             if (isMulticastAction(action) && options?.scope) {
-              const scoped = getScope(scope, options.scope.Scope);
+              const scoped = getScope(scope, options.scope);
               if (scoped)
                 return emitAsync(scoped.emitter, base, payload, channel);
               return Promise.resolve();

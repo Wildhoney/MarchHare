@@ -51,11 +51,11 @@ actions.useAction(Actions.Check, (context) => {
 
 ## Multicast support
 
-For multicast actions, pass the carrier class (the same one that owns the multicast action declarations) via the `options` argument:
+For multicast actions, pass the scope name (typically `Actions.Multicast.Scope`) via the `options` argument:
 
 ```ts
 const score = await context.actions.resolution(Actions.Multicast.Score, {
-  scope: Actions.Multicast,
+  scope: Actions.Multicast.Scope,
 });
 ```
 

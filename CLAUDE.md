@@ -28,7 +28,6 @@ import type {
   Handlers,
   Meta,
   Pk,
-  ScopeCarrier,
   Task,
   Tasks,
   Regulator,
@@ -270,14 +269,16 @@ export class Actions {
   static Multicast = MulticastActions; // Always at top of class
 }
 
-// Parent defines scope boundary by passing the carrier class
-<Scope of={MulticastActions}>
+// Parent defines scope boundary by passing the scope name
+<Scope of={MulticastActions.Scope}>
   <Happy />
   <Sad />
 </Scope>;
 
-// Dispatch multicast by passing the carrier class as `scope`
-actions.dispatch(Actions.Multicast.Mood, mood, { scope: Actions.Multicast });
+// Dispatch multicast by passing the scope name
+actions.dispatch(Actions.Multicast.Mood, mood, {
+  scope: Actions.Multicast.Scope,
+});
 
 // Handle multicast from any component in scope
 actions.useAction(Actions.Multicast.Mood, (context, mood) => {

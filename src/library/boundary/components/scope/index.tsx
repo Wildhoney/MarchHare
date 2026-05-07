@@ -1,5 +1,4 @@
 import type { Props, ScopeContext, ScopeEntry } from "./types.ts";
-import type { ScopeCarrier } from "../../../types/index.ts";
 import { Context, useScope } from "./utils.ts";
 import type { ComponentType, ReactNode } from "react";
 import { BroadcastEmitter } from "../broadcast/utils.ts";
@@ -23,7 +22,7 @@ export type { ScopeEntry, ScopeContext } from "./types.ts";
  * Like Broadcast, multicast caches the most recent dispatched value so that
  * late-mounted components can read it via `context.actions.resolution()`.
  *
- * @param props.of - The carrier object (typically a `MulticastActions` class) exposing the scope name via `.Scope`.
+ * @param props.of - The scope name. Typically a `static Scope` literal co-located with the feature's multicast actions.
  * @param props.children - Components within the scope boundary.
  *
  * @example
@@ -33,32 +32,31 @@ export type { ScopeEntry, ScopeContext } from "./types.ts";
  *   static FilterChanged = Action<Filter>("FilterChanged", Distribution.Multicast);
  * }
  *
- * <Scope of={UserListActions}>
+ * <Scope of={UserListActions.Scope}>
  *   <UserFilter />
  *   <UserTable />
  * </Scope>
  *
  * // Dispatch reaches every component in the UserList scope:
- * actions.dispatch(Actions.Multicast.FilterChanged, filter, { scope: Actions.Multicast });
+ * actions.dispatch(Actions.Multicast.FilterChanged, filter, { scope: Actions.Multicast.Scope });
  * ```
  *
  * @example
  * ```tsx
  * // Nested scopes - each class carries its own scope name
- * <Scope of={AppActions}>
+ * <Scope of={AppActions.Scope}>
  *   <Header />
- *   <Scope of={SidebarActions}>
+ *   <Scope of={SidebarActions.Scope}>
  *     <SidebarItem />
  *   </Scope>
- *   <Scope of={ContentActions}>
+ *   <Scope of={ContentActions.Scope}>
  *     <ContentItem />
  *   </Scope>
  * </Scope>
  * ```
  */
-export function Scope({ of, children }: Props): React.ReactNode {
+export function Scope({ of: name, children }: Props): React.ReactNode {
   const parent = useScope();
-  const name = of.Scope;
 
   const scopeEntry = React.useMemo<ScopeEntry>(
     () => ({
@@ -83,7 +81,7 @@ export function Scope({ of, children }: Props): React.ReactNode {
  * Eliminates the need to manually wrap component output in `<Scope of={...}>`,
  * keeping the component body focused on its own rendering logic.
  *
- * @param carrier - Scope carrier (typically a `MulticastActions` class) exposing the scope name via `.Scope`.
+ * @param scope - The scope name. Typically a `static Scope` literal co-located with the feature's multicast actions.
  * @param Component - The component to wrap.
  * @returns A new component that renders the original within a `<Scope>`.
  *
@@ -94,7 +92,7 @@ export function Scope({ of, children }: Props): React.ReactNode {
  *   static Update = Action<User>("Update", Distribution.Multicast);
  * }
  *
- * export default withScope(MulticastActions, function Layout(): ReactElement {
+ * export default withScope(MulticastActions.Scope, function Layout(): ReactElement {
  *   return (
  *     <div>
  *       <Sidebar />
@@ -104,8 +102,8 @@ export function Scope({ of, children }: Props): React.ReactNode {
  * });
  * ```
  */
-export function withScope<S extends string, P extends object>(
-  carrier: ScopeCarrier<S>,
+export function withScope<P extends object>(
+  scope: string,
   Component: ComponentType<P>,
 ): (props: P) => ReactNode {
   const scopedName = `Scoped${Component.displayName || Component.name || "Component"}`;
@@ -113,7 +111,7 @@ export function withScope<S extends string, P extends object>(
   return {
     [scopedName](props: P): ReactNode {
       return (
-        <Scope of={carrier}>
+        <Scope of={scope}>
           <Component {...props} />
         </Scope>
       );

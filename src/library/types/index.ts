@@ -382,9 +382,9 @@ export type BroadcastPayload<
  * Branded type for multicast action objects created with `Action()` and `Distribution.Multicast`.
  * Multicast actions are dispatched to all components within a named scope boundary.
  *
- * When dispatching a multicast action, you MUST provide the scope carrier as the third argument:
+ * When dispatching a multicast action, you MUST provide the scope name as the third argument:
  * ```ts
- * actions.dispatch(Actions.Multicast.Update, payload, { scope: Actions.Multicast });
+ * actions.dispatch(Actions.Multicast.Update, payload, { scope: Actions.Multicast.Scope });
  * ```
  *
  * Components receive multicast events only if they are descendants of a `<Scope of={...}>`.
@@ -406,13 +406,13 @@ export type BroadcastPayload<
  * }
  *
  * // In JSX - create a named scope boundary
- * <Scope of={MulticastActions}>
+ * <Scope of={MulticastActions.Scope}>
  *   <CounterA />
  *   <CounterB />
  * </Scope>
  *
  * // Inside CounterA - dispatch to all components in the scope
- * actions.dispatch(Actions.Multicast.Update, 42, { scope: Actions.Multicast });
+ * actions.dispatch(Actions.Multicast.Update, 42, { scope: Actions.Multicast.Scope });
  * // CounterA and CounterB both receive the event
  * ```
  */
@@ -424,34 +424,16 @@ export type MulticastPayload<
 };
 
 /**
- * A scope carrier — any object exposing a `Scope` string literal.
- *
- * By convention this is the feature's `MulticastActions` class, which owns
- * the scope name alongside its multicast action declarations:
- *
- * ```ts
- * export class MulticastActions {
- *   static Scope = "my-feature" as const;
- *   static Update = Action<T>("Update", Distribution.Multicast);
- * }
- * ```
- *
- * Requiring a carrier (rather than a bare string) prevents typos and enforces
- * a single source of truth for each scope name.
- *
- * @template S - The scope name literal type.
- */
-export type ScopeCarrier<S extends string = string> = {
-  readonly Scope: S;
-};
-
-/**
  * Options for multicast dispatch.
  * Required when dispatching a multicast action.
  */
 export type MulticastOptions = {
-  /** Carrier object exposing the scope name via `.Scope`. Typically the feature's `MulticastActions` class. */
-  scope: ScopeCarrier;
+  /**
+   * Scope name. By convention this is a `static Scope` literal co-located
+   * with the multicast action declarations (e.g. `Actions.Multicast.Scope`),
+   * giving every call site a single source of truth.
+   */
+  scope: string;
 };
 
 /**

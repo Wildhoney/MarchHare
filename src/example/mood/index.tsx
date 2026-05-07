@@ -7,7 +7,7 @@ import * as styles from "./styles.ts";
 
 export default function Mood(): React.ReactElement {
   return (
-    <Scope of={MulticastActions}>
+    <Scope of={MulticastActions.Scope}>
       <section className={styles.container}>
         <Happy />
         <Sad />
