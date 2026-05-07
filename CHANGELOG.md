@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.0](https://github.com/Wildhoney/Chizu/compare/v0.2.72...v0.3.0) (2026-05-07)
+
+
+### ⚠ BREAKING CHANGES
+
+* **error:** replace <Error> boundary with Lifecycle.Fault broadcast
+
+* **error:** replace <Error> boundary with Lifecycle.Fault broadcast ([e52555b](https://github.com/Wildhoney/Chizu/commit/e52555b29a320a5b7870fbd9b7015baf903d7895))
+
 ## [0.2.72](https://github.com/Wildhoney/Chizu/compare/v0.2.71...v0.2.72) (2026-03-06)
 
 ### Features
