@@ -8,7 +8,7 @@
  */
 import * as React from "react";
 import { createRoot } from "react-dom/client";
-import { Boundary, Error, Reason } from "../../src/library/index.ts";
+import { Boundary, Lifecycle, useActions } from "../../src/library/index.ts";
 
 // Fixture imports - Rules 1-4: Actions
 import { ActionsFixture } from "./rules/actions.tsx";
@@ -86,29 +86,35 @@ function App() {
 
   return (
     <Boundary>
-      <Error
-        handler={({ reason, error, action }) => {
-          setErrors((prev) => [
-            ...prev,
-            JSON.stringify({ reason, message: error.message, action }),
-          ]);
-        }}
-      >
-        <div data-testid={`fixture-${fixtureName}`}>
-          <Fixture />
+      <FaultLogger onFault={(entry) => setErrors((prev) => [...prev, entry])} />
+      <div data-testid={`fixture-${fixtureName}`}>
+        <Fixture />
+      </div>
+      {errors.length > 0 && (
+        <div data-testid="error-log">
+          {errors.map((err, i) => (
+            <div key={i} data-testid={`error-${i}`}>
+              {err}
+            </div>
+          ))}
         </div>
-        {errors.length > 0 && (
-          <div data-testid="error-log">
-            {errors.map((err, i) => (
-              <div key={i} data-testid={`error-${i}`}>
-                {err}
-              </div>
-            ))}
-          </div>
-        )}
-      </Error>
+      )}
     </Boundary>
   );
+}
+
+function FaultLogger({ onFault }: { onFault: (entry: string) => void }) {
+  const actions = useActions(() => ({ onFault }));
+  actions.useAction(Lifecycle.Fault, (context, fault) => {
+    context.data.onFault(
+      JSON.stringify({
+        reason: fault.reason,
+        message: fault.error.message,
+        action: fault.action,
+      }),
+    );
+  });
+  return null;
 }
 
 const container = document.getElementById("root");

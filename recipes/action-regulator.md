@@ -32,9 +32,11 @@ The regulator stores a single mutable policy object shared via React context acr
 When an action is blocked, the regulator:
 
 1. Constructs a `Fault` with `reason: Reason.Disallowed` and a `DisallowedError`.
-2. Fires the global `<Error>` handler (if present).
+2. Broadcasts it via `Lifecycle.Fault` (global subscribers receive it).
 3. Fires the local `Lifecycle.Error()` handler (if registered).
 4. Returns early &ndash; the action handler is never called.
+
+`Lifecycle.Fault` is exempt from the regulator policy &ndash; faults always reach subscribers, even when `disallow()` is in force.
 
 ## Policy modes
 

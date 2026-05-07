@@ -7,7 +7,7 @@ import {
   matchesChannel,
 } from "./utils.ts";
 import { getReason, getError } from "../error/utils.ts";
-import { Reason, AbortError, TimeoutError } from "../error/index.tsx";
+import { Reason, AbortError, TimeoutError } from "../error/index.ts";
 import { Action } from "../action/index.ts";
 import type { HandlerContext } from "../types/index.ts";
 

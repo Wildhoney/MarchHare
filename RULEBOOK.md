@@ -46,7 +46,7 @@ class Actions {
 
 ### Rule 4: Action names should be descriptive for error tracing
 
-Action names appear in the `<Error>` boundary's `fault.action` property, making them essential for debugging. Use descriptive, unique names so errors can be traced back to their source.
+Action names appear in the `Lifecycle.Fault` payload's `fault.action` property, making them essential for debugging. Use descriptive, unique names so errors can be traced back to their source.
 
 ```ts
 // Good — descriptive names for debugging
@@ -542,24 +542,22 @@ actions.useAction(Lifecycle.Error, (context, fault) => {
 });
 ```
 
-### Rule 24: Use the `<Error>` boundary for global error handling
+### Rule 24: Subscribe to `Lifecycle.Fault` for global error handling
 
-The `<Error>` boundary catches all unhandled errors from action handlers across your application. Use it for observability by reporting to your error tracking service.
+`Lifecycle.Fault` is a singleton broadcast that fires whenever any action in the surrounding `<Boundary>` errors, times out, is supplanted, or is blocked by the regulator. Subscribe to it for observability and report to your error tracking service.
 
 ```tsx
-<Error
-  handler={({ reason, error, action }) => {
-    // Report to observability service (Sentry, DataDog, etc.)
-    Sentry.captureException(error, {
-      tags: { action, reason },
-    });
-  }}
->
-  <App />
-</Error>
+const actions = useActions();
+
+actions.useAction(Lifecycle.Fault, (_context, { reason, error, action }) => {
+  // Report to observability service (Sentry, DataDog, etc.)
+  Sentry.captureException(error, {
+    tags: { action, reason },
+  });
+});
 ```
 
-The handler receives structured error details including the action name that failed, enabling targeted debugging.
+The payload is the same `Fault` delivered to the per-component `Lifecycle.Error()` factory &ndash; including `tasks` for cascading-abort scenarios. `Lifecycle.Fault` bypasses the regulator so a `disallow()` blanket can never silence error visibility.
 
 ### Rule 25: Know the error reasons
 

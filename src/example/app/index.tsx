@@ -2,7 +2,7 @@ import * as React from "react";
 import Counter from "../counter/index.tsx";
 import Mood from "../mood/index.tsx";
 import Visitor from "../visitor/index.tsx";
-import { Error, Reason } from "../../library/index.ts";
+import { Lifecycle, Reason, useActions } from "../../library/index.ts";
 import { message } from "antd";
 import * as styles from "./styles.ts";
 import logo from "../assets/logo.png";
@@ -10,6 +10,21 @@ import { features } from "./utils.ts";
 
 export default function App(): React.ReactElement {
   const [messageApi, contextHolder] = message.useMessage();
+  const actions = useActions();
+
+  actions.useAction(Lifecycle.Fault, (_context, { reason, error }) => {
+    switch (reason) {
+      case Reason.Timedout:
+        messageApi.warning(error.message);
+        break;
+      case Reason.Supplanted:
+        messageApi.info(error.message);
+        break;
+      case Reason.Errored:
+        messageApi.error(error.message);
+        break;
+    }
+  });
 
   return (
     <div className={styles.layout}>
@@ -67,23 +82,7 @@ export default function App(): React.ReactElement {
         </div>
 
         <div className={styles.demoCard}>
-          <Error
-            handler={({ reason, error }) => {
-              switch (reason) {
-                case Reason.Timedout:
-                  messageApi.warning(error.message);
-                  break;
-                case Reason.Supplanted:
-                  messageApi.info(error.message);
-                  break;
-                case Reason.Errored:
-                  messageApi.error(error.message);
-                  break;
-              }
-            }}
-          >
-            <Counter />
-          </Error>
+          <Counter />
         </div>
 
         <Mood />

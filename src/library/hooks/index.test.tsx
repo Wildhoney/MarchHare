@@ -2729,3 +2729,94 @@ describe("node capture writes to model", () => {
     }).not.toThrow();
   });
 });
+
+describe("useActions() Lifecycle.Fault broadcast", () => {
+  it("should fire Lifecycle.Fault on a sibling subscriber when a handler throws", async () => {
+    const captured: { reason: number; action: string; message: string }[] = [];
+
+    class ThrowerActions {
+      static Boom = Action("Boom");
+    }
+    function Thrower({ trigger }: { trigger: { current: () => void } }) {
+      const actions = useActions<void, typeof ThrowerActions>();
+      actions.useAction(ThrowerActions.Boom, () => {
+        throw new Error("kaboom");
+      });
+      trigger.current = () => actions[1].dispatch(ThrowerActions.Boom);
+      return null;
+    }
+
+    function Listener() {
+      const actions = useActions();
+      actions.useAction(Lifecycle.Fault, (_context, fault) => {
+        captured.push({
+          reason: fault.reason,
+          action: fault.action,
+          message: fault.error.message,
+        });
+      });
+      return null;
+    }
+
+    const trigger = { current: () => {} };
+    render(
+      <Broadcaster>
+        <Listener />
+        <Thrower trigger={trigger} />
+      </Broadcaster>,
+    );
+
+    await act(async () => {
+      await trigger.current();
+    });
+
+    expect(captured).toHaveLength(1);
+    expect(captured[0].action).toBe("Boom");
+    expect(captured[0].message).toBe("kaboom");
+  });
+
+  it("should still deliver Lifecycle.Fault when the regulator disallows everything", async () => {
+    const captured: string[] = [];
+
+    class GuardActions {
+      static Mount = Lifecycle.Mount();
+      static Blocked = Action("Blocked");
+    }
+    function Guard({ trigger }: { trigger: { current: () => void } }) {
+      const actions = useActions<void, typeof GuardActions>();
+      actions.useAction(GuardActions.Mount, (context) => {
+        context.regulator.disallow();
+      });
+      actions.useAction(GuardActions.Blocked, () => {
+        captured.push("should-not-run");
+      });
+      trigger.current = () => actions[1].dispatch(GuardActions.Blocked);
+      return null;
+    }
+
+    function Listener() {
+      const actions = useActions();
+      actions.useAction(Lifecycle.Fault, (_context, fault) => {
+        captured.push(`fault:${fault.action}:${fault.reason}`);
+      });
+      return null;
+    }
+
+    const trigger = { current: () => {} };
+    render(
+      <Broadcaster>
+        <Listener />
+        <Guard trigger={trigger} />
+      </Broadcaster>,
+    );
+
+    await act(async () => {
+      await trigger.current();
+    });
+
+    expect(captured.filter((entry) => entry.startsWith("fault:"))).toHaveLength(
+      1,
+    );
+    expect(captured).not.toContain("should-not-run");
+  });
+});

@@ -31,6 +31,15 @@ export class BroadcastEmitter extends EventEmitter {
   getCached(event: string | symbol): unknown {
     return this.cache.get(event);
   }
+
+  /**
+   * Emit without caching the payload. Used by the framework to publish
+   * fire-and-forget events (such as `Lifecycle.Fault`) where late-mounting
+   * subscribers must not replay a stale value.
+   */
+  fire(event: string | symbol, ...args: unknown[]): boolean {
+    return super.emit(event, ...args);
+  }
 }
 
 /**
