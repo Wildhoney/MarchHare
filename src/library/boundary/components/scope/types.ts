@@ -1,13 +1,12 @@
 import type { BroadcastEmitter } from "../broadcast/utils.ts";
-import type { ScopeCarrier } from "../../../types/index.ts";
 import type * as React from "react";
 
 /**
  * Props for the Scope component.
  */
 export type Props = {
-  /** The carrier object exposing the scope name via `.Scope`. Typically the feature's `MulticastActions` class. */
-  of: ScopeCarrier;
+  /** The scope name. Typically a `static Scope` literal co-located with the feature's multicast action declarations. */
+  of: string;
   /** Children to render within the scope boundary. */
   children: React.ReactNode;
 };

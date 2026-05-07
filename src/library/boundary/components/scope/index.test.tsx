@@ -11,17 +11,13 @@ function ScopeReader() {
   );
 }
 
-function carrier<S extends string>(name: S): { Scope: S } {
-  return { Scope: name };
-}
-
 describe("withScope", () => {
   it("should wrap the component in a Scope provider", () => {
     function Inner() {
       return <ScopeReader />;
     }
 
-    const Wrapped = withScope(carrier("test-scope"), Inner);
+    const Wrapped = withScope("test-scope", Inner);
 
     render(<Wrapped />);
 
@@ -33,7 +29,7 @@ describe("withScope", () => {
       return <div data-testid="label">{props.label}</div>;
     }
 
-    const Wrapped = withScope(carrier("forwarding"), Inner);
+    const Wrapped = withScope("forwarding", Inner);
 
     render(<Wrapped label="Hello" />);
 
@@ -45,10 +41,10 @@ describe("withScope", () => {
       return <ScopeReader />;
     }
 
-    const Wrapped = withScope(carrier("inner"), Inner);
+    const Wrapped = withScope("inner", Inner);
 
     render(
-      <Scope of={carrier("outer")}>
+      <Scope of="outer">
         <Wrapped />
       </Scope>,
     );
@@ -61,13 +57,13 @@ describe("withScope", () => {
       return <div />;
     }
 
-    const Wrapped = withScope(carrier("naming"), Layout);
+    const Wrapped = withScope("naming", Layout);
 
     expect(Wrapped.name).toBe("ScopedLayout");
   });
 
   it("should fall back to 'ScopedComponent' for anonymous components", () => {
-    const Wrapped = withScope(carrier("anon"), () => <div />);
+    const Wrapped = withScope("anon", () => <div />);
 
     expect(Wrapped.name).toBe("ScopedComponent");
   });
@@ -82,7 +78,7 @@ describe("withScope", () => {
       );
     }
 
-    const Wrapped = withScope(carrier("children-scope"), Inner);
+    const Wrapped = withScope("children-scope", Inner);
 
     render(<Wrapped />);
 

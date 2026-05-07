@@ -357,7 +357,7 @@ actions.dispatch(Actions.UserUpdated, user);
 
 Channel values support non-nullable primitives: `string`, `number`, `boolean`, or `symbol`. By convention, use uppercase keys like `{UserId: 4}` to distinguish channel keys from payload properties.
 
-For scoped communication between component groups, use multicast actions with the `<Scope>` component. The scope name lives as a `static Scope` literal on the same class as the multicast actions &ndash; passing the class as a carrier prevents typos and keeps a single source of truth:
+For scoped communication between component groups, use multicast actions with the `<Scope>` component. The scope name lives as a `static Scope` literal on the same class as the multicast actions, so every call site can reference `Actions.Multicast.Scope` from a single source of truth:
 
 ```tsx
 import { Action, Distribution, Scope } from "chizu";
@@ -376,7 +376,7 @@ class Actions {
 
 function App() {
   return (
-    <Scope of={MulticastActions}>
+    <Scope of={MulticastActions.Scope}>
       <ScoreBoard />
       <PlayerList />
     </Scope>
@@ -384,7 +384,9 @@ function App() {
 }
 
 // Dispatch to every component inside the scope
-actions.dispatch(Actions.Multicast.Update, 42, { scope: Actions.Multicast });
+actions.dispatch(Actions.Multicast.Update, 42, {
+  scope: Actions.Multicast.Scope,
+});
 ```
 
 Unlike broadcast which reaches all components, multicast is scoped to the named boundary &ndash; perfect for isolated widget groups, form sections, or distinct UI regions. Like broadcast, multicast caches dispatched values per scope &ndash; components that mount later automatically receive the cached value. See the [mount deduplication recipe](./recipes/mount-broadcast-deduplication.md) if you also fetch data in `Lifecycle.Mount()`.
@@ -395,14 +397,17 @@ For components that always render inside a scope, use the `withScope` HOC to eli
 import { withScope } from "chizu";
 import { MulticastActions } from "./types";
 
-export default withScope(MulticastActions, function Layout(): ReactElement {
-  return (
-    <div>
-      <PaymentLink />
-      <Outlet />
-    </div>
-  );
-});
+export default withScope(
+  MulticastActions.Scope,
+  function Layout(): ReactElement {
+    return (
+      <div>
+        <PaymentLink />
+        <Outlet />
+      </div>
+    );
+  },
+);
 ```
 
 See the [multicast recipe](./recipes/multicast-actions.md) for more details.
