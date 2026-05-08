@@ -158,10 +158,10 @@ function useRule9Actions() {
     active: false,
   });
 
-  // Using With() for simple property assignments
-  actions.useAction(WithActions.SetName, With("name"));
-  actions.useAction(WithActions.SetAge, With("age"));
-  actions.useAction(WithActions.SetActive, With("active"));
+  // Using With.Update for simple property assignments and With.Invert for booleans.
+  actions.useAction(WithActions.SetName, With.Update("name"));
+  actions.useAction(WithActions.SetAge, With.Update("age"));
+  actions.useAction(WithActions.SetActive, With.Update("active"));
 
   return actions;
 }

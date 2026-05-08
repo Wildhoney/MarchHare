@@ -2,7 +2,6 @@ import * as React from "react";
 import {
   useLifecycles,
   useData,
-  useNodes,
   isChanneledAction,
   getActionSymbol,
   matchesChannel,
@@ -31,22 +30,13 @@ import {
   Filter,
   ChanneledAction,
   ActionOrChanneled,
-  ExtractNodes,
-  MulticastOptions,
   AnyAction,
   BroadcastPayload,
   FaultSymbol,
-  type ValidateFeatures,
-  type NullableNodes,
 } from "../types/index.ts";
 import type { ResourceDispatch, ResourceHandle } from "../resource/index.ts";
 
 import { getReason, getError } from "../error/utils.ts";
-import { DisallowedError, Reason } from "../error/types.ts";
-import {
-  useRegulators,
-  isAllowed,
-} from "../boundary/components/regulators/index.tsx";
 import EventEmitter from "eventemitter3";
 import { useBroadcast } from "../boundary/components/broadcast/index.tsx";
 import { useScope, getScope } from "../boundary/components/scope/index.tsx";
@@ -108,10 +98,7 @@ export function useActions<
   M extends Model,
   A extends Actions | void = void,
   D extends Props = Props,
->(
-  initialModel: NullableNodes<M> & ValidateFeatures<M>,
-  getData?: Data<D>,
-): UseActions<M, A, D>;
+>(initialModel: M, getData?: Data<D>): UseActions<M, A, D>;
 export function useActions<
   M extends Model | void,
   A extends Actions | void,
@@ -126,48 +113,14 @@ export function useActions<
   const broadcast = useBroadcast();
   const scope = useScope();
   const tasks = useTasks();
-  const regulatorPolicy = useRegulators();
   const rerender = useRerender();
   const initialised = React.useRef(false);
   const hydration = React.useRef<Process | null>(null);
   const state = React.useRef(new State<Model>());
-  const meta = React.useRef<{
-    features: Record<string, boolean> | null;
-    nodes: Record<string, unknown> | null;
-  }>({ features: null, nodes: null });
-
-  /**
-   * Stamps the `meta` string key back onto the Immer-managed model object.
-   * Immer would see `meta` during produce, so we strip it before hydration
-   * and re-attach after every model update to keep `model.meta.features`
-   * and `model.meta.nodes` accessible.
-   */
-  function stampMeta(): void {
-    const obj = <Record<string, unknown>>state.current.model;
-    if (meta.current.features !== null || meta.current.nodes !== null) {
-      obj.meta = {
-        ...(meta.current.features !== null
-          ? { features: meta.current.features }
-          : {}),
-        ...(meta.current.nodes !== null ? { nodes: meta.current.nodes } : {}),
-      };
-    }
-  }
 
   if (!initialised.current) {
     initialised.current = true;
-    const raw = <Record<string, unknown>>(<unknown>initialModel);
-    const rawMeta = <
-      | { features?: Record<string, boolean>; nodes?: Record<string, unknown> }
-      | undefined
-    >raw.meta;
-    if (rawMeta?.features) meta.current.features = rawMeta.features;
-    if (rawMeta?.nodes) meta.current.nodes = rawMeta.nodes;
-
-    // Strip meta before Immer hydration — Immer must not manage it.
-    const { meta: _meta, ...cleaned } = raw;
-    hydration.current = state.current.hydrate(cleaned);
-    stampMeta();
+    hydration.current = state.current.hydrate(initialModel);
   }
   const [model, setModel] = React.useState<M>(
     () => <M>(<unknown>state.current.model),
@@ -178,7 +131,6 @@ export function useActions<
   registry.current.handlers = new Map();
   const dispatchers = useDispatchers();
   const phase = React.useRef<Phase>(Phase.Mounting);
-  const nodes = useNodes<M>();
   const localTasks = React.useRef<Set<Task>>(new Set());
   const unmountGeneration = React.useRef(0);
 
@@ -205,37 +157,13 @@ export function useActions<
         task,
         data,
         tasks,
-        get meta() {
-          return {
-            nodes: nodes.refs.current,
-            features: meta.current.features ?? {},
-          };
-        },
-        regulator: {
-          disallow(...actions: AnyAction[]) {
-            regulatorPolicy.actions.clear();
-            if (actions.length === 0) {
-              regulatorPolicy.mode = "disallow-all";
-            } else {
-              regulatorPolicy.mode = "disallow-matching";
-              for (const a of actions)
-                regulatorPolicy.actions.add(getActionSymbol(a));
-            }
-          },
-          allow(...actions: AnyAction[]) {
-            regulatorPolicy.actions.clear();
-            if (actions.length === 0) {
-              regulatorPolicy.mode = "allow-all";
-            } else {
-              regulatorPolicy.mode = "allow-matching";
-              for (const a of actions)
-                regulatorPolicy.actions.add(getActionSymbol(a));
-            }
-          },
-        },
         actions: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          produce(f: any) {
+          produce(
+            f: (draft: {
+              model: M;
+              readonly inspect: Readonly<Inspect<M>>;
+            }) => void,
+          ) {
             if (controller.signal.aborted) return;
             const process = state.current.produce((draft) => {
               f({
@@ -243,7 +171,6 @@ export function useActions<
                 inspect: <Readonly<Inspect<M>>>(<unknown>state.current.inspect),
               });
             });
-            stampMeta();
             setModel(<M>(<unknown>state.current.model));
             result.processes.add(process);
             if (hydration.current) {
@@ -254,7 +181,6 @@ export function useActions<
           dispatch(
             action: ActionOrChanneled,
             payload?: HandlerPayload,
-            options?: MulticastOptions,
           ): Promise<void> {
             if (controller.signal.aborted) return Promise.resolve();
             const base = getActionSymbol(action);
@@ -262,8 +188,8 @@ export function useActions<
               ? action.channel
               : undefined;
 
-            if (isMulticastAction(action) && options?.scope) {
-              const scoped = getScope(scope, options.scope);
+            if (isMulticastAction(action)) {
+              const scoped = getScope(scope, base);
               if (scoped)
                 return emitAsync(scoped.emitter, base, payload, channel);
               return Promise.resolve();
@@ -275,57 +201,14 @@ export function useActions<
           annotate<T>(operation: Operation, value: T): T {
             return state.current.annotate(operation, value);
           },
-          features: {
-            on(name: string) {
-              if (controller.signal.aborted) return;
-              meta.current.features = {
-                ...meta.current.features,
-                [name]: true,
-              };
-              stampMeta();
-              setModel(<M>(<unknown>state.current.model));
-              if (hydration.current) {
-                result.processes.add(hydration.current);
-                hydration.current = null;
-              }
-            },
-            off(name: string) {
-              if (controller.signal.aborted) return;
-              meta.current.features = {
-                ...meta.current.features,
-                [name]: false,
-              };
-              stampMeta();
-              setModel(<M>(<unknown>state.current.model));
-              if (hydration.current) {
-                result.processes.add(hydration.current);
-                hydration.current = null;
-              }
-            },
-            invert(name: string) {
-              if (controller.signal.aborted) return;
-              const current = meta.current.features?.[name] ?? false;
-              meta.current.features = {
-                ...meta.current.features,
-                [name]: !current,
-              };
-              stampMeta();
-              setModel(<M>(<unknown>state.current.model));
-              if (hydration.current) {
-                result.processes.add(hydration.current);
-                hydration.current = null;
-              }
-            },
-          },
-          async resolution(action: AnyAction, options?: MulticastOptions) {
+          async resolution(action: AnyAction) {
             if (controller.signal.aborted) return null;
 
             const key = getActionSymbol(action);
 
-            const emitter =
-              isMulticastAction(action) && options?.scope
-                ? (getScope(scope, options.scope)?.emitter ?? null)
-                : broadcast;
+            const emitter = isMulticastAction(action)
+              ? (getScope(scope, key)?.emitter ?? null)
+              : broadcast;
 
             if (!emitter) return null;
 
@@ -363,15 +246,14 @@ export function useActions<
 
             return emitter.getCached(key) ?? null;
           },
-          peek(action: AnyAction, options?: MulticastOptions) {
+          peek(action: AnyAction) {
             if (controller.signal.aborted) return null;
 
             const key = getActionSymbol(action);
 
-            const emitter =
-              isMulticastAction(action) && options?.scope
-                ? (getScope(scope, options.scope)?.emitter ?? null)
-                : broadcast;
+            const emitter = isMulticastAction(action)
+              ? (getScope(scope, key)?.emitter ?? null)
+              : broadcast;
 
             if (!emitter) return null;
 
@@ -395,25 +277,6 @@ export function useActions<
         payload: HandlerPayload,
         dispatchChannel?: Filter | typeof replay,
       ) {
-        const isFaultAction = action === FaultSymbol;
-        if (!isFaultAction && !isAllowed(action, regulatorPolicy)) {
-          const errorAction = findLifecycleAction(
-            registry.current.handlers,
-            "Error",
-          );
-          const handled = errorAction !== null;
-          const details = {
-            reason: Reason.Disallowed,
-            error: new DisallowedError(),
-            action: getName(action),
-            handled,
-            tasks,
-          };
-          broadcast.fire(FaultSymbol, details);
-          if (handled && errorAction) unicast.emit(errorAction, details);
-          return;
-        }
-
         const registeredChannel = getChannel();
 
         // Skip channeled handlers during replay — they require specific
@@ -549,29 +412,6 @@ export function useActions<
     };
   }, [unicast]);
 
-  React.useLayoutEffect(() => {
-    const nodeAction = findLifecycleAction(registry.current.handlers, "Node");
-    let modelChanged = false;
-    for (const [name, node] of nodes.pending.current) {
-      const latest = nodes.emitted.current.get(name);
-      if (latest !== node) {
-        nodes.emitted.current.set(name, node);
-        if (meta.current.nodes !== null) {
-          const updated = { ...meta.current.nodes };
-          updated[<string>name] = node;
-          meta.current.nodes = updated;
-          modelChanged = true;
-        }
-        if (nodeAction) unicast.emit(nodeAction, node, { Name: name });
-      }
-    }
-    if (modelChanged) {
-      stampMeta();
-      setModel(<M>(<unknown>state.current.model));
-    }
-    nodes.pending.current.clear();
-  });
-
   useLifecycles({
     unicast,
     broadcast,
@@ -591,15 +431,14 @@ export function useActions<
           dispatch(
             action: ActionOrChanneled,
             payload?: HandlerPayload,
-            options?: MulticastOptions,
           ): Promise<void> {
             const base = getActionSymbol(action);
             const channel = isChanneledAction(action)
               ? action.channel
               : undefined;
 
-            if (isMulticastAction(action) && options?.scope) {
-              const scoped = getScope(scope, options.scope);
+            if (isMulticastAction(action)) {
+              const scoped = getScope(scope, base);
               if (scoped)
                 return emitAsync(scoped.emitter, base, payload, channel);
               return Promise.resolve();
@@ -610,46 +449,6 @@ export function useActions<
           },
           get inspect() {
             return state.current.inspect;
-          },
-          get meta() {
-            return {
-              nodes: nodes.refs.current,
-              features: meta.current.features ?? {},
-            };
-          },
-          node<K extends keyof ExtractNodes<M>>(
-            name: K,
-            value: ExtractNodes<M>[K] | null,
-          ) {
-            nodes.refs.current[name] = value;
-            nodes.pending.current.set(name, value);
-          },
-          features: {
-            on(name: string) {
-              meta.current.features = {
-                ...meta.current.features,
-                [name]: true,
-              };
-              stampMeta();
-              setModel(<M>(<unknown>state.current.model));
-            },
-            off(name: string) {
-              meta.current.features = {
-                ...meta.current.features,
-                [name]: false,
-              };
-              stampMeta();
-              setModel(<M>(<unknown>state.current.model));
-            },
-            invert(name: string) {
-              const current = meta.current.features?.[name] ?? false;
-              meta.current.features = {
-                ...meta.current.features,
-                [name]: !current,
-              };
-              stampMeta();
-              setModel(<M>(<unknown>state.current.model));
-            },
           },
           stream(
             action: AnyAction,

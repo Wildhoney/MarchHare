@@ -51,12 +51,10 @@ actions.useAction(Actions.Check, (context) => {
 
 ## Multicast support
 
-For multicast actions, pass the scope name (typically `Actions.Multicast.Scope`) via the `options` argument:
+Multicast actions read their scope from the action itself, so `resolution` and `peek` accept them with no extra arguments:
 
 ```ts
-const score = await context.actions.resolution(Actions.Multicast.Score, {
-  scope: Actions.Multicast.Scope,
-});
+const score = await context.actions.resolution(Scope.Score);
 ```
 
 ## Cached values for useAction handlers

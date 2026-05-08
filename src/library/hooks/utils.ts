@@ -6,7 +6,6 @@ import {
   Model,
   Actions,
   Filter,
-  ExtractNodes,
   ActionId,
   HandlerPayload,
   ChanneledAction,
@@ -16,13 +15,7 @@ import EventEmitter from "eventemitter3";
 import { BroadcastEmitter } from "../boundary/components/broadcast/index.tsx";
 import { describe } from "../utils.ts";
 
-import type {
-  Dispatchers,
-  LifecycleConfig,
-  References,
-  Handler,
-  Scope,
-} from "./types.ts";
+import type { Dispatchers, LifecycleConfig, Handler, Scope } from "./types.ts";
 import { A, G } from "@mobily/ts-belt";
 import { changes } from "../utils.ts";
 import {
@@ -175,53 +168,76 @@ export function useData<P extends Props>(props: P): P {
 }
 
 /**
- * Creates a handler that binds an action's payload directly to a model property.
+ * Handler factories that wire an action directly to a model field.
  *
- * The returned handler updates `model[key]` with the payload when the action is dispatched.
- * Type safety is enforced at the call site: the payload type must be assignable to
- * the model property's type.
+ * - {@link With.Update} assigns the dispatched payload to `model[key]`.
+ * - {@link With.Invert} flips a boolean field on `model[key]`.
  *
- * @template K The property key type (inferred from the argument)
- * @param key The model property key to bind the payload to
- * @returns A handler function compatible with `useAction`
+ * Both are typed so the call site fails to compile when `key` is missing or
+ * has an incompatible type.
  *
  * @example
  * ```ts
  * import { With } from "chizu";
  *
- * type Model = { name: string; count: number };
+ * type Model = { name: string; sidebar: boolean };
  *
  * class Actions {
  *   static SetName = Action<string>("SetName");
- *   static SetCount = Action<number>("SetCount");
+ *   static ToggleSidebar = Action("ToggleSidebar");
  * }
  *
- * // These work - payload types match model property types
- * actions.useAction(Actions.SetName, With("name"));   // string -> string ✓
- * actions.useAction(Actions.SetCount, With("count")); // number -> number ✓
- *
- * // This would error - Country is not assignable to string
- * actions.useAction(Actions.Visitor, With("name")); // Country -> string ✗
+ * actions.useAction(Actions.SetName, With.Update("name"));
+ * actions.useAction(Actions.ToggleSidebar, With.Invert("sidebar"));
  * ```
  */
-export function With<K extends string>(
-  key: K,
-): <
-  M extends Model,
-  A extends Actions | void,
-  D extends Props,
-  P extends K extends keyof M ? M[K] : never,
->(
-  context: HandlerContext<M, A, D>,
-  payload: P,
-) => void {
-  return (context, payload) => {
-    context.actions.produce((draft) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (<any>draft.model)[key] = payload;
-    });
-  };
-}
+export const With = {
+  /**
+   * Returns a handler that assigns the action payload to `model[key]`.
+   *
+   * Type-checks at the call site: the payload type must be assignable to
+   * the model property's type, and the key must exist on the model.
+   */
+  Update<K extends string>(
+    key: K,
+  ): <
+    M extends Model,
+    A extends Actions | void,
+    D extends Props,
+    P extends K extends keyof M ? M[K] : never,
+  >(
+    context: HandlerContext<M, A, D>,
+    payload: P,
+  ) => void {
+    return (context, payload) => {
+      context.actions.produce((draft) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (<any>draft.model)[key] = payload;
+      });
+    };
+  },
+  /**
+   * Returns a handler that inverts a boolean field on the model.
+   *
+   * Type-checks at the call site: `model[key]` must be a boolean.
+   */
+  Invert<K extends string>(
+    key: K,
+  ): <
+    M extends Model & Record<K, boolean>,
+    A extends Actions | void,
+    D extends Props,
+  >(
+    context: HandlerContext<M, A, D>,
+  ) => void {
+    return (context) => {
+      context.actions.produce((draft) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (<any>draft.model)[key] = !(<any>draft.model)[key];
+      });
+    };
+  },
+};
 
 /**
  * Scans a handler registry for a lifecycle action of the given type.
@@ -370,23 +386,6 @@ export function useRegisterHandler<
   const entries = scope.current.handlers.get(base) ?? new Set();
   if (entries.size === 0) scope.current.handlers.set(base, entries);
   entries.add({ getChannel, handler: <Handler<M, A, D>>stableHandler });
-}
-
-/**
- * Manages captured DOM nodes for a model type.
- * Returns refs for nodes, pending captures, and last emitted nodes.
- *
- * @template M The model type containing a `nodes` property
- * @returns Object containing refs for nodes, pending captures, and emitted nodes
- */
-export function useNodes<M extends Model | void>(): References<M> {
-  type N = ExtractNodes<M>;
-  const refs = React.useRef<{ [K in keyof N]: N[K] | null }>(
-    <{ [K in keyof N]: N[K] | null }>{},
-  );
-  const pending = React.useRef<Map<keyof N, N[keyof N] | null>>(new Map());
-  const emitted = React.useRef<Map<keyof N, N[keyof N] | null>>(new Map());
-  return React.useMemo(() => ({ refs, pending, emitted }), []);
 }
 
 /**

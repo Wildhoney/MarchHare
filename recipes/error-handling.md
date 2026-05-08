@@ -28,7 +28,7 @@ function App() {
 
 The `Fault` payload contains:
 
-- **`reason`** &ndash; One of `Reason.Timedout`, `Reason.Supplanted`, `Reason.Disallowed`, or `Reason.Errored`.
+- **`reason`** &ndash; One of `Reason.Timedout`, `Reason.Supplanted`, or `Reason.Errored`.
 - **`error`** &ndash; The `Error` object that was thrown.
 - **`action`** &ndash; The name of the action that caused the error.
 - **`handled`** &ndash; Whether the failing component has a `Lifecycle.Error()` handler registered.
@@ -36,12 +36,11 @@ The `Fault` payload contains:
 
 ## Error reasons
 
-| Reason              | Description                                                                          |
-| ------------------- | ------------------------------------------------------------------------------------ |
-| `Reason.Timedout`   | Action exceeded the configured timeout duration                                      |
-| `Reason.Supplanted` | Action was cancelled because a newer instance of the same action was dispatched      |
-| `Reason.Disallowed` | Action was blocked by a regulator (see [action-regulator.md](./action-regulator.md)) |
-| `Reason.Errored`    | Action threw an uncaught error                                                       |
+| Reason              | Description                                                                     |
+| ------------------- | ------------------------------------------------------------------------------- |
+| `Reason.Timedout`   | Action exceeded the configured timeout duration                                 |
+| `Reason.Supplanted` | Action was cancelled because a newer instance of the same action was dispatched |
+| `Reason.Errored`    | Action threw an uncaught error                                                  |
 
 ## Local vs global error handling
 
@@ -77,7 +76,3 @@ actions.useAction(Lifecycle.Fault, (_context, { reason, error, tasks }) => {
 ```
 
 This is particularly useful for session expiration scenarios where multiple API calls might be in progress when authentication fails.
-
-## Regulator interaction
-
-`Lifecycle.Fault` bypasses the regulator policy. Calling `context.regulator.disallow()` blocks user-defined actions but never silences faults &ndash; error visibility is the substrate, and a misbehaving lockdown should not be able to hide the very signal that would tell you to lift it.

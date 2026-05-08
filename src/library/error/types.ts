@@ -8,12 +8,8 @@ export enum Reason {
   Timedout,
   /** Action was cancelled by a newer dispatch. */
   Supplanted,
-  /** Action was blocked by the regulator's `allow` function returning `false`. */
-  Disallowed,
   /** A generic error thrown in the user's action handler. */
   Errored,
-  /** Action was aborted because the component unmounted. */
-  Unmounted,
 }
 
 /**
@@ -45,22 +41,6 @@ export class AbortError extends Error {
 export class TimeoutError extends Error {
   override name = "TimeoutError";
   constructor(message = "Timeout") {
-    super(message);
-  }
-}
-
-/**
- * Error thrown when an action is blocked by the regulator policy.
- * Works across all platforms including React Native where `DOMException` is unavailable.
- *
- * @example
- * ```ts
- * throw new DisallowedError("Action blocked by regulator");
- * ```
- */
-export class DisallowedError extends Error {
-  override name = "DisallowedError";
-  constructor(message = "Disallowed") {
     super(message);
   }
 }

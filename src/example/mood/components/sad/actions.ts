@@ -1,5 +1,5 @@
 import { useActions } from "../../../../library/index.ts";
-import { Model } from "../../types.ts";
+import { Model, Scope } from "../../types.ts";
 import { Actions } from "./types.ts";
 
 const model: Model = {
@@ -10,12 +10,10 @@ export function useSadActions() {
   const actions = useActions<Model, typeof Actions>(model);
 
   actions.useAction(Actions.Select, (context, mood) => {
-    context.actions.dispatch(Actions.Multicast.Mood, mood, {
-      scope: Actions.Multicast.Scope,
-    });
+    context.actions.dispatch(Scope.Mood, mood);
   });
 
-  actions.useAction(Actions.Multicast.Mood, (context, mood) => {
+  actions.useAction(Scope.Mood, (context, mood) => {
     context.actions.produce((draft) => {
       draft.model.selected = mood;
     });

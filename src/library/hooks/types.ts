@@ -9,29 +9,9 @@ import type {
   ActionId,
   Phase,
   Filter,
-  ExtractNodes,
 } from "../types/index.ts";
 import type { BroadcastEmitter } from "../boundary/components/broadcast/utils.ts";
 import type { ScopeContext } from "../boundary/components/scope/types.ts";
-
-/**
- * Return type for the useNodes hook.
- * Contains refs for captured nodes, pending captures, and last emitted nodes.
- *
- * @template M - The model type containing a `nodes` property
- */
-export type References<M extends Model | void> = {
-  /** Ref containing captured DOM nodes by name */
-  refs: RefObject<{ [K in keyof ExtractNodes<M>]: ExtractNodes<M>[K] | null }>;
-  /** Ref containing pending node captures to be processed after render */
-  pending: RefObject<
-    Map<keyof ExtractNodes<M>, ExtractNodes<M>[keyof ExtractNodes<M>] | null>
-  >;
-  /** Ref containing last emitted node values to detect true changes */
-  emitted: RefObject<
-    Map<keyof ExtractNodes<M>, ExtractNodes<M>[keyof ExtractNodes<M>] | null>
-  >;
-};
 
 /**
  * Function signature for action handlers registered via `useAction`.

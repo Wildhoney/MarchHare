@@ -1,4 +1,5 @@
 import type { ScopeContext, ScopeEntry } from "./types.ts";
+import type { ActionId } from "../tasks/types.ts";
 import * as React from "react";
 
 /**
@@ -17,16 +18,12 @@ export function useScope(): ScopeContext {
 }
 
 /**
- * Gets the scope with the given name.
+ * Looks up the scope opened by the given multicast action.
  * O(1) lookup from the flattened scope map.
- *
- * @param context - The current scope context (map of all ancestor scopes)
- * @param name - The scope name to find
- * @returns The matching ScopeEntry, or null if not found
  */
 export function getScope(
   context: ScopeContext,
-  name: string,
+  action: ActionId,
 ): ScopeEntry | null {
-  return context?.get(name) ?? null;
+  return context?.get(action) ?? null;
 }

@@ -69,13 +69,11 @@ During mount, `context.phase` is `Phase.Mounting`. Live dispatches after mount a
 
 ## Multicast support
 
-Both patterns work identically with multicast actions. Pass the scope name to `peek()`:
+Both patterns work identically with multicast actions. The action carries its own scope, so `peek()` takes it directly:
 
 ```ts
 actions.useAction(Actions.Mount, (context) => {
-  const user = context.actions.peek(Actions.Multicast.User, {
-    scope: Actions.Multicast.Scope,
-  });
+  const user = context.actions.peek(Scope.User);
   if (user) return;
   fetchDefaultData(context.task.controller.signal);
 });

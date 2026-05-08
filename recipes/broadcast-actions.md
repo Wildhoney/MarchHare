@@ -23,26 +23,28 @@ Any component that defines a handler for `Actions.Broadcast.SignedOut` will rece
 
 ## Filtering broadcast actions
 
-When multiple components subscribe to the same broadcast action, all handlers execute on dispatch. Use `With.Filter` to conditionally execute handlers based on the payload or component-specific data:
+When multiple components subscribe to the same broadcast action, all handlers execute on dispatch. To respond only to specific instances, use a [channeled action](./channeled-actions.md) and subscribe with a channel filter:
 
 ```ts
-import { With } from "chizu";
+class Actions {
+  static Person = Action<Person, { PersonId: number }>(
+    "Person",
+    Distribution.Broadcast,
+  );
+}
 
 actions.useAction(
-  Actions.Person,
-  With.Filter(
-    (context, person) => person.id === context.data.personId,
-    async (context, person) => {
-      const details = await fetch(`/person/${person.id}`);
-      context.actions.produce((draft) => {
-        draft.model.person = details;
-      });
-    },
-  ),
+  Actions.Person({ PersonId: context.data.personId }),
+  async (context, person) => {
+    const details = await fetch(`/person/${person.id}`);
+    context.actions.produce((draft) => {
+      draft.model.person = details;
+    });
+  },
 );
 ```
 
-The predicate receives the context and the fully-typed payload. When it returns `false`, the handler never executes &ndash; preventing unnecessary API calls or state updates. This is useful when many components listen for the same action type but should only respond to specific instances.
+Dispatchers target a specific channel with `dispatch(Actions.Person({ PersonId: 5 }), person)`. Handlers registered for a different channel (or no channel) won't fire. This avoids unnecessary API calls without needing a runtime predicate.
 
 ## Cached values on mount
 

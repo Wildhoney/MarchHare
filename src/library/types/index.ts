@@ -6,7 +6,6 @@ import type {
   Task,
   Tasks,
 } from "../boundary/components/tasks/types.ts";
-import type { Regulator } from "../boundary/components/regulators/types.ts";
 import type { Fault } from "../error/types.ts";
 import { describe } from "../utils.ts";
 
@@ -62,8 +61,6 @@ export class Brand {
   static readonly Action = Symbol("chizu.brand/Action");
   /** Identifies channeled actions (result of calling Action(channel)) */
   static readonly Channel = Symbol("chizu.brand/Channel");
-  /** Node capture events used by Lifecycle.Node */
-  static readonly Node = Symbol("chizu.action.lifecycle/Node");
 }
 
 /**
@@ -100,8 +97,8 @@ function createLifecycleAction<P = never, C extends Filter = never>(
 
 /**
  * Internal symbol for the global `Lifecycle.Fault` broadcast. Exposed so the
- * dispatch pipeline can fire faults and short-circuit the regulator policy
- * without depending on the `Lifecycle` class at runtime.
+ * dispatch pipeline can fire faults without depending on the `Lifecycle`
+ * class at runtime.
  *
  * @internal
  */
@@ -112,8 +109,9 @@ export const FaultSymbol: unique symbol = <typeof FaultSymbol>(
 /**
  * Factory functions for lifecycle actions.
  *
- * Each call returns a **unique** action symbol, enabling per-component
- * regulation. Assign the result as a static property in your Actions class:
+ * Each call returns a **unique** action symbol so that each component can
+ * subscribe independently. Assign the result as a static property in your
+ * Actions class:
  *
  * @example
  * ```ts
@@ -122,13 +120,9 @@ export const FaultSymbol: unique symbol = <typeof FaultSymbol>(
  *   static Unmount = Lifecycle.Unmount();
  *   static Error = Lifecycle.Error();
  *   static Update = Lifecycle.Update();
- *   static Node = Lifecycle.Node();
  *
  *   static Increment = Action("Increment");
  * }
- *
- * // Now regulating Lifecycle.Mount only blocks THIS component's mount:
- * context.regulator.disallow(Actions.Mount);
  * ```
  *
  * `Lifecycle.Fault` is a singleton broadcast (not a factory). All components
@@ -156,40 +150,12 @@ export class Lifecycle {
   }
 
   /**
-   * Creates a Node lifecycle action. Triggered when a DOM node is captured
-   * or released via `actions.node()`. Supports channeled subscriptions by
-   * node name.
-   *
-   * @example
-   * ```ts
-   * export class Actions {
-   *   static Node = Lifecycle.Node();
-   * }
-   *
-   * // Subscribe to ALL node changes
-   * actions.useAction(Actions.Node, (context, node) => {
-   *   console.log("Node changed:", node);
-   * });
-   *
-   * // Subscribe to a specific node by name (channeled)
-   * actions.useAction(Actions.Node({ Name: "input" }), (context, node) => {
-   *   if (node) node.focus();
-   * });
-   * ```
-   */
-  static Node(): HandlerPayload<unknown, { Name: string }> {
-    return createLifecycleAction<unknown, { Name: string }>("Node");
-  }
-
-  /**
    * Global fault broadcast. Receives a `Fault` whenever any action in the
-   * `<Boundary>` errors, times out, is supplanted, or is blocked by the
-   * regulator. Subscribe via `actions.useAction(Lifecycle.Fault, handler)`.
+   * `<Boundary>` errors, times out, or is supplanted. Subscribe via
+   * `actions.useAction(Lifecycle.Fault, handler)`.
    *
    * Unlike the per-component `Lifecycle.Error()` factory, `Fault` is a single
-   * shared broadcast — every subscriber points at the same symbol. The
-   * regulator policy does not apply to `Fault`; faults always reach
-   * subscribers so error visibility cannot be silenced.
+   * shared broadcast — every subscriber points at the same symbol.
    *
    * @example
    * ```tsx
@@ -228,18 +194,24 @@ export class Lifecycle {
  *
  * - **Unicast** &ndash; Action is scoped to the component that defines it and cannot be
  *   consumed by other components. This is the default behaviour.
- * - **Broadcast** &ndash; Action is distributed to all mounted components that have defined
- *   a handler for it. Values are cached for late-mounting components.
+ * - **Broadcast** &ndash; Action is distributed to all mounted components that have
+ *   defined a handler for it. Values are cached for late-mounting components.
+ * - **Multicast** &ndash; Action defines its own scope. Components reach it by
+ *   wrapping a subtree in `withScope(<theMulticastAction>, Component)`.
  *
  * @example
  * ```ts
- * export class Actions {
- *   // Unicast action (default) - local to this component
- *   static Increment = new Action("Increment");
- *
- *   // Broadcast action - can be consumed across components
- *   static Counter = new Action("Counter", Distribution.Broadcast);
+ * export class Scope {
+ *   // The action itself acts as the scope identifier.
+ *   static Mood = Action<Mood>("Mood", Distribution.Multicast);
  * }
+ *
+ * // Wrap the subtree where the scope applies.
+ * export default withScope(Scope.Mood, Component);
+ *
+ * // Dispatch / subscribe — no extra options.
+ * actions.dispatch(Scope.Mood, mood);
+ * actions.useAction(Scope.Mood, (context, mood) => { ... });
  * ```
  */
 export enum Distribution {
@@ -247,7 +219,7 @@ export enum Distribution {
   Unicast = "unicast",
   /** Action is broadcast to all mounted components and can be consumed. */
   Broadcast = "broadcast",
-  /** Action is multicast to all components within a named scope boundary. */
+  /** Action is multicast to every component inside its `withScope` boundary. */
   Multicast = "multicast",
 }
 
@@ -394,10 +366,12 @@ export type BroadcastPayload<
  *
  * @example
  * ```tsx
- * // Define multicast actions and their scope together
+ * export enum Scope {
+ *   Counter = "counter",
+ * }
+ *
  * class MulticastActions {
- *   static Scope = "Counter" as const;
- *   static Update = Action<number>("Update", Distribution.Multicast);
+ *   static Update = Action<number>("Update", Distribution.Multicast(Scope.Counter));
  * }
  *
  * // Reference from component-level Actions
@@ -405,15 +379,18 @@ export type BroadcastPayload<
  *   static Multicast = MulticastActions;
  * }
  *
- * // In JSX - create a named scope boundary
- * <Scope of={MulticastActions.Scope}>
- *   <CounterA />
- *   <CounterB />
- * </Scope>
+ * // Wrap the subtree where the scope applies via the withScope HOC.
+ * export default withScope(Scope.Counter, function Counters() {
+ *   return (
+ *     <>
+ *       <CounterA />
+ *       <CounterB />
+ *     </>
+ *   );
+ * });
  *
- * // Inside CounterA - dispatch to all components in the scope
- * actions.dispatch(Actions.Multicast.Update, 42, { scope: Actions.Multicast.Scope });
- * // CounterA and CounterB both receive the event
+ * // Dispatch — the scope is read from the action itself.
+ * actions.dispatch(Actions.Multicast.Update, 42);
  * ```
  */
 export type MulticastPayload<
@@ -421,19 +398,6 @@ export type MulticastPayload<
   C extends Filter = never,
 > = HandlerPayload<P, C> & {
   readonly [Brand.Multicast]: true;
-};
-
-/**
- * Options for multicast dispatch.
- * Required when dispatching a multicast action.
- */
-export type MulticastOptions = {
-  /**
-   * Scope name. By convention this is a `static Scope` literal co-located
-   * with the multicast action declarations (e.g. `Actions.Multicast.Scope`),
-   * giving every call site a single source of truth.
-   */
-  scope: string;
 };
 
 /**
@@ -532,115 +496,6 @@ type AssertSync<F> =
  * Represents any object that can be captured as reactive data.
  */
 export type Props = Record<string, unknown>;
-
-/**
- * Extracts the nodes type from a Model.
- * If the model has a `meta.nodes` property, returns its type.
- * Otherwise returns an empty record.
- *
- * @example
- * ```ts
- * type Model = {
- *   count: number;
- *   meta: { nodes: { container: HTMLButtonElement | null } };
- * };
- *
- * type N = ExtractNodes<Model>; // { container: HTMLButtonElement | null }
- * ```
- */
-export type ExtractNodes<M> = M extends {
-  meta: { nodes: infer N extends Record<string, unknown> };
-}
-  ? N
-  : Record<never, unknown>;
-
-/**
- * Transforms `meta.nodes` values to include `| null`, reflecting
- * that node refs are initially `null` until a DOM element is captured.
- * Models without `meta.nodes` pass through unchanged.
- *
- * @internal
- */
-export type NullableNodes<M> = M extends {
-  meta: infer Meta & { nodes: infer N extends Record<string, unknown> };
-}
-  ? Omit<M, "meta"> & {
-      meta: Omit<Meta, "nodes"> & {
-        nodes: { [K in keyof N]: N[K] | null };
-      };
-    }
-  : M;
-
-/**
- * Extracts the `meta.features` property from a Model type.
- * If the model has a `meta.features` property whose values are all booleans,
- * returns its type. Otherwise returns an empty record, making the
- * `features` methods effectively uncallable.
- *
- * @example
- * ```ts
- * type Model = { count: number; meta: { features: { sidebar: boolean; modal: boolean } } };
- * type F = FeatureFlags<Model>; // { sidebar: boolean; modal: boolean }
- * ```
- */
-export type FeatureFlags<M> = M extends {
-  meta: { features: infer F extends Record<string, boolean> };
-}
-  ? F
-  : Record<never, boolean>;
-
-/**
- * Resolves to `unknown` when the model has no `meta.features` or all
- * feature values are booleans. Resolves to a descriptive string literal when
- * any value is not a boolean, causing an intersection with the model type
- * to become `never` and producing a compile-time error.
- *
- * @internal
- */
-export type ValidateFeatures<M> = M extends {
-  meta: { features: infer F };
-}
-  ? F extends Record<string, boolean>
-    ? unknown
-    : "meta.features values must all be boolean"
-  : unknown;
-
-/**
- * Utility type for the `meta` model property. Combines optional `nodes`
- * and `features` sub-objects into a single meta shape.
- *
- * - When `N` is provided, produces `{ nodes: { [K in keyof N]: N[K] | null } }`.
- * - When `F` is provided, produces `{ features: F }`.
- * - Pass `void` to omit either sub-object.
- *
- * @template N - Node type record (e.g. `{ input: HTMLInputElement }`)
- * @template F - Feature flags record (e.g. `{ sidebar: boolean }`)
- *
- * @example
- * ```ts
- * import type { Meta } from "chizu";
- *
- * type Model = {
- *   count: number;
- *   meta: Meta<{ input: HTMLInputElement }, { sidebar: boolean }>;
- * };
- * // Equivalent to:
- * // meta: { nodes: { input: HTMLInputElement | null }; features: { sidebar: boolean } }
- * ```
- */
-export type Meta<
-  N extends Record<string, unknown> | void = void,
-  F extends Record<string, boolean> | void = void,
-> = ([N] extends [void]
-  ? unknown
-  : { nodes: { [K in keyof N]: N[K] | null } }) &
-  ([F] extends [void] ? unknown : { features: F });
-
-// eslint-disable-next-line @typescript-eslint/no-namespace
-export namespace Meta {
-  export type Nodes<N extends Record<string, unknown>> = Meta<N>;
-  export type Features<F extends Record<string, boolean>> = Meta<void, F>;
-}
 
 /**
  * Constraint type for action containers.
@@ -749,72 +604,17 @@ export type HandlerContext<
    * ```
    */
   readonly tasks: ReadonlySet<Task>;
-  /**
-   * Meta properties including captured DOM nodes and feature flags.
-   *
-   * @example
-   * ```ts
-   * actions.useAction(Actions.Focus, (context) => {
-   *   context.meta.nodes.input?.focus();
-   * });
-   * ```
-   */
-  readonly meta: {
-    readonly nodes: {
-      [K in keyof ExtractNodes<M>]: ExtractNodes<M>[K] | null;
-    };
-    readonly features: Readonly<FeatureFlags<M>>;
-  };
-  /**
-   * The regulator API for controlling which actions may be dispatched.
-   *
-   * Each call replaces the previous policy entirely (last-write-wins).
-   * The policy is shared across all components within the same `<Boundary>`.
-   *
-   * @example
-   * ```ts
-   * actions.useAction(Actions.Mount, (context) => {
-   *   // Block all actions except Critical
-   *   context.regulator.allow(Actions.Critical);
-   * });
-   *
-   * actions.useAction(Actions.Unlock, (context) => {
-   *   // Re-allow all actions
-   *   context.regulator.allow();
-   * });
-   * ```
-   */
-  readonly regulator: Regulator;
   readonly actions: {
     produce<
       F extends (draft: {
-        model: Omit<M, "meta">;
+        model: M;
         readonly inspect: Readonly<Inspect<M>>;
       }) => void,
     >(
       ƒ: F & AssertSync<F>,
     ): void;
-    dispatch(
-      action: ActionOrChanneled,
-      payload?: unknown,
-      options?: MulticastOptions,
-    ): Promise<void>;
+    dispatch(action: ActionOrChanneled, payload?: unknown): Promise<void>;
     annotate<T>(operation: Operation, value: T): T;
-    /**
-     * Feature toggle methods for mutating boolean flags on the model.
-     *
-     * @example
-     * ```ts
-     * context.actions.features.on("sidebar");
-     * context.actions.features.off("sidebar");
-     * context.actions.features.invert("sidebar");
-     * ```
-     */
-    features: {
-      on<K extends keyof FeatureFlags<M>>(name: K): void;
-      off<K extends keyof FeatureFlags<M>>(name: K): void;
-      invert<K extends keyof FeatureFlags<M>>(name: K): void;
-    };
     /**
      * Returns the resolved broadcast or multicast value, waiting for any
      * pending annotations to settle before resolving.
@@ -823,8 +623,8 @@ export type HandlerContext<
      * Otherwise it waits until the next dispatch of the action.
      * Resolves with `null` if the task is aborted before a value arrives.
      *
-     * @param action - The broadcast or multicast action to resolve.
-     * @param options - For multicast actions, must include `{ scope: MulticastActions }`.
+     * @param action - The broadcast or multicast action to resolve. Multicast
+     *   actions read their scope from the action declaration.
      * @returns The dispatched value, or `null` if aborted.
      *
      * @example
@@ -839,10 +639,8 @@ export type HandlerContext<
      * });
      * ```
      */
-    resolution<T>(action: BroadcastPayload<T>): Promise<T | null>;
     resolution<T>(
-      action: MulticastPayload<T>,
-      options: MulticastOptions,
+      action: BroadcastPayload<T> | MulticastPayload<T>,
     ): Promise<T | null>;
 
     /**
@@ -850,8 +648,8 @@ export type HandlerContext<
      * waiting for annotations to settle. Use this when you need the current
      * cached value and do not need to wait for pending operations to complete.
      *
-     * @param action - The broadcast or multicast action to peek at.
-     * @param options - For multicast actions, must include `{ scope: MulticastActions }`.
+     * @param action - The broadcast or multicast action to peek at. Multicast
+     *   actions read their scope from the action declaration.
      * @returns The cached value, or `null` if no value has been dispatched.
      *
      * @example
@@ -863,8 +661,7 @@ export type HandlerContext<
      * });
      * ```
      */
-    peek<T>(action: BroadcastPayload<T>): T | null;
-    peek<T>(action: MulticastPayload<T>, options: MulticastOptions): T | null;
+    peek<T>(action: BroadcastPayload<T> | MulticastPayload<T>): T | null;
   };
 };
 
@@ -979,99 +776,21 @@ export type UseActions<
   AC extends Actions | void,
   D extends Props = Props,
 > = [
-  Readonly<NullableNodes<M>>,
+  Readonly<M>,
   {
     /**
-     * Dispatches an action with an optional payload.
-     *
-     * For multicast actions, you MUST provide the scope carrier as the third argument:
-     * ```ts
-     * actions.dispatch(Actions.Multicast.Update, payload, { scope: Actions.Multicast });
-     * ```
-     *
-     * @param action - The action to dispatch
-     * @param payload - The payload to send with the action
-     * @param options - For multicast actions, must include `{ scope: MulticastActions }`
+     * Dispatches an action with an optional payload. Multicast actions read
+     * their scope from the action declaration, so no extra options are
+     * required at the call site.
      */
-    dispatch<P>(
-      action: HandlerPayload<P>,
-      payload?: P,
-      options?: MulticastOptions,
-    ): Promise<void>;
-    dispatch<P>(
-      action: BroadcastPayload<P>,
-      payload?: P,
-      options?: MulticastOptions,
-    ): Promise<void>;
-    dispatch<P>(
-      action: MulticastPayload<P>,
-      payload: P,
-      options: MulticastOptions,
-    ): Promise<void>;
+    dispatch<P>(action: HandlerPayload<P>, payload?: P): Promise<void>;
+    dispatch<P>(action: BroadcastPayload<P>, payload?: P): Promise<void>;
+    dispatch<P>(action: MulticastPayload<P>, payload?: P): Promise<void>;
     dispatch<P, C extends Filter>(
       action: ChanneledAction<P, C>,
       payload?: P,
-      options?: MulticastOptions,
     ): Promise<void>;
     inspect: Inspect<M>;
-    /**
-     * Meta properties including captured DOM nodes and feature flags.
-     *
-     * @example
-     * ```tsx
-     * actions.meta.nodes.input?.focus();
-     * actions.meta.features.sidebar; // boolean
-     * ```
-     */
-    meta: {
-      readonly nodes: {
-        [K in keyof ExtractNodes<M>]: ExtractNodes<M>[K] | null;
-      };
-      readonly features: Readonly<FeatureFlags<M>>;
-    };
-    /**
-     * Captures a DOM node for later access via `meta.nodes`.
-     * Use as a ref callback on JSX elements.
-     *
-     * @param name - The node key (must match a key in the model's `meta.nodes`)
-     * @param node - The DOM node or null (when unmounting)
-     *
-     * @example
-     * ```tsx
-     * type Model = {
-     *   count: number;
-     *   meta: Meta<{ container: HTMLDivElement; input: HTMLInputElement }>;
-     * };
-     *
-     * const [model, actions] = useActions<Model, typeof Actions>(model);
-     *
-     * return (
-     *   <div ref={node => actions.node('container', node)}>
-     *     <input ref={node => actions.node('input', node)} />
-     *   </div>
-     * );
-     * ```
-     */
-    node<K extends keyof ExtractNodes<M>>(
-      name: K,
-      node: ExtractNodes<M>[K] | null,
-    ): void;
-    /**
-     * Feature toggle methods for mutating boolean flags on the model.
-     *
-     * @example
-     * ```tsx
-     * actions.features.on("sidebar");
-     * actions.features.invert("sidebar");
-     *
-     * {model.meta.features.sidebar && <Sidebar />}
-     * ```
-     */
-    features: {
-      on<K extends keyof FeatureFlags<M>>(name: K): void;
-      off<K extends keyof FeatureFlags<M>>(name: K): void;
-      invert<K extends keyof FeatureFlags<M>>(name: K): void;
-    };
     /**
      * Streams broadcast values declaratively in JSX using a render-prop pattern.
      *

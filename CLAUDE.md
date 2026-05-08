@@ -12,12 +12,11 @@ import {
   useActions,
   With,
   utils,
-  Scope,
+  withScope,
+  useMode,
   Boundary,
-  Regulators,
   Error,
   Reason,
-  DisallowedError,
   Op,
   Operation,
 } from "chizu";
@@ -26,11 +25,10 @@ import type {
   Fault,
   Handler,
   Handlers,
-  Meta,
+  ModeHandle,
   Pk,
   Task,
   Tasks,
-  Regulator,
 } from "chizu";
 ```
 
@@ -59,8 +57,8 @@ export class Actions {
 export function useNameActions() {
   const actions = useActions<Model, typeof Actions>({ name: null });
 
-  // Simple assignment using With helper
-  actions.useAction(Actions.Name, With("name"));
+  // Simple assignment using With.Update helper
+  actions.useAction(Actions.Name, With.Update("name"));
 
   return actions;
 }
@@ -88,7 +86,7 @@ static SetCount = Action<number>("SetCount");
 // Broadcast - all mounted components receive it
 static UserUpdated = Action<User>("UserUpdated", Distribution.Broadcast);
 
-// Multicast - components within a named <Scope> receive it
+// Multicast - components inside the matching withScope boundary receive it
 static Update = Action<number>("Update", Distribution.Multicast);
 ```
 
@@ -124,7 +122,6 @@ export class Actions {
   static Unmount = Lifecycle.Unmount();
   static Error = Lifecycle.Error();
   static Update = Lifecycle.Update();
-  static Node = Lifecycle.Node();
 
   static Increment = Action("Increment");
 }
@@ -146,15 +143,6 @@ actions.useAction(Actions.Error, (context, fault) => {
 actions.useAction(Actions.Update, (context, changes) => {
   // Triggered when context.data changes (not on initial mount)
   // changes: Record<string, unknown> with changed keys
-});
-
-actions.useAction(Actions.Node, (context, node) => {
-  // Triggered when any DOM node is captured via actions.node()
-});
-
-// Channeled node subscription for specific nodes
-actions.useAction(Actions.Node({ Name: "input" }), (context, node) => {
-  if (node) node.focus();
 });
 ```
 
@@ -178,10 +166,6 @@ actions.useAction(Actions.Fetch, async (context, payload) => {
 
   // Reactive data (always latest values, even after await)
   context.data;
-
-  // Captured DOM nodes and feature flags
-  context.meta.nodes;
-  context.meta.features;
 
   // Actions API
   context.actions.produce(({ model, inspect }) => {
@@ -255,33 +239,29 @@ actions.inspect.user.is(Op.Update); // check specific operation
 
 ## Multicast Pattern
 
-For scoped component communication:
+Each multicast action defines its own scope &mdash; pass the same action to `withScope` and to `dispatch`. There is no separate scope name.
 
 ```tsx
-// types.ts - shared multicast actions (scope name lives on the class)
-export class MulticastActions {
-  static Scope = "mood" as const;
+// types.ts — group multicast actions on a class named `Scope`.
+export class Scope {
   static Mood = Action<Mood>("Mood", Distribution.Multicast);
 }
 
-// component/types.ts - reference shared multicast
-export class Actions {
-  static Multicast = MulticastActions; // Always at top of class
+// Parent opens the scope by wrapping the subtree.
+function MoodArea() {
+  return (
+    <>
+      <Happy />
+      <Sad />
+    </>
+  );
 }
+export default withScope(Scope.Mood, MoodArea);
 
-// Parent defines scope boundary by passing the scope name
-<Scope of={MulticastActions.Scope}>
-  <Happy />
-  <Sad />
-</Scope>;
+// Dispatch and subscribe with no extra options.
+actions.dispatch(Scope.Mood, mood);
 
-// Dispatch multicast by passing the scope name
-actions.dispatch(Actions.Multicast.Mood, mood, {
-  scope: Actions.Multicast.Scope,
-});
-
-// Handle multicast from any component in scope
-actions.useAction(Actions.Multicast.Mood, (context, mood) => {
+actions.useAction(Scope.Mood, (context, mood) => {
   context.actions.produce(({ model }) => {
     model.selected = mood;
   });
@@ -312,11 +292,11 @@ utils.κ(); // Greek alias
 
 ## Helper Functions
 
-### `With(property)` - Simple Property Binding
+### `With.Update(property)` &mdash; Bind payload to a model field
 
 ```ts
 // Bind action payload directly to model property
-actions.useAction(Actions.SetName, With("name"));
+actions.useAction(Actions.SetName, With.Update("name"));
 
 // Equivalent to:
 actions.useAction(Actions.SetName, (context, name) => {
@@ -326,104 +306,23 @@ actions.useAction(Actions.SetName, (context, name) => {
 });
 ```
 
-## DOM Node Capture
+The helper type-checks at the call site: the payload type must be assignable to `model[key]`.
 
-Capture DOM nodes for access in handlers. When the model has a `meta.nodes` property, `actions.node()` automatically writes the captured node to the model — no manual `Lifecycle.Node` handler is needed:
-
-```tsx
-import type { Meta } from "chizu";
-
-type N = {
-  input: HTMLInputElement;
-  container: HTMLDivElement;
-};
-
-type Model = {
-  count: number;
-  meta: Meta.Nodes<N>;
-};
-
-const [model, actions] = useActions<Model, typeof Actions>(initialModel);
-
-// In JSX
-<div ref={(node) => actions.node("container", node)}>
-  <input ref={(node) => actions.node("input", node)} />
-</div>;
-
-// In handlers
-actions.useAction(Actions.Focus, (context) => {
-  context.meta.nodes.input?.focus();
-});
-
-// Or access from actions object
-actions.meta.nodes.input?.focus();
-```
-
-## Feature Toggles
-
-Toggle boolean UI state (modals, sidebars, drawers) without defining actions or handlers:
-
-```tsx
-import type { Meta } from "chizu";
-
-type F = {
-  paymentDialog: boolean;
-  sidebar: boolean;
-};
-
-type Model = {
-  name: string;
-  meta: Meta.Features<F>;
-};
-
-const [model, actions] = useMyActions();
-
-// Mutate via actions.features
-actions.features.invert("paymentDialog");
-actions.features.on("paymentDialog");
-actions.features.off("paymentDialog");
-
-// Read from model
-{
-  model.meta.features.paymentDialog && <PaymentDialog />;
-}
-
-// In handlers
-actions.useAction(Actions.CloseAll, (context) => {
-  context.actions.features.off("paymentDialog");
-  context.actions.features.off("sidebar");
-});
-```
-
-## Meta
-
-The `Meta` utility type combines optional `nodes` and `features` into a single `meta` model property. Use `Meta.Nodes<N>` or `Meta.Features<F>` when only one is needed:
+### `With.Invert(property)` &mdash; Flip a boolean field
 
 ```ts
-import type { Meta } from "chizu";
+// Toggle a boolean model property (payload is ignored)
+actions.useAction(Actions.ToggleSidebar, With.Invert("sidebar"));
 
-type N = { input: HTMLInputElement };
-type F = { sidebar: boolean };
-
-// Both nodes and features
-type Model = {
-  count: number;
-  meta: Meta<N, F>;
-};
-
-// Features only
-type FeaturesOnly = {
-  meta: Meta.Features<F>;
-};
-
-// Nodes only
-type NodesOnly = {
-  meta: Meta.Nodes<N>;
-};
+// Equivalent to:
+actions.useAction(Actions.ToggleSidebar, (context) => {
+  context.actions.produce(({ model }) => {
+    model.sidebar = !model.sidebar;
+  });
+});
 ```
 
-- `meta.features` — boolean flags toggled via `actions.features.on/off/invert()`
-- `meta.nodes` — captured DOM nodes registered via `actions.node()`
+`With.Invert` only compiles when the named property is a boolean on the model. Use it for modals, drawers, panels, and similar binary UI state &mdash; the field lives directly on the model with no special wrapper.
 
 ## Error Handling
 
@@ -437,7 +336,6 @@ import { Error, Reason } from "chizu";
     switch (reason) {
       case Reason.Timedout: // Action exceeded timeout
       case Reason.Supplanted: // Newer action instance dispatched
-      case Reason.Disallowed: // Blocked by policy
       case Reason.Errored: // Uncaught error
     }
   }}
@@ -473,18 +371,43 @@ actions.useAction(Actions.Search, async (context, query) => {
 });
 ```
 
-## Action Regulator
+## Mode (Per-Boundary Coordination Value)
 
-Control which actions may be dispatched across all components in a `<Boundary>`:
+A single mutable value shared across every component inside a `<Boundary>`. Mode is **opt-in**: components that need it call `useMode()` and thread the handle through the `useActions` data callback. Mode is **not** reactive &mdash; mutating it does not re-render. Use it for cross-handler coordination only; drive view state through the model.
 
 ```ts
-context.regulator.disallow(); // Block all actions
-context.regulator.disallow(Actions.Fetch, Actions.Save); // Block specific actions
-context.regulator.allow(); // Allow all actions (reset)
-context.regulator.allow(Actions.Critical); // Allow only specific actions
+import { useMode, useActions, Action } from "chizu";
+
+enum Mode {
+  Idle,
+  SigningOut,
+}
+
+function useSignOutActions() {
+  const mode = useMode<Mode>();
+  // Spell the data shape as the third generic so `context.data.mode` keeps
+  // its concrete type inside handlers.
+  const actions = useActions<Model, typeof Actions, { mode: typeof mode }>(
+    model,
+    () => ({ mode }),
+  );
+
+  actions.useAction(Actions.SignOut, async (context) => {
+    context.data.mode.update(Mode.SigningOut);
+    await api.signOut();
+    context.data.mode.update(Mode.Idle);
+  });
+
+  actions.useAction(Actions.Refresh, async (context) => {
+    if (context.data.mode.read() === Mode.SigningOut) return;
+    // ...
+  });
+
+  return actions;
+}
 ```
 
-Each call replaces the previous policy entirely (last-write-wins). Blocked actions fire `Reason.Disallowed` through the error system without allocating resources.
+`context.data.mode` is fully typed via the `useActions` data generic, no extra annotations needed. Reads stay fresh across `await` boundaries because `context.data` already does.
 
 ## Context Providers
 
@@ -493,25 +416,19 @@ Each call replaces the previous policy entirely (last-write-wins). Blocked actio
 ```tsx
 import { Boundary } from "chizu";
 
-// Wraps app with Broadcaster, Cache, Regulators, and Tasks providers
+// Wraps app with Broadcaster, Mode, and Tasks providers
 <Boundary>
   <App />
 </Boundary>;
 ```
 
-### Individual Providers (for isolation)
+### Multicast scope boundaries
 
 ```tsx
-import { Broadcaster, Scope, Regulators } from "chizu";
+import { withScope } from "chizu";
 
-// Isolated broadcast context (for libraries)
-<Broadcaster>{children}</Broadcaster>
-
-// Multicast scope boundary — pass the MulticastActions class as the carrier
-<Scope of={MulticastActions}>{children}</Scope>
-
-// Isolated regulator context
-<Regulators>{children}</Regulators>
+// Wrap a component with the multicast action that opens its scope.
+const ScopedArea = withScope(Scope.Mood, MoodArea);
 ```
 
 ## Reactive Data (Avoiding Stale Closures)
@@ -581,15 +498,15 @@ For feature components, use this folder structure:
 
 ```
 feature/
-├── index.tsx          # Main component with <Scope> if needed
-├── types.ts           # Model type, enums, shared MulticastActions
+├── index.tsx          # Main component (often wrapped via withScope)
+├── types.ts           # Model type, enums, multicast Scope class
 ├── styles.ts          # Emotion CSS styles
 ├── utils.ts           # Utility functions
 └── components/
     └── sub-feature/
         ├── index.tsx  # Component UI
         ├── actions.ts # useXxxActions hook with handlers
-        └── types.ts   # Actions class with Multicast reference
+        └── types.ts   # Actions class for this component
 ```
 
 ## Coding Standards
@@ -598,7 +515,7 @@ feature/
 - Use `export function` instead of `export const () =>`.
 - All comments and documentation must be written in British-English.
 - Keep dispatch logic in actions.ts, not in component files.
-- Place `static Multicast = MulticastActions;` at the top of Action classes.
+- Group multicast actions on a class named `Scope`; reference each action directly (e.g. `Scope.Update`) at the dispatch and `withScope` call sites.
 - Use `context.actions.produce` for all state mutations.
 - Pass abort signals to async operations: `signal: context.task.controller.signal`.
 
@@ -649,21 +566,20 @@ docs: update the README file
 - `src/library/boundary/components/broadcast/` - Broadcast system
 - `src/library/boundary/components/consumer/` - Consumer store (internal)
 - `src/library/boundary/components/tasks/` - Task tracking context
-- `src/library/boundary/components/regulators/` - Action regulator policy context
+- `src/library/boundary/components/mode/` - Per-Boundary mode handle context
 
 ### Documentation
 
 - `recipes/` - Advanced usage patterns and documentation
   - `action-control-patterns.md` - Cancellation, timeouts, retries, debouncing
-  - `action-regulator.md` - Blocking/allowing actions with blacklist/whitelist policies
   - `broadcast-actions.md` - Cross-component communication
   - `channeled-actions.md` - Targeted event delivery
   - `reading-actions.md` - Reading and streaming broadcast values: handler resolution(), peek(), and JSX stream()
   - `context-providers.md` - Boundary, Broadcaster, Consumer
   - `error-handling.md` - Error component and fault handling
-  - `feature-toggles.md` - Boolean feature flags with actions.features methods
   - `ky-http-client.md` - Integration with ky HTTP client
-  - `lifecycle-actions.md` - Mount, Unmount, Error, Update, Node
+  - `lifecycle-actions.md` - Mount, Unmount, Error, Update
+  - `mode.md` - Per-Boundary handler coordination value
   - `mount-broadcast-deduplication.md` - Avoiding duplicate fetches on mount with broadcast/multicast
   - `model-annotations.md` - Async state tracking with Immertation
   - `multicast-actions.md` - Scoped component communication
