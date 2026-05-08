@@ -117,9 +117,9 @@ export function isChanneledAction(
 /**
  * Extracts the lifecycle type from an action's symbol description.
  *
- * Returns the lifecycle name (`"Mount"`, `"Unmount"`, `"Error"`, `"Update"`,
- * `"Node"`) when the action symbol's description starts with the lifecycle
- * prefix, or `null` for non-lifecycle actions.
+ * Returns the lifecycle name (`"Mount"`, `"Unmount"`, `"Error"`, `"Update"`)
+ * when the action symbol's description starts with the lifecycle prefix, or
+ * `null` for non-lifecycle actions.
  *
  * @param action The action to inspect.
  * @returns The lifecycle name, or `null` if not a lifecycle action.

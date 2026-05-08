@@ -1,14 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { Lifecycle, Pk, HandlerPayload, Brand } from ".";
-import type {
-  Payload,
-  Handlers,
-  UseActions,
-  Meta,
-  FeatureFlags,
-  ValidateFeatures,
-  NullableNodes,
-} from ".";
+import type { Payload, Handlers, UseActions } from ".";
 import { Action, Distribution } from "..";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
@@ -20,12 +12,11 @@ describe("Lifecycle", () => {
     expect(mount1[Brand.Action]).not.toBe(mount2[Brand.Action]);
   });
 
-  it("should have all five lifecycle factories", () => {
+  it("should have all four lifecycle factories", () => {
     expect(typeof Lifecycle.Mount).toBe("function");
     expect(typeof Lifecycle.Unmount).toBe("function");
     expect(typeof Lifecycle.Error).toBe("function");
     expect(typeof Lifecycle.Update).toBe("function");
-    expect(typeof Lifecycle.Node).toBe("function");
   });
 
   it("should expose Fault as a singleton broadcast action", () => {
@@ -61,7 +52,6 @@ describe("Brand", () => {
     expect(typeof Brand.Multicast).toBe("symbol");
     expect(typeof Brand.Action).toBe("symbol");
     expect(typeof Brand.Channel).toBe("symbol");
-    expect(typeof Brand.Node).toBe("symbol");
   });
 });
 
@@ -135,125 +125,5 @@ describe("derive type inference", () => {
     // Each derive call returns a new UseActions with the model extended
     type Base = UseActions<Model, typeof Actions>;
     expectTypeOf<Base["derive"]>().toBeFunction();
-  });
-});
-
-describe("Meta", () => {
-  it("should produce nodes with null and features when both provided", () => {
-    type Result = Meta<{ input: HTMLInputElement }, { sidebar: boolean }>;
-    expectTypeOf<Result>().toMatchTypeOf<{
-      nodes: { input: HTMLInputElement | null };
-      features: { sidebar: boolean };
-    }>();
-  });
-
-  it("should produce only features when nodes is void", () => {
-    type Result = Meta<void, { sidebar: boolean }>;
-    expectTypeOf<Result>().toMatchTypeOf<{
-      features: { sidebar: boolean };
-    }>();
-  });
-
-  it("should produce only nodes when features is void", () => {
-    type Result = Meta<{ input: HTMLInputElement }>;
-    expectTypeOf<Result>().toMatchTypeOf<{
-      nodes: { input: HTMLInputElement | null };
-    }>();
-  });
-
-  it("should produce only features via Meta.Features shorthand", () => {
-    type Result = Meta.Features<{ sidebar: boolean }>;
-    expectTypeOf<Result>().toMatchTypeOf<{
-      features: { sidebar: boolean };
-    }>();
-  });
-
-  it("should produce only nodes via Meta.Nodes shorthand", () => {
-    type Result = Meta.Nodes<{ input: HTMLInputElement }>;
-    expectTypeOf<Result>().toMatchTypeOf<{
-      nodes: { input: HTMLInputElement | null };
-    }>();
-  });
-});
-
-describe("FeatureFlags", () => {
-  it("should extract features from a model with meta.features", () => {
-    type Model = {
-      count: number;
-      meta: { features: { sidebar: boolean; modal: boolean } };
-    };
-    type F = FeatureFlags<Model>;
-    expectTypeOf<F>().toEqualTypeOf<{ sidebar: boolean; modal: boolean }>();
-  });
-
-  it("should produce never keys when model has no meta.features", () => {
-    type Model = { count: number };
-    type F = FeatureFlags<Model>;
-    type Keys = keyof F;
-    expectTypeOf<Keys>().toEqualTypeOf<never>();
-  });
-
-  it("should produce never keys when features is a plain top-level key", () => {
-    type Model = { count: number; features: { sidebar: boolean } };
-    type F = FeatureFlags<Model>;
-    type Keys = keyof F;
-    expectTypeOf<Keys>().toEqualTypeOf<never>();
-  });
-
-  it("should reject non-boolean feature values via ValidateFeatures", () => {
-    type BadModel = {
-      count: number;
-      meta: { features: { sidebar: string } };
-    };
-    type Result = ValidateFeatures<BadModel>;
-    expectTypeOf<Result>().toEqualTypeOf<"meta.features values must all be boolean">();
-  });
-
-  it("should resolve to unknown when features are valid", () => {
-    type GoodModel = {
-      count: number;
-      meta: { features: { sidebar: boolean } };
-    };
-    type Result = ValidateFeatures<GoodModel>;
-    expectTypeOf<Result>().toEqualTypeOf<unknown>();
-  });
-
-  it("should resolve to unknown when no meta.features exists", () => {
-    type NoFeatures = { count: number };
-    type Result = ValidateFeatures<NoFeatures>;
-    expectTypeOf<Result>().toEqualTypeOf<unknown>();
-  });
-});
-
-describe("NullableNodes", () => {
-  it("should auto-apply null to node values in a model", () => {
-    type Model = {
-      count: number;
-      meta: { nodes: { container: HTMLDivElement } };
-    };
-    type Result = NullableNodes<Model>;
-    type NodeType = Result extends { meta: { nodes: infer N } } ? N : never;
-    expectTypeOf<NodeType>().toEqualTypeOf<{
-      container: HTMLDivElement | null;
-    }>();
-  });
-
-  it("should pass through model without meta.nodes unchanged", () => {
-    type Model = { count: number };
-    type Result = NullableNodes<Model>;
-    expectTypeOf<Result>().toEqualTypeOf<Model>();
-  });
-
-  it("should preserve features when nodes are transformed", () => {
-    type Model = {
-      count: number;
-      meta: {
-        features: { sidebar: boolean };
-        nodes: { container: HTMLDivElement };
-      };
-    };
-    type Result = NullableNodes<Model>;
-    type Features = Result extends { meta: { features: infer F } } ? F : never;
-    expectTypeOf<Features>().toEqualTypeOf<{ sidebar: boolean }>();
   });
 });

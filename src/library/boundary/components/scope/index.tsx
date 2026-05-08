@@ -1,5 +1,7 @@
-import type { Props, ScopeContext, ScopeEntry } from "./types.ts";
+import type { ScopeContext, ScopeEntry } from "./types.ts";
+import type { MulticastPayload } from "../../../types/index.ts";
 import { Context, useScope } from "./utils.ts";
+import { getActionSymbol } from "../../../action/index.ts";
 import type { ComponentType, ReactNode } from "react";
 import { BroadcastEmitter } from "../broadcast/utils.ts";
 import * as React from "react";
@@ -8,112 +10,69 @@ export { useScope, getScope } from "./utils.ts";
 export type { ScopeEntry, ScopeContext } from "./types.ts";
 
 /**
- * Creates a named scope boundary for multicast actions.
+ * Higher-order component that opens a multicast scope keyed by the supplied
+ * multicast action. Components rendered inside the wrapped tree (and any
+ * descendants) participate in the scope: every dispatch of `action` reaches
+ * every subscriber inside this boundary.
  *
- * Components within a `<Scope>` can dispatch multicast actions to all other
- * components within the same scope boundary. This is useful for creating
- * isolated groups of components that need to communicate without affecting
- * other parts of the application.
+ * Each multicast action defines its own scope &mdash; pass the same action you
+ * declared with `Distribution.Multicast` to both `withScope` and
+ * `actions.dispatch`.
  *
- * Multiple scopes can be nested, and each scope name creates its own
- * communication channel. When dispatching, the nearest ancestor scope
- * with the matching name receives the event.
+ * Multicast caches the most recent dispatched value per scope so late-mounted
+ * components can read it via `context.actions.resolution()`.
  *
- * Like Broadcast, multicast caches the most recent dispatched value so that
- * late-mounted components can read it via `context.actions.resolution()`.
- *
- * @param props.of - The scope name. Typically a `static Scope` literal co-located with the feature's multicast actions.
- * @param props.children - Components within the scope boundary.
- *
- * @example
- * ```tsx
- * class UserListActions {
- *   static Scope = "UserList" as const;
- *   static FilterChanged = Action<Filter>("FilterChanged", Distribution.Multicast);
- * }
- *
- * <Scope of={UserListActions.Scope}>
- *   <UserFilter />
- *   <UserTable />
- * </Scope>
- *
- * // Dispatch reaches every component in the UserList scope:
- * actions.dispatch(Actions.Multicast.FilterChanged, filter, { scope: Actions.Multicast.Scope });
- * ```
- *
- * @example
- * ```tsx
- * // Nested scopes - each class carries its own scope name
- * <Scope of={AppActions.Scope}>
- *   <Header />
- *   <Scope of={SidebarActions.Scope}>
- *     <SidebarItem />
- *   </Scope>
- *   <Scope of={ContentActions.Scope}>
- *     <ContentItem />
- *   </Scope>
- * </Scope>
- * ```
- */
-export function Scope({ of: name, children }: Props): React.ReactNode {
-  const parent = useScope();
-
-  const scopeEntry = React.useMemo<ScopeEntry>(
-    () => ({
-      name,
-      emitter: new BroadcastEmitter(),
-    }),
-    [],
-  );
-
-  const context = React.useMemo<ScopeContext>(() => {
-    const map = new Map(parent ?? []);
-    map.set(name, scopeEntry);
-    return map;
-  }, [parent, name, scopeEntry]);
-
-  return <Context.Provider value={context}>{children}</Context.Provider>;
-}
-
-/**
- * Higher-order component that wraps a component in a multicast `<Scope>`.
- *
- * Eliminates the need to manually wrap component output in `<Scope of={...}>`,
- * keeping the component body focused on its own rendering logic.
- *
- * @param scope - The scope name. Typically a `static Scope` literal co-located with the feature's multicast actions.
+ * @param action - The multicast action that opens this scope.
  * @param Component - The component to wrap.
- * @returns A new component that renders the original within a `<Scope>`.
+ * @returns A component that renders the original inside a fresh scope boundary.
  *
  * @example
  * ```tsx
- * class MulticastActions {
- *   static Scope = "payment-link" as const;
- *   static Update = Action<User>("Update", Distribution.Multicast);
+ * export class Scope {
+ *   static Mood = Action<Mood>("Mood", Distribution.Multicast);
  * }
  *
- * export default withScope(MulticastActions.Scope, function Layout(): ReactElement {
+ * function Mood() {
  *   return (
- *     <div>
- *       <Sidebar />
- *       <Content />
- *     </div>
+ *     <>
+ *       <Happy />
+ *       <Sad />
+ *     </>
  *   );
- * });
+ * }
+ *
+ * export default withScope(Scope.Mood, Mood);
  * ```
  */
-export function withScope<P extends object>(
-  scope: string,
+export function withScope<P extends object, T = unknown>(
+  action: MulticastPayload<T>,
   Component: ComponentType<P>,
 ): (props: P) => ReactNode {
   const scopedName = `Scoped${Component.displayName || Component.name || "Component"}`;
+  const symbol = getActionSymbol(action);
 
   return {
     [scopedName](props: P): ReactNode {
+      const parent = useScope();
+
+      const entry = React.useMemo<ScopeEntry>(
+        () => ({
+          action: symbol,
+          emitter: new BroadcastEmitter(),
+        }),
+        [],
+      );
+
+      const context = React.useMemo<ScopeContext>(() => {
+        const map = new Map(parent ?? []);
+        map.set(symbol, entry);
+        return map;
+      }, [parent, entry]);
+
       return (
-        <Scope of={scope}>
+        <Context.Provider value={context}>
           <Component {...props} />
-        </Scope>
+        </Context.Provider>
       );
     },
   }[scopedName];

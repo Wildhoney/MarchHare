@@ -1,31 +1,22 @@
 import type { BroadcastEmitter } from "../broadcast/utils.ts";
-import type * as React from "react";
+import type { ActionId } from "../tasks/types.ts";
 
 /**
- * Props for the Scope component.
- */
-export type Props = {
-  /** The scope name. Typically a `static Scope` literal co-located with the feature's multicast action declarations. */
-  of: string;
-  /** Children to render within the scope boundary. */
-  children: React.ReactNode;
-};
-
-/**
- * Represents a single scope in the ancestor chain.
- * Each scope has its own BroadcastEmitter for multicast events and caching.
+ * Represents a single scope in the ancestor chain. The scope key is the
+ * action id of the multicast action that opens the scope; each multicast
+ * action defines its own scope.
  */
 export type ScopeEntry = {
-  /** The name of this scope */
-  name: string;
+  /** The action id that opened this scope */
+  action: ActionId;
   /** BroadcastEmitter for multicast events within this scope (caches last payload per event) */
   emitter: BroadcastEmitter;
 };
 
 /**
- * The scope context is a flattened map of all ancestor scopes by name.
- * Each <Scope> merges its entry with the parent's map, building up a
- * complete lookup table for O(1) retrieval.
- * null indicates no scope ancestor.
+ * The scope context is a flattened map of ancestor scopes keyed by the
+ * multicast action that opened each scope. Each `withScope` merges its entry
+ * with the parent's map, building up a complete lookup table for O(1)
+ * retrieval. null indicates no scope ancestor.
  */
-export type ScopeContext = Map<string, ScopeEntry> | null;
+export type ScopeContext = Map<ActionId, ScopeEntry> | null;

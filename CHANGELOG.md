@@ -4,12 +4,11 @@ All notable changes to this project will be documented in this file. See [commit
 
 ## [0.4.0](https://github.com/Wildhoney/Chizu/compare/v0.3.0...v0.4.0) (2026-05-07)
 
-
 ### ⚠ BREAKING CHANGES
 
-* **scope:** drop ScopeCarrier, take scope name string directly
+- **scope:** drop ScopeCarrier, take scope name string directly
 
-* **scope:** drop ScopeCarrier, take scope name string directly ([1538ae5](https://github.com/Wildhoney/Chizu/commit/1538ae51b51dbf54f13afa6454e851641a1a2998))
+- **scope:** drop ScopeCarrier, take scope name string directly ([1538ae5](https://github.com/Wildhoney/Chizu/commit/1538ae51b51dbf54f13afa6454e851641a1a2998))
 
 ## [0.3.0](https://github.com/Wildhoney/Chizu/compare/v0.2.72...v0.3.0) (2026-05-07)
 

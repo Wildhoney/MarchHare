@@ -1,12 +1,12 @@
 import * as React from "react";
 import { Broadcaster } from "./components/broadcast/index.tsx";
 import { Tasks } from "./components/tasks/index.tsx";
-import { Regulators } from "./components/regulators/index.tsx";
+import { Mode } from "./components/mode/index.tsx";
 import type { Props } from "./types.ts";
 
 /**
  * Creates a unified context boundary for all Chizu features.
- * Wraps children with Broadcaster, Regulators, and Tasks providers.
+ * Wraps children with Broadcaster, Mode, and Tasks providers.
  *
  * Use this at the root of your application or to create isolated context boundaries
  * for libraries that need their own Chizu context.
@@ -24,9 +24,9 @@ import type { Props } from "./types.ts";
 export function Boundary({ children }: Props): React.ReactNode {
   return (
     <Broadcaster>
-      <Regulators>
+      <Mode>
         <Tasks>{children}</Tasks>
-      </Regulators>
+      </Mode>
     </Broadcaster>
   );
 }

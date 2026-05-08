@@ -544,7 +544,7 @@ actions.useAction(Lifecycle.Error, (context, fault) => {
 
 ### Rule 24: Subscribe to `Lifecycle.Fault` for global error handling
 
-`Lifecycle.Fault` is a singleton broadcast that fires whenever any action in the surrounding `<Boundary>` errors, times out, is supplanted, or is blocked by the regulator. Subscribe to it for observability and report to your error tracking service.
+`Lifecycle.Fault` is a singleton broadcast that fires whenever any action in the surrounding `<Boundary>` errors, times out, or is supplanted. Subscribe to it for observability and report to your error tracking service.
 
 ```tsx
 const actions = useActions();
@@ -557,15 +557,13 @@ actions.useAction(Lifecycle.Fault, (_context, { reason, error, action }) => {
 });
 ```
 
-The payload is the same `Fault` delivered to the per-component `Lifecycle.Error()` factory &ndash; including `tasks` for cascading-abort scenarios. `Lifecycle.Fault` bypasses the regulator so a `disallow()` blanket can never silence error visibility.
+The payload is the same `Fault` delivered to the per-component `Lifecycle.Error()` factory &ndash; including `tasks` for cascading-abort scenarios.
 
 ### Rule 25: Know the error reasons
 
 - `Reason.Timedout` — action exceeded timeout
 - `Reason.Supplanted` — newer dispatch cancelled this one
-- `Reason.Disallowed` — blocked by regulator
 - `Reason.Errored` — exception thrown
-- `Reason.Unmounted` — component unmounted during execution
 
 ### Rule 26: Use `Option` or `Result` for fallible model properties
 

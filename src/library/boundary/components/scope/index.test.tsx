@@ -1,14 +1,32 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { Scope, withScope, useScope } from "./index";
+import { withScope, useScope } from "./index";
+import { Action } from "../../../action/index.ts";
+import { Distribution } from "../../../types/index.ts";
+
+const Outer = Action("Outer", Distribution.Multicast);
+const Inner = Action("Inner", Distribution.Multicast);
+const TestScope = Action("Test", Distribution.Multicast);
+const Forwarding = Action("Forwarding", Distribution.Multicast);
+const Naming = Action("Naming", Distribution.Multicast);
+const Anon = Action("Anon", Distribution.Multicast);
+const Children = Action("Children", Distribution.Multicast);
 
 function ScopeReader() {
   const scope = useScope();
-  return (
-    <div data-testid="scope-names">
-      {scope ? Array.from(scope.keys()).join(",") : "none"}
-    </div>
-  );
+  const names = scope
+    ? Array.from(scope.values())
+        .map((entry) => {
+          const id = entry.action;
+          if (typeof id === "symbol") {
+            const description = id.description ?? "";
+            return description.slice(description.lastIndexOf("/") + 1);
+          }
+          return String(id);
+        })
+        .join(",")
+    : "none";
+  return <div data-testid="scope-names">{names}</div>;
 }
 
 describe("withScope", () => {
@@ -17,11 +35,11 @@ describe("withScope", () => {
       return <ScopeReader />;
     }
 
-    const Wrapped = withScope("test-scope", Inner);
+    const Wrapped = withScope(TestScope, Inner);
 
     render(<Wrapped />);
 
-    expect(screen.getByTestId("scope-names").textContent).toBe("test-scope");
+    expect(screen.getByTestId("scope-names").textContent).toBe("Test");
   });
 
   it("should forward props to the wrapped component", () => {
@@ -29,27 +47,27 @@ describe("withScope", () => {
       return <div data-testid="label">{props.label}</div>;
     }
 
-    const Wrapped = withScope("forwarding", Inner);
+    const Wrapped = withScope(Forwarding, Inner);
 
     render(<Wrapped label="Hello" />);
 
     expect(screen.getByTestId("label").textContent).toBe("Hello");
   });
 
-  it("should nest within an existing Scope", () => {
-    function Inner() {
+  it("should nest within an outer scope", () => {
+    function InnerComponent() {
       return <ScopeReader />;
     }
+    function OuterComponent() {
+      const Wrapped = withScope(Inner, InnerComponent);
+      return <Wrapped />;
+    }
 
-    const Wrapped = withScope("inner", Inner);
+    const WrappedOuter = withScope(Outer, OuterComponent);
 
-    render(
-      <Scope of="outer">
-        <Wrapped />
-      </Scope>,
-    );
+    render(<WrappedOuter />);
 
-    expect(screen.getByTestId("scope-names").textContent).toBe("outer,inner");
+    expect(screen.getByTestId("scope-names").textContent).toBe("Outer,Inner");
   });
 
   it("should name the wrapper by prepending 'Scoped' to the component name", () => {
@@ -57,13 +75,13 @@ describe("withScope", () => {
       return <div />;
     }
 
-    const Wrapped = withScope("naming", Layout);
+    const Wrapped = withScope(Naming, Layout);
 
     expect(Wrapped.name).toBe("ScopedLayout");
   });
 
   it("should fall back to 'ScopedComponent' for anonymous components", () => {
-    const Wrapped = withScope("anon", () => <div />);
+    const Wrapped = withScope(Anon, () => <div />);
 
     expect(Wrapped.name).toBe("ScopedComponent");
   });
@@ -78,7 +96,7 @@ describe("withScope", () => {
       );
     }
 
-    const Wrapped = withScope("children-scope", Inner);
+    const Wrapped = withScope(Children, Inner);
 
     render(<Wrapped />);
 

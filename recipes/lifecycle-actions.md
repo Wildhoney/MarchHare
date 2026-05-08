@@ -12,7 +12,6 @@ export class Actions {
   static Unmount = Lifecycle.Unmount();
   static Error = Lifecycle.Error();
   static Update = Lifecycle.Update();
-  static Node = Lifecycle.Node();
 
   static Increment = Action("Increment");
 }
@@ -40,9 +39,8 @@ export function useMyActions() {
 - **`Lifecycle.Error()`** &ndash; Triggered when an action **in this component** throws. Receives `Fault` as payload. Each call returns a unique per-component symbol.
 - **`Lifecycle.Unmount()`** &ndash; Triggered when the component unmounts. All in-flight actions are automatically aborted before this handler runs. Protected against React Strict Mode double-invocation via deferred microtask cancellation.
 - **`Lifecycle.Update()`** &ndash; Triggered when `context.data` changes. Receives an object with the changed keys.
-- **`Lifecycle.Node()`** &ndash; Triggered when a DOM node is captured via `actions.node()`. Supports channeled subscriptions by node name.
 
-Because each factory call returns a unique symbol, `context.regulator.disallow(Actions.Mount)` only blocks **this** component's mount — not every component in the boundary.
+Because each factory call returns a unique symbol, each component's `Mount`/`Unmount`/`Error`/`Update` is independent &mdash; one component's mount handler never fires for another component in the same boundary.
 
 **Note:** Actions should ideally be self-contained and handle expected errors internally using patterns like [Option](https://mobily.github.io/ts-belt/api/option) or [Result](https://mobily.github.io/ts-belt/api/result) types to update the model accordingly. `Lifecycle.Error()` is intended for timeouts, aborts, and uncaught catastrophic errors &ndash; not routine error handling.
 
@@ -59,43 +57,3 @@ actions.useAction(Lifecycle.Fault, (_context, fault) => {
 ```
 
 It does not need to be assigned as a static action property &ndash; reference it directly. See [error-handling.md](./error-handling.md) for the full contract.
-
-## Node capture events
-
-`Lifecycle.Node()` fires whenever a DOM node is captured or released via `actions.node()`. Since it's a channeled action, you can subscribe to specific nodes by name:
-
-```tsx
-import type { Meta } from "chizu";
-
-type N = {
-  searchInput: HTMLInputElement;
-};
-
-type Model = {
-  count: number;
-  meta: Meta.Nodes<N>;
-};
-
-export class Actions {
-  static Node = Lifecycle.Node();
-  static Increment = Action("Increment");
-}
-
-const [model, actions] = useActions<Model, typeof Actions>(model);
-
-// Subscribe to all node changes
-actions.useAction(Actions.Node, (context, node) => {
-  console.log("Some node changed:", node);
-});
-
-// Subscribe only to searchInput changes (channeled)
-actions.useAction(Actions.Node({ Name: "searchInput" }), (context, node) => {
-  if (node) {
-    node.focus(); // Node was captured
-  }
-});
-
-return <input ref={(node) => actions.node("searchInput", node)} />;
-```
-
-The payload is the captured node or `null` when the node unmounts.

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { renderHook, act, render, screen } from "@testing-library/react";
-import { useActions } from "./index.ts";
+import { useActions, With } from "./index.ts";
 import { Action } from "../action/index.ts";
 import { Lifecycle, Distribution, Phase } from "../types/index.ts";
 import { Broadcaster } from "../boundary/components/broadcast/index.tsx";
-import { Scope } from "../boundary/components/scope/index.tsx";
+import { withScope } from "../boundary/components/scope/index.tsx";
 import { annotate } from "../annotate/index.ts";
 import { Operation } from "immertation";
 import * as React from "react";
@@ -1197,7 +1197,6 @@ describe("useActions() context.actions.resolution", () => {
   }
 
   class MulticastReadActions {
-    static Scope = "test" as const;
     static Score = Action<number>("Score", Distribution.Multicast);
   }
 
@@ -1322,11 +1321,7 @@ describe("useActions() context.actions.resolution", () => {
       return (
         <button
           data-testid="publish-mc"
-          onClick={() =>
-            actions.dispatch(MulticastReadActions.Score, 99, {
-              scope: MulticastReadActions.Scope,
-            })
-          }
+          onClick={() => actions.dispatch(MulticastReadActions.Score, 99)}
         >
           Publish
         </button>
@@ -1342,9 +1337,6 @@ describe("useActions() context.actions.resolution", () => {
       result.useAction(MulticastReadActions.Score, async (context) => {
         const value = await context.actions.resolution(
           MulticastReadActions.Score,
-          {
-            scope: MulticastReadActions.Scope,
-          },
         );
         readValue = value;
       });
@@ -1352,13 +1344,21 @@ describe("useActions() context.actions.resolution", () => {
       return <div data-testid="mc-reader">Reader</div>;
     }
 
+    function ScoreArea() {
+      return (
+        <>
+          <Publisher />
+          <Reader />
+        </>
+      );
+    }
+
+    const ScopedScoreArea = withScope(MulticastReadActions.Score, ScoreArea);
+
     function App() {
       return (
         <Broadcaster>
-          <Scope of={MulticastReadActions.Scope}>
-            <Publisher />
-            <Reader />
-          </Scope>
+          <ScopedScoreArea />
         </Broadcaster>
       );
     }
@@ -2305,7 +2305,6 @@ describe("useActions() mount + broadcast replay deduplication", () => {
 
   it("should deduplicate with multicast actions using peek() and scope", async () => {
     class MulticastUser {
-      static Scope = "team" as const;
       static Mount = Lifecycle.Mount();
       static User = Action<{ id: number }>("User", Distribution.Multicast);
     }
@@ -2322,11 +2321,7 @@ describe("useActions() mount + broadcast replay deduplication", () => {
         <button
           data-testid="dispatch-mc-dedup"
           onClick={() => {
-            actions.dispatch(
-              MulticastUser.User,
-              { id: 3 },
-              { scope: MulticastUser.Scope },
-            );
+            actions.dispatch(MulticastUser.User, { id: 3 });
             onShowLate();
           }}
         >
@@ -2341,9 +2336,7 @@ describe("useActions() mount + broadcast replay deduplication", () => {
       });
 
       actions.useAction(MulticastUser.Mount, (context) => {
-        const user = context.actions.peek(MulticastUser.User, {
-          scope: MulticastUser.Scope,
-        });
+        const user = context.actions.peek(MulticastUser.User);
         if (!user) fetches.push("mount-fetch");
       });
 
@@ -2354,15 +2347,29 @@ describe("useActions() mount + broadcast replay deduplication", () => {
       return <div>Late</div>;
     }
 
+    function MulticastArea({
+      onShowLate,
+      show,
+    }: {
+      onShowLate: () => void;
+      show: boolean;
+    }) {
+      return (
+        <>
+          <Producer onShowLate={onShowLate} />
+          {show && <Late />}
+        </>
+      );
+    }
+
+    const ScopedMulticastArea = withScope(MulticastUser.User, MulticastArea);
+
     function App() {
       const [show, setShow] = React.useState(false);
 
       return (
         <Broadcaster>
-          <Scope of={MulticastUser.Scope}>
-            <Producer onShowLate={() => setShow(true)} />
-            {show && <Late />}
-          </Scope>
+          <ScopedMulticastArea show={show} onShowLate={() => setShow(true)} />
         </Broadcaster>
       );
     }
@@ -2382,102 +2389,52 @@ describe("useActions() mount + broadcast replay deduplication", () => {
   });
 });
 
-describe("useActions() feature toggles", () => {
-  type FeatureModel = {
-    count: number;
-    meta: { features: { Sidebar: boolean; Modal: boolean } };
-  };
+describe("useActions() With.Invert", () => {
+  type ToggleModel = { sidebar: boolean; modal: boolean };
 
-  class FeatureActions {
-    static Mount = Lifecycle.Mount();
-    static Toggle = Action<"Sidebar" | "Modal">("Toggle");
+  class ToggleActions {
+    static ToggleSidebar = Action("ToggleSidebar");
+    static ToggleModal = Action("ToggleModal");
   }
 
-  const featureModel: FeatureModel = {
-    count: 0,
-    meta: { features: { Sidebar: false, Modal: false } },
-  };
-
-  it("should invert a feature with features.invert()", () => {
+  it("should flip a boolean model field via With.Invert", async () => {
     const { result } = renderHook(() => {
-      const actions = useActions<FeatureModel, typeof FeatureActions>(
-        featureModel,
-      );
-      return actions;
-    });
-
-    act(() => {
-      result.current[1].features.invert("Sidebar");
-    });
-
-    expect(result.current[0].meta.features.Sidebar).toBe(true);
-  });
-
-  it("should set a feature to true with features.on()", () => {
-    const { result } = renderHook(() => {
-      const actions = useActions<FeatureModel, typeof FeatureActions>(
-        featureModel,
-      );
-      return actions;
-    });
-
-    act(() => {
-      result.current[1].features.on("Modal");
-    });
-
-    expect(result.current[0].meta.features.Modal).toBe(true);
-  });
-
-  it("should set a feature to false with features.off()", () => {
-    const { result } = renderHook(() => {
-      const actions = useActions<FeatureModel, typeof FeatureActions>({
-        ...featureModel,
-        meta: { features: { Sidebar: true, Modal: true } },
+      const actions = useActions<ToggleModel, typeof ToggleActions>({
+        sidebar: false,
+        modal: false,
       });
-      return actions;
-    });
-
-    act(() => {
-      result.current[1].features.off("Sidebar");
-    });
-
-    expect(result.current[0].meta.features.Sidebar).toBe(false);
-  });
-
-  it("should be idempotent: features.on() when already true stays true", () => {
-    const { result } = renderHook(() => {
-      const actions = useActions<FeatureModel, typeof FeatureActions>({
-        ...featureModel,
-        meta: { features: { Sidebar: true, Modal: false } },
-      });
-      return actions;
-    });
-
-    act(() => {
-      result.current[1].features.on("Sidebar");
-    });
-
-    expect(result.current[0].meta.features.Sidebar).toBe(true);
-  });
-
-  it("should support features in handler context", async () => {
-    const { result } = renderHook(() => {
-      const actions = useActions<FeatureModel, typeof FeatureActions>(
-        featureModel,
-      );
-
-      actions.useAction(FeatureActions.Toggle, (context, name) => {
-        context.actions.features.invert(name);
-      });
-
+      actions.useAction(ToggleActions.ToggleSidebar, With.Invert("sidebar"));
       return actions;
     });
 
     await act(async () => {
-      result.current[1].dispatch(FeatureActions.Toggle, "Sidebar");
+      result.current[1].dispatch(ToggleActions.ToggleSidebar);
+    });
+    expect(result.current[0].sidebar).toBe(true);
+
+    await act(async () => {
+      result.current[1].dispatch(ToggleActions.ToggleSidebar);
+    });
+    expect(result.current[0].sidebar).toBe(false);
+  });
+
+  it("should toggle independent boolean fields", async () => {
+    const { result } = renderHook(() => {
+      const actions = useActions<ToggleModel, typeof ToggleActions>({
+        sidebar: false,
+        modal: false,
+      });
+      actions.useAction(ToggleActions.ToggleSidebar, With.Invert("sidebar"));
+      actions.useAction(ToggleActions.ToggleModal, With.Invert("modal"));
+      return actions;
     });
 
-    expect(result.current[0].meta.features.Sidebar).toBe(true);
+    await act(async () => {
+      result.current[1].dispatch(ToggleActions.ToggleModal);
+    });
+
+    expect(result.current[0].sidebar).toBe(false);
+    expect(result.current[0].modal).toBe(true);
   });
 });
 
@@ -2665,71 +2622,6 @@ describe("useActions() produce implicit return safety", () => {
   });
 });
 
-describe("node capture writes to model", () => {
-  type NodeModel = {
-    count: number;
-    meta: { nodes: { container: HTMLDivElement | null } };
-  };
-
-  it("should update model.meta.nodes when actions.node() is called", () => {
-    let captured: NodeModel = {
-      count: 0,
-      meta: { nodes: { container: null } },
-    };
-
-    function TestComponent() {
-      const [nodeModel, actions] = useActions<NodeModel, typeof Actions>({
-        count: 0,
-        meta: { nodes: { container: null } },
-      });
-      captured = nodeModel;
-      return <div ref={(node) => actions.node("container", node)} />;
-    }
-
-    render(<TestComponent />);
-    expect(captured.meta.nodes.container).toBeInstanceOf(HTMLDivElement);
-  });
-
-  it("should set model.meta.nodes back to null when node is released", () => {
-    let captured: NodeModel = {
-      count: 0,
-      meta: { nodes: { container: null } },
-    };
-
-    function TestComponent({ show }: { show: boolean }) {
-      const [nodeModel, actions] = useActions<NodeModel, typeof Actions>({
-        count: 0,
-        meta: { nodes: { container: null } },
-      });
-      captured = nodeModel;
-      return show ? (
-        <div ref={(node) => actions.node("container", node)} />
-      ) : null;
-    }
-
-    const { rerender } = render(<TestComponent show={true} />);
-    expect(captured.meta.nodes.container).toBeInstanceOf(HTMLDivElement);
-
-    rerender(<TestComponent show={false} />);
-    expect(captured.meta.nodes.container).toBeNull();
-  });
-
-  it("should not throw when model has no meta.nodes property", () => {
-    const { result } = renderHook(() => {
-      const actions = useActions<Model, typeof Actions>(model);
-      return actions;
-    });
-
-    expect(() => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (result.current[1] as any).node(
-        "container",
-        document.createElement("div"),
-      );
-    }).not.toThrow();
-  });
-});
-
 describe("useActions() Lifecycle.Fault broadcast", () => {
   it("should fire Lifecycle.Fault on a sibling subscriber when a handler throws", async () => {
     const captured: { reason: number; action: string; message: string }[] = [];
@@ -2773,50 +2665,5 @@ describe("useActions() Lifecycle.Fault broadcast", () => {
     expect(captured).toHaveLength(1);
     expect(captured[0].action).toBe("Boom");
     expect(captured[0].message).toBe("kaboom");
-  });
-
-  it("should still deliver Lifecycle.Fault when the regulator disallows everything", async () => {
-    const captured: string[] = [];
-
-    class GuardActions {
-      static Mount = Lifecycle.Mount();
-      static Blocked = Action("Blocked");
-    }
-    function Guard({ trigger }: { trigger: { current: () => void } }) {
-      const actions = useActions<void, typeof GuardActions>();
-      actions.useAction(GuardActions.Mount, (context) => {
-        context.regulator.disallow();
-      });
-      actions.useAction(GuardActions.Blocked, () => {
-        captured.push("should-not-run");
-      });
-      trigger.current = () => actions[1].dispatch(GuardActions.Blocked);
-      return null;
-    }
-
-    function Listener() {
-      const actions = useActions();
-      actions.useAction(Lifecycle.Fault, (_context, fault) => {
-        captured.push(`fault:${fault.action}:${fault.reason}`);
-      });
-      return null;
-    }
-
-    const trigger = { current: () => {} };
-    render(
-      <Broadcaster>
-        <Listener />
-        <Guard trigger={trigger} />
-      </Broadcaster>,
-    );
-
-    await act(async () => {
-      await trigger.current();
-    });
-
-    expect(captured.filter((entry) => entry.startsWith("fault:"))).toHaveLength(
-      1,
-    );
-    expect(captured).not.toContain("should-not-run");
   });
 });

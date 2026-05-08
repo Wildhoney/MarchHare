@@ -18,7 +18,6 @@ class LifecycleActions {
   static Mount = Lifecycle.Mount();
   static Unmount = Lifecycle.Unmount();
   static Error = Lifecycle.Error();
-  static Node = Lifecycle.Node();
   static SetupComplete = Action("SetupComplete");
   static UserInteraction = Action<string>("UserInteraction");
 }
@@ -35,14 +34,6 @@ type LifecycleModel = {
   unmountTime: number;
   lastError: string;
   events: string[];
-};
-
-type NodeModel = {
-  nodeCallCount: number;
-  lastNodeName: string;
-  nodes: {
-    testButton: HTMLButtonElement;
-  };
 };
 
 type PhaseModel = {
@@ -130,33 +121,6 @@ function useRule14Actions() {
       ];
     });
   });
-
-  return actions;
-}
-
-function useNodeActions() {
-  const actions = useActions<NodeModel, typeof LifecycleActions>({
-    nodeCallCount: 0,
-    lastNodeName: "",
-    nodes: {} as NodeModel["nodes"],
-  });
-
-  // Subscribe to all node changes
-  actions.useAction(LifecycleActions.Node, (context) => {
-    context.actions.produce((draft) => {
-      draft.model.nodeCallCount = draft.model.nodeCallCount + 1;
-    });
-  });
-
-  // Subscribe to specific node by name (channeled)
-  actions.useAction(
-    LifecycleActions.Node({ Name: "testButton" }),
-    (context, node) => {
-      context.actions.produce((draft) => {
-        draft.model.lastNodeName = node ? "testButton" : "null";
-      });
-    },
-  );
 
   return actions;
 }
@@ -324,29 +288,6 @@ function Rule15CachedValues() {
 }
 
 /**
- * Rule 13b Test: Lifecycle.Node for DOM node capture
- */
-function Rule13NodeCapture() {
-  const [model, actions] = useNodeActions();
-  const [counter, setCounter] = React.useState(0);
-
-  return (
-    <section data-testid="rule-13-node">
-      <h3>Rule 13b: Node Capture</h3>
-      <div data-testid="rule-13-node-call-count">{model.nodeCallCount}</div>
-      <div data-testid="rule-13-node-last-name">{model.lastNodeName}</div>
-      <button
-        ref={(node) => actions.node("testButton", node)}
-        data-testid="rule-13-node-button"
-        onClick={() => setCounter((c) => c + 1)}
-      >
-        Click me ({counter})
-      </button>
-    </section>
-  );
-}
-
-/**
  * Wrapper to test unmount lifecycle
  */
 function UnmountTestWrapper() {
@@ -373,7 +314,6 @@ export function LifecyclesFixture() {
     <div data-testid="lifecycles-fixture">
       <h2>Rules 13-15: Lifecycles</h2>
       <UnmountTestWrapper />
-      <Rule13NodeCapture />
       <Rule14PhaseContext />
       <Rule15CachedValues />
     </div>

@@ -3,7 +3,7 @@
  *
  * Rule 23: Use Lifecycle.Error for local error recovery
  * Rule 24: Subscribe to Lifecycle.Fault for global error handling
- * Rule 25: Know the error reasons (Timedout, Supplanted, Disallowed, Errored, Unmounted)
+ * Rule 25: Know the error reasons (Timedout, Supplanted, Errored)
  * Rule 26: Use Option or Result for fallible model properties
  */
 import * as React from "react";
@@ -340,7 +340,7 @@ function Rule25ErrorReasons() {
       <div data-testid="rule-25-info">
         <small>
           Reasons: Timedout={Reason.Timedout}, Supplanted={Reason.Supplanted},
-          Errored={Reason.Errored}, Unmounted={Reason.Unmounted}
+          Errored={Reason.Errored}
         </small>
       </div>
     </section>

@@ -335,40 +335,6 @@ test.describe("Chizu Rulebook", () => {
       await expect(page.getByTestId("rule-13")).not.toBeVisible();
     });
 
-    it("Rule 13: Lifecycle.Node - should fire once on mount when node is captured", async ({
-      page,
-    }) => {
-      const callCount = page.getByTestId("rule-13-node-call-count");
-      const lastName = page.getByTestId("rule-13-node-last-name");
-
-      // Should have fired once on mount
-      await expect(callCount).toHaveText("1");
-      await expect(lastName).toHaveText("testButton");
-    });
-
-    it("Rule 13: Lifecycle.Node - should not fire when state changes but node stays same", async ({
-      page,
-    }) => {
-      const callCount = page.getByTestId("rule-13-node-call-count");
-      const button = page.getByTestId("rule-13-node-button");
-
-      await expect(callCount).toHaveText("1");
-
-      // Click the button to trigger state change (counter increments)
-      await button.click();
-      await expect(button).toContainText("Click me (1)");
-
-      // Call count should still be 1 - node didn't change
-      await expect(callCount).toHaveText("1");
-
-      // Click again
-      await button.click();
-      await expect(button).toContainText("Click me (2)");
-
-      // Still 1
-      await expect(callCount).toHaveText("1");
-    });
-
     it("Rule 14: Understand the Phase context - should have mounting phase during mount", async ({
       page,
     }) => {

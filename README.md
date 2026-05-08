@@ -36,7 +36,7 @@ For advanced topics, see the [recipes directory](./recipes/).
 
 ## Getting started
 
-We dispatch the `Actions.Name` event upon clicking the "Sign in" button and within `useNameActions` we subscribe to that same event so that when it's triggered it updates the model with the payload &ndash; in the React component we render `model.name`. The `With` helper binds the action's payload directly to a model property.
+We dispatch the `Actions.Name` event upon clicking the "Sign in" button and within `useNameActions` we subscribe to that same event so that when it's triggered it updates the model with the payload &ndash; in the React component we render `model.name`. The `With.Update` helper binds the action's payload directly to a model property.
 
 ```tsx
 import { useActions, Action, With } from "chizu";
@@ -56,7 +56,7 @@ export class Actions {
 export default function useNameActions() {
   const actions = useActions<Model, typeof Actions>(model);
 
-  actions.useAction(Actions.Name, With("name"));
+  actions.useAction(Actions.Name, With.Update("name"));
 
   return actions;
 }
@@ -357,105 +357,103 @@ actions.dispatch(Actions.UserUpdated, user);
 
 Channel values support non-nullable primitives: `string`, `number`, `boolean`, or `symbol`. By convention, use uppercase keys like `{UserId: 4}` to distinguish channel keys from payload properties.
 
-For scoped communication between component groups, use multicast actions with the `<Scope>` component. The scope name lives as a `static Scope` literal on the same class as the multicast actions, so every call site can reference `Actions.Multicast.Scope` from a single source of truth:
+For scoped communication between component groups, use multicast actions with the `withScope` HOC. Each multicast action defines its own scope &ndash; pass the same action to `withScope` and to `dispatch`, no separate scope name required:
 
 ```tsx
-import { Action, Distribution, Scope } from "chizu";
+import { Action, Distribution, withScope } from "chizu";
 
-// Scope name and multicast actions live on the same class
-class MulticastActions {
-  static Scope = "scoreboard" as const;
+// Group multicast actions on a class named `Scope`.
+class Scope {
   static Update = Action<number>("Update", Distribution.Multicast);
 }
 
-// Component-level actions reference the shared multicast
 class Actions {
-  static Multicast = MulticastActions;
   static Increment = Action("Increment");
 }
 
-function App() {
+function ScoreArea() {
   return (
-    <Scope of={MulticastActions.Scope}>
+    <>
       <ScoreBoard />
       <PlayerList />
-    </Scope>
+    </>
   );
 }
 
-// Dispatch to every component inside the scope
-actions.dispatch(Actions.Multicast.Update, 42, {
-  scope: Actions.Multicast.Scope,
-});
+// Wrap the subtree where the scope applies.
+export default withScope(Scope.Update, ScoreArea);
+
+// Dispatch to every component inside the scope.
+actions.dispatch(Scope.Update, 42);
 ```
 
-Unlike broadcast which reaches all components, multicast is scoped to the named boundary &ndash; perfect for isolated widget groups, form sections, or distinct UI regions. Like broadcast, multicast caches dispatched values per scope &ndash; components that mount later automatically receive the cached value. See the [mount deduplication recipe](./recipes/mount-broadcast-deduplication.md) if you also fetch data in `Lifecycle.Mount()`.
-
-For components that always render inside a scope, use the `withScope` HOC to eliminate the manual `<Scope>` wrapper:
-
-```tsx
-import { withScope } from "chizu";
-import { MulticastActions } from "./types";
-
-export default withScope(
-  MulticastActions.Scope,
-  function Layout(): ReactElement {
-    return (
-      <div>
-        <PaymentLink />
-        <Outlet />
-      </div>
-    );
-  },
-);
-```
+Unlike broadcast which reaches all mounted components, multicast is confined to the wrapped subtree &ndash; perfect for isolated widget groups, form sections, or distinct UI regions. Like broadcast, multicast caches dispatched values per scope &ndash; components that mount later automatically receive the cached value. See the [mount deduplication recipe](./recipes/mount-broadcast-deduplication.md) if you also fetch data in `Lifecycle.Mount()`.
 
 See the [multicast recipe](./recipes/multicast-actions.md) for more details.
 
-The action regulator lets handlers control which actions may be dispatched across all components within a `<Boundary>`. Use `context.regulator` to block or allow actions:
+For coordinating between async handlers without re-rendering the JSX tree, use the per-`<Boundary>` mode handle returned by `useMode()`. Thread it through the `useActions` data callback so it shows up as `context.data.mode` inside handlers, fully typed. Mode is **not** reactive &mdash; drive view state through the model, not mode.
 
 ```ts
-actions.useAction(Actions.Checkout, async (context) => {
-  // Allow only the cancel action during checkout
-  context.regulator.allow(Actions.Cancel);
+import { useMode, useActions } from "chizu";
 
-  try {
-    await processPayment(context.task.controller.signal);
-  } finally {
-    context.regulator.allow();
-  }
-});
+enum Mode {
+  Idle,
+  SigningOut,
+}
+
+function useSignOutActions() {
+  const mode = useMode<Mode>();
+  // Spell the data shape as the third generic so `context.data.mode` keeps
+  // its concrete type inside handlers.
+  const actions = useActions<Model, typeof Actions, { mode: typeof mode }>(
+    model,
+    () => ({ mode }),
+  );
+
+  actions.useAction(Actions.SignOut, async (context) => {
+    context.data.mode.update(Mode.SigningOut);
+    await api.signOut();
+    context.data.mode.update(Mode.Idle);
+  });
+
+  actions.useAction(Actions.Refresh, async (context) => {
+    if (context.data.mode.read() === Mode.SigningOut) return;
+    // ...
+  });
+
+  return actions;
+}
 ```
 
-`disallow()` blocks all, `disallow(A, B)` blocks specific actions, `allow()` allows all (reset), and `allow(A, B)` allows only those actions. Each call replaces the previous policy (last-write-wins). Blocked actions fire `Reason.Disallowed` through the error system without allocating resources. See the [action regulator recipe](./recipes/action-regulator.md) for more details.
-
-Toggling boolean UI state &ndash; modals, sidebars, drawers &ndash; is one of the most common patterns. Instead of defining actions and handlers, use the `actions.features` methods:
+Toggling boolean UI state &ndash; modals, sidebars, drawers &ndash; is one of the most common patterns. Bind a unicast action to a boolean field on the model with `With.Invert`:
 
 ```tsx
-import { useActions } from "chizu";
-import type { Meta } from "chizu";
+import { useActions, Action, With } from "chizu";
 
-type F = {
+type Model = {
   paymentDialog: boolean;
   sidebar: boolean;
 };
 
-type Model = {
-  name: string;
-  meta: Meta.Features<F>;
-};
+export class Actions {
+  static TogglePaymentDialog = Action("TogglePaymentDialog");
+  static ToggleSidebar = Action("ToggleSidebar");
+}
 
-const [model, actions] = useFeatureActions();
+const [model, actions] = useActions<Model, typeof Actions>({
+  paymentDialog: false,
+  sidebar: false,
+});
 
-// Mutate via actions.features
-actions.features.invert("paymentDialog");
-actions.features.on("paymentDialog");
-actions.features.off("paymentDialog");
+actions.useAction(Actions.TogglePaymentDialog, With.Invert("paymentDialog"));
+actions.useAction(Actions.ToggleSidebar, With.Invert("sidebar"));
 
-// Read from model
+// Dispatch from anywhere with access to the actions object.
+actions.dispatch(Actions.TogglePaymentDialog);
+
 {
-  model.meta.features.paymentDialog && <PaymentDialog />;
+  model.paymentDialog && <PaymentDialog />;
 }
 ```
 
-The methods also work inside action handlers via `context.actions.features`. See the [feature toggles recipe](./recipes/feature-toggles.md) for more details.
+`With.Invert` only compiles when the named property is a boolean on the model. `With.Update("name")` works the same way for arbitrary fields, and the payload type must match `model[name]`.

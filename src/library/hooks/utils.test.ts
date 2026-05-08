@@ -138,7 +138,7 @@ describe("getError()", () => {
   });
 });
 
-describe("With()", () => {
+describe("With.Update()", () => {
   function createMockContext<M>(model: M) {
     const capturedModel = { ...model };
     const produce = vi.fn((fn: (draft: { model: M }) => void) => {
@@ -156,7 +156,7 @@ describe("With()", () => {
   }
 
   it("should return a handler function", () => {
-    const handler = With("name");
+    const handler = With.Update("name");
     expect(typeof handler).toBe("function");
   });
 
@@ -167,7 +167,7 @@ describe("With()", () => {
       count: 0,
     });
 
-    const handler = With("name");
+    const handler = With.Update("name");
     handler(context, "updated");
 
     expect(produce).toHaveBeenCalledTimes(1);
@@ -188,7 +188,7 @@ describe("With()", () => {
       },
     });
 
-    const handler = With("count");
+    const handler = With.Update("count");
     handler(context, 42);
 
     expect(updatedModel.count).toBe(42);
@@ -209,7 +209,7 @@ describe("With()", () => {
       },
     });
 
-    const handler = With("visitor");
+    const handler = With.Update("visitor");
     handler(context, { name: "Japan", code: "JP" });
 
     expect(updatedModel.visitor).toEqual({ name: "Japan", code: "JP" });
@@ -229,10 +229,63 @@ describe("With()", () => {
       },
     });
 
-    const handler = With("items");
+    const handler = With.Update("items");
     handler(context, ["a", "b", "c"]);
 
     expect(updatedModel.items).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("With.Invert()", () => {
+  it("should flip a boolean field from false to true", () => {
+    type Model = { sidebar: boolean };
+    const updatedModel: Model = { sidebar: false };
+
+    const context = <HandlerContext<Model, object, object>>(<unknown>{
+      model: updatedModel,
+      actions: {
+        produce: (fn: (draft: { model: Model }) => void) => {
+          fn({ model: updatedModel });
+        },
+      },
+    });
+
+    With.Invert("sidebar")(context);
+    expect(updatedModel.sidebar).toBe(true);
+  });
+
+  it("should flip a boolean field from true to false", () => {
+    type Model = { sidebar: boolean };
+    const updatedModel: Model = { sidebar: true };
+
+    const context = <HandlerContext<Model, object, object>>(<unknown>{
+      model: updatedModel,
+      actions: {
+        produce: (fn: (draft: { model: Model }) => void) => {
+          fn({ model: updatedModel });
+        },
+      },
+    });
+
+    With.Invert("sidebar")(context);
+    expect(updatedModel.sidebar).toBe(false);
+  });
+
+  it("should toggle a boolean field without inspecting any payload", () => {
+    type Model = { open: boolean };
+    const updatedModel: Model = { open: false };
+
+    const context = <HandlerContext<Model, object, object>>(<unknown>{
+      model: updatedModel,
+      actions: {
+        produce: (fn: (draft: { model: Model }) => void) => {
+          fn({ model: updatedModel });
+        },
+      },
+    });
+
+    With.Invert("open")(context);
+    expect(updatedModel.open).toBe(true);
   });
 });
 

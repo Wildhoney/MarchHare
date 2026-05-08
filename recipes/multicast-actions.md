@@ -1,91 +1,55 @@
 # Multicast actions
 
-Multicast actions allow components within a named scope boundary to communicate with each other. Unlike broadcast actions which reach all mounted components, multicast actions are scoped to components within a `<Scope>` boundary.
+Multicast actions let components within a named boundary communicate with each other. Unlike broadcast actions which reach every mounted component, multicast actions are confined to a subtree wrapped in `withScope`.
+
+Each multicast action defines its own scope &mdash; the same action you dispatch is the one you pass to `withScope`. There is no separate "scope name"; the action's identity is the scope key.
 
 ## Defining multicast actions
 
-The scope name lives on the same class as the multicast actions, then the local `Actions` class references it:
+Group multicast actions on a class. Naming the class `Scope` reads naturally at the call site (`Scope.Update`, `Scope.Mood`):
 
 ```ts
 // types.ts
 import { Action, Distribution } from "chizu";
 
-export class MulticastActions {
-  static Scope = "scoreboard" as const;
+export class Scope {
   static Update = Action<number>("Update", Distribution.Multicast);
-}
-
-// Component-level actions.ts
-export class Actions {
-  static Multicast = MulticastActions;
 }
 ```
 
-Co-locating `Scope` with the multicast action declarations gives every call site a single source of truth &ndash; reference `Actions.Multicast.Scope` everywhere a scope name is required so a rename only needs to happen once.
+`Distribution.Multicast` takes no argument &mdash; each action provides its own scope identity.
 
 ## Creating scope boundaries
 
-Use the `<Scope>` component with the scope name to create a named boundary. All components within the scope can dispatch and receive multicast actions for that scope:
-
-```tsx
-import { Scope } from "chizu";
-import { MulticastActions } from "./types";
-
-function App() {
-  return (
-    <Scope of={MulticastActions.Scope}>
-      <ScoreBoard />
-      <PlayerList />
-    </Scope>
-  );
-}
-```
-
-If you need two isolated scope instances (e.g. one per team), declare two carrier classes &ndash; the `static Scope` literal on each distinguishes them.
-
-### `withScope` HOC
-
-For components that always render inside a scope, use the `withScope` higher-order component to eliminate the manual `<Scope>` wrapper:
+Wrap the subtree in `withScope`, passing the multicast action that opens the scope:
 
 ```tsx
 import { withScope } from "chizu";
-import { MulticastActions } from "./types";
+import { Scope } from "./types";
 
-export default withScope(
-  MulticastActions.Scope,
-  function Layout(): ReactElement {
-    return (
-      <div>
-        <PaymentLink />
-        <Outlet />
-      </div>
-    );
-  },
-);
+function ScoreArea() {
+  return (
+    <>
+      <ScoreBoard />
+      <PlayerList />
+    </>
+  );
+}
+
+export default withScope(Scope.Update, ScoreArea);
 ```
 
-This is equivalent to wrapping the component's output in `<Scope of={MulticastActions.Scope}>`, but keeps the component body focused on rendering. Props are forwarded to the wrapped component automatically.
+If you need two isolated scope instances of the same shape (e.g. one per team), declare two multicast actions &mdash; each is its own scope.
 
 ## Dispatching multicast actions
 
-When dispatching a multicast action, you **must** pass the scope name as `scope` in the third argument:
+Dispatch the multicast action like any other; the scope is read from the action itself:
 
 ```tsx
-// Inside any component within the scope
-actions.dispatch(Actions.Multicast.Update, 42, {
-  scope: Actions.Multicast.Scope,
-});
-```
-
-The dispatch walks up the component tree to find the nearest ancestor `<Scope>` whose name matches. All components within that scope receive the event. If no matching scope is found, the dispatch is silently ignored.
-
-```tsx
-// actions.ts
 function useScoreActions() {
   const actions = useActions<Model, typeof Actions>(model);
 
-  // Handle multicast from any component in scope
-  actions.useAction(Actions.Multicast.Update, (context, score) => {
+  actions.useAction(Scope.Update, (context, score) => {
     context.actions.produce(({ model }) => {
       model.score = score;
     });
@@ -94,20 +58,13 @@ function useScoreActions() {
   return actions;
 }
 
-// component
 function ScoreBoard() {
   const [model, actions] = useScoreActions();
 
   return (
     <div>
       <p>Score: {model.score}</p>
-      <button
-        onClick={() =>
-          actions.dispatch(Actions.Multicast.Update, model.score + 1, {
-            scope: Actions.Multicast.Scope,
-          })
-        }
-      >
+      <button onClick={() => actions.dispatch(Scope.Update, model.score + 1)}>
         +1
       </button>
     </div>
@@ -115,15 +72,17 @@ function ScoreBoard() {
 }
 ```
 
+The dispatch walks up the component tree to find the nearest ancestor `withScope` boundary that opened this multicast action. Every component inside that boundary receives the event. If no matching boundary exists, the dispatch is silently ignored.
+
 ## Subscribing to multicast values
 
-Use `useAction` to subscribe to multicast actions and store only what you need:
+Use `useAction` to subscribe and store only what you need locally:
 
 ```tsx
 function ScoreDisplay() {
   const [model, actions] = useScoreActions();
 
-  actions.useAction(Actions.Multicast.Update, (context, score) => {
+  actions.useAction(Scope.Update, (context, score) => {
     context.actions.produce(({ model }) => {
       model.latestScore = score;
     });
@@ -135,14 +94,13 @@ function ScoreDisplay() {
 
 ## Late-mounting components
 
-Like broadcast, multicast stores the last dispatched value for each action within the scope. Components that mount later receive the cached value automatically. If you also fetch data in `Lifecycle.Mount()`, see the [mount deduplication recipe](./mount-broadcast-deduplication.md) to avoid duplicate work.
+Like broadcast, multicast caches the last dispatched value per scope. Components that mount later receive the cached value automatically. If you also fetch data in `Lifecycle.Mount()`, see the [mount deduplication recipe](./mount-broadcast-deduplication.md) to avoid duplicate work.
 
 ```tsx
 function LateComponent() {
   const actions = useActions<Model, typeof Actions>(model);
 
-  // This handler is invoked with the cached value when the component mounts
-  actions.useAction(Actions.Update, (context, value) => {
+  actions.useAction(Scope.Update, (context, value) => {
     console.log("Received cached value:", value);
   });
 
@@ -152,29 +110,35 @@ function LateComponent() {
 
 ## Nested scopes
 
-Scopes can be nested. Each carrier class declares its own `static Scope` literal, and dispatching uses that name to select the target:
+Scopes can be nested. Each multicast action opens its own scope independently, so wrapping a subtree in multiple `withScope` HOCs composes naturally:
 
 ```tsx
-<Scope of={AppActions.Scope}>
-  <Header />
+class Scope {
+  static App = Action("App", Distribution.Multicast);
+  static Sidebar = Action("Sidebar", Distribution.Multicast);
+  static Editor = Action("Editor", Distribution.Multicast);
+}
 
-  <Scope of={SidebarActions.Scope}>
-    <Navigation />
-  </Scope>
+const ScopedSidebar = withScope(Scope.Sidebar, Sidebar);
+const ScopedEditor = withScope(Scope.Editor, Editor);
 
-  <Scope of={ContentActions.Scope}>
-    <Scope of={EditorActions.Scope}>
-      <TextEditor />
-    </Scope>
-  </Scope>
-</Scope>
+function AppShell() {
+  return (
+    <>
+      <Header />
+      <ScopedSidebar />
+      <ScopedEditor />
+    </>
+  );
+}
+
+export default withScope(Scope.App, AppShell);
 ```
 
-From `TextEditor`, dispatching with:
+From inside `Editor`:
 
-- `{ scope: EditorActions.Scope }` &ndash; reaches only `TextEditor`
-- `{ scope: ContentActions.Scope }` &ndash; reaches components in Content scope (including Editor)
-- `{ scope: AppActions.Scope }` &ndash; reaches all components in App scope
+- `dispatch(Scope.Editor, payload)` &mdash; reaches only the Editor subtree
+- `dispatch(Scope.App, payload)` &mdash; reaches the whole App subtree (including the Editor)
 
 ## Use cases
 
@@ -187,10 +151,11 @@ Multicast is ideal for:
 
 ## Comparison with broadcast
 
-| Feature           | Broadcast                    | Multicast                                                       |
-| ----------------- | ---------------------------- | --------------------------------------------------------------- |
-| Reach             | All mounted components       | Components within named scope                                   |
-| Dispatch          | `dispatch(action, payload)`  | `dispatch(action, payload, { scope: Actions.Multicast.Scope })` |
-| Subscribe         | `useAction(action, handler)` | Same, values scoped automatically                               |
-| Late mount values | ✓                            | ✓                                                               |
-| Isolation         | Global                       | Scoped                                                          |
+| Feature           | Broadcast                    | Multicast                                            |
+| ----------------- | ---------------------------- | ---------------------------------------------------- |
+| Reach             | All mounted components       | Components inside the matching `withScope`           |
+| Declaration       | `Distribution.Broadcast`     | `Distribution.Multicast` (action is its own scope)   |
+| Dispatch          | `dispatch(action, payload)`  | `dispatch(action, payload)` &mdash; no extra options |
+| Subscribe         | `useAction(action, handler)` | Same, values scoped automatically                    |
+| Late mount values | ✓                            | ✓                                                    |
+| Isolation         | Global                       | Per multicast action's `withScope` boundary          |
