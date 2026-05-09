@@ -6,14 +6,14 @@ const initialModel: Model = { items: [], cursor: null, hasMore: true };
 
 export function useTransactionsActions() {
   const actions = useActions<Model, typeof Actions>(initialModel);
-  const fetchPage = actions.useResource(resource.transactions);
+  const transactions = actions.useResource(resource.transactions);
 
   actions.useAction(Actions.Mount, async (context) => {
     context.actions.produce(({ model }) => {
       model.items = context.actions.annotate(Operation.Update, model.items);
     });
 
-    const page = await fetchPage(null);
+    const page = await transactions.fetch(null);
 
     context.actions.produce(({ model }) => {
       model.items = page.items;
@@ -31,7 +31,7 @@ export function useTransactionsActions() {
       model.items = context.actions.annotate(Operation.Update, model.items);
     });
 
-    const page = await fetchPage(cursor);
+    const page = await transactions.fetch(cursor);
 
     context.actions.produce(({ model }) => {
       model.items.push(...page.items);
@@ -45,7 +45,7 @@ export function useTransactionsActions() {
       model.items = context.actions.annotate(Operation.Update, model.items);
     });
 
-    const page = await fetchPage(null);
+    const page = await transactions.fetch(null);
 
     context.actions.produce(({ model }) => {
       model.items = page.items;

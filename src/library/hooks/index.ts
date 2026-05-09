@@ -34,7 +34,12 @@ import {
   BroadcastPayload,
   FaultSymbol,
 } from "../types/index.ts";
-import type { ResourceDispatch, ResourceHandle } from "../resource/index.ts";
+import type {
+  BoundFetch,
+  ResourceDispatch,
+  ResourceHandle,
+  UnlessOptions,
+} from "../resource/index.ts";
 
 import { getReason, getError } from "../error/utils.ts";
 import EventEmitter from "eventemitter3";
@@ -485,7 +490,7 @@ export function useActions<
     Args extends readonly unknown[],
   >(
     resource: ResourceHandle<T, E, Args>,
-  ): ((...args: Args) => Promise<T>) => {
+  ) => {
     const dispatch = React.useMemo<ResourceDispatch>(() => {
       const fn = <P>(
         action: BroadcastPayload<P> | ChanneledAction<P, Filter>,
@@ -497,9 +502,33 @@ export function useActions<
       return <ResourceDispatch>fn;
     }, [broadcast]);
 
-    return React.useCallback(
-      (...args: Args) => resource.fetch(dispatch, data, ...args),
-      [resource, dispatch, data],
+    const fetch = React.useMemo<BoundFetch<T, Args>>(() => {
+      const call = (...args: Args): Promise<T> =>
+        resource.fetch(dispatch, data, ...args);
+      const unless = (options: UnlessOptions, ...args: Args): Promise<T> => {
+        const { cache, fetched } = resource;
+        if (fetched !== null && cache !== null) {
+          if (Date.now() - fetched.getTime() <= options.within) {
+            return Promise.resolve(cache);
+          }
+        }
+        return call(...args);
+      };
+      // eslint-disable-next-line fp/no-mutating-assign
+      return Object.assign(call, { unless });
+    }, [resource, dispatch, data]);
+
+    return React.useMemo(
+      () => ({
+        fetch,
+        get cache() {
+          return resource.cache;
+        },
+        get fetched() {
+          return resource.fetched;
+        },
+      }),
+      [resource, fetch],
     );
   };
 

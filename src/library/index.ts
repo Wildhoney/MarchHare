@@ -16,6 +16,8 @@ export type {
   ResourceDispatch,
   ResourceSuccess,
   ResourceFailure,
+  BoundFetch,
+  UnlessOptions,
 } from "./resource/index.ts";
 export * as utils from "./utils/index.ts";
 

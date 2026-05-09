@@ -264,12 +264,12 @@ import * as resource from "./resources";
 
 function useUserActions() {
   const actions = useActions<Model, typeof Actions>(initialModel);
-  const fetchUser = actions.useResource(resource.user);
+  const user = actions.useResource(resource.user);
 
   actions.useAction(Actions.Mount, async (context) => {
-    const data = await fetchUser();
+    const response = user.fetch.ifNotFetchedWithin("5m");
     context.actions.produce(({ model }) => {
-      model.user = data;
+      model.user = response;
     });
   });
 
@@ -277,9 +277,9 @@ function useUserActions() {
 }
 ```
 
-Every call to the thunk fetches fresh &ndash; concurrent calls share one in-flight request, but there is no stale cache. Coordination across components happens at the broadcast layer.
+`actions.useResource(handle)` returns `{ fetch, cache, fetched }`. Every call to `fetch()` hits the network &ndash; concurrent calls share one in-flight request, but there is no memoised result. `cache` and `fetched` are read-only snapshots of the most recent successful response and the time it resolved (both `null` until the first success). Coordination across components still happens at the broadcast layer; `cache` is a diagnostic snapshot, not a reactive subscription.
 
-The fetcher may take arguments &ndash; the thunk forwards them, and in-flight dedup keys per arg-tuple. This is how you build pagination, search, and other dynamic-param fetches:
+The fetcher may take arguments &ndash; `fetch()` forwards them, and in-flight dedup keys per arg-tuple. This is how you build pagination, search, and other dynamic-param fetches:
 
 ```ts
 export const feed = Resource("feed", (cursor: string | null) =>
@@ -288,8 +288,8 @@ export const feed = Resource("feed", (cursor: string | null) =>
     .json<Page<Item>>(),
 );
 
-const fetchFeed = actions.useResource(resource.feed);
-const page = await fetchFeed(context.model.cursor);
+const feed = actions.useResource(resource.feed);
+const page = await feed.fetch(context.model.cursor);
 ```
 
 A complete IntersectionObserver-driven infinite-scroll demo lives at [`src/example/transactions/`](./src/example/transactions/) &ndash; mock paginated API, scroll-triggered `LoadMore`, `pending()` guard, broadcast on success.

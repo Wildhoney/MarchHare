@@ -1,6 +1,6 @@
 # Resource
 
-`Resource` declares a remote resource at module scope &ndash; same shape as `Action`. Components consume it via `actions.useResource(handle)` to obtain a thunk that fetches fresh data on every call.
+`Resource` declares a remote resource at module scope &ndash; same shape as `Action`. Components consume it via `actions.useResource(handle)` to obtain a `{ fetch, cache, fetched }` object: `fetch()` triggers a fresh network call, while `cache` and `fetched` are read-only snapshots of the most recent successful response.
 
 ```ts
 // resources.ts
@@ -15,10 +15,10 @@ import * as resource from "./resources";
 
 function useUserActions() {
   const actions = useActions<Model, typeof Actions>(initialModel);
-  const fetchUser = actions.useResource(resource.user);
+  const user = actions.useResource(resource.user);
 
   actions.useAction(Actions.Mount, async (context) => {
-    const data = await fetchUser();
+    const data = await user.fetch();
     context.actions.produce(({ model }) => {
       model.user = data;
     });
@@ -28,24 +28,76 @@ function useUserActions() {
 }
 ```
 
-`Resource(key, fetcher, onSuccess?, onError?)` returns a `ResourceHandle<T, E>`. Pass that handle to `actions.useResource` and you get a `() => Promise<T>` bound to the surrounding `<Boundary>`'s broadcaster and the component's reactive `data`.
+`Resource(key, fetcher, onSuccess?, onError?)` returns a `ResourceHandle<T, E>`. Pass that handle to `actions.useResource` and you get `{ fetch, cache, fetched }` bound to the surrounding `<Boundary>`'s broadcaster and the component's reactive `data`.
 
-> **Convention:** import resources as a namespace (`import * as resource`) so call sites read `resource.user`, `resource.cat(id)`, etc. The grouping signals "remote data, declared at module scope" at a glance.
+> **Convention:** import resources as a namespace (`import * as resource`) so call sites read `resource.user`, `resource.cat(id)`, etc. The grouping signals "remote data, declared at module scope" at a glance. The local binding then mirrors the resource &ndash; `const user = actions.useResource(resource.user)`.
 
 ## Fetch semantics
 
-Every awaited call triggers a fresh fetch. There is **no stale cache** &ndash; calling `await fetchUser()` twice in sequence makes two network requests. Coordination across components happens at the broadcast layer (see below), not at a hidden cache.
+Every awaited `fetch()` call triggers a fresh network request. There is **no memoised result** &ndash; calling `await user.fetch()` twice in sequence makes two network requests. Coordination across components happens at the broadcast layer (see below), not at a hidden cache.
 
 Concurrent calls share one in-flight request:
 
 ```ts
-const a = fetchUser();
-const b = fetchUser();
-const c = fetchUser();
+const a = user.fetch();
+const b = user.fetch();
+const c = user.fetch();
 // Single network request; a, b, c all resolve to the same value.
 ```
 
-Once the promise resolves, the next call fetches anew. Refresh is a synonym for "call the thunk again" &ndash; no `invalidate()`, no second function to import.
+Once the promise resolves, the next call fetches anew. Refresh is a synonym for "call `fetch()` again" &ndash; no `invalidate()`, no second function to import.
+
+## `cache` and `fetched`
+
+Alongside `fetch`, the hook returns two read-only snapshots:
+
+- **`cache`** &ndash; the most recently resolved response value, or `null` before the first successful fetch.
+- **`fetched`** &ndash; the `Date` at which `cache` last updated, or `null`.
+
+Both are module-scoped on the `ResourceHandle`, so two components reading the same `Resource` see the same values &ndash; whichever component fetches first populates the cache for everyone.
+
+```ts
+const user = actions.useResource(resource.user);
+
+actions.useAction(Actions.Refresh, async (context) => {
+  // Skip if we fetched in the last 30 seconds.
+  if (user.fetched && Date.now() - user.fetched.getTime() < 30_000) return;
+  await user.fetch();
+});
+```
+
+A failed fetch does **not** clobber `cache` or `fetched` &ndash; the last good value sticks around until the next successful call.
+
+### Conditional fetch with `fetch.unless({ within })`
+
+For "refresh, but don't bother if we just fetched" semantics, call `fetch.unless({ within })` with a duration in milliseconds:
+
+```ts
+const user = actions.useResource(resource.user);
+
+actions.useAction(Actions.Refresh, async (context) => {
+  const data = await user.fetch.unless({ within: 5 * 60_000 });
+  context.actions.produce(({ model }) => {
+    model.user = data;
+  });
+});
+```
+
+If a successful fetch resolved within the window, the cached value is returned without hitting the network. Otherwise `fetch(...args)` is called normally. Args are forwarded after the options object &ndash; e.g. `feed.fetch.unless({ within: 5 * 60_000 }, cursor)`.
+
+For more readable durations at the call site, install [`ms`](https://github.com/vercel/ms) and wrap the value yourself &ndash; Chizu has no opinion on the duration source:
+
+```ts
+import ms from "ms";
+
+const data = await user.fetch.unless({ within: ms("5m") });
+```
+
+The freshness check uses the resource's module-scoped `fetched` timestamp, which reflects the most recent successful call across all arg-tuples. For parameterised resources, that means a fresh `feed.fetch(null)` will short-circuit a subsequent `feed.fetch.unless({ within: ms("5m") }, "page-2")`. Treat it as "did _anyone_ fetch this resource recently?", not "did we fetch _these args_ recently".
+
+> **`cache` and `fetched` are non-reactive.** Reading them does not subscribe the component to updates. Drive UI from the model (write the response into `model` after `await user.fetch()`) or from a broadcast subscription &ndash; `cache` is a snapshot, not a signal.
+
+For parameterised resources (`Resource("feed", (cursor: string) => ...)`), `cache` and `fetched` reflect the most recent successful call regardless of which arg-tuple it used. Treat them as "latest result", not "result for these args".
 
 ## Subscriptions via `onSuccess`
 
@@ -88,7 +140,7 @@ export const user = Resource<User, ApiError>(
 
 The awaiter's promise still rejects with the original value, so try/catch and a global `Lifecycle.Fault` subscriber continue to work &ndash; the subscription is purely additive.
 
-> **Note:** TypeScript cannot type promise rejections, so `await fetchUser()` itself still rejects with `unknown`. The typing only narrows the `onError` callback. To recover inline, narrow within a `try/catch` block in the handler.
+> **Note:** TypeScript cannot type promise rejections, so `await user.fetch()` itself still rejects with `unknown`. The typing only narrows the `onError` callback. To recover inline, narrow within a `try/catch` block in the handler.
 
 ## Three-tier error handling
 
@@ -110,7 +162,7 @@ export const user = Resource<User, ApiError>(
 // Tier 2: handler-level inline recovery — branch on a specific error
 actions.useAction(Actions.Mount, async (context) => {
   try {
-    const data = await fetchUser();
+    const data = await user.fetch();
     context.actions.produce(({ model }) => {
       model.user = data;
     });
@@ -146,7 +198,7 @@ Pick the lowest tier that suits the concern. Routine, expected failures (404 mea
 
 ## Mount-time pattern
 
-The canonical pattern is to call `await fetchUser()` from a `Lifecycle.Mount` handler and write the result into the model:
+The canonical pattern is to call `await user.fetch()` from a `Lifecycle.Mount` handler and write the result into the model:
 
 ```ts
 actions.useAction(Actions.Mount, async (context) => {
@@ -154,7 +206,7 @@ actions.useAction(Actions.Mount, async (context) => {
     model.user = context.actions.annotate(Operation.Update, model.user);
   });
 
-  const data = await fetchUser();
+  const data = await user.fetch();
 
   context.actions.produce(({ model }) => {
     model.user = data;
@@ -162,11 +214,11 @@ actions.useAction(Actions.Mount, async (context) => {
 });
 ```
 
-The `annotate` call drives the loading UI via `actions.inspect.user.pending()` &ndash; see [model-annotations.md](./model-annotations.md). Refresh has the same body &ndash; just call `await fetchUser()` again, no invalidate step.
+The `annotate` call drives the loading UI via `actions.inspect.user.pending()` &ndash; see [model-annotations.md](./model-annotations.md). Refresh has the same body &ndash; just call `await user.fetch()` again, no invalidate step.
 
 ## Parameterised resources
 
-The fetcher may take arguments. The thunk returned by `actions.useResource` forwards them, and in-flight dedup keys per arg-tuple &ndash; so concurrent calls with the same args share a request, while different args run independently.
+The fetcher may take arguments. `fetch()` forwards them, and in-flight dedup keys per arg-tuple &ndash; so concurrent calls with the same args share a request, while different args run independently.
 
 ```ts
 // resources.ts
@@ -179,18 +231,18 @@ export const user = Resource(
 
 ```ts
 // actions.ts
-const fetchUser = actions.useResource(resource.user);
-//    ^ (id: number) => Promise<User>
+const user = actions.useResource(resource.user);
+//    ^ { fetch: (id: number) => Promise<User>; cache: User | null; fetched: Date | null }
 
 actions.useAction(Actions.Mount, async (context) => {
-  const data = await fetchUser(props.id);
+  const data = await user.fetch(props.id);
   context.actions.produce(({ model }) => {
     model.user = data;
   });
 });
 ```
 
-The fetcher's signature flows through TypeScript &ndash; if you write `(id: number, opts: Options) => ...`, the thunk is typed `(id: number, opts: Options) => Promise<T>`. No need to specify the args generic explicitly.
+The fetcher's signature flows through TypeScript &ndash; if you write `(id: number, opts: Options) => ...`, `fetch` is typed `(id: number, opts: Options) => Promise<T>`. No need to specify the args generic explicitly.
 
 ## Infinite scroll
 
@@ -219,10 +271,10 @@ export function useFeedActions() {
     cursor: null,
     hasMore: true,
   });
-  const fetchFeed = actions.useResource(resource.feed);
+  const feed = actions.useResource(resource.feed);
 
   actions.useAction(Actions.Mount, async (context) => {
-    const page = await fetchFeed(null);
+    const page = await feed.fetch(null);
     context.actions.produce(({ model }) => {
       model.items = page.items;
       model.cursor = page.nextCursor;
@@ -232,7 +284,7 @@ export function useFeedActions() {
 
   actions.useAction(Actions.LoadMore, async (context) => {
     if (!context.model.hasMore) return;
-    const page = await fetchFeed(context.model.cursor);
+    const page = await feed.fetch(context.model.cursor);
     context.actions.produce(({ model }) => {
       model.items.push(...page.items);
       model.cursor = page.nextCursor;
@@ -257,4 +309,5 @@ Putting `useResource` on the `actions` tuple gives the Resource's callbacks acce
 - **No persistence across reloads.** A hard reload starts every Resource fresh.
 - **No focus or reconnect revalidation.** Wire a `window` listener and call the thunk again if you need this.
 - **No SSR isolation.** The `inflight` field on each Resource is module-global, so server-side rendering would leak across requests. `Resource` is client-only.
-- **No subscription on the awaiter.** `await fetchUser()` resolves once and does not re-fire when the broadcast goes out. Use a `useAction(broadcastAction)` handler in consuming components for change notifications.
+- **No subscription on the awaiter.** `await user.fetch()` resolves once and does not re-fire when the broadcast goes out. Use a `useAction(broadcastAction)` handler in consuming components for change notifications.
+- **`cache` and `fetched` are not reactive.** Reading them inside render does not subscribe the component to updates &ndash; they are snapshots, not signals. Drive UI from the model.
