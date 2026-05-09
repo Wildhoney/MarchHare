@@ -4,17 +4,15 @@ All notable changes to this project will be documented in this file. See [commit
 
 ## [0.5.0](https://github.com/Wildhoney/Chizu/compare/v0.4.0...v0.5.0) (2026-05-08)
 
-
 ### ⚠ BREAKING CHANGES
 
-* **api:** multicasts self-scope via withScope, drop regulator+meta, rename With.{Update,Invert}, add useMode
+- **api:** multicasts self-scope via withScope, drop regulator+meta, rename With.{Update,Invert}, add useMode
 
-* **api:** multicasts self-scope via withScope, drop regulator+meta, rename With.{Update,Invert}, add useMode ([82a89c9](https://github.com/Wildhoney/Chizu/commit/82a89c926922990fe4bb8fbbcb5bd4a0eaf0d035))
-
+- **api:** multicasts self-scope via withScope, drop regulator+meta, rename With.{Update,Invert}, add useMode ([82a89c9](https://github.com/Wildhoney/Chizu/commit/82a89c926922990fe4bb8fbbcb5bd4a0eaf0d035))
 
 ### Bug Fixes
 
-* yarn resolutions ([b334ecf](https://github.com/Wildhoney/Chizu/commit/b334ecf7fcb17505dbcf9037f228584efffdb8c6))
+- yarn resolutions ([b334ecf](https://github.com/Wildhoney/Chizu/commit/b334ecf7fcb17505dbcf9037f228584efffdb8c6))
 
 ## [0.4.0](https://github.com/Wildhoney/Chizu/compare/v0.3.0...v0.4.0) (2026-05-07)
 
