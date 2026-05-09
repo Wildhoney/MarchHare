@@ -95,12 +95,14 @@ export function emitAsync(
  * Also invokes broadcast action handlers with cached values on mount.
  * Updates the phase ref to track the component's current lifecycle state.
  *
- * Uses a ref guard to prevent React Strict Mode from causing duplicate
- * Mount emissions during its development-only double-invocation cycle.
+ * The Mount effect skips when `phase` is already `Mounted` — this catches
+ * Strict Mode's dev-only double-invocation. It accepts both `Mounting` (first
+ * mount) and `Unmounted` (re-mount after `<Activity>` show) as entry states
+ * so that hidden-then-shown subtrees correctly re-emit Mount.
  *
- * Note: The phase transitions are:
- * - Mounting → (cached broadcast action values emitted here) → Mounted
- * - Mounted → Unmounting → Unmounted
+ * Phase transitions:
+ * - First mount:           Mounting → Mounted
+ * - Activity hide / show:  Mounted → Unmounting → Unmounted → Mounting → Mounted
  */
 export function useLifecycles({
   unicast,
@@ -114,7 +116,8 @@ export function useLifecycles({
   const previous = React.useRef<Props | null>(null);
 
   React.useLayoutEffect(() => {
-    if (phase.current !== Phase.Mounting) return;
+    if (phase.current === Phase.Mounted) return;
+    phase.current = Phase.Mounting;
 
     const mountAction = findLifecycleAction(handlers, "Mount");
     if (mountAction) unicast.emit(mountAction);
