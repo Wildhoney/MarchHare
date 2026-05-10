@@ -264,10 +264,12 @@ import * as resource from "./resources";
 
 function useUserActions() {
   const actions = useActions<Model, typeof Actions>(initialModel);
+
   const user = actions.useResource(resource.user);
 
   actions.useAction(Actions.Mount, async (context) => {
-    const response = user.fetch.ifNotFetchedWithin("5m");
+    const response = await user.fetch.unless({ within: ms("5m") });
+
     context.actions.produce(({ model }) => {
       model.user = response;
     });
