@@ -4,7 +4,7 @@
     "target": "es2020",
     "useDefineForClassFields": true,
     "module": "esnext",
-    "lib": ["es2024", "dom", "dom.iterable"],
+    "lib": ["es2024", "esnext.temporal", "dom", "dom.iterable"],
     "skipLibCheck": true,
 
     /* Bundler mode */

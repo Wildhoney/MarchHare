@@ -1,4 +1,3 @@
-import ms from "ms";
 import { useActions } from "../../../../library/index.ts";
 import { useRouter } from "react-wayfinder";
 import { Actions, type Data, type Model } from "./types.ts";
@@ -16,7 +15,7 @@ export function useCatActions({ index }: { index: number }) {
   const cat = actions.useResource(resources.cat);
 
   actions.useAction(Actions.Mount, async (context) => {
-    const data = await cat.fetch();
+    const data = await cat.run();
 
     context.actions.produce(({ model }) => {
       model.cat = data;
@@ -24,7 +23,7 @@ export function useCatActions({ index }: { index: number }) {
   });
 
   actions.useAction(Actions.Refresh, async (context) => {
-    const data = await cat.fetch.unless({ within: ms("5m") });
+    const data = await cat.run.unless({ within: { minutes: 5 } });
 
     context.actions.produce(({ model }) => {
       model.cat = data;

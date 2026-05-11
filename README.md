@@ -36,7 +36,7 @@ For advanced topics, see the [recipes directory](./recipes/).
 
 ## Getting started
 
-We dispatch the `Actions.Name` event upon clicking the "Sign in" button and within `useNameActions` we subscribe to that same event so that when it's triggered it updates the model with the payload &ndash; in the React component we render `model.name`. The `With.Update` helper binds the action's payload directly to a model property.
+We dispatch the `Actions.Name` event upon clicking the "Sign in" button and within the component we subscribe to that same event via `useActions` so that when it's triggered it updates the model with the payload &ndash; in the React component we render `model.name`. The `With.Update` helper binds the action's payload directly to a model property.
 
 ```tsx
 import { useActions, Action, With } from "chizu";
@@ -53,22 +53,14 @@ export class Actions {
   static Name = Action<string>("Name");
 }
 
-export default function useNameActions() {
-  const actions = useActions<Model, typeof Actions>(model);
+export default function Profile(): React.ReactElement {
+  const [state, actions] = useActions<Model, typeof Actions>(model);
 
   actions.useAction(Actions.Name, With.Update("name"));
 
-  return actions;
-}
-```
-
-```tsx
-export default function Profile(): React.ReactElement {
-  const [model, actions] = useNameActions();
-
   return (
     <>
-      <p>Hey {model.name}</p>
+      <p>Hey {state.name}</p>
 
       <button onClick={() => actions.dispatch(Actions.Name, randomName())}>
         Sign in
@@ -138,14 +130,14 @@ export class Actions {
   static Ping = Action("Ping");
 }
 
-export default function usePingActions() {
-  const actions = useActions<void, typeof Actions>();
+export default function Pinger(): React.ReactElement {
+  const [, actions] = useActions<void, typeof Actions>();
 
   actions.useAction(Actions.Ping, () => {
     console.log("Pinged!");
   });
 
-  return actions;
+  return <button onClick={() => actions.dispatch(Actions.Ping)}>Ping</button>;
 }
 ```
 
@@ -235,7 +227,7 @@ You can also render broadcast values declaratively in JSX with `actions.stream`.
 
 ```tsx
 function Dashboard() {
-  const [model, actions] = useDashboardActions();
+  const [model, actions] = useActions<Model, typeof Actions>(initialModel);
 
   return (
     <div>
@@ -260,15 +252,16 @@ export const user = Resource("user", () => ky.get("/api/user").json<User>());
 
 ```tsx
 // actions.ts
+import * as chizu from "chizu";
 import * as resource from "./resources";
 
-function useUserActions() {
-  const actions = useActions<Model, typeof Actions>(initialModel);
+export function useActions() {
+  const actions = chizu.useActions<Model, typeof Actions>(initialModel);
 
   const user = actions.useResource(resource.user);
 
   actions.useAction(Actions.Mount, async (context) => {
-    const response = await user.fetch.unless({ within: ms("5m") });
+    const response = await user.run.unless({ within: { minutes: 5 } });
 
     context.actions.produce(({ model }) => {
       model.user = response;
@@ -279,46 +272,58 @@ function useUserActions() {
 }
 ```
 
-`actions.useResource(handle)` returns `{ fetch, cache, fetched }`. Every call to `fetch()` hits the network &ndash; concurrent calls share one in-flight request, but there is no memoised result. `cache` and `fetched` are read-only snapshots of the most recent successful response and the time it resolved (both `null` until the first success). Coordination across components still happens at the broadcast layer; `cache` is a diagnostic snapshot, not a reactive subscription.
+`actions.useResource(handle)` returns `{ run, response, at }`. Every call to `run()` hits the network &ndash; concurrent calls share one in-flight request, but there is no memoised result. `response` and `at` are read-only snapshots of the most recent successful payload and a `Temporal.Instant` of when it resolved (both `null` until the first success). Coordination across components still happens at the broadcast layer; `response` is a diagnostic snapshot, not a reactive subscription. `Temporal` is read from the host runtime &ndash; bring a polyfill (e.g. [`@js-temporal/polyfill`](https://github.com/js-temporal/temporal-polyfill)) if your target environment does not yet expose it natively. `unless({ within })` accepts a `Temporal.Duration`, a `DurationLike` object, or an ISO 8601 duration string.
 
-The fetcher may take arguments &ndash; `fetch()` forwards them, and in-flight dedup keys per arg-tuple. This is how you build pagination, search, and other dynamic-param fetches:
+`Resource` takes two arguments: a key and a fetcher. The fetcher receives the call-site `params` object as its only argument and returns a `Promise<T>`. There are no callbacks &ndash; no `onSuccess`, no `onError`, no injected `dispatch`. Side-effects after a run (broadcasting, analytics, model writes) live in the `useAction` handler that awaited `run()`, next to the rest of the flow:
 
 ```ts
-export const feed = Resource("feed", (cursor: string | null) =>
-  http
-    .get("feed", { searchParams: { cursor: cursor ?? "" } })
-    .json<Page<Item>>(),
+export const user = Resource("user", () => ky.get("/api/user").json<User>());
+
+actions.useAction(Actions.Mount, async (context) => {
+  const data = await user.run();
+  await context.actions.dispatch(Actions.Broadcast.UserUpdated, data);
+  context.actions.produce(({ model }) => {
+    model.user = data;
+  });
+});
+```
+
+`params` is the second generic on `Resource` and defaults to `{}`. Declare it when the fetcher needs call-time inputs &ndash; cursors, ids, query strings. `params` is a single object (not positional args), which keeps call sites self-documenting and lets in-flight dedup key cleanly per param shape:
+
+```ts
+export const feed = Resource<Page<Item>, { cursor: string | null }>(
+  "feed",
+  ({ cursor }) =>
+    http
+      .get("feed", { searchParams: { cursor: cursor ?? "" } })
+      .json<Page<Item>>(),
 );
 
 const feed = actions.useResource(resource.feed);
-const page = await feed.fetch(context.model.cursor);
+const page = await feed.run({ cursor: context.model.cursor });
 ```
 
 A complete IntersectionObserver-driven infinite-scroll demo lives at [`src/example/transactions/`](./src/example/transactions/) &ndash; mock paginated API, scroll-triggered `LoadMore`, `pending()` guard, broadcast on success.
 
-Pass an `onSuccess` callback to fan a fresh fetch out as a broadcast event &ndash; the callback receives a `context` with `response`, `data` (the consuming component's reactive proxy), and `dispatch` (pre-bound to the surrounding `<Boundary>`'s broadcaster):
+For typed failure routing, wrap the call in `try/catch` and use `instanceof` &ndash; TypeScript cannot type promise rejections, so narrowing happens in the handler that catches them:
 
 ```ts
-export const user = Resource(
-  "user",
-  () => ky.get("/api/user").json<User>(),
-  ({ response, dispatch }) => dispatch(Actions.Broadcast.UserUpdated, response),
-);
-```
-
-For typed error handling, supply the second generic and an `onError` callback &ndash; the parameter narrows to your error union, so `instanceof` discrimination on a typed `HttpError` hierarchy is clean:
-
-```ts
-export const user = Resource<User, ApiError>(
-  "user",
-  () => http.get("user").json<User>(),
-  ({ response, dispatch }) => dispatch(Actions.Broadcast.UserUpdated, response),
-  ({ error, dispatch }) => {
+actions.useAction(Actions.Mount, async (context) => {
+  try {
+    const data = await user.run();
+    context.actions.produce(({ model }) => {
+      model.user = data;
+    });
+  } catch (error) {
     if (error instanceof RateLimitedError) {
-      dispatch(Actions.Broadcast.RateLimited, error.retryAfter);
+      await context.actions.dispatch(
+        Actions.Broadcast.RateLimited,
+        error.retryAfter,
+      );
     }
-  },
-);
+    throw error;
+  }
+});
 ```
 
 See the [Resource recipe](./recipes/use-resource.md) for the three-tier error handling model, parameterised resources, and limitations.
@@ -396,21 +401,22 @@ See the [multicast recipe](./recipes/multicast-actions.md) for more details.
 For coordinating between async handlers without re-rendering the JSX tree, use the per-`<Boundary>` mode handle returned by `useMode()`. Thread it through the `useActions` data callback so it shows up as `context.data.mode` inside handlers, fully typed. Mode is **not** reactive &mdash; drive view state through the model, not mode.
 
 ```ts
-import { useMode, useActions } from "chizu";
+import * as chizu from "chizu";
 
 enum Mode {
   Idle,
   SigningOut,
 }
 
-function useSignOutActions() {
-  const mode = useMode<Mode>();
+export function useActions() {
+  const mode = chizu.useMode<Mode>();
   // Spell the data shape as the third generic so `context.data.mode` keeps
   // its concrete type inside handlers.
-  const actions = useActions<Model, typeof Actions, { mode: typeof mode }>(
-    model,
-    () => ({ mode }),
-  );
+  const actions = chizu.useActions<
+    Model,
+    typeof Actions,
+    { mode: typeof mode }
+  >(model, () => ({ mode }));
 
   actions.useAction(Actions.SignOut, async (context) => {
     context.data.mode.update(Mode.SigningOut);

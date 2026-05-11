@@ -31,12 +31,10 @@ import {
   ChanneledAction,
   ActionOrChanneled,
   AnyAction,
-  BroadcastPayload,
   FaultSymbol,
 } from "../types/index.ts";
 import type {
-  BoundFetch,
-  ResourceDispatch,
+  BoundRun,
   ResourceHandle,
   UnlessOptions,
 } from "../resource/index.ts";
@@ -484,51 +482,37 @@ export function useActions<
     useRegisterHandler<M, A, D>(registry, action, <Handler<M, A, D>>handler);
   };
 
-  (<UseActions<M, A, D>>result).useResource = <
-    T,
-    E,
-    Args extends readonly unknown[],
-  >(
-    resource: ResourceHandle<T, E, Args>,
+  (<UseActions<M, A, D>>result).useResource = <T, P extends object>(
+    resource: ResourceHandle<T, P>,
   ) => {
-    const dispatch = React.useMemo<ResourceDispatch>(() => {
-      const fn = <P>(
-        action: BroadcastPayload<P> | ChanneledAction<P, Filter>,
-        payload?: P,
-      ): Promise<void> => {
-        const channel = isChanneledAction(action) ? action.channel : undefined;
-        return emitAsync(broadcast, getActionSymbol(action), payload, channel);
-      };
-      return <ResourceDispatch>fn;
-    }, [broadcast]);
-
-    const fetch = React.useMemo<BoundFetch<T, Args>>(() => {
-      const call = (...args: Args): Promise<T> =>
-        resource.fetch(dispatch, data, ...args);
-      const unless = (options: UnlessOptions, ...args: Args): Promise<T> => {
-        const { cache, fetched } = resource;
-        if (fetched !== null && cache !== null) {
-          if (Date.now() - fetched.getTime() <= options.within) {
-            return Promise.resolve(cache);
+    const run = React.useMemo<BoundRun<T, P>>(() => {
+      const call = (params?: P): Promise<T> => resource.run(<P>(params ?? {}));
+      const unless = (options: UnlessOptions, params?: P): Promise<T> => {
+        const { response, at } = resource;
+        if (at !== null && response !== null) {
+          const elapsed = Temporal.Now.instant().since(at);
+          const window = Temporal.Duration.from(options.within);
+          if (Temporal.Duration.compare(elapsed, window) <= 0) {
+            return Promise.resolve(response);
           }
         }
-        return call(...args);
+        return call(params);
       };
       // eslint-disable-next-line fp/no-mutating-assign
-      return Object.assign(call, { unless });
-    }, [resource, dispatch, data]);
+      return <BoundRun<T, P>>(<unknown>Object.assign(call, { unless }));
+    }, [resource]);
 
     return React.useMemo(
       () => ({
-        fetch,
-        get cache() {
-          return resource.cache;
+        run,
+        get response() {
+          return resource.response;
         },
-        get fetched() {
-          return resource.fetched;
+        get at() {
+          return resource.at;
         },
       }),
-      [resource, fetch],
+      [resource, run],
     );
   };
 

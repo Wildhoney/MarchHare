@@ -1,189 +1,146 @@
-import type {
-  BroadcastPayload,
-  ChanneledAction,
-  Filter,
-  Props,
-} from "../types/index.ts";
-
 /**
- * Options accepted by `fetch.unless(...)`.
+ * Options accepted by `run.unless(...)`.
  *
- * - `within` &ndash; a duration in milliseconds. If a successful fetch
- *   resolved within this window, the cached value is returned without
- *   hitting the network. Otherwise `fetch(...)` is called normally.
+ * - `within` &ndash; a `Temporal.Duration`, a `DurationLike` object
+ *   (e.g. `{ minutes: 5 }`), or an ISO 8601 duration string (`"PT5M"`).
+ *   If a successful run resolved within this window, the cached
+ *   response is returned without hitting the network. Otherwise
+ *   `run(...)` is called normally.
  *
- * Pass a raw number (e.g. `60_000` for one minute), or wrap a string
- * with the optional [`ms`](https://github.com/vercel/ms) package at the
- * call site &mdash; e.g. `unless({ within: ms("5m") })`.
+ * @example
+ * ```ts
+ * await user.run.unless({ within: { minutes: 5 } });
+ * await user.run.unless({ within: "PT5M" });
+ * await user.run.unless({ within: Temporal.Duration.from({ minutes: 5 }) });
+ * ```
  */
 export type UnlessOptions = {
-  readonly within: number;
+  readonly within: Temporal.DurationLike;
 };
 
 /**
- * Fan-out dispatcher passed to a {@link Resource}'s `onSuccess` and
- * `onError` callbacks. Restricted to broadcast actions (and channeled
- * broadcasts) because resource-level events have no single owning
- * component to scope unicast or multicast to.
+ * Fetcher signature accepted by {@link Resource}. Receives the
+ * call-site `params` object and returns a `Promise` of the response.
+ * Side-effects (dispatching broadcasts, analytics, etc.) belong in
+ * the calling `useAction` handler, not inside the fetcher.
  */
-export type ResourceDispatch = {
-  <P>(action: BroadcastPayload<P>, payload?: P): Promise<void>;
-  <P, C extends Filter>(
-    action: ChanneledAction<P, C>,
-    payload?: P,
-  ): Promise<void>;
-};
+export type ResourceFetcher<T, P extends object = Record<never, never>> = (
+  params: P,
+) => Promise<T>;
 
 /**
- * Context passed to a {@link Resource}'s `onSuccess` callback after a
- * successful fetch.
- */
-export type ResourceSuccess<T> = {
-  /** The resolved value from the fetcher. */
-  readonly response: T;
-  /** The reactive `data` proxy of the component that triggered the fetch. */
-  readonly data: Props;
-  /** Pre-bound dispatcher for the surrounding Boundary's broadcaster. */
-  readonly dispatch: ResourceDispatch;
-};
-
-/**
- * Context passed to a {@link Resource}'s `onError` callback after a
- * failed fetch.
- */
-export type ResourceFailure<E> = {
-  /** The thrown error, narrowed to the second generic on `Resource`. */
-  readonly error: E;
-  /** The reactive `data` proxy of the component that triggered the fetch. */
-  readonly data: Props;
-  /** Pre-bound dispatcher for the surrounding Boundary's broadcaster. */
-  readonly dispatch: ResourceDispatch;
-};
-
-/**
- * Component-bound `fetch` callable returned by `actions.useResource`. It
- * is invokable like the underlying fetcher (`fetch(...args)`) and also
+ * Component-bound `run` callable returned by `actions.useResource`. It
+ * is invokable like the underlying fetcher (`run(params)`) and also
  * carries an `unless` method that short-circuits the network call when
- * the cached value is still within a freshness window.
+ * the cached response is still within a freshness window.
+ *
+ * The conditional specialisation collapses the call signature when
+ * `P` is empty &mdash; `run()` instead of `run({})`.
  */
-export type BoundFetch<T, Args extends readonly unknown[]> = {
-  (...args: Args): Promise<T>;
-  /**
-   * Returns the cached value if a successful fetch resolved within
-   * `options.within` (parsed by [`ms`](https://github.com/vercel/ms)),
-   * otherwise calls `fetch(...args)`.
-   *
-   * @example
-   * ```ts
-   * const user = actions.useResource(resource.user);
-   * const data = await user.fetch.unless({ within: "5m" });
-   * ```
-   */
-  unless(options: UnlessOptions, ...args: Args): Promise<T>;
-};
+export type BoundRun<T, P extends object> = [keyof P] extends [never]
+  ? {
+      (): Promise<T>;
+      /**
+       * Returns the cached response if a successful run resolved within
+       * `options.within`, otherwise calls `run()`.
+       */
+      unless(options: UnlessOptions): Promise<T>;
+    }
+  : {
+      (params: P): Promise<T>;
+      /**
+       * Returns the cached response if a successful run resolved within
+       * `options.within`, otherwise calls `run(params)`.
+       */
+      unless(options: UnlessOptions, params: P): Promise<T>;
+    };
 
 /**
  * Module-scope handle returned by {@link Resource}. Pass to
  * `actions.useResource(handle)` inside a component to obtain a
- * `{ fetch, cache, fetched }` object bound to the surrounding
- * Boundary's broadcaster and the component's reactive `data`.
+ * `{ run, response, at }` object.
  */
-export type ResourceHandle<
-  T,
-  E = Error,
-  Args extends readonly unknown[] = [],
-> = {
+export type ResourceHandle<T, P extends object = Record<never, never>> = {
   readonly key: string;
   /** @internal */
-  readonly fetch: (
-    dispatch: ResourceDispatch,
-    data: Props,
-    ...args: Args
-  ) => Promise<T>;
-  /** Most recent successful response across all arg-tuples, or `null`. */
-  readonly cache: T | null;
-  /** Timestamp of the most recent successful fetch, or `null`. */
-  readonly fetched: Date | null;
-  /** @internal — phantom marker so TS distinguishes by error type */
-  readonly _error?: E;
-  /** @internal — phantom marker so TS distinguishes by args */
-  readonly _args?: Args;
+  readonly run: (params: P) => Promise<T>;
+  /** Most recent successful response across all param-sets, or `null`. */
+  readonly response: T | null;
+  /** Instant of the most recent successful run, or `null`. */
+  readonly at: Temporal.Instant | null;
 };
 
 /**
- * Defines a remote resource &mdash; declare at module scope and consume via
- * `actions.useResource(handle)`. Mirrors the {@link Action} factory pattern:
- * the declaration is a value, not a hook.
+ * Defines a remote resource &mdash; declare at module scope and consume
+ * via `actions.useResource(handle)`. Mirrors the {@link Action} factory
+ * pattern: the declaration is a value, not a hook.
  *
- * The fetcher may take arguments. The `fetch` method returned by
- * `actions.useResource` forwards them, and in-flight dedup keys per
- * arg-tuple &ndash; so `feed.fetch(null)` and `feed.fetch("abc")` run
- * independently, while two concurrent `feed.fetch("abc")` calls share
- * one network request.
+ * The fetcher takes a single `params` argument (defaults to `{}`) and
+ * returns a `Promise<T>`. Resources do **not** carry any callbacks
+ * &ndash; any side-effects the caller wants on success or failure
+ * (broadcasting, logging, model updates) belong in the `useAction`
+ * handler that called `await user.run(...)`.
  *
- * Each call to `fetch()` always hits the network; `cache` and `fetched`
- * are read-only snapshots of the most recent successful response &ndash;
- * not a memoised result. Coordination across components happens via the
- * broadcast actions dispatched in `onSuccess` / `onError`.
+ * `params` are typed via the second generic and forwarded to every
+ * `run(params)` call site. In-flight dedup keys per params shape, so
+ * `feed.run({ cursor: null })` and `feed.run({ cursor: "abc" })` execute
+ * independently while two concurrent `feed.run({ cursor: "abc" })` calls
+ * share one network request.
+ *
+ * Each call to `run()` always hits the network; `response` and `at`
+ * are read-only snapshots of the most recent successful response and
+ * the instant it resolved &ndash; not a memoised result.
  *
  * @example
  * ```ts
  * import { Resource } from "chizu";
  *
- * export const feed = Resource<Page<Item>, ApiError, [cursor: string | null]>(
+ * export const feed = Resource<Page<Item>, { cursor: string | null }>(
  *   "feed",
- *   (cursor) =>
- *     http.get("feed", { searchParams: { cursor: cursor ?? "" } }).json(),
- *   ({ response, dispatch }) =>
- *     dispatch(Actions.Broadcast.PageLoaded, response),
+ *   ({ cursor }) =>
+ *     http
+ *       .get("feed", { searchParams: { cursor: cursor ?? "" } })
+ *       .json<Page<Item>>(),
  * );
  * ```
  */
-export function Resource<T, E = Error, Args extends readonly unknown[] = []>(
+export function Resource<T, P extends object = Record<never, never>>(
   key: string,
-  fetcher: (...args: Args) => Promise<T>,
-  onSuccess?: (context: ResourceSuccess<T>) => void,
-  onError?: (context: ResourceFailure<E>) => void,
-): ResourceHandle<T, E, Args> {
+  fetcher: ResourceFetcher<T, P>,
+): ResourceHandle<T, P> {
   const inflight = new Map<string, Promise<T>>();
-  let cache: T | null = null;
-  let fetched: Date | null = null;
+  let response: T | null = null;
+  let at: Temporal.Instant | null = null;
 
-  const fetchWith = (
-    dispatch: ResourceDispatch,
-    data: Props,
-    ...args: Args
-  ): Promise<T> => {
-    const argKey = JSON.stringify(args);
-    const existing = inflight.get(argKey);
+  const runWith = (params: P): Promise<T> => {
+    const paramsKey = JSON.stringify(params);
+    const existing = inflight.get(paramsKey);
     if (existing) return existing;
 
-    const promise = fetcher(...args).then(
-      (response) => {
-        if (inflight.get(argKey) === promise) inflight.delete(argKey);
-        cache = response;
-        fetched = new Date();
-        onSuccess?.({ response, data, dispatch });
-        return response;
+    const promise = fetcher(params).then(
+      (resolved) => {
+        if (inflight.get(paramsKey) === promise) inflight.delete(paramsKey);
+        response = resolved;
+        at = Temporal.Now.instant();
+        return resolved;
       },
       (error: unknown) => {
-        if (inflight.get(argKey) === promise) inflight.delete(argKey);
-        onError?.({ error: <E>error, data, dispatch });
+        if (inflight.get(paramsKey) === promise) inflight.delete(paramsKey);
         throw error;
       },
     );
-    inflight.set(argKey, promise);
+    inflight.set(paramsKey, promise);
     return promise;
   };
 
   return {
     key,
-    fetch: fetchWith,
-    get cache() {
-      return cache;
+    run: runWith,
+    get response() {
+      return response;
     },
-    get fetched() {
-      return fetched;
+    get at() {
+      return at;
     },
   };
 }

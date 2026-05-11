@@ -1,10 +1,8 @@
 import { Resource } from "../../library/index.ts";
-import { Actions } from "./types.ts";
 import { fetchTransactions } from "./api.ts";
+import type { TransactionsPage } from "./types.ts";
 
-export const transactions = Resource(
-  "transactions",
-  (cursor: string | null) => fetchTransactions(cursor),
-  ({ response, dispatch }) =>
-    dispatch(Actions.Broadcast.TransactionsLoaded, response.items),
-);
+export const transactions = Resource<
+  TransactionsPage,
+  { cursor: string | null }
+>("transactions", ({ cursor }) => fetchTransactions(cursor));

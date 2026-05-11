@@ -13,7 +13,11 @@ export function useTransactionsActions() {
       model.items = context.actions.annotate(Operation.Update, model.items);
     });
 
-    const page = await transactions.fetch(null);
+    const page = await transactions.run({ cursor: null });
+    await context.actions.dispatch(
+      Actions.Broadcast.TransactionsLoaded,
+      page.items,
+    );
 
     context.actions.produce(({ model }) => {
       model.items = page.items;
@@ -31,7 +35,11 @@ export function useTransactionsActions() {
       model.items = context.actions.annotate(Operation.Update, model.items);
     });
 
-    const page = await transactions.fetch(cursor);
+    const page = await transactions.run({ cursor });
+    await context.actions.dispatch(
+      Actions.Broadcast.TransactionsLoaded,
+      page.items,
+    );
 
     context.actions.produce(({ model }) => {
       model.items.push(...page.items);
@@ -45,7 +53,11 @@ export function useTransactionsActions() {
       model.items = context.actions.annotate(Operation.Update, model.items);
     });
 
-    const page = await transactions.fetch(null);
+    const page = await transactions.run({ cursor: null });
+    await context.actions.dispatch(
+      Actions.Broadcast.TransactionsLoaded,
+      page.items,
+    );
 
     context.actions.produce(({ model }) => {
       model.items = page.items;

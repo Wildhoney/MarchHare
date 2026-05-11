@@ -1,14 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
-import * as React from "react";
-import ms from "ms";
 import { Resource } from "./index.ts";
-import {
-  Context,
-  BroadcastEmitter,
-} from "../boundary/components/broadcast/utils.ts";
-import { Action, Distribution, useActions } from "../index.ts";
-import { getActionSymbol } from "../action/index.ts";
+import { useActions } from "../index.ts";
 
 describe("Resource()", () => {
   it("declares a handle with a key", () => {
@@ -18,19 +11,19 @@ describe("Resource()", () => {
 });
 
 describe("actions.useResource()", () => {
-  it("fetches on first call and resolves with the data", async () => {
+  it("runs on first call and resolves with the data", async () => {
     const user = Resource("user", () => Promise.resolve({ name: "Adam" }));
     const { result } = renderHook(() => {
       const actions = useActions();
       return actions.useResource(user);
     });
 
-    await expect(result.current.fetch()).resolves.toEqual({ name: "Adam" });
+    await expect(result.current.run()).resolves.toEqual({ name: "Adam" });
   });
 
-  it("fetches fresh on every awaited call (no stale cache)", async () => {
+  it("runs fresh on every awaited call (no stale response)", async () => {
     const fetcher = vi
-      .fn()
+      .fn<() => Promise<{ name: string }>>()
       .mockResolvedValueOnce({ name: "Adam" })
       .mockResolvedValueOnce({ name: "Eve" });
     const user = Resource("user", fetcher);
@@ -39,12 +32,12 @@ describe("actions.useResource()", () => {
       return actions.useResource(user);
     });
 
-    await expect(result.current.fetch()).resolves.toEqual({ name: "Adam" });
-    await expect(result.current.fetch()).resolves.toEqual({ name: "Eve" });
+    await expect(result.current.run()).resolves.toEqual({ name: "Adam" });
+    await expect(result.current.run()).resolves.toEqual({ name: "Eve" });
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
-  it("deduplicates concurrent calls into a single in-flight fetch", async () => {
+  it("deduplicates concurrent calls into a single in-flight run", async () => {
     const fetcher = vi.fn(() => Promise.resolve({ name: "Adam" }));
     const user = Resource("user", fetcher);
     const { result } = renderHook(() => {
@@ -53,9 +46,9 @@ describe("actions.useResource()", () => {
     });
 
     const [a, b, c] = await Promise.all([
-      result.current.fetch(),
-      result.current.fetch(),
-      result.current.fetch(),
+      result.current.run(),
+      result.current.run(),
+      result.current.run(),
     ]);
 
     expect(fetcher).toHaveBeenCalledTimes(1);
@@ -66,7 +59,7 @@ describe("actions.useResource()", () => {
 
   it("clears in-flight state on rejection so the next call retries", async () => {
     const fetcher = vi
-      .fn()
+      .fn<() => Promise<{ name: string }>>()
       .mockRejectedValueOnce(new Error("boom"))
       .mockResolvedValueOnce({ name: "Adam" });
     const user = Resource("user", fetcher);
@@ -75,12 +68,12 @@ describe("actions.useResource()", () => {
       return actions.useResource(user);
     });
 
-    await expect(result.current.fetch()).rejects.toThrow("boom");
-    await expect(result.current.fetch()).resolves.toEqual({ name: "Adam" });
+    await expect(result.current.run()).rejects.toThrow("boom");
+    await expect(result.current.run()).resolves.toEqual({ name: "Adam" });
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
-  it("two components using the same resource share the in-flight fetch", async () => {
+  it("two components using the same resource share the in-flight run", async () => {
     const fetcher = vi.fn(() => Promise.resolve({ name: "Adam" }));
     const user = Resource("user", fetcher);
 
@@ -93,236 +86,113 @@ describe("actions.useResource()", () => {
       return actions.useResource(user);
     });
 
-    await Promise.all([a.result.current.fetch(), b.result.current.fetch()]);
+    await Promise.all([a.result.current.run(), b.result.current.run()]);
 
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
-  it("onSuccess receives a context with response, data, dispatch", async () => {
-    const onSuccess = vi.fn();
-    const user = Resource(
-      "user",
-      () => Promise.resolve({ name: "Adam" }),
-      onSuccess,
+  it("forwards params to the fetcher", async () => {
+    type Params = { cursor: string | null };
+    const fetcher = vi.fn((params: Params) =>
+      Promise.resolve({ items: [params.cursor ?? "first"] }),
     );
-    const { result } = renderHook(() => {
-      const actions = useActions<void, void, { hint: string }>(() => ({
-        hint: "hello",
-      }));
-      return actions.useResource(user);
-    });
-
-    await result.current.fetch();
-
-    expect(onSuccess).toHaveBeenCalledTimes(1);
-    const [context] = onSuccess.mock.calls[0];
-    expect(context.response).toEqual({ name: "Adam" });
-    expect(context.data.hint).toBe("hello");
-    expect(typeof context.dispatch).toBe("function");
-  });
-
-  it("onError receives a context with error, data, dispatch", async () => {
-    const onError = vi.fn();
-    const error = new Error("boom");
-    const user = Resource(
-      "user",
-      () => Promise.reject(error),
-      undefined,
-      onError,
-    );
-    const { result } = renderHook(() => {
-      const actions = useActions<void, void, { hint: string }>(() => ({
-        hint: "hello",
-      }));
-      return actions.useResource(user);
-    });
-
-    await expect(result.current.fetch()).rejects.toBe(error);
-
-    expect(onError).toHaveBeenCalledTimes(1);
-    const [context] = onError.mock.calls[0];
-    expect(context.error).toBe(error);
-    expect(context.data.hint).toBe("hello");
-    expect(typeof context.dispatch).toBe("function");
-  });
-
-  it("onError narrows to the typed error generic", async () => {
-    class HttpError extends Error {
-      constructor(public status: number) {
-        super(`HTTP ${status}`);
-      }
-    }
-    class RateLimitedError extends HttpError {
-      constructor(public retryAfter: number) {
-        super(429);
-      }
-    }
-    type ApiError = HttpError | RateLimitedError;
-
-    const seen = vi.fn<(context: { error: ApiError }) => void>();
-    const user = Resource<{ name: string }, ApiError>(
-      "user",
-      () => Promise.reject(new RateLimitedError(30)),
-      undefined,
-      seen,
-    );
-    const { result } = renderHook(() => {
-      const actions = useActions();
-      return actions.useResource(user);
-    });
-
-    await expect(result.current.fetch()).rejects.toBeInstanceOf(
-      RateLimitedError,
-    );
-
-    const error = seen.mock.calls[0][0].error;
-    expect(error).toBeInstanceOf(RateLimitedError);
-    if (error instanceof RateLimitedError) {
-      expect(error.retryAfter).toBe(30);
-    }
-  });
-
-  it("forwards args to the fetcher", async () => {
-    const fetcher = vi.fn((cursor: string | null) =>
-      Promise.resolve({ items: [cursor ?? "first"] }),
-    );
-    const feed = Resource("feed", fetcher);
+    const feed = Resource<{ items: string[] }, Params>("feed", fetcher);
     const { result } = renderHook(() => {
       const actions = useActions();
       return actions.useResource(feed);
     });
 
-    await expect(result.current.fetch(null)).resolves.toEqual({
+    await expect(result.current.run({ cursor: null })).resolves.toEqual({
       items: ["first"],
     });
-    await expect(result.current.fetch("abc")).resolves.toEqual({
+    await expect(result.current.run({ cursor: "abc" })).resolves.toEqual({
       items: ["abc"],
     });
 
-    expect(fetcher).toHaveBeenNthCalledWith(1, null);
-    expect(fetcher).toHaveBeenNthCalledWith(2, "abc");
+    expect(fetcher).toHaveBeenNthCalledWith(1, { cursor: null });
+    expect(fetcher).toHaveBeenNthCalledWith(2, { cursor: "abc" });
   });
 
-  it("dedupes concurrent calls per arg-tuple, not globally", async () => {
-    const fetcher = vi.fn((cursor: string | null) =>
-      Promise.resolve({ items: [cursor ?? "first"] }),
+  it("dedupes concurrent calls per param-set, not globally", async () => {
+    type Params = { cursor: string | null };
+    const fetcher = vi.fn((params: Params) =>
+      Promise.resolve({ items: [params.cursor ?? "first"] }),
     );
-    const feed = Resource("feed", fetcher);
+    const feed = Resource<{ items: string[] }, Params>("feed", fetcher);
     const { result } = renderHook(() => {
       const actions = useActions();
       return actions.useResource(feed);
     });
 
-    // Concurrent calls with same arg: one fetch
     const [a, b] = await Promise.all([
-      result.current.fetch(null),
-      result.current.fetch(null),
+      result.current.run({ cursor: null }),
+      result.current.run({ cursor: null }),
     ]);
     expect(a).toBe(b);
     expect(fetcher).toHaveBeenCalledTimes(1);
 
-    // Concurrent calls with different args: two fetches
     const [c, d] = await Promise.all([
-      result.current.fetch("x"),
-      result.current.fetch("y"),
+      result.current.run({ cursor: "x" }),
+      result.current.run({ cursor: "y" }),
     ]);
     expect(c).not.toBe(d);
-    expect(fetcher).toHaveBeenCalledTimes(3); // 1 (null) + 2 (x, y)
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
-  it("auto-injected dispatch broadcasts onSuccess via the boundary's emitter", async () => {
-    const Updated = Action<string>("Updated", Distribution.Broadcast);
-    const emitter = new BroadcastEmitter();
-    const listener = vi.fn();
-    emitter.on(getActionSymbol(Updated), listener);
+  it("awaiting run() does not resolve before the fetcher promise settles", async () => {
+    const order: string[] = [];
+    const user = Resource("user", async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      order.push("fetcher resolved");
+      return { name: "Adam" };
+    });
 
-    const user = Resource(
-      "user",
-      () => Promise.resolve({ name: "Adam" }),
-      ({ dispatch }) => dispatch(Updated, "hello"),
-    );
+    const { result } = renderHook(() => {
+      const actions = useActions();
+      return actions.useResource(user);
+    });
 
-    const wrapper = ({ children }: { children: React.ReactNode }) =>
-      React.createElement(Context.Provider, { value: emitter }, children);
+    await result.current.run();
+    order.push("after run");
 
-    const { result } = renderHook(
-      () => {
-        const actions = useActions();
-        return actions.useResource(user);
-      },
-      { wrapper },
-    );
-
-    await result.current.fetch();
-
-    expect(listener.mock.calls[0][0]).toBe("hello");
-  });
-
-  it("auto-injected dispatch broadcasts onError via the boundary's emitter", async () => {
-    const Failed = Action<string>("Failed", Distribution.Broadcast);
-    const emitter = new BroadcastEmitter();
-    const listener = vi.fn();
-    emitter.on(getActionSymbol(Failed), listener);
-
-    const error = new Error("boom");
-    const user = Resource(
-      "user",
-      () => Promise.reject(error),
-      undefined,
-      ({ dispatch }) => dispatch(Failed, "uh oh"),
-    );
-
-    const wrapper = ({ children }: { children: React.ReactNode }) =>
-      React.createElement(Context.Provider, { value: emitter }, children);
-
-    const { result } = renderHook(
-      () => {
-        const actions = useActions();
-        return actions.useResource(user);
-      },
-      { wrapper },
-    );
-
-    await expect(result.current.fetch()).rejects.toBe(error);
-
-    expect(listener.mock.calls[0][0]).toBe("uh oh");
+    expect(order).toEqual(["fetcher resolved", "after run"]);
   });
 });
 
-describe("ResourceHandle.cache / .fetched", () => {
-  it("are null before any fetch resolves", () => {
+describe("ResourceHandle.response / .at", () => {
+  it("are null before any run resolves", () => {
     const user = Resource("user", () => Promise.resolve({ name: "Adam" }));
     const { result } = renderHook(() => {
       const actions = useActions();
       return actions.useResource(user);
     });
 
-    expect(result.current.cache).toBeNull();
-    expect(result.current.fetched).toBeNull();
+    expect(result.current.response).toBeNull();
+    expect(result.current.at).toBeNull();
   });
 
-  it("populate after a successful fetch", async () => {
+  it("populate after a successful run", async () => {
     const user = Resource("user", () => Promise.resolve({ name: "Adam" }));
     const { result } = renderHook(() => {
       const actions = useActions();
       return actions.useResource(user);
     });
 
-    const before = Date.now();
-    await result.current.fetch();
-    const after = Date.now();
+    const before = Temporal.Now.instant();
+    await result.current.run();
+    const after = Temporal.Now.instant();
 
-    const fetched = result.current.fetched;
-    if (!fetched) throw new Error("expected fetched to be set");
-    expect(result.current.cache).toEqual({ name: "Adam" });
-    expect(fetched).toBeInstanceOf(Date);
-    expect(fetched.getTime()).toBeGreaterThanOrEqual(before);
-    expect(fetched.getTime()).toBeLessThanOrEqual(after);
+    const at = result.current.at;
+    if (!at) throw new Error("expected at to be set");
+    expect(result.current.response).toEqual({ name: "Adam" });
+    expect(at).toBeInstanceOf(Temporal.Instant);
+    expect(Temporal.Instant.compare(at, before)).toBeGreaterThanOrEqual(0);
+    expect(Temporal.Instant.compare(at, after)).toBeLessThanOrEqual(0);
   });
 
   it("update to the most recent successful response", async () => {
     const fetcher = vi
-      .fn()
+      .fn<() => Promise<{ name: string }>>()
       .mockResolvedValueOnce({ name: "Adam" })
       .mockResolvedValueOnce({ name: "Eve" });
     const user = Resource("user", fetcher);
@@ -331,23 +201,23 @@ describe("ResourceHandle.cache / .fetched", () => {
       return actions.useResource(user);
     });
 
-    await result.current.fetch();
-    const firstFetched = result.current.fetched;
-    if (!firstFetched) throw new Error("expected fetched to be set");
-    expect(result.current.cache).toEqual({ name: "Adam" });
+    await result.current.run();
+    const firstAt = result.current.at;
+    if (!firstAt) throw new Error("expected at to be set");
+    expect(result.current.response).toEqual({ name: "Adam" });
 
     await new Promise((resolve) => setTimeout(resolve, 2));
-    await result.current.fetch();
+    await result.current.run();
 
-    const secondFetched = result.current.fetched;
-    if (!secondFetched) throw new Error("expected fetched to still be set");
-    expect(result.current.cache).toEqual({ name: "Eve" });
-    expect(secondFetched.getTime()).toBeGreaterThan(firstFetched.getTime());
+    const secondAt = result.current.at;
+    if (!secondAt) throw new Error("expected at to still be set");
+    expect(result.current.response).toEqual({ name: "Eve" });
+    expect(Temporal.Instant.compare(secondAt, firstAt)).toBeGreaterThan(0);
   });
 
-  it("are not updated by a failed fetch", async () => {
+  it("are not updated by a failed run", async () => {
     const fetcher = vi
-      .fn()
+      .fn<() => Promise<{ name: string }>>()
       .mockResolvedValueOnce({ name: "Adam" })
       .mockRejectedValueOnce(new Error("boom"));
     const user = Resource("user", fetcher);
@@ -356,13 +226,13 @@ describe("ResourceHandle.cache / .fetched", () => {
       return actions.useResource(user);
     });
 
-    await result.current.fetch();
-    const fetchedAfterSuccess = result.current.fetched;
+    await result.current.run();
+    const atAfterSuccess = result.current.at;
 
-    await expect(result.current.fetch()).rejects.toThrow("boom");
+    await expect(result.current.run()).rejects.toThrow("boom");
 
-    expect(result.current.cache).toEqual({ name: "Adam" });
-    expect(result.current.fetched).toBe(fetchedAfterSuccess);
+    expect(result.current.response).toEqual({ name: "Adam" });
+    expect(result.current.at).toBe(atAfterSuccess);
   });
 
   it("are shared across components using the same Resource", async () => {
@@ -377,15 +247,15 @@ describe("ResourceHandle.cache / .fetched", () => {
       return actions.useResource(user);
     });
 
-    await a.result.current.fetch();
+    await a.result.current.run();
 
-    expect(b.result.current.cache).toEqual({ name: "Adam" });
-    expect(b.result.current.fetched).toBeInstanceOf(Date);
+    expect(b.result.current.response).toEqual({ name: "Adam" });
+    expect(b.result.current.at).toBeInstanceOf(Temporal.Instant);
   });
 });
 
-describe("fetch.unless({ within })", () => {
-  it("fetches when no successful fetch has happened yet", async () => {
+describe("run.unless({ within })", () => {
+  it("runs when no successful run has happened yet", async () => {
     const fetcher = vi.fn(() => Promise.resolve({ name: "Adam" }));
     const user = Resource("user", fetcher);
     const { result } = renderHook(() => {
@@ -394,12 +264,12 @@ describe("fetch.unless({ within })", () => {
     });
 
     await expect(
-      result.current.fetch.unless({ within: ms("5m") }),
+      result.current.run.unless({ within: { minutes: 5 } }),
     ).resolves.toEqual({ name: "Adam" });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
-  it("returns the cached value without fetching when within the window", async () => {
+  it("returns the cached response without running when within the window", async () => {
     const fetcher = vi.fn(() => Promise.resolve({ name: "Adam" }));
     const user = Resource("user", fetcher);
     const { result } = renderHook(() => {
@@ -407,18 +277,18 @@ describe("fetch.unless({ within })", () => {
       return actions.useResource(user);
     });
 
-    await result.current.fetch();
+    await result.current.run();
     expect(fetcher).toHaveBeenCalledTimes(1);
 
     await expect(
-      result.current.fetch.unless({ within: ms("5m") }),
+      result.current.run.unless({ within: { minutes: 5 } }),
     ).resolves.toEqual({ name: "Adam" });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
-  it("fetches when the cache is older than the window", async () => {
+  it("runs when the cached response is older than the window", async () => {
     const fetcher = vi
-      .fn()
+      .fn<() => Promise<{ name: string }>>()
       .mockResolvedValueOnce({ name: "Adam" })
       .mockResolvedValueOnce({ name: "Eve" });
     const user = Resource("user", fetcher);
@@ -427,12 +297,12 @@ describe("fetch.unless({ within })", () => {
       return actions.useResource(user);
     });
 
-    await result.current.fetch();
+    await result.current.run();
 
-    vi.useFakeTimers({ now: Date.now() + ms("6m") });
+    vi.useFakeTimers({ now: Date.now() + 6 * 60_000 });
     try {
       await expect(
-        result.current.fetch.unless({ within: ms("5m") }),
+        result.current.run.unless({ within: { minutes: 5 } }),
       ).resolves.toEqual({ name: "Eve" });
     } finally {
       vi.useRealTimers();
@@ -440,19 +310,34 @@ describe("fetch.unless({ within })", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
-  it("forwards args to the underlying fetcher when it falls through", async () => {
-    const fetcher = vi.fn((cursor: string | null) =>
-      Promise.resolve({ items: [cursor ?? "first"] }),
+  it("forwards params to the underlying fetcher when it falls through", async () => {
+    type Params = { cursor: string | null };
+    const fetcher = vi.fn((params: Params) =>
+      Promise.resolve({ items: [params.cursor ?? "first"] }),
     );
-    const feed = Resource("feed", fetcher);
+    const feed = Resource<{ items: string[] }, Params>("feed", fetcher);
     const { result } = renderHook(() => {
       const actions = useActions();
       return actions.useResource(feed);
     });
 
     await expect(
-      result.current.fetch.unless({ within: ms("5m") }, "abc"),
+      result.current.run.unless({ within: { minutes: 5 } }, { cursor: "abc" }),
     ).resolves.toEqual({ items: ["abc"] });
-    expect(fetcher).toHaveBeenCalledWith("abc");
+    expect(fetcher).toHaveBeenCalledWith({ cursor: "abc" });
+  });
+
+  it("accepts an ISO 8601 duration string for within", async () => {
+    const fetcher = vi.fn(() => Promise.resolve({ name: "Adam" }));
+    const user = Resource("user", fetcher);
+    const { result } = renderHook(() => {
+      const actions = useActions();
+      return actions.useResource(user);
+    });
+
+    await result.current.run();
+    await result.current.run.unless({ within: "PT5M" });
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });

@@ -13,10 +13,8 @@ export { useActions, With } from "./hooks/index.ts";
 export { Resource } from "./resource/index.ts";
 export type {
   ResourceHandle,
-  ResourceDispatch,
-  ResourceSuccess,
-  ResourceFailure,
-  BoundFetch,
+  ResourceFetcher,
+  BoundRun,
   UnlessOptions,
 } from "./resource/index.ts";
 export * as utils from "./utils/index.ts";

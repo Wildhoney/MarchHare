@@ -854,14 +854,14 @@ export type UseActions<
   ): void;
   /**
    * Connects a {@link Resource} declared at module scope to this component.
-   * Returns `{ fetch, cache, fetched }` &ndash; `fetch` triggers a fresh
-   * network call (concurrent calls share the in-flight promise), while
-   * `cache` and `fetched` are read-only snapshots of the most recent
-   * successful response and the time it resolved. The Resource's
-   * `onSuccess` and `onError` callbacks receive `(response, data, dispatch)`
-   * where `data` is this component's reactive `data` proxy.
+   * Returns `{ run, response, at }` &ndash; `run` triggers a fresh network
+   * call (concurrent calls share the in-flight promise), while `response`
+   * and `at` are read-only snapshots of the most recent successful
+   * response and the instant it resolved. The Resource's `onSuccess` and
+   * `onError` callbacks receive `(response, data, dispatch)` where `data`
+   * is this component's reactive `data` proxy.
    *
-   * `cache` and `fetched` are non-reactive &mdash; reading them does not
+   * `response` and `at` are non-reactive &mdash; reading them does not
    * subscribe the component to updates. Drive UI from the model.
    *
    * @example
@@ -869,16 +869,16 @@ export type UseActions<
    * const user = actions.useResource(resources.user);
    *
    * actions.useAction(Actions.Mount, async (context) => {
-   *   const data = await user.fetch();
+   *   const data = await user.run();
    *   context.actions.produce(({ model }) => { model.user = data; });
    * });
    * ```
    */
-  useResource<T, E, Args extends readonly unknown[]>(
-    resource: import("../resource/index.ts").ResourceHandle<T, E, Args>,
+  useResource<T, P extends object>(
+    resource: import("../resource/index.ts").ResourceHandle<T, P>,
   ): {
-    readonly fetch: import("../resource/index.ts").BoundFetch<T, Args>;
-    readonly cache: T | null;
-    readonly fetched: Date | null;
+    readonly run: import("../resource/index.ts").BoundRun<T, P>;
+    readonly response: T | null;
+    readonly at: Temporal.Instant | null;
   };
 };
