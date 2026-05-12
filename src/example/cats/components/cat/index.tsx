@@ -11,7 +11,9 @@ export function Cat({ index }: { index: number }): React.ReactElement {
     <main className={styles.layout}>
       <header className={styles.header}>
         <h1>Cat #{index + 1}</h1>
-        <p className={styles.tagline}>Powered by Chizu, ky &amp; Wayfinder</p>
+        <p className={styles.tagline}>
+          Powered by March Hare, ky &amp; Wayfinder
+        </p>
       </header>
 
       <figure className={styles.figure}>

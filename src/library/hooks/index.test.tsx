@@ -33,9 +33,9 @@ describe("useActions() data callback", () => {
 
       actions.useAction(Actions.Update, (context) => {
         capturedData.external = context.data.external;
-        context.actions.produce((draft) => {
-          draft.model.value = context.data.external;
-        });
+        context.actions.produce(
+          (draft) => void (draft.model.value = context.data.external),
+        );
       });
 
       return actions;
@@ -94,9 +94,9 @@ describe("useActions() data callback", () => {
       actions.useAction(Actions.Update, (context) => {
         // Data should be an empty object when no callback is provided
         dataReceived = typeof context.data === "object";
-        context.actions.produce((draft) => {
-          draft.model.value = "updated";
-        });
+        context.actions.produce(
+          (draft) => void (draft.model.value = "updated"),
+        );
       });
 
       return actions;
@@ -193,9 +193,7 @@ describe("useActions() broadcast action mount behaviour", () => {
       );
 
       actions.useAction(BroadcastActions.Counter, (context, payload) => {
-        context.actions.produce((draft) => {
-          draft.model.count = payload;
-        });
+        context.actions.produce((draft) => void (draft.model.count = payload));
       });
 
       return (
@@ -263,9 +261,7 @@ describe("useActions() broadcast action mount behaviour", () => {
       );
 
       actions.useAction(BroadcastActions.Counter, (context, payload) => {
-        context.actions.produce((draft) => {
-          draft.model.count = payload;
-        });
+        context.actions.produce((draft) => void (draft.model.count = payload));
       });
 
       return (
@@ -357,9 +353,7 @@ describe("useActions() broadcast replay for late-mounting components", () => {
       );
 
       actions.useAction(BroadcastActions.Counter, (context, payload) => {
-        context.actions.produce((draft) => {
-          draft.model.count = payload;
-        });
+        context.actions.produce((draft) => void (draft.model.count = payload));
       });
 
       return (
@@ -523,9 +517,7 @@ describe("useActions() broadcast replay to child rendered after parent mount han
         // Simulate async fetch then dispatch broadcast
         await Promise.resolve();
         context.actions.dispatch(ParentActions.Broadcast.Counter, 42);
-        context.actions.produce((draft) => {
-          draft.model.loading = false;
-        });
+        context.actions.produce((draft) => void (draft.model.loading = false));
       });
 
       if (result[0].loading) return <div data-testid="loading">Loading...</div>;
@@ -739,9 +731,9 @@ describe("useActions() channeled actions", () => {
       actions.useAction(
         UserActions.UserUpdated({ UserId: 1 }),
         (context, payload) => {
-          context.actions.produce((draft) => {
-            draft.model.lastPayload = payload;
-          });
+          context.actions.produce(
+            (draft) => void (draft.model.lastPayload = payload),
+          );
         },
       );
 
@@ -1108,9 +1100,7 @@ describe("useActions() StrictMode resilience", () => {
       });
 
       result.useAction(AnnotatedActions.SetName, (context, name) => {
-        context.actions.produce(({ model }) => {
-          model.name = name;
-        });
+        context.actions.produce(({ model }) => void (model.name = name));
       });
 
       return (
@@ -1231,9 +1221,7 @@ describe("useActions() context.actions.resolution", () => {
           BroadcastReadActions.Name,
         );
         readValue = value;
-        context.actions.produce(({ model }) => {
-          model.result = value;
-        });
+        context.actions.produce(({ model }) => void (model.result = value));
       });
 
       return <div data-testid="result">{result[0].result ?? "null"}</div>;
@@ -1411,23 +1399,25 @@ describe("useActions() context.actions.resolution", () => {
       // Handle the broadcast: annotate twice then settle after async work.
       actions.useAction(BroadcastReadActions.Name, async (context, name) => {
         // Annotate twice to simulate multiple pending ops.
-        context.actions.produce(({ model, inspect }) => {
-          model.name = inspect.annotate(Operation.Update, name);
-        });
-        context.actions.produce(({ model, inspect }) => {
-          model.name = inspect.annotate(Operation.Update, name);
-        });
+        context.actions.produce(
+          ({ model, inspect }) =>
+            void (model.name = inspect.annotate(Operation.Update, name)),
+        );
+        context.actions.produce(
+          ({ model, inspect }) =>
+            void (model.name = inspect.annotate(Operation.Update, name)),
+        );
 
         // Settle after async work.
         await new Promise((r) => setTimeout(r, 50));
-        context.actions.produce(({ model }) => {
-          model.name = "settled-value";
-        });
+        context.actions.produce(
+          ({ model }) => void (model.name = "settled-value"),
+        );
 
         await new Promise((r) => setTimeout(r, 50));
-        context.actions.produce(({ model }) => {
-          model.name = "settled-value";
-        });
+        context.actions.produce(
+          ({ model }) => void (model.name = "settled-value"),
+        );
       });
 
       // Read should await until the annotations on `name` have settled.
@@ -1605,9 +1595,9 @@ describe("useActions() context.model freshness", () => {
       const actions = useActions<ItemModel, typeof ItemActions>(itemModel);
 
       actions.useAction(ItemActions.Add, (context, item) => {
-        context.actions.produce((draft) => {
-          draft.model.items = [...draft.model.items, item];
-        });
+        context.actions.produce(
+          (draft) => void (draft.model.items = [...draft.model.items, item]),
+        );
       });
 
       actions.useAction(ItemActions.Process, (context) => {
@@ -1677,9 +1667,7 @@ describe("useActions() void actions", () => {
       const actions = useActions<LocalModel, void>({ count: 0 });
 
       actions.useAction(Mount, (context) => {
-        context.actions.produce(({ model }) => {
-          model.count = 42;
-        });
+        context.actions.produce(({ model }) => void (model.count = 42));
       });
 
       return actions;
@@ -2458,9 +2446,7 @@ describe("useActions() awaitable dispatch", () => {
         executionOrder.push("dispatch:start");
         await context.actions.dispatch(PaymentActions.PaymentSent);
         executionOrder.push("dispatch:settled");
-        context.actions.produce(({ model }) => {
-          model.loading = false;
-        });
+        context.actions.produce(({ model }) => void (model.loading = false));
         executionOrder.push("loading:false");
       });
 
@@ -2600,9 +2586,7 @@ describe("useActions() produce implicit return safety", () => {
       });
 
       actions.useAction(ImplicitActions.SetName, (context, name) => {
-        context.actions.produce((draft) => {
-          draft.model.name = name;
-        });
+        context.actions.produce((draft) => void (draft.model.name = name));
       });
 
       return actions;

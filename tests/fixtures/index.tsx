@@ -62,7 +62,7 @@ function App() {
   if (fixtureName === "index") {
     return (
       <div data-testid="fixture-index">
-        <h1>Chizu E2E Test Fixtures</h1>
+        <h1>March Hare E2E Test Fixtures</h1>
         <ul>
           {Object.keys(fixtures).map((name) => (
             <li key={name}>

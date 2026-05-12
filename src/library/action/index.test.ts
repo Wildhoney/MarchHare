@@ -8,7 +8,7 @@ describe("Action (unicast)", () => {
     expect(typeof action).toBe("function");
     expect(Brand.Action in action).toBe(true);
     expect(getActionSymbol(action).toString()).toBe(
-      "Symbol(chizu.action/increment)",
+      "Symbol(march-hare.action/increment)",
     );
   });
 
@@ -27,7 +27,7 @@ describe("Action (broadcast)", () => {
     expect(typeof action).toBe("function");
     expect(Brand.Action in action).toBe(true);
     expect(getActionSymbol(action).toString()).toBe(
-      "Symbol(chizu.action/broadcast/signed-out)",
+      "Symbol(march-hare.action/broadcast/signed-out)",
     );
   });
 });
@@ -38,7 +38,7 @@ describe("Action (multicast)", () => {
     expect(typeof action).toBe("function");
     expect(Brand.Action in action).toBe(true);
     expect(getActionSymbol(action).toString()).toBe(
-      "Symbol(chizu.action/multicast/update)",
+      "Symbol(march-hare.action/multicast/update)",
     );
   });
 });

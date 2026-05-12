@@ -1,13 +1,13 @@
 <div align="center">
   <img src="/media/logo-v2.png" width="475" />
 
-[![Checks](https://github.com/Wildhoney/Chizu/actions/workflows/checks.yml/badge.svg)](https://github.com/Wildhoney/Chizu/actions/workflows/checks.yml)
+[![Checks](https://github.com/Wildhoney/march-hare/actions/workflows/checks.yml/badge.svg)](https://github.com/Wildhoney/march-hare/actions/workflows/checks.yml)
 
 </div>
 
 Strongly typed React framework using generators and efficiently updated views alongside the publish-subscribe pattern.
 
-**[View Live Demo →](https://wildhoney.github.io/Chizu/)**
+**[View Live Demo →](https://wildhoney.github.io/march-hare/)**
 
 ## Contents
 
@@ -39,7 +39,7 @@ For advanced topics, see the [recipes directory](./recipes/).
 We dispatch the `Actions.Name` event upon clicking the "Sign in" button and within the component we subscribe to that same event via `useActions` so that when it's triggered it updates the model with the payload &ndash; in the React component we render `model.name`. The `With.Update` helper binds the action's payload directly to a model property.
 
 ```tsx
-import { useActions, Action, With } from "chizu";
+import { useActions, Action, With } from "march-hare";
 
 type Model = {
   name: string | null;
@@ -74,15 +74,14 @@ When you need to do more than just assign the payload &ndash; such as making an 
 
 ```tsx
 actions.useAction(Actions.Name, async (context) => {
-  context.actions.produce((draft) => {
-    draft.model.name = context.actions.annotate(Op.Update, null);
-  });
+  context.actions.produce(
+    (draft) =>
+      void (draft.model.name = context.actions.annotate(Op.Update, null)),
+  );
 
   const name = await fetch(api.user());
 
-  context.actions.produce((draft) => {
-    draft.model.name = name;
-  });
+  context.actions.produce((draft) => void (draft.model.name = name));
 });
 ```
 
@@ -108,7 +107,7 @@ For more details, see the [referential equality recipe](./recipes/referential-eq
 Both the model and actions type parameters default to `void`, so you can call `useActions()` with no generics at all when neither is needed:
 
 ```tsx
-import { useActions, Lifecycle } from "chizu";
+import { useActions, Lifecycle } from "march-hare";
 
 class Actions {
   static Mount = Lifecycle.Mount();
@@ -124,7 +123,7 @@ actions.useAction(Actions.Mount, () => {
 If your component doesn't need local state but still needs to dispatch or listen to typed actions, pass `void` as the model type. No initial model is required:
 
 ```tsx
-import { useActions, Action, Lifecycle } from "chizu";
+import { useActions, Action, Lifecycle } from "march-hare";
 
 export class Actions {
   static Ping = Action("Ping");
@@ -158,15 +157,14 @@ class Actions {
 
 ```tsx
 actions.useAction(Actions.Profile, async (context) => {
-  context.actions.produce((draft) => {
-    draft.model.name = context.actions.annotate(Op.Update, null);
-  });
+  context.actions.produce(
+    (draft) =>
+      void (draft.model.name = context.actions.annotate(Op.Update, null)),
+  );
 
   const name = await fetch(api.user());
 
-  context.actions.produce((draft) => {
-    draft.model.name = name;
-  });
+  context.actions.produce((draft) => void (draft.model.name = name));
 
   context.actions.dispatch(Actions.Broadcast.Name, name);
 });
@@ -178,9 +176,7 @@ Once we have the broadcast action, if we want to listen for it and perform anoth
 actions.useAction(Actions.Broadcast.Name, async (context, name) => {
   const friends = await fetch(api.friends(name));
 
-  context.actions.produce((draft) => {
-    draft.model.friends = friends;
-  });
+  context.actions.produce((draft) => void (draft.model.friends = friends));
 });
 ```
 
@@ -191,9 +187,7 @@ actions.useAction(Actions.FetchFriends, async (context) => {
   const name = await context.actions.resolution(Actions.Broadcast.Name);
   if (!name) return;
   const friends = await fetch(api.friends(name));
-  context.actions.produce(({ model }) => {
-    model.friends = friends;
-  });
+  context.actions.produce(({ model }) => void (model.friends = friends));
 });
 ```
 
@@ -215,9 +209,7 @@ actions.useAction(Actions.Mount, async (context) => {
   await context.actions.dispatch(Actions.Broadcast.PaymentSent);
 
   // Safe to update local state now — upstream work is done.
-  context.actions.produce(({ model }) => {
-    model.loading = false;
-  });
+  context.actions.produce(({ model }) => void (model.loading = false));
 });
 ```
 
@@ -245,27 +237,25 @@ For remote data, declare a `Resource` at module scope &ndash; same shape as `Act
 
 ```ts
 // resources.ts
-import { Resource } from "chizu";
+import { Resource } from "march-hare";
 
 export const user = Resource("user", () => ky.get("/api/user").json<User>());
 ```
 
 ```tsx
 // actions.ts
-import * as chizu from "chizu";
+import * as marchHare from "march-hare";
 import * as resource from "./resources";
 
 export function useActions() {
-  const actions = chizu.useActions<Model, typeof Actions>(initialModel);
+  const actions = marchHare.useActions<Model, typeof Actions>(initialModel);
 
   const user = actions.useResource(resource.user);
 
   actions.useAction(Actions.Mount, async (context) => {
     const data = await user.run.if({ over: { minutes: 5 } });
 
-    context.actions.produce(({ model }) => {
-      model.user = data;
-    });
+    context.actions.produce(({ model }) => void (model.user = data));
   });
 
   return actions;
@@ -282,9 +272,7 @@ export const user = Resource("user", () => ky.get("/api/user").json<User>());
 actions.useAction(Actions.Mount, async (context) => {
   const data = await user.run();
   await context.actions.dispatch(Actions.Broadcast.UserUpdated, data);
-  context.actions.produce(({ model }) => {
-    model.user = data;
-  });
+  context.actions.produce(({ model }) => void (model.user = data));
 });
 ```
 
@@ -311,9 +299,7 @@ For typed failure routing, wrap the call in `try/catch` and use `instanceof` &nd
 actions.useAction(Actions.Mount, async (context) => {
   try {
     const data = await user.run();
-    context.actions.produce(({ model }) => {
-      model.user = data;
-    });
+    context.actions.produce(({ model }) => void (model.user = data));
   } catch (error) {
     if (error instanceof RateLimitedError) {
       await context.actions.dispatch(
@@ -367,7 +353,7 @@ Channel values support non-nullable primitives: `string`, `number`, `boolean`, o
 For scoped communication between component groups, use multicast actions with the `withScope` HOC. Each multicast action defines its own scope &ndash; pass the same action to `withScope` and to `dispatch`, no separate scope name required:
 
 ```tsx
-import { Action, Distribution, withScope } from "chizu";
+import { Action, Distribution, withScope } from "march-hare";
 
 // Group multicast actions on a class named `Scope`.
 class Scope {
@@ -401,7 +387,7 @@ See the [multicast recipe](./recipes/multicast-actions.md) for more details.
 For coordinating between async handlers without re-rendering the JSX tree, use the per-`<Boundary>` mode handle returned by `useMode()`. Thread it through the `useActions` data callback so it shows up as `context.data.mode` inside handlers, fully typed. Mode is **not** reactive &mdash; drive view state through the model, not mode.
 
 ```ts
-import * as chizu from "chizu";
+import * as marchHare from "march-hare";
 
 enum Mode {
   Idle,
@@ -409,10 +395,10 @@ enum Mode {
 }
 
 export function useActions() {
-  const mode = chizu.useMode<Mode>();
+  const mode = marchHare.useMode<Mode>();
   // Spell the data shape as the third generic so `context.data.mode` keeps
   // its concrete type inside handlers.
-  const actions = chizu.useActions<
+  const actions = marchHare.useActions<
     Model,
     typeof Actions,
     { mode: typeof mode }
@@ -436,7 +422,7 @@ export function useActions() {
 Toggling boolean UI state &ndash; modals, sidebars, drawers &ndash; is one of the most common patterns. Bind a unicast action to a boolean field on the model with `With.Invert`:
 
 ```tsx
-import { useActions, Action, With } from "chizu";
+import { useActions, Action, With } from "march-hare";
 
 type Model = {
   paymentDialog: boolean;

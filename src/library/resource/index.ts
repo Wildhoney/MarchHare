@@ -93,7 +93,7 @@ export type ResourceHandle<T, P extends object = Record<never, never>> = {
  *
  * @example
  * ```ts
- * import { Resource } from "chizu";
+ * import { Resource } from "march-hare";
  *
  * export const feed = Resource<Page<Item>, { cursor: string | null }>(
  *   "feed",

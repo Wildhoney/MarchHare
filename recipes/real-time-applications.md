@@ -1,11 +1,11 @@
 # Real-time applications
 
-Chizu's lifecycle actions make it easy to integrate with real-time data sources like Server-Sent Events (SSE), WebSockets, or any event-based API. Use `Lifecycle.Mount()` to establish connections and `Lifecycle.Unmount()` to clean them up.
+March Hare's lifecycle actions make it easy to integrate with real-time data sources like Server-Sent Events (SSE), WebSockets, or any event-based API. Use `Lifecycle.Mount()` to establish connections and `Lifecycle.Unmount()` to clean them up.
 
 Here's an example that tracks website visitors in real-time using SSE:
 
 ```ts
-import { useActions, Lifecycle, Action } from "chizu";
+import { useActions, Lifecycle, Action } from "march-hare";
 
 type Country = { name: string; flag: string; timestamp: number };
 
@@ -38,9 +38,7 @@ export function useVisitorActions() {
         JSON.parse(event.data) as Country,
       );
     });
-    context.actions.produce((draft) => {
-      draft.model.source = source;
-    });
+    context.actions.produce((draft) => void (draft.model.source = source));
   });
 
   actions.useAction(Actions.Visitor, (context, country) => {
@@ -65,4 +63,4 @@ Key patterns demonstrated:
 - **Cleanup in `Lifecycle.Unmount()`** &ndash; Close the connection when the component unmounts to prevent memory leaks.
 - **All handlers use `actions.useAction`** &ndash; Lifecycle handlers benefit from the same stable reference pattern as regular actions, with types pre-baked from the `useActions` call.
 
-See the full implementation in the [Visitor example source code](https://github.com/Wildhoney/Chizu/blob/main/src/example/visitor/actions.ts).
+See the full implementation in the [Visitor example source code](https://github.com/Wildhoney/march-hare/blob/main/src/example/visitor/actions.ts).

@@ -85,29 +85,33 @@ function useRule8Actions() {
 
   // Synchronous handler
   actions.useAction(HandlerActions.SyncAction, (context, value) => {
-    context.actions.produce((draft) => {
-      draft.model.syncResult = `sync: ${value}`;
-    });
+    context.actions.produce(
+      (draft) => void (draft.model.syncResult = `sync: ${value}`),
+    );
   });
 
   // Asynchronous handler
   actions.useAction(HandlerActions.AsyncAction, async (context, value) => {
     await new Promise((resolve) => setTimeout(resolve, 200));
-    context.actions.produce((draft) => {
-      draft.model.asyncResult = `async: ${value}`;
-    });
+    context.actions.produce(
+      (draft) => void (draft.model.asyncResult = `async: ${value}`),
+    );
   });
 
   // Finite generator handler
   actions.useAction(HandlerActions.GeneratorAction, function* (context, items) {
-    context.actions.produce((draft) => {
-      draft.model.generatorResults = [];
-    });
+    context.actions.produce(
+      (draft) => void (draft.model.generatorResults = []),
+    );
     for (const item of items) {
       yield; // Process one at a time
-      context.actions.produce((draft) => {
-        draft.model.generatorResults = [...draft.model.generatorResults, item];
-      });
+      context.actions.produce(
+        (draft) =>
+          void (draft.model.generatorResults = [
+            ...draft.model.generatorResults,
+            item,
+          ]),
+      );
     }
   });
 
@@ -124,14 +128,10 @@ function useRule8Actions() {
       while (!signal.aborted) {
         yield utils.sleep(300, signal);
         if (signal.aborted) break;
-        context.actions.produce((draft) => {
-          draft.model.pollCount += 1;
-        });
+        context.actions.produce((draft) => void (draft.model.pollCount += 1));
       }
 
-      context.actions.produce((draft) => {
-        draft.model.isPolling = false;
-      });
+      context.actions.produce((draft) => void (draft.model.isPolling = false));
     },
   );
 
@@ -143,9 +143,7 @@ function useRule8Actions() {
       }
     }
     // Immediately update state
-    context.actions.produce((draft) => {
-      draft.model.isPolling = false;
-    });
+    context.actions.produce((draft) => void (draft.model.isPolling = false));
   });
 
   return actions;
@@ -177,9 +175,9 @@ function useRule10Actions() {
   actions.useAction(
     ChanneledActions.UserUpdated({ UserId: 1 }),
     (context, user) => {
-      context.actions.produce((draft) => {
-        draft.model.user1Name = user.name;
-      });
+      context.actions.produce(
+        (draft) => void (draft.model.user1Name = user.name),
+      );
     },
   );
 
@@ -187,17 +185,15 @@ function useRule10Actions() {
   actions.useAction(
     ChanneledActions.UserUpdated({ UserId: 2 }),
     (context, user) => {
-      context.actions.produce((draft) => {
-        draft.model.user2Name = user.name;
-      });
+      context.actions.produce(
+        (draft) => void (draft.model.user2Name = user.name),
+      );
     },
   );
 
   // Handler for ALL UserUpdated dispatches (plain action)
   actions.useAction(ChanneledActions.UserUpdated, (context) => {
-    context.actions.produce((draft) => {
-      draft.model.allUsersUpdates += 1;
-    });
+    context.actions.produce((draft) => void (draft.model.allUsersUpdates += 1));
   });
 
   return actions;
@@ -216,9 +212,9 @@ function useRule12Actions(query: string) {
     // Capture query at dispatch time (this would be stale after await)
     const queryAtDispatch = context.data.query;
 
-    context.actions.produce((draft) => {
-      draft.model.fetchResult = "loading";
-    });
+    context.actions.produce(
+      (draft) => void (draft.model.fetchResult = "loading"),
+    );
 
     await new Promise((resolve) => setTimeout(resolve, 500));
 

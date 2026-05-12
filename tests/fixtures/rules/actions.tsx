@@ -111,15 +111,14 @@ function useBroadcastReceiverHook() {
   });
 
   actions.useAction(BroadcastActions.UserLoggedIn, (context, user) => {
-    context.actions.produce((draft) => {
-      draft.model.user = user;
-    });
+    context.actions.produce((draft) => void (draft.model.user = user));
   });
 
   actions.useAction(BroadcastActions.GlobalMessage, (context, message) => {
-    context.actions.produce((draft) => {
-      draft.model.messages = [...draft.model.messages, message];
-    });
+    context.actions.produce(
+      (draft) =>
+        void (draft.model.messages = [...draft.model.messages, message]),
+    );
   });
 
   return actions;
@@ -136,16 +135,14 @@ function useMixedActionsHook() {
 
   // Local action handler (unicast)
   actions.useAction(MixedActions.LocalFetch, (context, query) => {
-    context.actions.produce((draft) => {
-      draft.model.local = `Fetched: ${query}`;
-    });
+    context.actions.produce(
+      (draft) => void (draft.model.local = `Fetched: ${query}`),
+    );
   });
 
   // Broadcast action handler (inherited)
   actions.useAction(MixedActions.GlobalMessage, (context, message) => {
-    context.actions.produce((draft) => {
-      draft.model.broadcast = message;
-    });
+    context.actions.produce((draft) => void (draft.model.broadcast = message));
   });
 
   return actions;
@@ -161,17 +158,18 @@ function useDescriptiveActionsHook() {
   });
 
   actions.useAction(DescriptiveActions.FetchUserProfile, (context, userId) => {
-    context.actions.produce((draft) => {
-      draft.model.status = `Fetching user ${userId}`;
-    });
+    context.actions.produce(
+      (draft) => void (draft.model.status = `Fetching user ${userId}`),
+    );
   });
 
   actions.useAction(
     DescriptiveActions.UpdateCartQuantity,
     (context, update) => {
-      context.actions.produce((draft) => {
-        draft.model.status = `Updated item ${update.itemId} to qty ${update.quantity}`;
-      });
+      context.actions.produce(
+        (draft) =>
+          void (draft.model.status = `Updated item ${update.itemId} to qty ${update.quantity}`),
+      );
     },
   );
 
@@ -182,9 +180,9 @@ function useDescriptiveActionsHook() {
       if (payment.amount < 0) {
         throw new Error("Invalid payment amount");
       }
-      context.actions.produce((draft) => {
-        draft.model.status = `Processed $${payment.amount}`;
-      });
+      context.actions.produce(
+        (draft) => void (draft.model.status = `Processed $${payment.amount}`),
+      );
     },
   );
 

@@ -36,17 +36,15 @@ function StrictModeFixture(): React.ReactElement {
   });
 
   result.useAction(Actions.SetName, (context, name) => {
-    context.actions.produce(({ model }) => {
-      model.name = name;
-    });
+    context.actions.produce(({ model }) => void (model.name = name));
   });
 
   result.useAction(Actions.Increment, (context) => {
     handlerCountRef.current++;
     forceRender((n) => n + 1);
-    context.actions.produce((draft) => {
-      draft.model.count = draft.model.count + 1;
-    });
+    context.actions.produce(
+      (draft) => void (draft.model.count = draft.model.count + 1),
+    );
   });
 
   return (

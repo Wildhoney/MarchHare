@@ -5,20 +5,20 @@
  * @internal
  */
 export const describe = {
-  /** Unicast action description. `describe.action("Fetch")` &rarr; `"chizu.action/Fetch"` */
-  action: (name = "") => `chizu.action/${name}`,
-  /** Broadcast action description. `describe.broadcast("User")` &rarr; `"chizu.action/broadcast/User"` */
-  broadcast: (name = "") => `chizu.action/broadcast/${name}`,
-  /** Multicast action description. `describe.multicast("Update")` &rarr; `"chizu.action/multicast/Update"` */
-  multicast: (name = "") => `chizu.action/multicast/${name}`,
-  /** Channeled action description. `describe.channel("user")` &rarr; `"chizu.channel/user"` */
-  channel: (name = "") => `chizu.channel/${name}`,
-  /** Cache entry description. `describe.cache("users")` &rarr; `"chizu.cache/users"` */
-  cache: (name = "") => `chizu.cache/${name}`,
-  /** Lifecycle action description. `describe.lifecycle("Mount")` &rarr; `"chizu.action.lifecycle/Mount"` */
-  lifecycle: (name = "") => `chizu.action.lifecycle/${name}`,
+  /** Unicast action description. `describe.action("Fetch")` &rarr; `"march-hare.action/Fetch"` */
+  action: (name = "") => `march-hare.action/${name}`,
+  /** Broadcast action description. `describe.broadcast("User")` &rarr; `"march-hare.action/broadcast/User"` */
+  broadcast: (name = "") => `march-hare.action/broadcast/${name}`,
+  /** Multicast action description. `describe.multicast("Update")` &rarr; `"march-hare.action/multicast/Update"` */
+  multicast: (name = "") => `march-hare.action/multicast/${name}`,
+  /** Channeled action description. `describe.channel("user")` &rarr; `"march-hare.channel/user"` */
+  channel: (name = "") => `march-hare.channel/${name}`,
+  /** Cache entry description. `describe.cache("users")` &rarr; `"march-hare.cache/users"` */
+  cache: (name = "") => `march-hare.cache/${name}`,
+  /** Lifecycle action description. `describe.lifecycle("Mount")` &rarr; `"march-hare.action.lifecycle/Mount"` */
+  lifecycle: (name = "") => `march-hare.action.lifecycle/${name}`,
   /** Mount replay sentinel description. Used to create the {@link replay} symbol. */
-  replay: (name = "") => `chizu/replay${name}`,
+  replay: (name = "") => `march-hare/replay${name}`,
 };
 
 /**

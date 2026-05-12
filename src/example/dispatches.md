@@ -1,6 +1,6 @@
 # Dispatch Relationships
 
-This diagram illustrates the action dispatch flow in the Chizu example application.
+This diagram illustrates the action dispatch flow in the March Hare example application.
 
 ```mermaid
 flowchart TB

@@ -154,9 +154,10 @@ function useRule37Actions() {
     const tempId = utils.pk();
 
     // Optimistically add item with temp id
-    context.actions.produce((draft) => {
-      draft.model.items.push({ id: tempId, name, confirmed: false });
-    });
+    context.actions.produce(
+      (draft) =>
+        void draft.model.items.push({ id: tempId, name, confirmed: false }),
+    );
 
     // Simulate API confirmation
     await utils.sleep(800, context.task.controller.signal);
@@ -237,9 +238,9 @@ function useRule38Actions() {
   actions.useAction(UtilityActions.FetchData, async (context) => {
     const { signal } = context.task.controller;
 
-    context.actions.produce((draft) => {
-      draft.model.fetchStatus = "loading";
-    });
+    context.actions.produce(
+      (draft) => void (draft.model.fetchStatus = "loading"),
+    );
 
     try {
       // Rule 38: Pass abort signal to HTTP requests
@@ -330,9 +331,7 @@ function useRule39Actions() {
       });
     }
 
-    context.actions.produce((draft) => {
-      draft.model.sseConnected = false;
-    });
+    context.actions.produce((draft) => void (draft.model.sseConnected = false));
   });
 
   // Listen for SSE messages
@@ -353,9 +352,7 @@ function useRule39Actions() {
       }
     }
     // Immediately set disconnected state
-    context.actions.produce((draft) => {
-      draft.model.sseConnected = false;
-    });
+    context.actions.produce((draft) => void (draft.model.sseConnected = false));
   });
 
   return actions;

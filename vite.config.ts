@@ -144,8 +144,8 @@ export default defineConfig(({ mode }) => {
           // Library build configuration
           lib: {
             entry: resolve(__dirname, "src/library/index.ts"),
-            name: "Chizu",
-            fileName: "chizu",
+            name: "MarchHare",
+            fileName: "march-hare",
             formats: ["es", "umd"],
           },
           minify: "terser",

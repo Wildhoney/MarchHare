@@ -1,6 +1,6 @@
-# Chizu Rulebook
+# March Hare Rulebook
 
-This document defines the rules and conventions for the Chizu framework—a strongly typed, event-driven React state management library.
+This document defines the rules and conventions for the March Hare framework—a strongly typed, event-driven React state management library.
 
 ---
 
@@ -65,9 +65,7 @@ static Update = Action<CartUpdate>("Update");
 ### Rule 5: Always use `produce()` for state mutations
 
 ```ts
-context.actions.produce((draft) => {
-  draft.model.count = 42;
-});
+context.actions.produce((draft) => void (draft.model.count = 42));
 ```
 
 Never mutate the model directly outside of `produce()`.
@@ -77,9 +75,10 @@ Never mutate the model directly outside of `produce()`.
 Annotations are powered by [Immertation](https://www.npmjs.com/package/immertation), which extends Immer with metadata tracking.
 
 ```ts
-context.actions.produce((draft) => {
-  draft.model.data = context.actions.annotate(Op.Update, newValue);
-});
+context.actions.produce(
+  (draft) =>
+    void (draft.model.data = context.actions.annotate(Op.Update, newValue)),
+);
 ```
 
 Annotations enable `inspect.pending()`, `inspect.settled()`, etc.
@@ -90,9 +89,7 @@ Immertation handles merging. Use this for conditional updates within handlers.
 
 ```ts
 actions.useAction(Actions.Fetch, async (context) => {
-  context.actions.produce((draft) => {
-    draft.model.status = "loading";
-  });
+  context.actions.produce((draft) => void (draft.model.status = "loading"));
 
   const data = await fetchData();
 
@@ -113,9 +110,7 @@ actions.useAction(Actions.Fetch, async (context) => {
 
 ```ts
 actions.useAction(Actions.Set, (context, payload) => {
-  context.actions.produce((draft) => {
-    draft.model.value = payload;
-  });
+  context.actions.produce((draft) => void (draft.model.value = payload));
 });
 ```
 
@@ -124,9 +119,7 @@ actions.useAction(Actions.Set, (context, payload) => {
 ```ts
 actions.useAction(Actions.Fetch, async (context, query) => {
   const data = await fetch(`/api?q=${query}`);
-  context.actions.produce((draft) => {
-    draft.model.data = data;
-  });
+  context.actions.produce((draft) => void (draft.model.data = data));
 });
 ```
 
@@ -147,9 +140,7 @@ actions.useAction(Actions.Poll, function* (context) {
   const { signal } = context.task.controller;
   while (!signal.aborted) {
     const data = yield fetch("/api/status", { signal });
-    context.actions.produce((draft) => {
-      draft.model.status = data;
-    });
+    context.actions.produce((draft) => void (draft.model.status = data));
     yield utils.sleep(5000, signal);
   }
 });
@@ -180,9 +171,7 @@ class Actions {
 actions.useAction(
   Actions.UserUpdated({ UserId: props.userId }),
   (context, user) => {
-    context.actions.produce((draft) => {
-      draft.model.user = user;
-    });
+    context.actions.produce((draft) => void (draft.model.user = user));
   },
 );
 ```
@@ -220,7 +209,7 @@ Define handlers as standalone functions for easier unit testing. Use `Handler` �
 TypeScript doesn't natively support HKTs (types that return types), but `Handler` emulates them using mapped types with indexed access.
 
 ```ts
-import { Action, Handler } from "chizu";
+import { Action, Handler } from "march-hare";
 
 class Actions {
   static SetName = Action<string>("SetName");
@@ -232,15 +221,11 @@ type H = Handler<Model, typeof Actions>;
 
 // "Apply" the HKT via indexed access — H["SetName"] is the handler type
 export const handleSetName: H["SetName"] = (context, name) => {
-  context.actions.produce((draft) => {
-    draft.model.name = name;
-  });
+  context.actions.produce((draft) => void (draft.model.name = name));
 };
 
 export const handleSetAge: H["SetAge"] = (context, age) => {
-  context.actions.produce((draft) => {
-    draft.model.age = age;
-  });
+  context.actions.produce((draft) => void (draft.model.age = age));
 };
 
 // Reference in component
@@ -333,9 +318,7 @@ Access via `context.phase` to conditionally handle actions.
 actions.useAction(Actions.Broadcast.UserUpdated, (context, user) => {
   if (context.phase === Phase.Mounting) {
     // Hydrating from cache — just update state silently
-    context.actions.produce((draft) => {
-      draft.model.user = user;
-    });
+    context.actions.produce((draft) => void (draft.model.user = user));
     return;
   }
 
@@ -385,9 +368,7 @@ class Actions {
 
 // Broadcast: all mounted handlers fire
 actions.useAction(Actions.Broadcast, (context, data) => {
-  context.actions.produce(({ model }) => {
-    model.data = data;
-  });
+  context.actions.produce(({ model }) => void (model.data = data));
 });
 ```
 
@@ -400,9 +381,7 @@ Each component's model should contain exactly the data it requires — nothing m
 type Model = { age: number | null };
 
 actions.useAction(Actions.Broadcast.UserUpdated, (context, user) => {
-  context.actions.produce(({ model }) => {
-    model.age = user.age;
-  });
+  context.actions.produce(({ model }) => void (model.age = user.age));
 });
 ```
 
@@ -432,9 +411,7 @@ actions.dispatch(Actions.UserLoggedIn, user);
 // Later, Component B mounts — its handler receives the cached value
 actions.useAction(Actions.UserLoggedIn, (context, user) => {
   // context.phase === Phase.Mounting (hydrating from cache)
-  context.actions.produce((draft) => {
-    draft.model.currentUser = user;
-  });
+  context.actions.produce((draft) => void (draft.model.currentUser = user));
 });
 ```
 
@@ -520,9 +497,7 @@ actions.useAction(Actions.Fetch, async (context) => {
   const response = await fetch(url, { signal });
 
   // This produce() is a no-op if the component has unmounted
-  context.actions.produce((draft) => {
-    draft.model.data = response;
-  });
+  context.actions.produce((draft) => void (draft.model.data = response));
 });
 ```
 
@@ -648,9 +623,9 @@ interface Todo {
 
 // Create with temporary symbol key for optimistic insert
 const tempId = utils.pk();
-context.actions.produce((draft) => {
-  draft.model.todos.push({ id: tempId, text });
-});
+context.actions.produce(
+  (draft) => void draft.model.todos.push({ id: tempId, text }),
+);
 
 const response = await api.createTodo(text);
 
@@ -677,11 +652,12 @@ actions.useAction(Actions.Increment, (context, payload) => {
 ### Rule 29: Use `Op` to specify annotation operations
 
 ```ts
-import { Op } from "chizu";
+import { Op } from "march-hare";
 
-context.actions.produce((draft) => {
-  draft.model.item = context.actions.annotate(Op.Update, newValue);
-});
+context.actions.produce(
+  (draft) =>
+    void (draft.model.item = context.actions.annotate(Op.Update, newValue)),
+);
 ```
 
 Available operations:
@@ -809,15 +785,19 @@ const isConcrete = utils.pk(id); // boolean — true if not a symbol
 
 ### Rule 38: Prefer `ky` over React Query for HTTP requests
 
-Chizu handles caching (via broadcast actions), loading states (via `inspect`), and cancellation (via `context.task.controller`). React Query's caching layer is redundant. Use [ky](https://github.com/sindresorhus/ky) — a lightweight fetch wrapper.
+March Hare handles caching (via broadcast actions), loading states (via `inspect`), and cancellation (via `context.task.controller`). React Query's caching layer is redundant. Use [ky](https://github.com/sindresorhus/ky) — a lightweight fetch wrapper.
 
 ```ts
 import ky from "ky";
 
 actions.useAction(Actions.FetchUser, async (context, userId) => {
-  context.actions.produce((draft) => {
-    draft.model.user = context.actions.annotate(Op.Update, draft.model.user);
-  });
+  context.actions.produce(
+    (draft) =>
+      void (draft.model.user = context.actions.annotate(
+        Op.Update,
+        draft.model.user,
+      )),
+  );
 
   const user = await ky
     .get(`/api/users/${userId}`, {
@@ -825,16 +805,14 @@ actions.useAction(Actions.FetchUser, async (context, userId) => {
     })
     .json<User>();
 
-  context.actions.produce((draft) => {
-    draft.model.user = user;
-  });
+  context.actions.produce((draft) => void (draft.model.user = user));
 });
 ```
 
 Key benefits:
 
 - **Automatic cancellation** — pass `context.task.controller.signal` to abort on unmount
-- **No duplicate caching** — Chizu's broadcast actions handle cross-component data sharing
+- **No duplicate caching** — March Hare's broadcast actions handle cross-component data sharing
 - **Lightweight** — ky is ~3KB vs React Query's ~40KB
 - **Typed responses** — `.json<T>()` provides type-safe parsing
 
@@ -875,9 +853,7 @@ Consumers receive updates automatically:
 actions.useAction(
   Actions.PriceUpdate({ Symbol: context.data.symbol }),
   (context, price) => {
-    context.actions.produce((draft) => {
-      draft.model.currentPrice = price;
-    });
+    context.actions.produce((draft) => void (draft.model.currentPrice = price));
   },
 );
 ```
@@ -902,9 +878,7 @@ actions.useAction(Actions.FetchPosts, async (context) => {
   const posts = await fetchPosts(user.id, {
     signal: context.task.controller.signal,
   });
-  context.actions.produce(({ model }) => {
-    model.posts = posts;
-  });
+  context.actions.produce(({ model }) => void (model.posts = posts));
 });
 ```
 
@@ -970,7 +944,7 @@ Key details:
 
 ## Anti-Patterns
 
-### Don't use `useEffect` for Chizu patterns
+### Don't use `useEffect` for March Hare patterns
 
 ```ts
 // Wrong
@@ -991,9 +965,7 @@ actions.useAction(Lifecycle.Mount, async (context) => {
 model.count = 5;
 
 // Right
-context.actions.produce((draft) => {
-  draft.model.count = 5;
-});
+context.actions.produce((draft) => void (draft.model.count = 5));
 ```
 
 ### Don't ignore the abort signal in async handlers

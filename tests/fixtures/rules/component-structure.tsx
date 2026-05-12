@@ -199,21 +199,15 @@ function useRule33Actions() {
   });
 
   actions.useAction(LocalActions.UpdateName, (context, name) => {
-    context.actions.produce((draft) => {
-      draft.model.name = name;
-    });
+    context.actions.produce((draft) => void (draft.model.name = name));
   });
 
   actions.useAction(LocalActions.UpdateAge, (context, age) => {
-    context.actions.produce((draft) => {
-      draft.model.age = age;
-    });
+    context.actions.produce((draft) => void (draft.model.age = age));
   });
 
   actions.useAction(LocalActions.UpdateEmail, (context, email) => {
-    context.actions.produce((draft) => {
-      draft.model.email = email;
-    });
+    context.actions.produce((draft) => void (draft.model.email = email));
   });
 
   return actions;
@@ -268,15 +262,11 @@ function useRule34Actions() {
   });
 
   actions.useAction(LocalActions.UpdateName, (context, name) => {
-    context.actions.produce((draft) => {
-      draft.model.name = name;
-    });
+    context.actions.produce((draft) => void (draft.model.name = name));
   });
 
   actions.useAction(LocalActions.UpdateEmail, (context, email) => {
-    context.actions.produce((draft) => {
-      draft.model.email = email;
-    });
+    context.actions.produce((draft) => void (draft.model.email = email));
   });
 
   return actions;
@@ -350,15 +340,11 @@ function useRule35Actions() {
   });
 
   actions.useAction(LocalActions.UpdateName, (context, name) => {
-    context.actions.produce((draft) => {
-      draft.model.name = name;
-    });
+    context.actions.produce((draft) => void (draft.model.name = name));
   });
 
   actions.useAction(LocalActions.UpdateEmail, (context, email) => {
-    context.actions.produce((draft) => {
-      draft.model.email = email;
-    });
+    context.actions.produce((draft) => void (draft.model.email = email));
   });
 
   return actions;

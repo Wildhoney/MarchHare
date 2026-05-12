@@ -1,7 +1,7 @@
 /**
  * @fileoverview Unit tests for the Visitor component.
  *
- * Demonstrates testing patterns for SSE (Server-Sent Events) with Chizu:
+ * Demonstrates testing patterns for SSE (Server-Sent Events) with March Hare:
  * - Mock `EventSource` to simulate server connections and events
  * - Use `Lifecycle.Mount` to establish connections on component mount
  * - Use `Lifecycle.Unmount` to clean up connections

@@ -89,9 +89,13 @@ function useRule13Actions() {
     if (value === "throw") {
       throw new Error("Test error from interaction");
     }
-    context.actions.produce((draft) => {
-      draft.model.events = [...draft.model.events, `interaction:${value}`];
-    });
+    context.actions.produce(
+      (draft) =>
+        void (draft.model.events = [
+          ...draft.model.events,
+          `interaction:${value}`,
+        ]),
+    );
   });
 
   return actions;
@@ -106,9 +110,9 @@ function useRule14Actions() {
 
   actions.useAction(LifecycleActions.Mount, (context) => {
     // During mount, context.phase should be "mounting"
-    context.actions.produce((draft) => {
-      draft.model.phaseAtMount = context.phase;
-    });
+    context.actions.produce(
+      (draft) => void (draft.model.phaseAtMount = context.phase),
+    );
   });
 
   actions.useAction(LifecycleActions.UserInteraction, (context, value) => {

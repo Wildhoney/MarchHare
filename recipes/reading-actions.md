@@ -16,9 +16,7 @@ actions.useAction(Actions.FetchPosts, async (context) => {
   const posts = await fetchPosts(user.id, {
     signal: context.task.controller.signal,
   });
-  context.actions.produce(({ model }) => {
-    model.posts = posts;
-  });
+  context.actions.produce(({ model }) => void (model.posts = posts));
 });
 ```
 

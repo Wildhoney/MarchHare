@@ -5,7 +5,7 @@ Model annotations allow you to track the state of async operations on individual
 Use `context.actions.annotate` to mark a value with an operation type. The `produce` callback receives a draft object with `model` and `inspect` properties, allowing you to read the current draft value when making changes:
 
 ```ts
-import { Op } from "chizu";
+import { Op } from "march-hare";
 
 context.actions.produce((draft) => {
   draft.model.count = context.actions.annotate(

@@ -52,28 +52,28 @@ export type AnyAction = ActionId | BrandedObject;
  */
 export class Brand {
   /** Brand key for HandlerPayload type */
-  static readonly Payload = Symbol("chizu.brand/Payload");
+  static readonly Payload = Symbol("march-hare.brand/Payload");
   /** Brand key for BroadcastPayload type */
-  static readonly Broadcast = Symbol("chizu.brand/Broadcast");
+  static readonly Broadcast = Symbol("march-hare.brand/Broadcast");
   /** Brand key for MulticastPayload type */
-  static readonly Multicast = Symbol("chizu.brand/Multicast");
+  static readonly Multicast = Symbol("march-hare.brand/Multicast");
   /** Access the underlying symbol from an action */
-  static readonly Action = Symbol("chizu.brand/Action");
+  static readonly Action = Symbol("march-hare.brand/Action");
   /** Identifies channeled actions (result of calling Action(channel)) */
-  static readonly Channel = Symbol("chizu.brand/Channel");
+  static readonly Channel = Symbol("march-hare.brand/Channel");
 }
 
 /**
  * Creates a lifecycle action with the given name.
  * Produces a branded `HandlerPayload` backed by a fresh
- * `Symbol("chizu.action.lifecycle/${name}")` on each call.
+ * `Symbol("march-hare.action.lifecycle/${name}")` on each call.
  *
  * @internal
  */
 function createLifecycleAction<P = never, C extends Filter = never>(
   name: string,
 ): HandlerPayload<P, C> {
-  const symbol = Symbol(`chizu.action.lifecycle/${name}`);
+  const symbol = Symbol(`march-hare.action.lifecycle/${name}`);
   const action = function (channel: C): ChanneledAction<P, C> {
     return {
       [Brand.Action]: symbol,
@@ -735,7 +735,7 @@ type OwnKeys<AC> = Exclude<keyof AC & string, "prototype">;
  *
  * @example
  * ```ts
- * import { Action, Distribution, Handlers } from "chizu";
+ * import { Action, Distribution, Handlers } from "march-hare";
  *
  * class BroadcastActions {
  *   static PaymentSent = Action("PaymentSent", Distribution.Broadcast);

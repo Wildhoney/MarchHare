@@ -181,7 +181,7 @@ export function useData<P extends Props>(props: P): P {
  *
  * @example
  * ```ts
- * import { With } from "chizu";
+ * import { With } from "march-hare";
  *
  * type Model = { name: string; sidebar: boolean };
  *

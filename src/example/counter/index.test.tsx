@@ -1,7 +1,7 @@
 /**
  * @fileoverview Unit tests for the Counter component.
  *
- * Demonstrates testing patterns for Chizu components:
+ * Demonstrates testing patterns for March Hare components:
  * - Synchronous actions (decrement) update state immediately
  * - Asynchronous actions (increment) show pending state via annotations
  * - Use `vi.useFakeTimers()` to control async timing in tests

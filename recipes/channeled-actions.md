@@ -7,7 +7,7 @@ Channeled actions allow targeted event delivery by subscribing with a channel ob
 Define a channel type as the second generic argument and call the action to create a channeled dispatch:
 
 ```tsx
-import { useActions, Action } from "chizu";
+import { useActions, Action } from "march-hare";
 
 type User = { id: number; name: string };
 
@@ -23,9 +23,7 @@ function UserCard({ userId }: { userId: number }) {
   actions.useAction(
     Actions.UserUpdated({ UserId: userId }),
     (context, user) => {
-      context.actions.produce((draft) => {
-        draft.model.user = user;
-      });
+      context.actions.produce((draft) => void (draft.model.user = user));
     },
   );
 
@@ -109,9 +107,7 @@ class Actions {
 actions.useAction(
   Actions.UserUpdated({ OrgId: props.orgId, Role: "admin" }),
   (context, user) => {
-    context.actions.produce((draft) => {
-      draft.model.user = user;
-    });
+    context.actions.produce((draft) => void (draft.model.user = user));
   },
 );
 
@@ -122,7 +118,7 @@ actions.dispatch(Actions.UserUpdated({ OrgId: 42, Role: "admin" }), user);
 ## Real-World Example: Multi-User Dashboard
 
 ```tsx
-import { useActions, Action, Lifecycle, Distribution } from "chizu";
+import { useActions, Action, Lifecycle, Distribution } from "march-hare";
 
 type User = { id: number; name: string; status: string };
 type Model = { user: User | null };
@@ -164,9 +160,7 @@ function UserCard({ userId }: { userId: number }) {
   actions.useAction(
     Actions.UserUpdated({ UserId: userId }),
     (context, user) => {
-      context.actions.produce((draft) => {
-        draft.model.user = user;
-      });
+      context.actions.produce((draft) => void (draft.model.user = user));
     },
   );
 

@@ -63,17 +63,21 @@ function useRule6Actions() {
 
   actions.useAction(Actions.UpdateWithAnnotation, async (context, newData) => {
     // Mark the update as pending with an annotation
-    context.actions.produce((draft) => {
-      draft.model.annotatedData = context.actions.annotate(Op.Update, newData);
-    });
+    context.actions.produce(
+      (draft) =>
+        void (draft.model.annotatedData = context.actions.annotate(
+          Op.Update,
+          newData,
+        )),
+    );
 
     // Simulate async operation
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     // Complete the update
-    context.actions.produce((draft) => {
-      draft.model.annotatedData = newData;
-    });
+    context.actions.produce(
+      (draft) => void (draft.model.annotatedData = newData),
+    );
   });
 
   return actions;
@@ -91,33 +95,29 @@ function useRule7Actions() {
 
   actions.useAction(Actions.NestedUpdate, (context, { step1, step2 }) => {
     // First produce() call
-    context.actions.produce((draft) => {
-      draft.model.step1Result = step1;
-    });
+    context.actions.produce((draft) => void (draft.model.step1Result = step1));
 
     // Second (nested) produce() call - Immertation handles merging
-    context.actions.produce((draft) => {
-      draft.model.step2Result = step2;
-    });
+    context.actions.produce((draft) => void (draft.model.step2Result = step2));
   });
 
   actions.useAction(Actions.MultiStepAsync, async (context) => {
     // Multiple produce() calls in async handler
-    context.actions.produce((draft) => {
-      draft.model.asyncStatus = "loading";
-    });
+    context.actions.produce(
+      (draft) => void (draft.model.asyncStatus = "loading"),
+    );
 
     await new Promise((resolve) => setTimeout(resolve, 300));
 
-    context.actions.produce((draft) => {
-      draft.model.asyncStatus = "processing";
-    });
+    context.actions.produce(
+      (draft) => void (draft.model.asyncStatus = "processing"),
+    );
 
     await new Promise((resolve) => setTimeout(resolve, 300));
 
-    context.actions.produce((draft) => {
-      draft.model.asyncStatus = "complete";
-    });
+    context.actions.produce(
+      (draft) => void (draft.model.asyncStatus = "complete"),
+    );
   });
 
   return actions;

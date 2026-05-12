@@ -16,9 +16,7 @@ export function useVisitorActions() {
     const source = new EventSource("/visitors");
 
     source.addEventListener("connected", () => {
-      context.actions.produce((draft) => {
-        draft.model.connected = true;
-      });
+      context.actions.produce((draft) => void (draft.model.connected = true));
     });
 
     source.addEventListener("visitor", (event) => {
@@ -32,9 +30,7 @@ export function useVisitorActions() {
       source.close();
     });
 
-    context.actions.produce((draft) => {
-      draft.model.source = source;
-    });
+    context.actions.produce((draft) => void (draft.model.source = source));
   });
 
   actions.useAction(Actions.Visitor, (context, country) => {

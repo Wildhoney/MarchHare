@@ -22,7 +22,7 @@ describe("getActionSymbol()", () => {
   it("should extract symbol from action", () => {
     const action = Action("increment");
     expect(getActionSymbol(action).toString()).toBe(
-      "Symbol(chizu.action/increment)",
+      "Symbol(march-hare.action/increment)",
     );
   });
 
@@ -89,7 +89,7 @@ describe("getName()", () => {
   });
 
   it("should return unknown for malformed symbols", () => {
-    const malformed = <symbol>(<unknown>Symbol("not-a-chizu-action"));
+    const malformed = <symbol>(<unknown>Symbol("not-a-march-hare-action"));
     expect(getName(malformed)).toBe("unknown");
   });
 });

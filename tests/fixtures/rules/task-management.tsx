@@ -154,9 +154,9 @@ function useRule21Actions() {
   });
 
   actions.useAction(TaskActions.GetTaskCount, (context) => {
-    context.actions.produce((draft) => {
-      draft.model.activeTaskCount = context.tasks.size;
-    });
+    context.actions.produce(
+      (draft) => void (draft.model.activeTaskCount = context.tasks.size),
+    );
   });
 
   return actions;
@@ -179,9 +179,9 @@ function useUnmountableChildActions(onLog: (msg: string) => void) {
   actions.useAction(TaskActions.SlowOperation, async (context) => {
     const { signal } = context.task.controller;
 
-    context.actions.produce((draft) => {
-      draft.model.slowOpStatus = "started";
-    });
+    context.actions.produce(
+      (draft) => void (draft.model.slowOpStatus = "started"),
+    );
     onLog("started");
 
     try {
@@ -189,9 +189,9 @@ function useUnmountableChildActions(onLog: (msg: string) => void) {
       await utils.sleep(2000, signal);
 
       // This produce() should be a no-op if unmounted
-      context.actions.produce((draft) => {
-        draft.model.slowOpStatus = "completed";
-      });
+      context.actions.produce(
+        (draft) => void (draft.model.slowOpStatus = "completed"),
+      );
       onLog("completed");
     } catch {
       onLog("aborted");

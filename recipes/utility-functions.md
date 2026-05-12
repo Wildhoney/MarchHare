@@ -1,9 +1,9 @@
 # Utility functions
 
-Chizu provides a set of utility functions via the `utils` namespace to help with common patterns. Each utility also has a shorthand Greek letter alias for concise code.
+March Hare provides a set of utility functions via the `utils` namespace to help with common patterns. Each utility also has a shorthand Greek letter alias for concise code.
 
 ```ts
-import { utils } from "chizu";
+import { utils } from "march-hare";
 ```
 
 ## `utils.set(property)` / `utils.λ`
@@ -25,9 +25,10 @@ Generates or validates primary keys. Particularly useful for optimistic updates 
 ```ts
 // Optimistic update: add item with placeholder ID
 const id = utils.pk();
-context.actions.produce((draft) => {
-  draft.model.todos.push({ id, text: "New todo", status: "pending" });
-});
+context.actions.produce(
+  (draft) =>
+    void draft.model.todos.push({ id, text: "New todo", status: "pending" }),
+);
 
 // Later when the API responds, find and update with real ID
 const response = await api.createTodo({ text: "New todo" });
@@ -62,9 +63,7 @@ actions.useAction(Actions.WaitForResult, async (context) => {
   await utils.poll(2_000, signal, async () => {
     const response = await fetch("/api/job/status", { signal });
     const { status } = await response.json();
-    context.actions.produce(({ model }) => {
-      model.status = status;
-    });
+    context.actions.produce(({ model }) => void (model.status = status));
     return status === "complete";
   });
 });

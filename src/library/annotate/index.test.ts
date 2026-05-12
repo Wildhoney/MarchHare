@@ -115,9 +115,7 @@ describe("annotate()", () => {
       const actions = useActions<Model, typeof _Actions>(model);
 
       actions.useAction(_Actions.SetName, (context, name) => {
-        context.actions.produce(({ model }) => {
-          model.name = name;
-        });
+        context.actions.produce(({ model }) => void (model.name = name));
       });
 
       return actions;

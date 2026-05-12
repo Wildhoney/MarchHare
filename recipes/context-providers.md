@@ -1,13 +1,13 @@
 # Context providers
 
-Chizu provides context providers for advanced use cases where you need isolated contexts. These are edge cases &ndash; most applications don't need them.
+March Hare provides context providers for advanced use cases where you need isolated contexts. These are edge cases &ndash; most applications don't need them.
 
 ## `Broadcaster`
 
 Creates an isolated broadcast context for broadcast actions. Useful for libraries that want their own broadcast context without interfering with the host application:
 
 ```tsx
-import { Broadcaster } from "chizu";
+import { Broadcaster } from "march-hare";
 
 function MyLibraryRoot({ children }) {
   return <Broadcaster>{children}</Broadcaster>;

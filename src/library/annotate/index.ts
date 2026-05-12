@@ -22,7 +22,7 @@ const state = new State();
  *
  * @example
  * ```ts
- * import { annotate, Op } from "chizu";
+ * import { annotate, Op } from "march-hare";
  *
  * type Model = { user: User | null };
  *

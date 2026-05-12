@@ -1,6 +1,6 @@
 # Removed Decorators
 
-This document lists the middleware/decorators that were removed from Chizu for future reimplementation.
+This document lists the middleware/decorators that were removed from March Hare for future reimplementation.
 
 ## Middleware Functions (via `Use` object)
 

@@ -1,13 +1,13 @@
 # Using ky for HTTP requests
 
-[ky](https://github.com/sindresorhus/ky) is a lightweight HTTP client built on `fetch` with a cleaner API, automatic retries, and better error handling. It pairs well with Chizu actions for data fetching.
+[ky](https://github.com/sindresorhus/ky) is a lightweight HTTP client built on `fetch` with a cleaner API, automatic retries, and better error handling. It pairs well with March Hare actions for data fetching.
 
 ## Basic usage
 
 Here's a simple example that fetches user data:
 
 ```ts
-import { useActions, Lifecycle, Action, Operation } from "chizu";
+import { useActions, Lifecycle, Action, Operation } from "march-hare";
 import ky from "ky";
 
 type User = { id: number; name: string; email: string };
@@ -28,15 +28,14 @@ export function useUserActions() {
   const actions = useActions<Model, typeof Actions>(model);
 
   actions.useAction(Actions.FetchUser, async (context, userId) => {
-    context.actions.produce(({ model, inspect }) => {
-      model.user = inspect.annotate(Operation.Pending, model.user);
-    });
+    context.actions.produce(
+      ({ model, inspect }) =>
+        void (model.user = inspect.annotate(Operation.Pending, model.user)),
+    );
 
     const user = await ky.get(`/api/users/${userId}`).json<User>();
 
-    context.actions.produce(({ model }) => {
-      model.user = user;
-    });
+    context.actions.produce(({ model }) => void (model.user = user));
   });
 
   return actions;
@@ -45,13 +44,14 @@ export function useUserActions() {
 
 ## Request cancellation
 
-Chizu provides an `AbortController` via `context.task.controller` that you can pass to ky. This enables automatic cancellation when the component unmounts or when a newer request supplants the current one:
+March Hare provides an `AbortController` via `context.task.controller` that you can pass to ky. This enables automatic cancellation when the component unmounts or when a newer request supplants the current one:
 
 ```ts
 actions.useAction(Actions.FetchUser, async (context, userId) => {
-  context.actions.produce(({ model, inspect }) => {
-    model.user = inspect.annotate(Operation.Pending, model.user);
-  });
+  context.actions.produce(
+    ({ model, inspect }) =>
+      void (model.user = inspect.annotate(Operation.Pending, model.user)),
+  );
 
   const user = await ky
     .get(`/api/users/${userId}`, {
@@ -59,9 +59,7 @@ actions.useAction(Actions.FetchUser, async (context, userId) => {
     })
     .json<User>();
 
-  context.actions.produce(({ model }) => {
-    model.user = user;
-  });
+  context.actions.produce(({ model }) => void (model.user = user));
 });
 ```
 
@@ -70,7 +68,7 @@ actions.useAction(Actions.FetchUser, async (context, userId) => {
 For applications with shared configuration (base URL, headers, auth), create a ky instance and access it via `context.data`:
 
 ```ts
-import { useActions, Lifecycle, Action } from "chizu";
+import { useActions, Lifecycle, Action } from "march-hare";
 import ky, { type KyInstance } from "ky";
 
 type User = { id: number; name: string; email: string };
@@ -116,9 +114,7 @@ export function useUserActions(authToken: string) {
       })
       .json<User>();
 
-    context.actions.produce(({ model }) => {
-      model.user = user;
-    });
+    context.actions.produce(({ model }) => void (model.user = user));
   });
 
   return actions;
@@ -129,7 +125,7 @@ export function useUserActions(authToken: string) {
 
 ## Error handling with HTTPError
 
-ky throws an `HTTPError` for non-2xx responses, which integrates with Chizu's error handling:
+ky throws an `HTTPError` for non-2xx responses, which integrates with March Hare's error handling:
 
 ```ts
 import ky, { HTTPError } from "ky";
@@ -147,15 +143,11 @@ actions.useAction(Actions.FetchUser, async (context, userId) => {
       })
       .json<User>();
 
-    context.actions.produce(({ model }) => {
-      model.user = user;
-    });
+    context.actions.produce(({ model }) => void (model.user = user));
   } catch (error) {
     if (error instanceof HTTPError) {
       const body = await error.response.json<{ message: string }>();
-      context.actions.produce(({ model }) => {
-        model.error = body.message;
-      });
+      context.actions.produce(({ model }) => void (model.error = body.message));
     } else {
       throw error; // Re-throw non-HTTP errors for Lifecycle.Error()
     }

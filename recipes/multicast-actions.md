@@ -10,7 +10,7 @@ Group multicast actions on a class. Naming the class `Scope` reads naturally at 
 
 ```ts
 // types.ts
-import { Action, Distribution } from "chizu";
+import { Action, Distribution } from "march-hare";
 
 export class Scope {
   static Update = Action<number>("Update", Distribution.Multicast);
@@ -24,7 +24,7 @@ export class Scope {
 Wrap the subtree in `withScope`, passing the multicast action that opens the scope:
 
 ```tsx
-import { withScope } from "chizu";
+import { withScope } from "march-hare";
 import { Scope } from "./types";
 
 function ScoreArea() {
@@ -50,9 +50,7 @@ function useScoreActions() {
   const actions = useActions<Model, typeof Actions>(model);
 
   actions.useAction(Scope.Update, (context, score) => {
-    context.actions.produce(({ model }) => {
-      model.score = score;
-    });
+    context.actions.produce(({ model }) => void (model.score = score));
   });
 
   return actions;
@@ -83,9 +81,7 @@ function ScoreDisplay() {
   const [model, actions] = useScoreActions();
 
   actions.useAction(Scope.Update, (context, score) => {
-    context.actions.produce(({ model }) => {
-      model.latestScore = score;
-    });
+    context.actions.produce(({ model }) => void (model.latestScore = score));
   });
 
   return <div>Current score: {model.latestScore ?? "—"}</div>;

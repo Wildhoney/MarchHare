@@ -9,9 +9,13 @@ export function useTransactionsActions() {
   const transactions = actions.useResource(resource.transactions);
 
   actions.useAction(Actions.Mount, async (context) => {
-    context.actions.produce(({ model }) => {
-      model.items = context.actions.annotate(Operation.Update, model.items);
-    });
+    context.actions.produce(
+      ({ model }) =>
+        void (model.items = context.actions.annotate(
+          Operation.Update,
+          model.items,
+        )),
+    );
 
     const page = await transactions.run({ cursor: null });
     await context.actions.dispatch(
@@ -31,9 +35,13 @@ export function useTransactionsActions() {
     if (actions[1].inspect.items.pending()) return;
 
     const cursor = context.model.cursor;
-    context.actions.produce(({ model }) => {
-      model.items = context.actions.annotate(Operation.Update, model.items);
-    });
+    context.actions.produce(
+      ({ model }) =>
+        void (model.items = context.actions.annotate(
+          Operation.Update,
+          model.items,
+        )),
+    );
 
     const page = await transactions.run({ cursor });
     await context.actions.dispatch(
@@ -49,9 +57,13 @@ export function useTransactionsActions() {
   });
 
   actions.useAction(Actions.Refresh, async (context) => {
-    context.actions.produce(({ model }) => {
-      model.items = context.actions.annotate(Operation.Update, model.items);
-    });
+    context.actions.produce(
+      ({ model }) =>
+        void (model.items = context.actions.annotate(
+          Operation.Update,
+          model.items,
+        )),
+    );
 
     const page = await transactions.run({ cursor: null });
     await context.actions.dispatch(

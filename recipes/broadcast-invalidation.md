@@ -113,11 +113,11 @@ actions.useAction(Actions.Broadcast.Reset, (context, scope) => {
 
 ## Comparison with React Query
 
-| React Query                      | Chizu                                          |
+| React Query                      | March Hare                                     |
 | -------------------------------- | ---------------------------------------------- |
 | `queryClient.invalidateQueries`  | Dispatch a shared broadcast reset action       |
 | Automatic re-fetch on invalidate | Producer handles re-fetch in its reset handler |
 | Tag-based invalidation           | Typed payload on the reset action              |
 | Global query client              | Scoped to `<Boundary>`                         |
 
-The key difference: React Query owns the fetch function and can re-run it. In Chizu, the producer owns the fetch logic, so invalidation is a signal that tells producers to re-run themselves.
+The key difference: React Query owns the fetch function and can re-run it. In March Hare, the producer owns the fetch logic, so invalidation is a signal that tells producers to re-run themselves.

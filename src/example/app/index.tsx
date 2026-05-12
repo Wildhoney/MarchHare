@@ -30,7 +30,7 @@ export default function App(): React.ReactElement {
     <div className={styles.layout}>
       <div className={styles.marketing}>
         <div className={styles.content}>
-          <img src={logo} alt="Chizu" className={styles.logo} />
+          <img src={logo} alt="March Hare" className={styles.logo} />
 
           <h1 className={styles.headline}>
             The <span>event-driven</span> React framework
@@ -43,13 +43,13 @@ export default function App(): React.ReactElement {
 
           <div className={styles.cta}>
             <a
-              href="https://github.com/Wildhoney/Chizu"
+              href="https://github.com/Wildhoney/march-hare"
               className={`${styles.button} primary`}
             >
               View on GitHub
             </a>
             <a
-              href="https://www.npmjs.com/package/chizu"
+              href="https://www.npmjs.com/package/march-hare"
               className={`${styles.button} secondary`}
             >
               Documentation
@@ -57,7 +57,7 @@ export default function App(): React.ReactElement {
           </div>
 
           <div className={styles.install}>
-            <span>$</span> npm install chizu
+            <span>$</span> npm install march-hare
           </div>
 
           <div className={styles.features}>

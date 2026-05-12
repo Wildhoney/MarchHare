@@ -7,7 +7,7 @@ It is opt-in: components that need it call `useMode()` and thread the returned h
 ## Setup
 
 ```ts
-import { useMode, useActions } from "chizu";
+import { useMode, useActions } from "march-hare";
 
 enum Mode {
   Idle,

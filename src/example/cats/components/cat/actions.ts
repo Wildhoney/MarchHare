@@ -17,17 +17,13 @@ export function useCatActions({ index }: { index: number }) {
   actions.useAction(Actions.Mount, async (context) => {
     const data = await cat.run();
 
-    context.actions.produce(({ model }) => {
-      model.cat = data;
-    });
+    context.actions.produce(({ model }) => void (model.cat = data));
   });
 
   actions.useAction(Actions.Refresh, async (context) => {
     const data = await cat.run.if({ over: { minutes: 5 } });
 
-    context.actions.produce(({ model }) => {
-      model.cat = data;
-    });
+    context.actions.produce(({ model }) => void (model.cat = data));
   });
 
   actions.useAction(Actions.Next, (context) => {

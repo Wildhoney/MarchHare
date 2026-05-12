@@ -5,11 +5,11 @@ import { Mode } from "./components/mode/index.tsx";
 import type { Props } from "./types.ts";
 
 /**
- * Creates a unified context boundary for all Chizu features.
+ * Creates a unified context boundary for all March Hare features.
  * Wraps children with Broadcaster, Mode, and Tasks providers.
  *
  * Use this at the root of your application or to create isolated context boundaries
- * for libraries that need their own Chizu context.
+ * for libraries that need their own March Hare context.
  *
  * @param props.children - The children to render within the boundary.
  * @returns The children wrapped in all required context providers.

@@ -3,7 +3,7 @@
 Both the model and actions type parameters default to `void`, so you can omit them entirely when neither is needed:
 
 ```ts
-import { useActions, Lifecycle } from "chizu";
+import { useActions, Lifecycle } from "march-hare";
 
 class Actions {
   static Mount = Lifecycle.Mount();
@@ -20,7 +20,7 @@ actions.useAction(Actions.Mount, () => {
 When a component needs to dispatch or listen to actions but doesn't manage any local state, pass `void` as the model type:
 
 ```ts
-import { useActions, Action } from "chizu";
+import { useActions, Action } from "march-hare";
 
 class Actions {
   static Ping = Action("Ping");
@@ -91,7 +91,7 @@ function useTrackingActions(props: { userId: string }) {
 Void-model components can participate in broadcast and multicast communication. This is particularly useful for "listener-only" components:
 
 ```ts
-import { useActions, Action, Distribution } from "chizu";
+import { useActions, Action, Distribution } from "march-hare";
 
 class BroadcastActions {
   static UserLoggedIn = Action<string>("UserLoggedIn", Distribution.Broadcast);

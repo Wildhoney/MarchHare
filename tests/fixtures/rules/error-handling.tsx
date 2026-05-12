@@ -160,9 +160,7 @@ function useRule26Actions() {
   actions.useAction(
     OptionResultActions.FetchUser,
     async (context, shouldSucceed) => {
-      context.actions.produce((draft) => {
-        draft.model.loadingUser = true;
-      });
+      context.actions.produce((draft) => void (draft.model.loadingUser = true));
 
       await utils.sleep(300);
 
@@ -184,9 +182,7 @@ function useRule26Actions() {
   actions.useAction(
     OptionResultActions.FetchData,
     async (context, shouldSucceed) => {
-      context.actions.produce((draft) => {
-        draft.model.loadingData = true;
-      });
+      context.actions.produce((draft) => void (draft.model.loadingData = true));
 
       await utils.sleep(300);
 

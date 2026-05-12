@@ -1,9 +1,9 @@
 # Error handling
 
-Chizu publishes every action failure as `Lifecycle.Fault`, a singleton broadcast action delivered through the surrounding `<Boundary>`. Subscribe to it like any other action to handle errors centrally:
+March Hare publishes every action failure as `Lifecycle.Fault`, a singleton broadcast action delivered through the surrounding `<Boundary>`. Subscribe to it like any other action to handle errors centrally:
 
 ```tsx
-import { useActions, Lifecycle, Reason } from "chizu";
+import { useActions, Lifecycle, Reason } from "march-hare";
 
 function App() {
   const actions = useActions();
@@ -52,9 +52,9 @@ class Actions {
 }
 
 actions.useAction(Actions.Error, (context, fault) => {
-  context.actions.produce(({ model }) => {
-    model.errorMessage = fault.error.message;
-  });
+  context.actions.produce(
+    ({ model }) => void (model.errorMessage = fault.error.message),
+  );
 });
 ```
 

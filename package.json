@@ -1,16 +1,16 @@
 {
-  "name": "chizu",
+  "name": "march-hare",
   "version": "0.5.2",
   "type": "module",
   "license": "MIT",
   "packageManager": "yarn@1.22.22",
-  "main": "./dist/chizu.js",
+  "main": "./dist/march-hare.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/chizu.js",
-      "require": "./dist/chizu.umd.cjs"
+      "import": "./dist/march-hare.js",
+      "require": "./dist/march-hare.umd.cjs"
     }
   },
   "dependencies": {
@@ -30,7 +30,7 @@
   ],
   "scripts": {
     "build": "vite build",
-    "build:example": "vite build --mode example --outDir dist-example --base /Chizu/",
+    "build:example": "vite build --mode example --outDir dist-example --base /march-hare/",
     "dev": "vite",
     "preview": "vite preview",
     "release": "make checks",

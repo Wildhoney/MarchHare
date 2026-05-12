@@ -8,17 +8,13 @@ When a component uses both `Lifecycle.Mount()` and a broadcast (or multicast) `u
 actions.useAction(Actions.Mount, async (context) => {
   // Always runs on mount
   const data = await fetchData(context.task.controller.signal);
-  context.actions.produce(({ model }) => {
-    model.data = data;
-  });
+  context.actions.produce(({ model }) => void (model.data = data));
 });
 
 actions.useAction(Actions.Broadcast.User, async (context, user) => {
   // Also runs on mount if a cached value exists
   const data = await fetchData(context.task.controller.signal, user.id);
-  context.actions.produce(({ model }) => {
-    model.data = data;
-  });
+  context.actions.produce(({ model }) => void (model.data = data));
 });
 ```
 
@@ -37,9 +33,7 @@ actions.useAction(Actions.Mount, (context) => {
 
 actions.useAction(Actions.Broadcast.User, async (context, user) => {
   const data = await fetchData(context.task.controller.signal, user.id);
-  context.actions.produce(({ model }) => {
-    model.data = data;
-  });
+  context.actions.produce(({ model }) => void (model.data = data));
 });
 ```
 
@@ -52,16 +46,12 @@ Skip the cached replay in the broadcast handler, letting Mount handle initial da
 ```ts
 actions.useAction(Actions.Mount, async (context) => {
   const data = await fetchDefaultData(context.task.controller.signal);
-  context.actions.produce(({ model }) => {
-    model.data = data;
-  });
+  context.actions.produce(({ model }) => void (model.data = data));
 });
 
 actions.useAction(Actions.Broadcast.User, (context, user) => {
   if (context.phase === Phase.Mounting) return; // Skip cached replay
-  context.actions.produce(({ model }) => {
-    model.data = user;
-  });
+  context.actions.produce(({ model }) => void (model.data = user));
 });
 ```
 

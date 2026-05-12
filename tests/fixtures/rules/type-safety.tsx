@@ -84,9 +84,10 @@ function useRule27Actions() {
   });
 
   actions.useAction(TypeSafetyActions.DeleteTodo, (context, id) => {
-    context.actions.produce((draft) => {
-      draft.model.todos = draft.model.todos.filter((t) => t.id !== id);
-    });
+    context.actions.produce(
+      (draft) =>
+        void (draft.model.todos = draft.model.todos.filter((t) => t.id !== id)),
+    );
   });
 
   actions.useAction(TypeSafetyActions.CompleteTodo, (context, id) => {
@@ -161,9 +162,9 @@ function useRule29And30Actions() {
       await utils.sleep(800);
 
       // Complete the update
-      context.actions.produce((draft) => {
-        draft.model.annotatedValue = newValue;
-      });
+      context.actions.produce(
+        (draft) => void (draft.model.annotatedValue = newValue),
+      );
     },
   );
 
@@ -272,9 +273,9 @@ function useRule31Actions() {
 
     await utils.sleep(500);
 
-    context.actions.produce((draft) => {
-      draft.model.user = { ...draft.model.user, ...updates };
-    });
+    context.actions.produce(
+      (draft) => void (draft.model.user = { ...draft.model.user, ...updates }),
+    );
   });
 
   actions.useAction(BoxActions.IncrementCounter, async (context) => {
@@ -287,9 +288,7 @@ function useRule31Actions() {
 
     await utils.sleep(300);
 
-    context.actions.produce((draft) => {
-      draft.model.counter += 1;
-    });
+    context.actions.produce((draft) => void (draft.model.counter += 1));
   });
 
   return actions;

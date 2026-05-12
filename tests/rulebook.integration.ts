@@ -1,5 +1,5 @@
 /**
- * Chizu Rulebook E2E Tests
+ * March Hare Rulebook E2E Tests
  *
  * Comprehensive integration tests for all 39 rules in RULEBOOK.md
  * Each test is labeled with the rule number and its intention.
@@ -9,7 +9,7 @@ import { test, expect } from "@playwright/test";
 // Use 'it' alias for BDD-style test naming
 const it = test;
 
-test.describe("Chizu Rulebook", () => {
+test.describe("March Hare Rulebook", () => {
   // Actions (Rules 1-4)
   test.describe("Actions", () => {
     test.beforeEach(async ({ page }) => {

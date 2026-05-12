@@ -5,7 +5,7 @@ Broadcast actions allow different components to communicate with each other. Unl
 To create a broadcast action, use `Distribution.Broadcast` as the second parameter. A good pattern is to define broadcast actions in a shared class and reference them via a static property:
 
 ```ts
-import { Action, Distribution } from "chizu";
+import { Action, Distribution } from "march-hare";
 
 export class BroadcastActions {
   static SignedOut = Action("SignedOut", Distribution.Broadcast);
@@ -37,9 +37,7 @@ actions.useAction(
   Actions.Person({ PersonId: context.data.personId }),
   async (context, person) => {
     const details = await fetch(`/person/${person.id}`);
-    context.actions.produce((draft) => {
-      draft.model.person = details;
-    });
+    context.actions.produce((draft) => void (draft.model.person = details));
   },
 );
 ```
@@ -87,7 +85,7 @@ For reading broadcast values imperatively in handlers (`context.actions.resoluti
 For direct access to the broadcast emitter, use `useBroadcast()`:
 
 ```ts
-import { useBroadcast } from "chizu";
+import { useBroadcast } from "march-hare";
 
 const broadcast = useBroadcast();
 

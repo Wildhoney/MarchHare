@@ -1,11 +1,11 @@
 # Lifecycle actions
 
-Chizu provides lifecycle actions that trigger at specific points in a component's lifecycle. Lifecycle actions are **factory functions** — each call to `Lifecycle.Mount()` returns a unique action symbol, enabling per-component regulation.
+March Hare provides lifecycle actions that trigger at specific points in a component's lifecycle. Lifecycle actions are **factory functions** — each call to `Lifecycle.Mount()` returns a unique action symbol, enabling per-component regulation.
 
 Assign lifecycle factories as static properties in your Actions class:
 
 ```ts
-import { useActions, Lifecycle, Action } from "chizu";
+import { useActions, Lifecycle, Action } from "march-hare";
 
 export class Actions {
   static Mount = Lifecycle.Mount();

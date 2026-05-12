@@ -1,6 +1,6 @@
 # React context in handlers
 
-React hooks like `use()` cannot be called inside action handlers &ndash; they run outside React's render cycle when actions are dispatched. Instead, Chizu provides `context.data` to access external values inside handlers.
+React hooks like `use()` cannot be called inside action handlers &ndash; they run outside React's render cycle when actions are dispatched. Instead, March Hare provides `context.data` to access external values inside handlers.
 
 ## The problem
 
@@ -18,7 +18,7 @@ actions.useAction(Actions.Submit, (context) => {
 Pass a data function as the second argument to `useActions`. This function runs during render (where hooks are valid) and captures values for use in handlers:
 
 ```tsx
-import { useActions } from "chizu";
+import { useActions } from "march-hare";
 
 type Data = { theme: Theme; user: User };
 

@@ -68,9 +68,7 @@ function useLateMountingSubscriberActions(
 
   actions.useAction(BroadcastActions.DataLoaded, (context, payload) => {
     setReceivedPhase(context.phase);
-    context.actions.produce((draft) => {
-      draft.model.data = payload.items;
-    });
+    context.actions.produce((draft) => void (draft.model.data = payload.items));
   });
 
   return actions;
@@ -94,9 +92,10 @@ function useChanneledSubscriberActions() {
   actions.useAction(
     ChanneledBroadcastActions.UserUpdated({ UserId: 1 }),
     (context, user) => {
-      context.actions.produce((draft) => {
-        draft.model.user1Data = `${user.name} <${user.email}>`;
-      });
+      context.actions.produce(
+        (draft) =>
+          void (draft.model.user1Data = `${user.name} <${user.email}>`),
+      );
     },
   );
 
@@ -104,9 +103,10 @@ function useChanneledSubscriberActions() {
   actions.useAction(
     ChanneledBroadcastActions.UserUpdated({ UserId: 2 }),
     (context, user) => {
-      context.actions.produce((draft) => {
-        draft.model.user2Data = `${user.name} <${user.email}>`;
-      });
+      context.actions.produce(
+        (draft) =>
+          void (draft.model.user2Data = `${user.name} <${user.email}>`),
+      );
     },
   );
 
@@ -114,9 +114,9 @@ function useChanneledSubscriberActions() {
   actions.useAction(
     ChanneledBroadcastActions.ChannelMessage({ Channel: "general" }),
     (context, msg) => {
-      context.actions.produce((draft) => {
-        draft.model.generalChannel = msg.message;
-      });
+      context.actions.produce(
+        (draft) => void (draft.model.generalChannel = msg.message),
+      );
     },
   );
 
@@ -124,17 +124,15 @@ function useChanneledSubscriberActions() {
   actions.useAction(
     ChanneledBroadcastActions.ChannelMessage({ Channel: "tech" }),
     (context, msg) => {
-      context.actions.produce((draft) => {
-        draft.model.techChannel = msg.message;
-      });
+      context.actions.produce(
+        (draft) => void (draft.model.techChannel = msg.message),
+      );
     },
   );
 
   // Plain handler receives ALL dispatches
   actions.useAction(ChanneledBroadcastActions.ChannelMessage, (context) => {
-    context.actions.produce((draft) => {
-      draft.model.allMessages += 1;
-    });
+    context.actions.produce((draft) => void (draft.model.allMessages += 1));
   });
 
   return actions;
@@ -354,18 +352,16 @@ function useRule40ConsumerActions() {
       BroadcastActions.UserLoggedIn,
     );
     if (!user) return;
-    context.actions.produce(({ model }) => {
-      model.consumed = user.name;
-    });
+    context.actions.produce(({ model }) => void (model.consumed = user.name));
   });
 
   actions.useAction(Rule40Actions.Trigger, async (context) => {
     const user = await context.actions.resolution(
       BroadcastActions.UserLoggedIn,
     );
-    context.actions.produce(({ model }) => {
-      model.consumed = user ? user.name : "null";
-    });
+    context.actions.produce(
+      ({ model }) => void (model.consumed = user ? user.name : "null"),
+    );
   });
 
   return actions;
@@ -445,9 +441,9 @@ function useRule40PeekActions() {
 
   actions.useAction(Rule40PeekActions.Check, (context) => {
     const user = context.actions.peek(BroadcastActions.UserLoggedIn);
-    context.actions.produce(({ model }) => {
-      model.peeked = user ? user.name : "null";
-    });
+    context.actions.produce(
+      ({ model }) => void (model.peeked = user ? user.name : "null"),
+    );
   });
 
   return actions;

@@ -1,13 +1,13 @@
 # Utility Types
 
-Chizu exports `Handler` for typing action handlers when you need to define them in separate files with full type safety.
+March Hare exports `Handler` for typing action handlers when you need to define them in separate files with full type safety.
 
 ## Handler
 
 Use `Handler` to type extracted handlers:
 
 ```tsx
-import { useActions, Action, Handler } from "chizu";
+import { useActions, Action, Handler } from "march-hare";
 
 type Model = { name: string | null; age: number | null };
 const model: Model = { name: null, age: null };
@@ -22,18 +22,14 @@ export const handleSetName: Handler<Model, typeof Actions, "SetName"> = (
   context,
   name,
 ) => {
-  context.actions.produce((draft) => {
-    draft.model.name = name;
-  });
+  context.actions.produce((draft) => void (draft.model.name = name));
 };
 
 export const handleSetAge: Handler<Model, typeof Actions, "SetAge"> = (
   context,
   age,
 ) => {
-  context.actions.produce((draft) => {
-    draft.model.age = age;
-  });
+  context.actions.produce((draft) => void (draft.model.age = age));
 };
 
 // Use in component
@@ -64,9 +60,7 @@ export default function useUserActions() {
 
   // Types are fully inferred - no explicit typing needed
   actions.useAction(Actions.SetName, (context, name) => {
-    context.actions.produce((draft) => {
-      draft.model.name = name;
-    });
+    context.actions.produce((draft) => void (draft.model.name = name));
   });
 
   return actions;

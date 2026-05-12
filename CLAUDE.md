@@ -1,4 +1,4 @@
-# Chizu AI Assistant Guide
+# March Hare AI Assistant Guide
 
 Strongly typed React framework using generators and efficiently updated views alongside the publish-subscribe pattern.
 
@@ -19,7 +19,7 @@ import {
   Reason,
   Op,
   Operation,
-} from "chizu";
+} from "march-hare";
 import type {
   Box,
   Fault,
@@ -29,12 +29,12 @@ import type {
   Pk,
   Task,
   Tasks,
-} from "chizu";
+} from "march-hare";
 ```
 
 ## Core Concepts
 
-Chizu is an event-driven state management library for React built on the publish-subscribe pattern. Key concepts:
+March Hare is an event-driven state management library for React built on the publish-subscribe pattern. Key concepts:
 
 - **Model:** The application state, a plain JavaScript object. Pass `void` for actions-only components with no local state.
 - **Actions:** Typed events that trigger state changes. Created with `Action<Payload>("name")`.
@@ -46,7 +46,7 @@ Chizu is an event-driven state management library for React built on the publish
 ### Basic Example
 
 ```tsx
-import { useActions, Action, With } from "chizu";
+import { useActions, Action, With } from "march-hare";
 
 type Model = { name: string | null };
 
@@ -77,7 +77,7 @@ function Profile() {
 ## Action Distribution Types
 
 ```ts
-import { Action, Distribution } from "chizu";
+import { Action, Distribution } from "march-hare";
 
 // Unicast (default) - only the dispatching component handles it
 static Increment = Action("Increment");
@@ -115,7 +115,7 @@ Channel values must be non-nullable primitives: `string`, `number`, `bigint`, `b
 Lifecycle actions are **factory functions** that return unique symbols per call. Assign them as static properties in your Actions class for per-component regulation support:
 
 ```ts
-import { Lifecycle } from "chizu";
+import { Lifecycle } from "march-hare";
 
 export class Actions {
   static Mount = Lifecycle.Mount();
@@ -212,20 +212,19 @@ Returns `null` until the first dispatch. The renderer receives `(value, inspect)
 Track async operation state per field using Immertation:
 
 ```ts
-import { Op } from "chizu";
+import { Op } from "march-hare";
 
 actions.useAction(Actions.Fetch, async (context) => {
   // Mark field as pending
-  context.actions.produce(({ model, inspect }) => {
-    model.user = inspect.annotate(Op.Update, model.user);
-  });
+  context.actions.produce(
+    ({ model, inspect }) =>
+      void (model.user = inspect.annotate(Op.Update, model.user)),
+  );
 
   const user = await fetchUser();
 
   // Update with result
-  context.actions.produce(({ model }) => {
-    model.user = user;
-  });
+  context.actions.produce(({ model }) => void (model.user = user));
 });
 
 // In component - check annotation state
@@ -262,16 +261,14 @@ export default withScope(Scope.Mood, MoodArea);
 actions.dispatch(Scope.Mood, mood);
 
 actions.useAction(Scope.Mood, (context, mood) => {
-  context.actions.produce(({ model }) => {
-    model.selected = mood;
-  });
+  context.actions.produce(({ model }) => void (model.selected = mood));
 });
 ```
 
 ## Utility Functions
 
 ```ts
-import { utils } from "chizu";
+import { utils } from "march-hare";
 
 // Sleep with abort signal
 await utils.sleep(1000, context.task.controller.signal);
@@ -300,9 +297,7 @@ actions.useAction(Actions.SetName, With.Update("name"));
 
 // Equivalent to:
 actions.useAction(Actions.SetName, (context, name) => {
-  context.actions.produce(({ model }) => {
-    model.name = name;
-  });
+  context.actions.produce(({ model }) => void (model.name = name));
 });
 ```
 
@@ -316,9 +311,7 @@ actions.useAction(Actions.ToggleSidebar, With.Invert("sidebar"));
 
 // Equivalent to:
 actions.useAction(Actions.ToggleSidebar, (context) => {
-  context.actions.produce(({ model }) => {
-    model.sidebar = !model.sidebar;
-  });
+  context.actions.produce(({ model }) => void (model.sidebar = !model.sidebar));
 });
 ```
 
@@ -329,7 +322,7 @@ actions.useAction(Actions.ToggleSidebar, (context) => {
 ### Global Error Handler
 
 ```tsx
-import { Error, Reason } from "chizu";
+import { Error, Reason } from "march-hare";
 
 <Error
   handler={({ reason, error, action, handled, tasks }) => {
@@ -376,7 +369,7 @@ actions.useAction(Actions.Search, async (context, query) => {
 A single mutable value shared across every component inside a `<Boundary>`. Mode is **opt-in**: components that need it call `useMode()` and thread the handle through the `useActions` data callback. Mode is **not** reactive &mdash; mutating it does not re-render. Use it for cross-handler coordination only; drive view state through the model.
 
 ```ts
-import { useMode, useActions, Action } from "chizu";
+import { useMode, useActions, Action } from "march-hare";
 
 enum Mode {
   Idle,
@@ -414,7 +407,7 @@ function useSignOutActions() {
 ### `<Boundary>` - All-in-one Provider
 
 ```tsx
-import { Boundary } from "chizu";
+import { Boundary } from "march-hare";
 
 // Wraps app with Broadcaster, Mode, and Tasks providers
 <Boundary>
@@ -425,7 +418,7 @@ import { Boundary } from "chizu";
 ### Multicast scope boundaries
 
 ```tsx
-import { withScope } from "chizu";
+import { withScope } from "march-hare";
 
 // Wrap a component with the multicast action that opens its scope.
 const ScopedArea = withScope(Scope.Mood, MoodArea);
@@ -457,22 +450,20 @@ function useSearchActions(props: { query: string }) {
 ### `Handler<M, AC, K, D>` - Single Handler Type
 
 ```ts
-import { Handler } from "chizu";
+import { Handler } from "march-hare";
 
 const handleSetName: Handler<Model, typeof Actions, "SetName"> = (
   context,
   name,
 ) => {
-  context.actions.produce(({ model }) => {
-    model.name = name;
-  });
+  context.actions.produce(({ model }) => void (model.name = name));
 };
 ```
 
 ### `Handlers<M, A, D>` - HKT for All Handlers
 
 ```ts
-import { Handlers } from "chizu";
+import { Handlers } from "march-hare";
 
 type H = Handlers<Model, typeof Actions>;
 
@@ -484,7 +475,7 @@ const handleSetAge: H["SetAge"] = (context, age) => { ... };
 ### `Pk<T>` - Primary Key Type
 
 ```ts
-import type { Pk } from "chizu";
+import type { Pk } from "march-hare";
 
 type Todo = {
   id: Pk<number>; // undefined | symbol | number

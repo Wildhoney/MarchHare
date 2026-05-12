@@ -4,25 +4,23 @@
 
 ```ts
 // resources.ts
-import { Resource } from "chizu";
+import { Resource } from "march-hare";
 
 export const user = Resource("user", () => ky.get("/api/user").json<User>());
 ```
 
 ```tsx
 // actions.ts
-import * as chizu from "chizu";
+import * as marchHare from "march-hare";
 import * as resource from "./resources";
 
 export function useActions() {
-  const actions = chizu.useActions<Model, typeof Actions>(initialModel);
+  const actions = marchHare.useActions<Model, typeof Actions>(initialModel);
   const user = actions.useResource(resource.user);
 
   actions.useAction(Actions.Mount, async (context) => {
     const data = await user.run();
-    context.actions.produce(({ model }) => {
-      model.user = data;
-    });
+    context.actions.produce(({ model }) => void (model.user = data));
   });
 
   return actions;
@@ -33,7 +31,7 @@ export function useActions() {
 
 > **Convention:** import resources as a namespace (`import * as resource`) so call sites read `resource.user`, `resource.feed`, etc. The grouping signals "remote data, declared at module scope" at a glance. The local binding then mirrors the resource &ndash; `const user = actions.useResource(resource.user)`.
 
-> **Temporal runtime requirement.** `at` is a `Temporal.Instant`. Chizu reads `Temporal` from the host global, so consumers targeting runtimes that do not yet expose it natively must install a polyfill (e.g. [`@js-temporal/polyfill`](https://github.com/js-temporal/temporal-polyfill)) once at app entry.
+> **Temporal runtime requirement.** `at` is a `Temporal.Instant`. March Hare reads `Temporal` from the host global, so consumers targeting runtimes that do not yet expose it natively must install a polyfill (e.g. [`@js-temporal/polyfill`](https://github.com/js-temporal/temporal-polyfill)) once at app entry.
 
 ## Passing params
 
@@ -55,9 +53,7 @@ const user = actions.useResource(resource.user);
 
 actions.useAction(Actions.Mount, async (context) => {
   const data = await user.run({ id: props.id });
-  context.actions.produce(({ model }) => {
-    model.user = data;
-  });
+  context.actions.produce(({ model }) => void (model.user = data));
 });
 ```
 
@@ -72,9 +68,7 @@ actions.useAction(Actions.Mount, async (context) => {
   try {
     const data = await user.run();
     await context.actions.dispatch(Actions.Broadcast.UserUpdated, data);
-    context.actions.produce(({ model }) => {
-      model.user = data;
-    });
+    context.actions.produce(({ model }) => void (model.user = data));
   } catch (error) {
     if (error instanceof RateLimitedError) {
       await context.actions.dispatch(
@@ -142,9 +136,7 @@ const user = actions.useResource(resource.user);
 
 actions.useAction(Actions.Refresh, async (context) => {
   const data = await user.run.if({ over: { minutes: 5 } });
-  context.actions.produce(({ model }) => {
-    model.user = data;
-  });
+  context.actions.produce(({ model }) => void (model.user = data));
 });
 ```
 
@@ -177,9 +169,7 @@ Errors can be handled at three layers, each with a distinct responsibility:
 actions.useAction(Actions.Mount, async (context) => {
   try {
     const data = await user.run();
-    context.actions.produce(({ model }) => {
-      model.user = data;
-    });
+    context.actions.produce(({ model }) => void (model.user = data));
   } catch (error) {
     if (error instanceof RateLimitedError) {
       await context.actions.dispatch(
@@ -195,14 +185,10 @@ actions.useAction(Actions.Mount, async (context) => {
 actions.useAction(Actions.Mount, async (context) => {
   try {
     const data = await user.run();
-    context.actions.produce(({ model }) => {
-      model.user = data;
-    });
+    context.actions.produce(({ model }) => void (model.user = data));
   } catch (error) {
     if (error instanceof ForbiddenError) {
-      context.actions.produce(({ model }) => {
-        model.locked = true;
-      });
+      context.actions.produce(({ model }) => void (model.locked = true));
       return;
     }
     throw error; // bubble to the boundary
@@ -234,15 +220,17 @@ The canonical pattern is to call `await user.run()` from a `Lifecycle.Mount` han
 
 ```ts
 actions.useAction(Actions.Mount, async (context) => {
-  context.actions.produce(({ model }) => {
-    model.user = context.actions.annotate(Operation.Update, model.user);
-  });
+  context.actions.produce(
+    ({ model }) =>
+      void (model.user = context.actions.annotate(
+        Operation.Update,
+        model.user,
+      )),
+  );
 
   const data = await user.run();
 
-  context.actions.produce(({ model }) => {
-    model.user = data;
-  });
+  context.actions.produce(({ model }) => void (model.user = data));
 });
 ```
 
@@ -272,7 +260,7 @@ type Model = {
 };
 
 export function useActions() {
-  const actions = chizu.useActions<Model, typeof Actions>({
+  const actions = marchHare.useActions<Model, typeof Actions>({
     items: [],
     cursor: null,
     hasMore: true,

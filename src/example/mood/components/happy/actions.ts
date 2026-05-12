@@ -14,9 +14,7 @@ export function useHappyActions() {
   });
 
   actions.useAction(Scope.Mood, (context, mood) => {
-    context.actions.produce((draft) => {
-      draft.model.selected = mood;
-    });
+    context.actions.produce((draft) => void (draft.model.selected = mood));
   });
 
   return actions;

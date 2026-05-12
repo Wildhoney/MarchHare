@@ -22,8 +22,8 @@ const isSymbol = (value: unknown): value is symbol => typeof value === "symbol";
  * @example
  * ```typescript
  * const Increment = Action<number>("Increment");
- * getActionSymbol(Increment); // Symbol(chizu.action/Increment)
- * getActionSymbol(Increment({ UserId: 5 })); // Symbol(chizu.action/Increment)
+ * getActionSymbol(Increment); // Symbol(march-hare.action/Increment)
+ * getActionSymbol(Increment({ UserId: 5 })); // Symbol(march-hare.action/Increment)
  * ```
  */
 export function getActionSymbol(action: AnyAction): ActionId {
@@ -70,8 +70,8 @@ export function isBroadcastAction(action: AnyAction): boolean {
 /**
  * Extracts the action name from an action.
  *
- * Parses both regular actions (`chizu.action/Name`) and
- * distributed actions (`chizu.action/distributed/Name`)
+ * Parses both regular actions (`march-hare.action/Name`) and
+ * distributed actions (`march-hare.action/distributed/Name`)
  * to extract just the name portion.
  *
  * @param action The action to extract the name from.
