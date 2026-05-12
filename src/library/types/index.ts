@@ -854,14 +854,12 @@ export type UseActions<
   ): void;
   /**
    * Connects a {@link Resource} declared at module scope to this component.
-   * Returns `{ run, response, at }` &ndash; `run` triggers a fresh network
-   * call (concurrent calls share the in-flight promise), while `response`
-   * and `at` are read-only snapshots of the most recent successful
-   * response and the instant it resolved. The Resource's `onSuccess` and
-   * `onError` callbacks receive `(response, data, dispatch)` where `data`
-   * is this component's reactive `data` proxy.
+   * Returns a frozen `{ run, data, at }` object &ndash; `run` triggers a
+   * fresh network call (concurrent calls share the in-flight promise),
+   * while `data` and `at` are read-only snapshots of the most recent
+   * successful payload and the instant it resolved.
    *
-   * `response` and `at` are non-reactive &mdash; reading them does not
+   * `data` and `at` are non-reactive &mdash; reading them does not
    * subscribe the component to updates. Drive UI from the model.
    *
    * @example
@@ -876,9 +874,9 @@ export type UseActions<
    */
   useResource<T, P extends object>(
     resource: import("../resource/index.ts").ResourceHandle<T, P>,
-  ): {
-    readonly run: import("../resource/index.ts").BoundRun<T, P>;
-    readonly response: T | null;
-    readonly at: Temporal.Instant | null;
-  };
+  ): Readonly<{
+    run: import("../resource/index.ts").BoundRun<T, P>;
+    data: T | null;
+    at: Temporal.Instant | null;
+  }>;
 };

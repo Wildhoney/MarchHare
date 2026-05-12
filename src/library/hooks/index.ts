@@ -33,11 +33,7 @@ import {
   AnyAction,
   FaultSymbol,
 } from "../types/index.ts";
-import type {
-  BoundRun,
-  ResourceHandle,
-  UnlessOptions,
-} from "../resource/index.ts";
+import type { BoundRun, ResourceHandle, IfOptions } from "../resource/index.ts";
 
 import { getReason, getError } from "../error/utils.ts";
 import EventEmitter from "eventemitter3";
@@ -487,31 +483,32 @@ export function useActions<
   ) => {
     const run = React.useMemo<BoundRun<T, P>>(() => {
       const call = (params?: P): Promise<T> => resource.run(<P>(params ?? {}));
-      const unless = (options: UnlessOptions, params?: P): Promise<T> => {
-        const { response, at } = resource;
-        if (at !== null && response !== null) {
+      const ifOver = (options: IfOptions, params?: P): Promise<T> => {
+        const { data, at } = resource;
+        if (at !== null && data !== null) {
           const elapsed = Temporal.Now.instant().since(at);
-          const window = Temporal.Duration.from(options.within);
+          const window = Temporal.Duration.from(options.over);
           if (Temporal.Duration.compare(elapsed, window) <= 0) {
-            return Promise.resolve(response);
+            return Promise.resolve(data);
           }
         }
         return call(params);
       };
       // eslint-disable-next-line fp/no-mutating-assign
-      return <BoundRun<T, P>>(<unknown>Object.assign(call, { unless }));
+      return <BoundRun<T, P>>(<unknown>Object.assign(call, { if: ifOver }));
     }, [resource]);
 
     return React.useMemo(
-      () => ({
-        run,
-        get response() {
-          return resource.response;
-        },
-        get at() {
-          return resource.at;
-        },
-      }),
+      () =>
+        Object.freeze({
+          run,
+          get data() {
+            return resource.data;
+          },
+          get at() {
+            return resource.at;
+          },
+        }),
       [resource, run],
     );
   };

@@ -1,6 +1,6 @@
 # Resource
 
-`Resource` declares a remote resource at module scope &ndash; same shape as `Action`. Components consume it via `actions.useResource(handle)` to obtain a `{ run, response, at }` object: `run()` triggers a fresh network call, while `response` and `at` are read-only snapshots of the most recent successful payload and when it resolved.
+`Resource` declares a remote resource at module scope &ndash; same shape as `Action`. Components consume it via `actions.useResource(handle)` to obtain a frozen `{ run, data, at }` object: `run()` triggers a fresh network call, while `data` and `at` are read-only snapshots of the most recent successful payload and when it resolved.
 
 ```ts
 // resources.ts
@@ -41,7 +41,9 @@ The second generic on `Resource` types a single `params` object that the fetcher
 
 ```ts
 // resources.ts
-export const user = Resource<User, { id: number }>("user", ({ id }) =>
+type Params = { id: number };
+
+export const user = Resource<User, Params>("user", ({ id }) =>
   ky.get(`/api/users/${id}`).json<User>(),
 );
 ```
@@ -49,7 +51,7 @@ export const user = Resource<User, { id: number }>("user", ({ id }) =>
 ```ts
 // actions.ts
 const user = actions.useResource(resource.user);
-//    ^ { run: (params: { id: number }) => Promise<User>; response: User | null; at: Temporal.Instant | null }
+//    ^ { run: (params: Params) => Promise<User>; data: User | null; at: Temporal.Instant | null }
 
 actions.useAction(Actions.Mount, async (context) => {
   const data = await user.run({ id: props.id });
@@ -107,12 +109,12 @@ const d = user.run({ id: 6 });
 
 Once a promise resolves, the next call runs anew. Refresh is a synonym for "call `run()` again" &ndash; no `invalidate()`, no second function to import.
 
-## `response` and `at`
+## `data` and `at`
 
 Alongside `run`, the hook returns two read-only snapshots:
 
-- **`response`** &ndash; the most recently resolved payload, or `null` before the first successful run.
-- **`at`** &ndash; the `Temporal.Instant` at which `response` last updated, or `null`.
+- **`data`** &ndash; the most recently resolved payload, or `null` before the first successful run.
+- **`at`** &ndash; the `Temporal.Instant` at which `data` last updated, or `null`.
 
 Both are module-scoped on the `ResourceHandle`, so two components reading the same `Resource` see the same values &ndash; whichever component runs first populates the snapshot for everyone.
 
@@ -129,42 +131,42 @@ actions.useAction(Actions.Refresh, async (context) => {
 });
 ```
 
-A failed run does **not** clobber `response` or `at` &ndash; the last good value sticks around until the next successful call.
+A failed run does **not** clobber `data` or `at` &ndash; the last good value sticks around until the next successful call.
 
-### Conditional run with `run.unless({ within })`
+### Conditional run with `run.if({ over })`
 
-For "refresh, but don't bother if we just ran" semantics, call `run.unless({ within })`:
+For "refresh, but don't bother if we just ran" semantics, call `run.if({ over })`:
 
 ```ts
 const user = actions.useResource(resource.user);
 
 actions.useAction(Actions.Refresh, async (context) => {
-  const data = await user.run.unless({ within: { minutes: 5 } });
+  const data = await user.run.if({ over: { minutes: 5 } });
   context.actions.produce(({ model }) => {
     model.user = data;
   });
 });
 ```
 
-`within` accepts a `Temporal.Duration`, a `DurationLike` object (`{ minutes: 5 }`, `{ seconds: 30 }`), or an ISO 8601 duration string (`"PT5M"`). If a successful run resolved within the window, the cached response is returned without hitting the network. Otherwise `run(...)` is called normally.
+`over` accepts a `Temporal.Duration`, a `DurationLike` object (`{ minutes: 5 }`, `{ seconds: 30 }`), or an ISO 8601 duration string (`"PT5M"`). If the most recent successful run resolved longer ago than the window, `run(...)` is called. Otherwise the cached data is returned without hitting the network.
 
 ```ts
-await user.run.unless({ within: { minutes: 5 } });
-await user.run.unless({ within: "PT5M" });
-await user.run.unless({ within: Temporal.Duration.from({ minutes: 5 }) });
+await user.run.if({ over: { minutes: 5 } });
+await user.run.if({ over: "PT5M" });
+await user.run.if({ over: Temporal.Duration.from({ minutes: 5 }) });
 ```
 
 For parameterised resources, params come after the options object:
 
 ```ts
-const data = await feed.run.unless({ within: { minutes: 1 } }, { cursor });
+const data = await feed.run.if({ over: { minutes: 1 } }, { cursor });
 ```
 
-The freshness check uses the resource's module-scoped `at` instant, which reflects the most recent successful call across all param-sets. For parameterised resources, a fresh `feed.run({ cursor: null })` will short-circuit a subsequent `feed.run.unless({ within: { minutes: 5 } }, { cursor: "page-2" })`. Treat it as "did _anyone_ run this resource recently?", not "did we run _these params_ recently".
+The freshness check uses the resource's module-scoped `at` instant, which reflects the most recent successful call across all param-sets. For parameterised resources, a fresh `feed.run({ cursor: null })` will short-circuit a subsequent `feed.run.if({ over: { minutes: 5 } }, { cursor: "page-2" })`. Treat it as "did _anyone_ run this resource recently?", not "did we run _these params_ recently".
 
-> **`response` and `at` are non-reactive.** Reading them does not subscribe the component to updates. Drive UI from the model (write the payload into `model` after `await user.run()`) or from a broadcast subscription &ndash; `response` is a snapshot, not a signal.
+> **`data` and `at` are non-reactive.** Reading them does not subscribe the component to updates. Drive UI from the model (write the payload into `model` after `await user.run()`) or from a broadcast subscription &ndash; `data` is a snapshot, not a signal.
 
-For parameterised resources, `response` and `at` reflect the most recent successful call regardless of which param-set it used. Treat them as "latest result", not "result for these params".
+For parameterised resources, `data` and `at` reflect the most recent successful call regardless of which param-set it used. Treat them as "latest result", not "result for these params".
 
 ## Three-tier error handling
 
@@ -248,16 +250,16 @@ The `annotate` call drives the loading UI via `actions.inspect.user.pending()` &
 
 ## Infinite scroll
 
-Variadic fetchers are how you build pagination. Declare the cursor as a param, pass it at call time, append the response into the model:
+Variadic fetchers are how you build pagination. Declare the cursor as a param, pass it at call time, append each page into the model:
 
 ```ts
 // resources.ts
-export const feed = Resource<Page<Item>, { cursor: string | null }>(
-  "feed",
-  ({ cursor }) =>
-    http
-      .get("feed", { searchParams: { cursor: cursor ?? "" } })
-      .json<Page<Item>>(),
+type Params = { cursor: string | null };
+
+export const feed = Resource<Page<Item>, Params>("feed", ({ cursor }) =>
+  http
+    .get("feed", { searchParams: { cursor: cursor ?? "" } })
+    .json<Page<Item>>(),
 );
 ```
 
@@ -314,4 +316,4 @@ Putting `useResource` on the `actions` tuple keeps the surface consistent &ndash
 - **No focus or reconnect revalidation.** Wire a `window` listener and call `run()` again if you need this.
 - **No SSR isolation.** The `inflight` field on each Resource is module-global, so server-side rendering would leak across requests. `Resource` is client-only.
 - **No subscription on the awaiter.** `await user.run()` resolves once and does not re-fire when the broadcast goes out. Use a `useAction(broadcastAction)` handler in consuming components for change notifications.
-- **`response` and `at` are not reactive.** Reading them inside render does not subscribe the component to updates &ndash; they are snapshots, not signals. Drive UI from the model.
+- **`data` and `at` are not reactive.** Reading them inside render does not subscribe the component to updates &ndash; they are snapshots, not signals. Drive UI from the model.

@@ -261,10 +261,10 @@ export function useActions() {
   const user = actions.useResource(resource.user);
 
   actions.useAction(Actions.Mount, async (context) => {
-    const response = await user.run.unless({ within: { minutes: 5 } });
+    const data = await user.run.if({ over: { minutes: 5 } });
 
     context.actions.produce(({ model }) => {
-      model.user = response;
+      model.user = data;
     });
   });
 
@@ -272,7 +272,7 @@ export function useActions() {
 }
 ```
 
-`actions.useResource(handle)` returns `{ run, response, at }`. Every call to `run()` hits the network &ndash; concurrent calls share one in-flight request, but there is no memoised result. `response` and `at` are read-only snapshots of the most recent successful payload and a `Temporal.Instant` of when it resolved (both `null` until the first success). Coordination across components still happens at the broadcast layer; `response` is a diagnostic snapshot, not a reactive subscription. `Temporal` is read from the host runtime &ndash; bring a polyfill (e.g. [`@js-temporal/polyfill`](https://github.com/js-temporal/temporal-polyfill)) if your target environment does not yet expose it natively. `unless({ within })` accepts a `Temporal.Duration`, a `DurationLike` object, or an ISO 8601 duration string.
+`actions.useResource(handle)` returns a frozen `{ run, data, at }` object. Every call to `run()` hits the network &ndash; concurrent calls share one in-flight request, but there is no memoised result. `data` and `at` are read-only snapshots of the most recent successful payload and a `Temporal.Instant` of when it resolved (both `null` until the first success). Coordination across components still happens at the broadcast layer; `data` is a diagnostic snapshot, not a reactive subscription. `Temporal` is read from the host runtime &ndash; bring a polyfill (e.g. [`@js-temporal/polyfill`](https://github.com/js-temporal/temporal-polyfill)) if your target environment does not yet expose it natively. `run.if({ over })` accepts a `Temporal.Duration`, a `DurationLike` object, or an ISO 8601 duration string.
 
 `Resource` takes two arguments: a key and a fetcher. The fetcher receives the call-site `params` object as its only argument and returns a `Promise<T>`. There are no callbacks &ndash; no `onSuccess`, no `onError`, no injected `dispatch`. Side-effects after a run (broadcasting, analytics, model writes) live in the `useAction` handler that awaited `run()`, next to the rest of the flow:
 
@@ -291,12 +291,12 @@ actions.useAction(Actions.Mount, async (context) => {
 `params` is the second generic on `Resource` and defaults to `{}`. Declare it when the fetcher needs call-time inputs &ndash; cursors, ids, query strings. `params` is a single object (not positional args), which keeps call sites self-documenting and lets in-flight dedup key cleanly per param shape:
 
 ```ts
-export const feed = Resource<Page<Item>, { cursor: string | null }>(
-  "feed",
-  ({ cursor }) =>
-    http
-      .get("feed", { searchParams: { cursor: cursor ?? "" } })
-      .json<Page<Item>>(),
+type Params = { cursor: string | null };
+
+export const feed = Resource<Page<Item>, Params>("feed", ({ cursor }) =>
+  http
+    .get("feed", { searchParams: { cursor: cursor ?? "" } })
+    .json<Page<Item>>(),
 );
 
 const feed = actions.useResource(resource.feed);

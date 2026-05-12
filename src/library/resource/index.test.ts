@@ -8,6 +8,14 @@ describe("Resource()", () => {
     const user = Resource("user", () => Promise.resolve({ name: "Adam" }));
     expect(user.key).toBe("user");
   });
+
+  it("returns a frozen handle — props cannot be reassigned", () => {
+    const user = Resource("user", () => Promise.resolve({ name: "Adam" }));
+    expect(Object.isFrozen(user)).toBe(true);
+    expect(() => {
+      (<{ key: unknown }>user).key = "other";
+    }).toThrow(TypeError);
+  });
 });
 
 describe("actions.useResource()", () => {
@@ -21,7 +29,7 @@ describe("actions.useResource()", () => {
     await expect(result.current.run()).resolves.toEqual({ name: "Adam" });
   });
 
-  it("runs fresh on every awaited call (no stale response)", async () => {
+  it("runs fresh on every awaited call (no stale data)", async () => {
     const fetcher = vi
       .fn<() => Promise<{ name: string }>>()
       .mockResolvedValueOnce({ name: "Adam" })
@@ -159,7 +167,7 @@ describe("actions.useResource()", () => {
   });
 });
 
-describe("ResourceHandle.response / .at", () => {
+describe("ResourceHandle.data / .at", () => {
   it("are null before any run resolves", () => {
     const user = Resource("user", () => Promise.resolve({ name: "Adam" }));
     const { result } = renderHook(() => {
@@ -167,7 +175,7 @@ describe("ResourceHandle.response / .at", () => {
       return actions.useResource(user);
     });
 
-    expect(result.current.response).toBeNull();
+    expect(result.current.data).toBeNull();
     expect(result.current.at).toBeNull();
   });
 
@@ -184,13 +192,13 @@ describe("ResourceHandle.response / .at", () => {
 
     const at = result.current.at;
     if (!at) throw new Error("expected at to be set");
-    expect(result.current.response).toEqual({ name: "Adam" });
+    expect(result.current.data).toEqual({ name: "Adam" });
     expect(at).toBeInstanceOf(Temporal.Instant);
     expect(Temporal.Instant.compare(at, before)).toBeGreaterThanOrEqual(0);
     expect(Temporal.Instant.compare(at, after)).toBeLessThanOrEqual(0);
   });
 
-  it("update to the most recent successful response", async () => {
+  it("update to the most recent successful data", async () => {
     const fetcher = vi
       .fn<() => Promise<{ name: string }>>()
       .mockResolvedValueOnce({ name: "Adam" })
@@ -204,14 +212,14 @@ describe("ResourceHandle.response / .at", () => {
     await result.current.run();
     const firstAt = result.current.at;
     if (!firstAt) throw new Error("expected at to be set");
-    expect(result.current.response).toEqual({ name: "Adam" });
+    expect(result.current.data).toEqual({ name: "Adam" });
 
     await new Promise((resolve) => setTimeout(resolve, 2));
     await result.current.run();
 
     const secondAt = result.current.at;
     if (!secondAt) throw new Error("expected at to still be set");
-    expect(result.current.response).toEqual({ name: "Eve" });
+    expect(result.current.data).toEqual({ name: "Eve" });
     expect(Temporal.Instant.compare(secondAt, firstAt)).toBeGreaterThan(0);
   });
 
@@ -231,8 +239,21 @@ describe("ResourceHandle.response / .at", () => {
 
     await expect(result.current.run()).rejects.toThrow("boom");
 
-    expect(result.current.response).toEqual({ name: "Adam" });
+    expect(result.current.data).toEqual({ name: "Adam" });
     expect(result.current.at).toBe(atAfterSuccess);
+  });
+
+  it("returns a frozen object — props cannot be reassigned", () => {
+    const user = Resource("user", () => Promise.resolve({ name: "Adam" }));
+    const { result } = renderHook(() => {
+      const actions = useActions();
+      return actions.useResource(user);
+    });
+
+    expect(Object.isFrozen(result.current)).toBe(true);
+    expect(() => {
+      (<{ run: unknown }>result.current).run = () => Promise.resolve(null);
+    }).toThrow(TypeError);
   });
 
   it("are shared across components using the same Resource", async () => {
@@ -249,12 +270,12 @@ describe("ResourceHandle.response / .at", () => {
 
     await a.result.current.run();
 
-    expect(b.result.current.response).toEqual({ name: "Adam" });
+    expect(b.result.current.data).toEqual({ name: "Adam" });
     expect(b.result.current.at).toBeInstanceOf(Temporal.Instant);
   });
 });
 
-describe("run.unless({ within })", () => {
+describe("run.if({ over })", () => {
   it("runs when no successful run has happened yet", async () => {
     const fetcher = vi.fn(() => Promise.resolve({ name: "Adam" }));
     const user = Resource("user", fetcher);
@@ -264,12 +285,12 @@ describe("run.unless({ within })", () => {
     });
 
     await expect(
-      result.current.run.unless({ within: { minutes: 5 } }),
+      result.current.run.if({ over: { minutes: 5 } }),
     ).resolves.toEqual({ name: "Adam" });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
-  it("returns the cached response without running when within the window", async () => {
+  it("returns the cached data without running when inside the window", async () => {
     const fetcher = vi.fn(() => Promise.resolve({ name: "Adam" }));
     const user = Resource("user", fetcher);
     const { result } = renderHook(() => {
@@ -281,12 +302,12 @@ describe("run.unless({ within })", () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
 
     await expect(
-      result.current.run.unless({ within: { minutes: 5 } }),
+      result.current.run.if({ over: { minutes: 5 } }),
     ).resolves.toEqual({ name: "Adam" });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
-  it("runs when the cached response is older than the window", async () => {
+  it("runs when the cached data is older than the window", async () => {
     const fetcher = vi
       .fn<() => Promise<{ name: string }>>()
       .mockResolvedValueOnce({ name: "Adam" })
@@ -302,7 +323,7 @@ describe("run.unless({ within })", () => {
     vi.useFakeTimers({ now: Date.now() + 6 * 60_000 });
     try {
       await expect(
-        result.current.run.unless({ within: { minutes: 5 } }),
+        result.current.run.if({ over: { minutes: 5 } }),
       ).resolves.toEqual({ name: "Eve" });
     } finally {
       vi.useRealTimers();
@@ -322,12 +343,12 @@ describe("run.unless({ within })", () => {
     });
 
     await expect(
-      result.current.run.unless({ within: { minutes: 5 } }, { cursor: "abc" }),
+      result.current.run.if({ over: { minutes: 5 } }, { cursor: "abc" }),
     ).resolves.toEqual({ items: ["abc"] });
     expect(fetcher).toHaveBeenCalledWith({ cursor: "abc" });
   });
 
-  it("accepts an ISO 8601 duration string for within", async () => {
+  it("accepts an ISO 8601 duration string for over", async () => {
     const fetcher = vi.fn(() => Promise.resolve({ name: "Adam" }));
     const user = Resource("user", fetcher);
     const { result } = renderHook(() => {
@@ -336,7 +357,7 @@ describe("run.unless({ within })", () => {
     });
 
     await result.current.run();
-    await result.current.run.unless({ within: "PT5M" });
+    await result.current.run.if({ over: "PT5M" });
 
     expect(fetcher).toHaveBeenCalledTimes(1);
   });

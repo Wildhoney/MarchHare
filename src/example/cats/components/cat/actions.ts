@@ -23,7 +23,7 @@ export function useCatActions({ index }: { index: number }) {
   });
 
   actions.useAction(Actions.Refresh, async (context) => {
-    const data = await cat.run.unless({ within: { minutes: 5 } });
+    const data = await cat.run.if({ over: { minutes: 5 } });
 
     context.actions.produce(({ model }) => {
       model.cat = data;

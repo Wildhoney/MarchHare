@@ -1,21 +1,21 @@
 /**
- * Options accepted by `run.unless(...)`.
+ * Options accepted by `run.if(...)`.
  *
- * - `within` &ndash; a `Temporal.Duration`, a `DurationLike` object
+ * - `over` &ndash; a `Temporal.Duration`, a `DurationLike` object
  *   (e.g. `{ minutes: 5 }`), or an ISO 8601 duration string (`"PT5M"`).
- *   If a successful run resolved within this window, the cached
- *   response is returned without hitting the network. Otherwise
- *   `run(...)` is called normally.
+ *   If the most recent successful run resolved longer ago than this
+ *   window, `run(...)` is called. Otherwise the cached data is returned
+ *   without hitting the network.
  *
  * @example
  * ```ts
- * await user.run.unless({ within: { minutes: 5 } });
- * await user.run.unless({ within: "PT5M" });
- * await user.run.unless({ within: Temporal.Duration.from({ minutes: 5 }) });
+ * await user.run.if({ over: { minutes: 5 } });
+ * await user.run.if({ over: "PT5M" });
+ * await user.run.if({ over: Temporal.Duration.from({ minutes: 5 }) });
  * ```
  */
-export type UnlessOptions = {
-  readonly within: Temporal.DurationLike;
+export type IfOptions = {
+  readonly over: Temporal.DurationLike;
 };
 
 /**
@@ -31,8 +31,8 @@ export type ResourceFetcher<T, P extends object = Record<never, never>> = (
 /**
  * Component-bound `run` callable returned by `actions.useResource`. It
  * is invokable like the underlying fetcher (`run(params)`) and also
- * carries an `unless` method that short-circuits the network call when
- * the cached response is still within a freshness window.
+ * carries an `if` method that triggers the network call only when the
+ * cached data is older than the supplied freshness window.
  *
  * The conditional specialisation collapses the call signature when
  * `P` is empty &mdash; `run()` instead of `run({})`.
@@ -41,31 +41,31 @@ export type BoundRun<T, P extends object> = [keyof P] extends [never]
   ? {
       (): Promise<T>;
       /**
-       * Returns the cached response if a successful run resolved within
-       * `options.within`, otherwise calls `run()`.
+       * Calls `run()` if the most recent successful run resolved longer
+       * ago than `options.over`. Otherwise returns the cached data.
        */
-      unless(options: UnlessOptions): Promise<T>;
+      readonly if: (options: IfOptions) => Promise<T>;
     }
   : {
       (params: P): Promise<T>;
       /**
-       * Returns the cached response if a successful run resolved within
-       * `options.within`, otherwise calls `run(params)`.
+       * Calls `run(params)` if the most recent successful run resolved
+       * longer ago than `options.over`. Otherwise returns the cached data.
        */
-      unless(options: UnlessOptions, params: P): Promise<T>;
+      readonly if: (options: IfOptions, params: P) => Promise<T>;
     };
 
 /**
  * Module-scope handle returned by {@link Resource}. Pass to
  * `actions.useResource(handle)` inside a component to obtain a
- * `{ run, response, at }` object.
+ * `{ run, data, at }` object.
  */
 export type ResourceHandle<T, P extends object = Record<never, never>> = {
   readonly key: string;
   /** @internal */
   readonly run: (params: P) => Promise<T>;
-  /** Most recent successful response across all param-sets, or `null`. */
-  readonly response: T | null;
+  /** Most recent successful data across all param-sets, or `null`. */
+  readonly data: T | null;
   /** Instant of the most recent successful run, or `null`. */
   readonly at: Temporal.Instant | null;
 };
@@ -87,8 +87,8 @@ export type ResourceHandle<T, P extends object = Record<never, never>> = {
  * independently while two concurrent `feed.run({ cursor: "abc" })` calls
  * share one network request.
  *
- * Each call to `run()` always hits the network; `response` and `at`
- * are read-only snapshots of the most recent successful response and
+ * Each call to `run()` always hits the network; `data` and `at`
+ * are read-only snapshots of the most recent successful payload and
  * the instant it resolved &ndash; not a memoised result.
  *
  * @example
@@ -109,7 +109,7 @@ export function Resource<T, P extends object = Record<never, never>>(
   fetcher: ResourceFetcher<T, P>,
 ): ResourceHandle<T, P> {
   const inflight = new Map<string, Promise<T>>();
-  let response: T | null = null;
+  let data: T | null = null;
   let at: Temporal.Instant | null = null;
 
   const runWith = (params: P): Promise<T> => {
@@ -120,7 +120,7 @@ export function Resource<T, P extends object = Record<never, never>>(
     const promise = fetcher(params).then(
       (resolved) => {
         if (inflight.get(paramsKey) === promise) inflight.delete(paramsKey);
-        response = resolved;
+        data = resolved;
         at = Temporal.Now.instant();
         return resolved;
       },
@@ -133,14 +133,14 @@ export function Resource<T, P extends object = Record<never, never>>(
     return promise;
   };
 
-  return {
+  return Object.freeze({
     key,
     run: runWith,
-    get response() {
-      return response;
+    get data() {
+      return data;
     },
     get at() {
       return at;
     },
-  };
+  });
 }
