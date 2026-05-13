@@ -30,7 +30,7 @@
   ],
   "scripts": {
     "build": "vite build",
-    "build:example": "vite build --mode example --outDir dist-example --base /march-hare/",
+    "build:example": "vite build --mode example --outDir dist-example --base /MarchHare/",
     "dev": "vite",
     "preview": "vite preview",
     "release": "make checks",
