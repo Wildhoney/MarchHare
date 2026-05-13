@@ -1096,7 +1096,7 @@ describe("useActions() StrictMode resilience", () => {
 
     function TestComponent() {
       const result = useActions<AnnotatedModel, typeof AnnotatedActions>({
-        name: annotate(Operation.Update, null),
+        name: annotate(null, Operation.Update),
       });
 
       result.useAction(AnnotatedActions.SetName, (context, name) => {

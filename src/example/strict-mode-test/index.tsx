@@ -19,7 +19,7 @@ class Actions {
 }
 
 const model: Model = {
-  name: annotate(Operation.Update, null),
+  name: annotate(null, Operation.Update),
   count: 0,
 };
 

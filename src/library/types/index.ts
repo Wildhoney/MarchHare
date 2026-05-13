@@ -614,7 +614,7 @@ export type HandlerContext<
       ƒ: F & AssertSync<F>,
     ): void;
     dispatch(action: ActionOrChanneled, payload?: unknown): Promise<void>;
-    annotate<T>(operation: Operation, value: T): T;
+    annotate<T>(value: T, operation?: Operation): T;
     /**
      * Returns the resolved broadcast or multicast value, waiting for any
      * pending annotations to settle before resolving.

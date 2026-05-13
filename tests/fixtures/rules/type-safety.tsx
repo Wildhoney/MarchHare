@@ -153,8 +153,8 @@ function useRule29And30Actions() {
       // Rule 29: Use Op to specify annotation operations
       context.actions.produce((draft) => {
         draft.model.annotatedValue = context.actions.annotate(
-          Op.Update,
           newValue,
+          Op.Update,
         );
       });
 
@@ -265,10 +265,13 @@ function useRule31Actions() {
   actions.useAction(BoxActions.UpdateUser, async (context, updates) => {
     // Annotate the update
     context.actions.produce((draft) => {
-      draft.model.user = context.actions.annotate(Op.Update, {
-        ...draft.model.user,
-        ...updates,
-      });
+      draft.model.user = context.actions.annotate(
+        {
+          ...draft.model.user,
+          ...updates,
+        },
+        Op.Update,
+      );
     });
 
     await utils.sleep(500);
@@ -281,8 +284,8 @@ function useRule31Actions() {
   actions.useAction(BoxActions.IncrementCounter, async (context) => {
     context.actions.produce((draft) => {
       draft.model.counter = context.actions.annotate(
-        Op.Update,
         draft.model.counter + 1,
+        Op.Update,
       );
     });
 

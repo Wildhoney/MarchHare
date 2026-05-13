@@ -16,23 +16,26 @@ const state = new State();
  * registered during hydration so that `actions.inspect` reports the field as pending
  * from the very first render.
  *
- * @param operation - The operation type (e.g., Op.Update).
  * @param value - The value to annotate.
+ * @param operation - The operation type (defaults to {@link Operation.Update}).
  * @returns The annotated value (typed as T for assignment compatibility).
  *
  * @example
  * ```ts
- * import { annotate, Op } from "march-hare";
+ * import { annotate } from "march-hare";
  *
  * type Model = { user: User | null };
  *
  * const model: Model = {
- *   user: annotate(Op.Update, null),
+ *   user: annotate(null),
  * };
  *
  * // actions.inspect.user.pending() === true from the first render
  * ```
  */
-export function annotate<T>(operation: Operation, value: T): T {
+export function annotate<T>(
+  value: T,
+  operation: Operation = Operation.Update,
+): T {
   return state.annotate(operation, value);
 }

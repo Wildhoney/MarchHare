@@ -12,7 +12,7 @@ const _Actions = <const>{ SetName: Action<string>("SetName") };
 describe("annotate()", () => {
   it("should mark an initial model field as pending with Op.Update", () => {
     const model: Model = {
-      name: annotate(Operation.Update, null),
+      name: annotate(null, Operation.Update),
     };
 
     const { result } = renderHook(() => {
@@ -28,7 +28,7 @@ describe("annotate()", () => {
 
   it("should mark an initial model field as pending with Op.Add", () => {
     const model: Model = {
-      name: annotate(Operation.Add, null),
+      name: annotate(null, Operation.Add),
     };
 
     const { result } = renderHook(() => {
@@ -44,7 +44,7 @@ describe("annotate()", () => {
 
   it("should mark an initial model field as pending with Op.Remove", () => {
     const model: Model = {
-      name: annotate(Operation.Remove, "about-to-go"),
+      name: annotate("about-to-go", Operation.Remove),
     };
 
     const { result } = renderHook(() => {
@@ -60,7 +60,7 @@ describe("annotate()", () => {
 
   it("should preserve the annotated value as the model value", () => {
     const model: Model = {
-      name: annotate(Operation.Update, "initial"),
+      name: annotate("initial", Operation.Update),
     };
 
     const { result } = renderHook(() => {
@@ -73,7 +73,7 @@ describe("annotate()", () => {
 
   it("should report remaining count of 1 for a single annotation", () => {
     const model: Model = {
-      name: annotate(Operation.Update, null),
+      name: annotate(null, Operation.Update),
     };
 
     const { result } = renderHook(() => {
@@ -88,8 +88,8 @@ describe("annotate()", () => {
     type MultiModel = { name: string | null; age: number };
 
     const model: MultiModel = {
-      name: annotate(Operation.Update, null),
-      age: annotate(Operation.Add, 0),
+      name: annotate(null, Operation.Update),
+      age: annotate(0, Operation.Add),
     };
 
     const { result } = renderHook(() => {
@@ -108,7 +108,7 @@ describe("annotate()", () => {
 
   it("should clear annotations after produce prunes the hydration process", async () => {
     const model: Model = {
-      name: annotate(Operation.Update, null),
+      name: annotate(null, Operation.Update),
     };
 
     const { result } = renderHook(() => {
@@ -135,7 +135,7 @@ describe("annotate()", () => {
     type MixedModel = { name: string | null; count: number };
 
     const model: MixedModel = {
-      name: annotate(Operation.Update, null),
+      name: annotate(null, Operation.Update),
       count: 42,
     };
 
@@ -152,7 +152,7 @@ describe("annotate()", () => {
 
   it("should expose the draft value via inspect.draft()", () => {
     const model: Model = {
-      name: annotate(Operation.Update, "loading"),
+      name: annotate("loading", Operation.Update),
     };
 
     const { result } = renderHook(() => {

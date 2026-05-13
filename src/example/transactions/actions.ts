@@ -12,8 +12,8 @@ export function useTransactionsActions() {
     context.actions.produce(
       ({ model }) =>
         void (model.items = context.actions.annotate(
-          Operation.Update,
           model.items,
+          Operation.Update,
         )),
     );
 
@@ -38,8 +38,8 @@ export function useTransactionsActions() {
     context.actions.produce(
       ({ model }) =>
         void (model.items = context.actions.annotate(
-          Operation.Update,
           model.items,
+          Operation.Update,
         )),
     );
 
@@ -60,8 +60,8 @@ export function useTransactionsActions() {
     context.actions.produce(
       ({ model }) =>
         void (model.items = context.actions.annotate(
-          Operation.Update,
           model.items,
+          Operation.Update,
         )),
     );
 

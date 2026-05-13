@@ -76,7 +76,7 @@ When you need to do more than just assign the payload &ndash; such as making an 
 actions.useAction(Actions.Name, async (context) => {
   context.actions.produce(
     (draft) =>
-      void (draft.model.name = context.actions.annotate(Op.Update, null)),
+      void (draft.model.name = context.actions.annotate(null, Op.Update)),
   );
 
   const name = await fetch(api.user());
@@ -159,7 +159,7 @@ class Actions {
 actions.useAction(Actions.Profile, async (context) => {
   context.actions.produce(
     (draft) =>
-      void (draft.model.name = context.actions.annotate(Op.Update, null)),
+      void (draft.model.name = context.actions.annotate(null, Op.Update)),
   );
 
   const name = await fetch(api.user());

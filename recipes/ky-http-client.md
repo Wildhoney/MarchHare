@@ -29,8 +29,11 @@ export function useUserActions() {
 
   actions.useAction(Actions.FetchUser, async (context, userId) => {
     context.actions.produce(
-      ({ model, inspect }) =>
-        void (model.user = inspect.annotate(Operation.Pending, model.user)),
+      ({ model }) =>
+        void (model.user = context.actions.annotate(
+          model.user,
+          Operation.Pending,
+        )),
     );
 
     const user = await ky.get(`/api/users/${userId}`).json<User>();
@@ -49,8 +52,11 @@ March Hare provides an `AbortController` via `context.task.controller` that you 
 ```ts
 actions.useAction(Actions.FetchUser, async (context, userId) => {
   context.actions.produce(
-    ({ model, inspect }) =>
-      void (model.user = inspect.annotate(Operation.Pending, model.user)),
+    ({ model }) =>
+      void (model.user = context.actions.annotate(
+        model.user,
+        Operation.Pending,
+      )),
   );
 
   const user = await ky
@@ -131,8 +137,8 @@ ky throws an `HTTPError` for non-2xx responses, which integrates with March Hare
 import ky, { HTTPError } from "ky";
 
 actions.useAction(Actions.FetchUser, async (context, userId) => {
-  context.actions.produce(({ model, inspect }) => {
-    model.user = inspect.annotate(Operation.Pending, model.user);
+  context.actions.produce(({ model }) => {
+    model.user = context.actions.annotate(model.user, Operation.Pending);
     model.error = null;
   });
 

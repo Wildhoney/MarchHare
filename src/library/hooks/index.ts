@@ -197,7 +197,7 @@ export function useActions<
             const emitter = isBroadcastAction(action) ? broadcast : unicast;
             return emitAsync(emitter, base, payload, channel);
           },
-          annotate<T>(operation: Operation, value: T): T {
+          annotate<T>(value: T, operation: Operation = Operation.Update): T {
             return state.current.annotate(operation, value);
           },
           async resolution(action: AnyAction) {

@@ -77,7 +77,7 @@ Annotations are powered by [Immertation](https://www.npmjs.com/package/immertati
 ```ts
 context.actions.produce(
   (draft) =>
-    void (draft.model.data = context.actions.annotate(Op.Update, newValue)),
+    void (draft.model.data = context.actions.annotate(newValue, Op.Update)),
 );
 ```
 
@@ -656,7 +656,7 @@ import { Op } from "march-hare";
 
 context.actions.produce(
   (draft) =>
-    void (draft.model.item = context.actions.annotate(Op.Update, newValue)),
+    void (draft.model.item = context.actions.annotate(newValue, Op.Update)),
 );
 ```
 
@@ -794,8 +794,8 @@ actions.useAction(Actions.FetchUser, async (context, userId) => {
   context.actions.produce(
     (draft) =>
       void (draft.model.user = context.actions.annotate(
-        Op.Update,
         draft.model.user,
+        Op.Update,
       )),
   );
 

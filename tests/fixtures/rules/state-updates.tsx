@@ -66,8 +66,8 @@ function useRule6Actions() {
     context.actions.produce(
       (draft) =>
         void (draft.model.annotatedData = context.actions.annotate(
-          Op.Update,
           newData,
+          Op.Update,
         )),
     );
 

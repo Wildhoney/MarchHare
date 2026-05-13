@@ -177,7 +177,7 @@ actions.useAction(Actions.Fetch, async (context, payload) => {
   // Generator handlers run in the background and do not block.
   await context.actions.dispatch(action, payload, options?);
 
-  context.actions.annotate(Op.Update, value); // Mark async state
+  context.actions.annotate(value, Op.Update); // Mark async state (Op.Update is the default)
 
   // Resolve latest broadcast/multicast value (waits for settled annotations)
   const user = await context.actions.resolution(Actions.Broadcast.User);
@@ -218,7 +218,7 @@ actions.useAction(Actions.Fetch, async (context) => {
   // Mark field as pending
   context.actions.produce(
     ({ model, inspect }) =>
-      void (model.user = inspect.annotate(Op.Update, model.user)),
+      void (model.user = context.actions.annotate(model.user)),
   );
 
   const user = await fetchUser();

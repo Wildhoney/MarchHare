@@ -9,8 +9,8 @@ import { Op } from "march-hare";
 
 context.actions.produce((draft) => {
   draft.model.count = context.actions.annotate(
-    Op.Update,
     draft.inspect.count.draft() + 1,
+    Op.Update,
   );
 });
 ```

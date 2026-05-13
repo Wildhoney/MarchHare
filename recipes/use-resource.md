@@ -223,8 +223,8 @@ actions.useAction(Actions.Mount, async (context) => {
   context.actions.produce(
     ({ model }) =>
       void (model.user = context.actions.annotate(
-        Operation.Update,
         model.user,
+        Operation.Update,
       )),
   );
 

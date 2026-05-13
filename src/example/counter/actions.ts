@@ -14,8 +14,8 @@ export function useCounterActions() {
   actions.useAction(Actions.Increment, async (context) => {
     context.actions.produce((draft) => {
       draft.model.count = context.actions.annotate(
-        Operation.Update,
         draft.inspect.count.draft() + 1,
+        Operation.Update,
       );
     });
 
