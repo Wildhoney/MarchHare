@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="/media/logo-v2.png" width="475" />
+  <img src="/media/logo-v3.png" width="475" />
 
 [![Checks](https://github.com/Wildhoney/march-hare/actions/workflows/checks.yml/badge.svg)](https://github.com/Wildhoney/march-hare/actions/workflows/checks.yml)
 
