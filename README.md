@@ -1,13 +1,19 @@
 <div align="center">
   <img src="/media/logo-v3.png" width="475" />
 
+<i>❝We're all <ins>mad</ins> here.❞</i>
+<br />
+<sub><strong>M</strong>odel,</sub>
+<sub><strong>A</strong>ctions,</sub>
+<sub><strong>D</strong>ata</sub>
+
 [![Checks](https://github.com/Wildhoney/march-hare/actions/workflows/checks.yml/badge.svg)](https://github.com/Wildhoney/march-hare/actions/workflows/checks.yml)
 
 </div>
 
-Strongly typed React framework using generators and efficiently updated views alongside the publish-subscribe pattern.
+> Strongly typed React framework using generators and efficiently updated views alongside the publish-subscribe pattern.
 
-**[View Live Demo →](https://wildhoney.github.io/march-hare/)**
+> **[View Live Demo →](https://wildhoney.github.io/march-hare/)**
 
 ## Contents
 
