@@ -2,6 +2,101 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.6.0](https://github.com/Wildhoney/Chizu/compare/v0.2.27...v0.6.0) (2026-05-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* **api:** multicasts self-scope via withScope, drop regulator+meta, rename With.{Update,Invert}, add useMode
+* **scope:** drop ScopeCarrier, take scope name string directly
+* **error:** replace <Error> boundary with Lifecycle.Fault broadcast
+
+* **api:** multicasts self-scope via withScope, drop regulator+meta, rename With.{Update,Invert}, add useMode ([590740d](https://github.com/Wildhoney/Chizu/commit/590740d02b8b06ae1a3a7687a209090260eb6da3))
+* **error:** replace <Error> boundary with Lifecycle.Fault broadcast ([f29dd1a](https://github.com/Wildhoney/Chizu/commit/f29dd1a1f953b86821ab606edb9c5132231499de))
+* **scope:** drop ScopeCarrier, take scope name string directly ([2c78815](https://github.com/Wildhoney/Chizu/commit/2c78815fb0a01ee07a2675c351ce8263de049351))
+
+
+### Features
+
+* abort in-flight actions on unmount, add own() methods, unify to array notation ([1e66147](https://github.com/Wildhoney/Chizu/commit/1e6614768f3fd9c8e7679070ea6c413b2e5c89f1))
+* add cache layer with cacheable, invalidate, and model initialisation ([1d1dbb2](https://github.com/Wildhoney/Chizu/commit/1d1dbb2507759f91ff71bfc485cc5f9b48da7d0d))
+* add consume() method for subscribing to distributed action values ([594d231](https://github.com/Wildhoney/Chizu/commit/594d231cc3a840b8ea07634dad93656589046e7f))
+* add Lifecycle.Element for element capture events with channeled subscriptions ([4da7f9e](https://github.com/Wildhoney/Chizu/commit/4da7f9e31dd852a35d84a716e6c9215fb8cabcb3))
+* add nested Actions.Multicast pattern with typed dispatch overloads ([eaa1ff0](https://github.com/Wildhoney/Chizu/commit/eaa1ff0f8cee740707f0616c47d4b056f0758fa2))
+* add tuple type pattern for useAction and useActions hooks ([bb463b0](https://github.com/Wildhoney/Chizu/commit/bb463b0c27f3ce90f1fe05d503a3f65d337d54e9))
+* add With.Filter helper and organize utils under With namespace ([53c23c2](https://github.com/Wildhoney/Chizu/commit/53c23c247d8273bc2396096ec4085e21ec938ea9))
+* added + updated decorators ([c96215e](https://github.com/Wildhoney/Chizu/commit/c96215ec1aef32869babeb245dcda2570d776ef3))
+* added <Visitor /> example for real-time data ([26df7a5](https://github.com/Wildhoney/Chizu/commit/26df7a559d38a632be5ba66dcab5b70dc2b36600))
+* added action decorators and updated README ([5da6166](https://github.com/Wildhoney/Chizu/commit/5da616695c022b4bdb3c1839fcccf2b687e0a43a))
+* added actions.useReactive hook ([152054c](https://github.com/Wildhoney/Chizu/commit/152054c912d0674f456ca74f1e1776032508fd32))
+* added Bound function for simple assignments ([a47bf6a](https://github.com/Wildhoney/Chizu/commit/a47bf6a2bdb22e0d362e94e0a84c093f7940b0fc))
+* added checksum util fn and documented the util fns ([699ff84](https://github.com/Wildhoney/Chizu/commit/699ff844000f1fc7f4ea8e70435c785db7b2c5c9))
+* added concept of features and made dispatch awaitable ([4565a45](https://github.com/Wildhoney/Chizu/commit/4565a45a73739065d44702151bf8c1d789fac607))
+* added decorators + updated README ([8949d13](https://github.com/Wildhoney/Chizu/commit/8949d13407d2189e44c0ce6bbd560514489ee669))
+* added error handling context ([01c1510](https://github.com/Wildhoney/Chizu/commit/01c15105f0755be06b954405d8c86e9542c68473))
+* added initial decorator example ([8af20b7](https://github.com/Wildhoney/Chizu/commit/8af20b74f10895e5576123a785ce7af64633fa3f))
+* added integration test for the counter example ([56e557b](https://github.com/Wildhoney/Chizu/commit/56e557b3bc046a736f35d849e4e9bea0f426e5db))
+* added late dispatching for useAction(DistributedAction) ([0999e49](https://github.com/Wildhoney/Chizu/commit/0999e49694ee433e1e1c09ea7b473327288b2286))
+* added Lifecycle.Update with diff ([4d8aa36](https://github.com/Wildhoney/Chizu/commit/4d8aa366b772a73e59a1ca18d5bfa59f5f40f1d8))
+* added rulebook with associated integration tests + rulebook ([b6cbffa](https://github.com/Wildhoney/Chizu/commit/b6cbffa2e0310b78f1431028a734be2165b9f191))
+* added the ability to dispatch events using partial object matching ([4898c10](https://github.com/Wildhoney/Chizu/commit/4898c1012e885201217abfe1025d3152f53681a3))
+* added withScope HOC for multicast actions ([eadb5c0](https://github.com/Wildhoney/Chizu/commit/eadb5c0c898dce7190494d0db8dda9627dcb6014))
+* **annotate:** add standalone annotate function for initial model Op states ([2a88a4b](https://github.com/Wildhoney/Chizu/commit/2a88a4b1b174df6c3600e638eca0aebb79cda5c3))
+* **cache:** add Entry factory with cacheable/invalidate on context.actions ([42a7ba6](https://github.com/Wildhoney/Chizu/commit/42a7ba6efa18ad069762e450165836d3f9c723a9))
+* changed the channeled actions approach ([0bdcd60](https://github.com/Wildhoney/Chizu/commit/0bdcd60690fa88a222492f1fee0ba833f50c9543))
+* changed the interface of the regulator object ([7a3f482](https://github.com/Wildhoney/Chizu/commit/7a3f482932af49f14f5fa3115522631e0a95bd0d))
+* **deps:** update immertation to ^0.1.26 ([15a674e](https://github.com/Wildhoney/Chizu/commit/15a674e7f1de574e70ce89c79598a99308e10bca))
+* **hooks:** add context.actions.consume for handler-side broadcast/multicast reads ([615332f](https://github.com/Wildhoney/Chizu/commit/615332f8b3dea679a5b815ff897f42bf9ca61ea6))
+* **hooks:** add multicast cached replay on mount and document deduplication patterns ([6e4abe9](https://github.com/Wildhoney/Chizu/commit/6e4abe94871955cc63bfe69a0acac4766b77c79b))
+* **hooks:** add peek() for synchronous reads and JSX consume() on actions tuple ([d635a65](https://github.com/Wildhoney/Chizu/commit/d635a65e09d82977115293c949e9497fcc52fae0))
+* **hooks:** convert lifecycle actions to factory functions for per-component regulation ([f408fb9](https://github.com/Wildhoney/Chizu/commit/f408fb985a5da056037de889218a5d24254f9cd4))
+* **hooks:** support void actions type parameter in useActions with void,void defaults ([de47323](https://github.com/Wildhoney/Chizu/commit/de4732305f93847e023f0bdb95c13fbf8d0faebb))
+* implement real Immertation inspect for consume() and rename ConsumeRenderer to Partition ([84cb3aa](https://github.com/Wildhoney/Chizu/commit/84cb3aa5b4485758f5f40570c491883ef0bfd4db))
+* improved the appearance of the example ([d5ea529](https://github.com/Wildhoney/Chizu/commit/d5ea5294908957bdef69277e356d82c769521ac1))
+* improved the typing of the useAction fn ([3393907](https://github.com/Wildhoney/Chizu/commit/3393907cd8fcf74ca8016a7fd2fec4b6eda5b30a))
+* improved typings around the actions ([3cc511b](https://github.com/Wildhoney/Chizu/commit/3cc511b81695ece5602008b69939ac07ccf1f8ef))
+* integrated immeration ([11641a7](https://github.com/Wildhoney/Chizu/commit/11641a796066ad5791de694f7576578b946e09dd))
+* new implementation for the annotations ([eec20b2](https://github.com/Wildhoney/Chizu/commit/eec20b28483f6967a4df746e5bb79255934f7c8d))
+* re-added the model stateful and stateless concept ([0beb7c4](https://github.com/Wildhoney/Chizu/commit/0beb7c4a68cfbadf5c038495e2c2765ca4d68430))
+* read context.model from state ref to prevent stale closure reads ([e8a0d4a](https://github.com/Wildhoney/Chizu/commit/e8a0d4a64082b56edaf12cbc09a985f6566fa657))
+* regulator class ([97f23be](https://github.com/Wildhoney/Chizu/commit/97f23bec165d0c2ed379bd3930b7b6c030d502b7))
+* **rehydrate:** add typed Id<M, C> store factory and context.actions.invalidate for rehydration snapshots ([54b208f](https://github.com/Wildhoney/Chizu/commit/54b208f8d1962e08fcd25173d4f60b827ceff3ec))
+* removed the regulator class in favour of Set<Task> ([c48286d](https://github.com/Wildhoney/Chizu/commit/c48286d196af991ec23751c6837883064343372f))
+* replace cache layer with rehydration for persisting state across unmount/remount cycles ([b559b7c](https://github.com/Wildhoney/Chizu/commit/b559b7c43880dbbfdd5a7a6d4f7373df0d909884))
+* **resource:** rework useResource to return { fetch, cache, fetched } with fetch.unless ([4b3402c](https://github.com/Wildhoney/Chizu/commit/4b3402cc0d9ec92f4662e6991b0ff47d34dec7fa))
+* **scope:** derive withScope wrapper name from wrapped component ([5150b91](https://github.com/Wildhoney/Chizu/commit/5150b917742a59ebc7652c9598f5508db5a8cff3))
+* simplified the README ([7f3dab9](https://github.com/Wildhoney/Chizu/commit/7f3dab910b56f85f10c0e45f508f7b051567e0f3))
+* support dot-notation for nested action namespaces in Handlers type ([a35f0d7](https://github.com/Wildhoney/Chizu/commit/a35f0d7f2bbf033e86e119e0116fdb5a5684b949))
+* support variadic arguments in regulator matching methods ([a1bb779](https://github.com/Wildhoney/Chizu/commit/a1bb779b7246b9cd3ad8cd98ff4596a8e069b9ad))
+* support void model type in useActions for stateless action-only components ([5d420ff](https://github.com/Wildhoney/Chizu/commit/5d420fff69095d6377dfc3d0f01637faf532a59c))
+* supporting async and generator actions ([abbf73c](https://github.com/Wildhoney/Chizu/commit/abbf73c5e046235d563ee25ea624a9f4b7b6b723))
+* supporting custom error classes ([d7e49af](https://github.com/Wildhoney/Chizu/commit/d7e49af66cb6f850e491781a58618fc5cc8516f8))
+* **types:** add Features and Nodes utility types with Property symbol keys ([5500257](https://github.com/Wildhoney/Chizu/commit/55002571abf7e6748ced904384d959b06c1e449a))
+* **types:** support dot-notated nested actions in Handlers HKT ([295e4c1](https://github.com/Wildhoney/Chizu/commit/295e4c16acae2c7d418e30febf2f2505e584f192))
+* update api to improve readability ([cfc5061](https://github.com/Wildhoney/Chizu/commit/cfc5061d218383b6c07fcc3429cafc4c22d91dbe))
+* update Immertation to 0.1.21 and set yarn as package manager ([d4b1909](https://github.com/Wildhoney/Chizu/commit/d4b19096db9603c6309ef60f6388968966d1a257))
+* updated inteface for the regulator ([5a3ad80](https://github.com/Wildhoney/Chizu/commit/5a3ad80d27fb4b915a282e9ec9b36d22d72481ef))
+* updated the api for the reactive() decorator ([800bf11](https://github.com/Wildhoney/Chizu/commit/800bf11952f8afbd05d97331acbbc695d6d64b0f))
+* upgraded to latest immertation version ([4065a1b](https://github.com/Wildhoney/Chizu/commit/4065a1bde44875580ea312da77bd6f3904755ed8))
+* use `useEffectEvent` for the `useAction` hook ([a75a145](https://github.com/Wildhoney/Chizu/commit/a75a145f484d9b9b732253457a097875b1af6d66))
+* using ref to allow for sync actions ([5bc897d](https://github.com/Wildhoney/Chizu/commit/5bc897d34cbad4d4ff28b2dea406334727c8ac8c))
+* **utils:** add signal-aware poll() utility and make sleep() signal arg explicit ([4603ace](https://github.com/Wildhoney/Chizu/commit/4603aced8050900272ed8ec431dba466477d5b6a))
+
+
+### Bug Fixes
+
+* bug with the strings as action names ([f4cd779](https://github.com/Wildhoney/Chizu/commit/f4cd77992549de13330ce1fd924e40a6b8735de0))
+* emitting Lifecycle.Node ([95db16f](https://github.com/Wildhoney/Chizu/commit/95db16f1dbb7d2cd5604ebfeefd72bbd4f9b092a))
+* **hooks:** discard implicit return values from produce callbacks ([e6f6417](https://github.com/Wildhoney/Chizu/commit/e6f6417db6286b4a0ac663f2a05b7478d7f5c2dc))
+* **hooks:** re-emit Lifecycle.Mount after <Activity> show ([2efc657](https://github.com/Wildhoney/Chizu/commit/2efc657341d64d2140b2dece1b5d0f7a3c4e7c89))
+* playwright ci ([8db6641](https://github.com/Wildhoney/Chizu/commit/8db664153791ea22df30fc9f238b613084018316))
+* replay broadcast values for useAction handlers without consume ([014e273](https://github.com/Wildhoney/Chizu/commit/014e273cd374d913ca0eb1e7108cae47b450d40f))
+* tests + lint + typecheck ([5fe94ac](https://github.com/Wildhoney/Chizu/commit/5fe94ac97d57f8954997b0156b20e00a2c2894d7))
+* tests + lint + typecheck ([91678c3](https://github.com/Wildhoney/Chizu/commit/91678c36546799208a857d487e21938ed85f6f01))
+* **types:** allow action-based derive with void model by removing never guard ([7decfaa](https://github.com/Wildhoney/Chizu/commit/7decfaa4a27eefc008ada319c04eb785773c12c9))
+* update GitHub URLs and fix example build configuration ([1728a16](https://github.com/Wildhoney/Chizu/commit/1728a16c9d93a035f35f385aa4c41befee82e5a7))
+* yarn resolutions ([debadaf](https://github.com/Wildhoney/Chizu/commit/debadafa0aef48d88329fbff23717666baff6e31))
+
 ## [0.5.2](https://github.com/Wildhoney/Chizu/compare/v0.5.1...v0.5.2) (2026-05-09)
 
 ## [0.5.1](https://github.com/Wildhoney/Chizu/compare/v0.5.0...v0.5.1) (2026-05-09)
