@@ -76,22 +76,31 @@ export default function Profile(): React.ReactElement {
 }
 ```
 
-When you need to do more than just assign the payload &ndash; such as making an API request &ndash; expand `useAction` to a full function. It can be synchronous, asynchronous, or even a generator:
+When you need to do more than just assign the payload &ndash; such as making an API request &ndash; expand `useAction` to a full function. It can be synchronous, asynchronous, or even a generator. Remote data goes through `Resource` rather than a bare `fetch` &ndash; declare the resource at module scope and consume it via `actions.useResource`:
+
+```ts
+// resources.ts
+import { Resource } from "march-hare";
+
+export const user = Resource("user", () => ky.get(api.user()).json<User>());
+```
 
 ```tsx
+const user = actions.useResource(resource.user);
+
 actions.useAction(Actions.Name, async (context) => {
   context.actions.produce(
-    (draft) =>
-      void (draft.model.name = context.actions.annotate(null, Op.Update)),
+    ({ model }) =>
+      void (model.name = context.actions.annotate(model.name, Op.Update)),
   );
 
-  const name = await fetch(api.user());
+  const data = await user.run();
 
-  context.actions.produce((draft) => void (draft.model.name = name));
+  context.actions.produce(({ model }) => void (model.name = data.name));
 });
 ```
 
-Notice we're using `annotate` which you can read more about in the [Immertation documentation](https://github.com/Wildhoney/Immertation). Nevertheless once the request is finished we update the model again with the `name` fetched from the response and update our React component again.
+Notice we're using `annotate` which you can read more about in the [Immertation documentation](https://github.com/Wildhoney/Immertation). Once the request is finished we update the model again with the name fetched from the response and re-render the React component. `Resource` dedupes concurrent calls and exposes typed params &ndash; the full API is covered [further down](#remote-data).
 
 If you need to access external reactive values (like props or `useState` from parent components) that always reflect the latest value even after `await` operations, pass a data callback to `useActions`:
 
@@ -101,9 +110,11 @@ const actions = useActions<Model, typeof Actions, { query: string }>(
   () => ({ query: props.query }),
 );
 
+const search = actions.useResource(resource.search);
+
 actions.useAction(Actions.Search, async (context) => {
-  await fetch("/search");
-  // context.data.query is always the latest value
+  await search.run({ query: context.data.query });
+  // context.data.query is always the latest value, even after await
   console.log(context.data.query);
 });
 ```
@@ -162,38 +173,44 @@ class Actions {
 ```
 
 ```tsx
+const user = actions.useResource(resource.user);
+
 actions.useAction(Actions.Profile, async (context) => {
   context.actions.produce(
-    (draft) =>
-      void (draft.model.name = context.actions.annotate(null, Op.Update)),
+    ({ model }) =>
+      void (model.name = context.actions.annotate(model.name, Op.Update)),
   );
 
-  const name = await fetch(api.user());
+  const data = await user.run();
 
-  context.actions.produce((draft) => void (draft.model.name = name));
+  context.actions.produce(({ model }) => void (model.name = data.name));
 
-  context.actions.dispatch(Actions.Broadcast.Name, name);
+  context.actions.dispatch(Actions.Broadcast.Name, data.name);
 });
 ```
 
 Once we have the broadcast action, if we want to listen for it and perform another operation in our local component we can do that via `useAction`:
 
 ```tsx
-actions.useAction(Actions.Broadcast.Name, async (context, name) => {
-  const friends = await fetch(api.friends(name));
+const friends = actions.useResource(resource.friends);
 
-  context.actions.produce((draft) => void (draft.model.friends = friends));
+actions.useAction(Actions.Broadcast.Name, async (context, name) => {
+  const data = await friends.run({ name });
+
+  context.actions.produce(({ model }) => void (model.friends = data));
 });
 ```
 
 Both `read` and `peek` access the latest cached broadcast value without subscribing via `useAction`. The difference is that `read` waits for any pending annotations on the corresponding model field to settle before resolving, whereas `peek` returns the value immediately:
 
 ```tsx
+const friends = actions.useResource(resource.friends);
+
 actions.useAction(Actions.FetchFriends, async (context) => {
   const name = await context.actions.resolution(Actions.Broadcast.Name);
   if (!name) return;
-  const friends = await fetch(api.friends(name));
-  context.actions.produce(({ model }) => void (model.friends = friends));
+  const data = await friends.run({ name });
+  context.actions.produce(({ model }) => void (model.friends = data));
 });
 ```
 
@@ -238,6 +255,8 @@ function Dashboard() {
 ```
 
 Components that mount after a broadcast has already been dispatched automatically receive the cached value via their `useAction` handler. If you also fetch data in `Lifecycle.Mount()`, see the [mount deduplication recipe](./recipes/mount-broadcast-deduplication.md) to avoid duplicate requests.
+
+<a id="remote-data"></a>
 
 For remote data, declare a `Resource` at module scope &ndash; same shape as `Action` &ndash; and consume it via `actions.useResource` inside a component. Convention is to keep all resources in `resources.ts` and import them as a namespace:
 
