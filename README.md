@@ -7,13 +7,13 @@
 <sub><strong>A</strong>ctions,</sub>
 <sub><strong>D</strong>ata</sub>
 
-[![Checks](https://github.com/Wildhoney/march-hare/actions/workflows/checks.yml/badge.svg)](https://github.com/Wildhoney/march-hare/actions/workflows/checks.yml)
+[![Checks](https://github.com/Wildhoney/MarchHare/actions/workflows/checks.yml/badge.svg)](https://github.com/Wildhoney/MarchHare/actions/workflows/checks.yml)
 
 </div>
 
 > Strongly typed React framework using generators and efficiently updated views alongside the publish-subscribe pattern.
 
-> **[View Live Demo →](https://wildhoney.github.io/march-hare/)**
+> **[View Live Demo →](https://wildhoney.github.io/MarchHare/)**
 
 ## Contents
 

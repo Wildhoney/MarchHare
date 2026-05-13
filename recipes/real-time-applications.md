@@ -63,4 +63,4 @@ Key patterns demonstrated:
 - **Cleanup in `Lifecycle.Unmount()`** &ndash; Close the connection when the component unmounts to prevent memory leaks.
 - **All handlers use `actions.useAction`** &ndash; Lifecycle handlers benefit from the same stable reference pattern as regular actions, with types pre-baked from the `useActions` call.
 
-See the full implementation in the [Visitor example source code](https://github.com/Wildhoney/march-hare/blob/main/src/example/visitor/actions.ts).
+See the full implementation in the [Visitor example source code](https://github.com/Wildhoney/MarchHare/blob/main/src/example/visitor/actions.ts).
