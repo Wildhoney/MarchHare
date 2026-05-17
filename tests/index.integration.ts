@@ -1,22 +1,12 @@
 import { test, expect } from "@playwright/test";
 
-test("counter increments and decrements", async ({ page }) => {
+test("counter renders and refreshes the fetched user", async ({ page }) => {
   await page.goto("/");
 
-  const increment = page.getByRole("button", { name: "+" });
-  const decrement = page.getByRole("button", { name: "−" });
-  const count = page.getByTestId("count");
+  const user = page.getByTestId("user");
+  await expect(user).toHaveText("Adam");
 
-  await expect(count).toHaveAttribute("data-count", "1");
-
-  await decrement.click();
-  await expect(count).toHaveAttribute("data-count", "0");
-
-  await increment.click();
-  await expect(count).toHaveAttribute("data-count", "1");
-
-  await increment.click();
-  const loading = page.getByTestId("loading");
-  await expect(loading).toHaveCSS("opacity", "1");
-  await expect(loading).toHaveCSS("opacity", "0");
+  const refresh = page.getByTestId("refresh");
+  await refresh.click();
+  await expect(user).toHaveText("Adam");
 });

@@ -1,37 +1,23 @@
-import { useActions, Operation } from "../../library/index.ts";
-import { sleep } from "../../library/utils/index.ts";
+import { useActions, useResource } from "../../library/index.ts";
 import { Model, Actions } from "./types.ts";
-
-const model: Model = {
-  count: 1,
-};
+import { resources } from "./utils.ts";
 
 export function useCounterActions() {
-  const actions = useActions<Model, typeof Actions>(model, () => ({
-    name: "Adam",
-  }));
+  const get = {
+    user: useResource(resources.user),
+  };
 
-  actions.useAction(Actions.Increment, async (context) => {
-    context.actions.produce((draft) => {
-      draft.model.count = context.actions.annotate(
-        draft.inspect.count.draft() + 1,
-        Operation.Update,
-      );
-    });
-
-    await sleep(1_000, context.task.controller.signal);
-
-    context.actions.produce((draft) => {
-      draft.model.count = draft.model.count + 1;
-      context.actions.dispatch(Actions.Broadcast.Counter, draft.model.count);
-    });
+  const actions = useActions<Model, typeof Actions>({
+    user: get.user.else(null),
   });
 
-  actions.useAction(Actions.Decrement, (context) => {
-    context.actions.produce((draft) => {
-      draft.model.count = draft.model.count - 1;
-      context.actions.dispatch(Actions.Broadcast.Counter, draft.model.count);
-    });
+  actions.useAction(Actions.Mount, async (context) => {
+    await context.actions.dispatch(Actions.User);
+  });
+
+  actions.useAction(Actions.User, async (context) => {
+    const user = await get.user();
+    context.actions.produce(({ model }) => void (model.user = user));
   });
 
   return actions;

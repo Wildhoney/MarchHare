@@ -1,15 +1,15 @@
 import { Action, Lifecycle } from "../../library/index.ts";
-import { BroadcastActions } from "../types.ts";
+
+export type User = {
+  name: string;
+  age: number;
+};
 
 export type Model = {
-  count: number;
+  user: null | User;
 };
 
 export class Actions {
-  static Broadcast = BroadcastActions;
-
   static Mount = Lifecycle.Mount();
-
-  static Increment = Action("Increment");
-  static Decrement = Action("Decrement");
+  static User = Action("User");
 }

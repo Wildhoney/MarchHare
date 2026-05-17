@@ -6,21 +6,23 @@ import { resources } from "./utils.ts";
 
 export function useCatActions({ index }: { index: number }) {
   const router = useRouter();
-  const cat = useResource(resources.cat);
+  const get = {
+    cat: useResource(resources.cat),
+  };
 
   const actions = useActions<Model, typeof Actions, Data>(
-    { cat: cat.else(null) },
+    { cat: get.cat.else(null) },
     () => ({ index, router }),
   );
 
   actions.useAction(Actions.Mount, async (context) => {
-    const data = await cat(context.task.controller.signal);
+    const data = await get.cat(context.task.controller.signal);
 
     context.actions.produce(({ model }) => void (model.cat = data));
   });
 
   actions.useAction(Actions.Refresh, async (context) => {
-    const data = await cat.if(
+    const data = await get.cat.if(
       { over: { minutes: 5 } },
       context.task.controller.signal,
     );

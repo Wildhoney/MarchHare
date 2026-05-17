@@ -1,6 +1,6 @@
 # Resource
 
-`Resource(fetcher)` declares a remote interaction at module scope. Components consume it via `useResource(handle)`, which returns the fetch callable directly &ndash; `await user()` triggers a request. The callable exposes two attached methods:
+`Resource(fetcher)` declares a remote interaction at module scope. Components consume it via `useResource(handle)`, which returns the fetch callable directly &ndash; `await get.user()` triggers a request. The callable exposes two attached methods:
 
 - `.if({ over })` &ndash; conditional refresh; fetch only if the cached payload is older than the supplied freshness window.
 - `.else(fallback)` &ndash; synchronous read of the cached payload with a default for the "nothing cached yet" case.
@@ -27,15 +27,19 @@ import { useActions, useResource } from "march-hare";
 import * as resource from "./resources";
 
 export function useActions() {
-  const user = useResource(resource.user);
-  const pay = useResource(resource.pay);
+  const get = {
+    user: useResource(resource.user),
+  };
+  const post = {
+    pay: useResource(resource.pay),
+  };
   const actions = useActions<Model, typeof Actions>({
-    user: user.else(null),
-    receipt: pay.else(null),
+    user: get.user.else(null),
+    receipt: post.pay.else(null),
   });
 
   actions.useAction(Actions.Mount, async (context) => {
-    const data = await user.if(
+    const data = await get.user.if(
       { over: { minutes: 5 } },
       context.task.controller.signal,
     );
@@ -43,7 +47,7 @@ export function useActions() {
   });
 
   actions.useAction(Actions.Submit, async (context, body) => {
-    const receipt = await pay(context.task.controller.signal, body);
+    const receipt = await post.pay(context.task.controller.signal, body);
     context.actions.produce(({ model }) => void (model.receipt = receipt));
   });
 
@@ -55,7 +59,7 @@ Fetchers take a single `params` argument (defaults to `{}`) and return a `Promis
 
 > **One primitive for reads and writes.** `Resource` doesn't distinguish GETs from POSTs. The cache and the freshness window apply uniformly. Every call fires its own request &mdash; no implicit coalescing &mdash; so accidental double-submits aren't masked. If you want a deliberate duplicate-submit guard, use `.if({ over })` explicitly.
 
-> **Convention:** import resources as a namespace (`import * as resource`) so call sites read `resource.user`, `resource.pay`, etc. The grouping signals "remote interactions, declared at module scope" at a glance. The local binding then mirrors the resource &ndash; `const user = useResource(resource.user)`.
+> **Convention:** import resources as a namespace (`import * as resource`) so call sites read `resource.user`, `resource.pay`, etc. The grouping signals "remote interactions, declared at module scope" at a glance. Bind the local handles into one object per HTTP verb &mdash; `const get = { ... }`, `const post = { ... }`, `const patch = { ... }` &mdash; so call sites read `get.user()`, `post.pay()`, `patch.updateUser()`. The verb at the call site advertises read vs. write without jumping back to the resource definition.
 
 > **Temporal runtime requirement.** `.if({ over })` reads a `Temporal.Instant` internally. March Hare reads `Temporal` from the host global, so consumers targeting runtimes that do not yet expose it natively must install a polyfill (e.g. [`@js-temporal/polyfill`](https://github.com/js-temporal/temporal-polyfill)) once at app entry.
 
@@ -79,14 +83,17 @@ export const updateUser = Resource(
 
 ```ts
 // actions.ts
-const user = useResource(resource.user);
-//    ^ (params: Params) => Promise<User>; with .if, .else attached
-
-const updateUser = useResource(resource.updateUser);
-//    ^ (params: { id: number; name: string }) => Promise<User>; with .if, .else attached
+const get = {
+  user: useResource(resource.user),
+  // ^ (params: Params) => Promise<User>; with .if, .else attached
+};
+const patch = {
+  updateUser: useResource(resource.updateUser),
+  // ^ (params: { id: number; name: string }) => Promise<User>; with .if, .else attached
+};
 ```
 
-Params are passed as a single object &mdash; not positional arguments. This keeps the call site self-documenting (`user({ id: 5 })` is clearer than `user(5)`).
+Params are passed as a single object &mdash; not positional arguments. This keeps the call site self-documenting (`get.user({ id: 5 })` is clearer than `get.user(5)`).
 
 ## `.else(fallback)` &mdash; sync read of the cache
 
@@ -95,11 +102,13 @@ Params are passed as a single object &mdash; not positional arguments. This keep
 ```ts
 actions.useAction(Actions.Refresh, async (context) => {
   try {
-    const data = await user();
+    const data = await get.user();
     context.actions.produce(({ model }) => void (model.user = data));
   } catch {
     // Refresh failed — fall back to the last good value, or null.
-    context.actions.produce(({ model }) => void (model.user = user.else(null)));
+    context.actions.produce(
+      ({ model }) => void (model.user = get.user.else(null)),
+    );
   }
 });
 ```
@@ -113,10 +122,12 @@ The cache slot is shared across components using the same Resource handle &mdash
 For "refresh, but don't bother if we just ran" semantics, call `.if({ over })`:
 
 ```ts
-const user = useResource(resource.user);
+const get = {
+  user: useResource(resource.user),
+};
 
 actions.useAction(Actions.Refresh, async (context) => {
-  const data = await user.if({ over: { minutes: 5 } });
+  const data = await get.user.if({ over: { minutes: 5 } });
   context.actions.produce(({ model }) => void (model.user = data));
 });
 ```
@@ -124,20 +135,20 @@ actions.useAction(Actions.Refresh, async (context) => {
 `over` accepts a `Temporal.Duration`, a `DurationLike` object (`{ minutes: 5 }`, `{ seconds: 30 }`), or an ISO 8601 duration string (`"PT5M"`). If the most recent successful run resolved longer ago than the window, the fetcher is called. Otherwise the cached data is returned without hitting the network.
 
 ```ts
-await user.if({ over: { minutes: 5 } });
-await user.if({ over: "PT5M" });
-await user.if({ over: Temporal.Duration.from({ minutes: 5 }) });
+await get.user.if({ over: { minutes: 5 } });
+await get.user.if({ over: "PT5M" });
+await get.user.if({ over: Temporal.Duration.from({ minutes: 5 }) });
 ```
 
 For parameterised resources, params come after the options object:
 
 ```ts
-const data = await feed.if({ over: { minutes: 1 } }, { cursor });
+const data = await get.feed.if({ over: { minutes: 1 } }, { cursor });
 ```
 
 The freshness check uses the resource's module-scoped timestamp, which reflects the most recent successful call across all param-sets. For parameterised resources, a fresh `feed({ cursor: null })` will short-circuit a subsequent `feed.if({ over: { minutes: 5 } }, { cursor: "page-2" })`. Treat it as "did _anyone_ run this resource recently?", not "did we run _these params_ recently".
 
-`.if` is also useful as an explicit duplicate-submit guard for writes &mdash; `await pay.if({ over: { seconds: 5 } }, body)` will only fire if the last successful `pay` was more than five seconds ago. The cached receipt may not match the current intent, so use this deliberately.
+`.if` is also useful as an explicit duplicate-submit guard for writes &mdash; `await post.pay.if({ over: { seconds: 5 } }, body)` will only fire if the last successful `pay` was more than five seconds ago. The cached receipt may not match the current intent, so use this deliberately.
 
 ## Fanning out on success or failure
 
@@ -146,7 +157,7 @@ Resources don't dispatch anything themselves. Compose dispatch (and any other si
 ```ts
 actions.useAction(Actions.Mount, async (context) => {
   try {
-    const data = await user();
+    const data = await get.user();
     await context.actions.dispatch(Actions.Broadcast.UserUpdated, data);
     context.actions.produce(({ model }) => void (model.user = data));
   } catch (error) {
@@ -179,7 +190,7 @@ actions.useAction(Actions.Rename, async (context, name) => {
   });
 
   try {
-    const updated = await updateUser({ id: previous!.id, name });
+    const updated = await patch.updateUser({ id: previous!.id, name });
     context.actions.produce(({ model }) => void (model.user = updated));
   } catch (error) {
     context.actions.produce(({ model }) => void (model.user = previous));
@@ -195,12 +206,12 @@ Pending state drives the UI via `actions.inspect.user.pending()` &mdash; see [mo
 Every awaited call triggers a fresh network request. There is **no in-flight coalescing** &ndash; calling `user()` three times concurrently produces three requests. Coordination across components happens at the broadcast layer (see above), not at a hidden cache.
 
 ```ts
-const a = user({ id: 5 });
-const b = user({ id: 5 });
-const c = user({ id: 5 });
+const a = get.user({ id: 5 });
+const b = get.user({ id: 5 });
+const c = get.user({ id: 5 });
 // Three network requests.
 
-const d = user({ id: 6 });
+const d = get.user({ id: 6 });
 // A fourth, with different params.
 ```
 
@@ -214,7 +225,7 @@ Errors can be handled at three layers, each with a distinct responsibility:
 // Tier 1: dispatch a typed broadcast in the calling handler — every listener reacts
 actions.useAction(Actions.Mount, async (context) => {
   try {
-    const data = await user();
+    const data = await get.user();
     context.actions.produce(({ model }) => void (model.user = data));
   } catch (error) {
     if (error instanceof RateLimitedError) {
@@ -230,7 +241,7 @@ actions.useAction(Actions.Mount, async (context) => {
 // Tier 2: handler-level inline recovery — branch on a specific error
 actions.useAction(Actions.Submit, async (context, body) => {
   try {
-    const receipt = await pay(body);
+    const receipt = await post.pay(body);
     context.actions.produce(({ model }) => void (model.receipt = receipt));
   } catch (error) {
     if (error instanceof InsufficientFundsError) {
@@ -262,7 +273,7 @@ Pick the lowest tier that suits the concern. Routine, expected failures (404 mea
 
 ## Mount-time pattern
 
-The canonical pattern is to call `await user()` from a `Lifecycle.Mount` handler and write the result into the model:
+The canonical pattern is to call `await get.user()` from a `Lifecycle.Mount` handler and write the result into the model:
 
 ```ts
 actions.useAction(Actions.Mount, async (context) => {
@@ -274,7 +285,7 @@ actions.useAction(Actions.Mount, async (context) => {
       )),
   );
 
-  const data = await user();
+  const data = await get.user();
 
   context.actions.produce(({ model }) => void (model.user = data));
 });
@@ -306,7 +317,9 @@ type Model = {
 };
 
 export function useActions() {
-  const feed = useResource(resource.feed);
+  const get = {
+    feed: useResource(resource.feed),
+  };
   const actions = useActions<Model, typeof Actions>({
     items: [],
     cursor: null,
@@ -314,7 +327,7 @@ export function useActions() {
   });
 
   actions.useAction(Actions.Mount, async (context) => {
-    const page = await feed({ cursor: null });
+    const page = await get.feed({ cursor: null });
     context.actions.produce(({ model }) => {
       model.items = page.items;
       model.cursor = page.nextCursor;
@@ -324,7 +337,7 @@ export function useActions() {
 
   actions.useAction(Actions.LoadMore, async (context) => {
     if (!context.model.hasMore) return;
-    const page = await feed({ cursor: context.model.cursor });
+    const page = await get.feed({ cursor: context.model.cursor });
     context.actions.produce(({ model }) => {
       model.items.push(...page.items);
       model.cursor = page.nextCursor;
@@ -343,24 +356,26 @@ There's no in-flight coalescing &ndash; clicking "load more" twice rapidly fires
 Because `useResource` is a standalone hook, you can call it _before_ `useActions` and feed the cached value into the initial model literal:
 
 ```ts
-const cat = useResource(resources.cat);
+const get = {
+  cat: useResource(resources.cat),
+};
 const actions = useActions<Model, typeof Actions, Data>(
-  { cat: cat.else(null) },
+  { cat: get.cat.else(null) },
   () => ({ index, router }),
 );
 
 actions.useAction(Actions.Mount, async (context) => {
-  const fresh = await cat.if({ over: { minutes: 5 } });
+  const fresh = await get.cat.if({ over: { minutes: 5 } });
   context.actions.produce(({ model }) => void (model.cat = fresh));
 });
 ```
 
-`cat.else(null)` reads the cached payload synchronously &ndash; if a previous mount (or another component using the same Resource) populated the cache, the model starts with that value rather than `null`. The mount handler then refreshes lazily via `.if`.
+`get.cat.else(null)` reads the cached payload synchronously &ndash; if a previous mount (or another component using the same Resource) populated the cache, the model starts with that value rather than `null`. The mount handler then refreshes lazily via `.if`.
 
 ## Limitations
 
 - **No persistence across reloads.** A hard reload starts every Resource fresh.
 - **No focus or reconnect revalidation.** Wire a `window` listener and call the handle again if you need this.
 - **No SSR isolation.** The cache `WeakMap` is module-global, so server-side rendering would leak across requests. `Resource` is client-only.
-- **No subscription on the awaiter.** `await user()` resolves once and does not re-fire when the broadcast goes out. Use a `useAction(broadcastAction)` handler in consuming components for change notifications.
+- **No subscription on the awaiter.** `await get.user()` resolves once and does not re-fire when the broadcast goes out. Use a `useAction(broadcastAction)` handler in consuming components for change notifications.
 - **`.else` is not reactive.** Reading it inside render does not subscribe the component to updates &mdash; it is a snapshot, not a signal. Drive UI from the model.

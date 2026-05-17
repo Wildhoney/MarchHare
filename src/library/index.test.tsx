@@ -1,19 +1,15 @@
 import { expect, it } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import { Boundary } from "./index.ts";
 import Counter from "../example/counter";
 
-it("should decrement the counter synchronously", async () => {
-  render(<Counter />);
-
-  expect(screen.getByLabelText("1")).toBeTruthy();
-
-  fireEvent.click(screen.getByText("−"));
-  await waitFor(() => {
-    expect(screen.getByLabelText("0")).toBeTruthy();
-  });
-
-  fireEvent.click(screen.getByText("−"));
-  await waitFor(() => {
-    expect(screen.getByLabelText("-1")).toBeTruthy();
-  });
+it("renders the fetched user", async () => {
+  render(
+    <Boundary>
+      <Counter />
+    </Boundary>,
+  );
+  await waitFor(() =>
+    expect(screen.getByTestId("user").textContent).toBe("Adam"),
+  );
 });

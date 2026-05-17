@@ -86,7 +86,9 @@ export const user = Resource(() => ky.get(api.user()).json<User>());
 ```
 
 ```tsx
-const user = useResource(resource.user);
+const get = {
+  user: useResource(resource.user),
+};
 
 actions.useAction(Actions.Name, async (context) => {
   context.actions.produce(
@@ -94,7 +96,7 @@ actions.useAction(Actions.Name, async (context) => {
       void (model.name = context.actions.annotate(model.name, Op.Update)),
   );
 
-  const data = await user();
+  const data = await get.user();
 
   context.actions.produce(({ model }) => void (model.name = data.name));
 });
@@ -110,10 +112,12 @@ const actions = useActions<Model, typeof Actions, { query: string }>(
   () => ({ query: props.query }),
 );
 
-const search = useResource(resource.search);
+const get = {
+  search: useResource(resource.search),
+};
 
 actions.useAction(Actions.Search, async (context) => {
-  await search({ query: context.data.query });
+  await get.search({ query: context.data.query });
   // context.data.query is always the latest value, even after await
   console.log(context.data.query);
 });
@@ -173,7 +177,9 @@ class Actions {
 ```
 
 ```tsx
-const user = useResource(resource.user);
+const get = {
+  user: useResource(resource.user),
+};
 
 actions.useAction(Actions.Profile, async (context) => {
   context.actions.produce(
@@ -181,7 +187,7 @@ actions.useAction(Actions.Profile, async (context) => {
       void (model.name = context.actions.annotate(model.name, Op.Update)),
   );
 
-  const data = await user();
+  const data = await get.user();
 
   context.actions.produce(({ model }) => void (model.name = data.name));
 
@@ -192,10 +198,12 @@ actions.useAction(Actions.Profile, async (context) => {
 Once we have the broadcast action, if we want to listen for it and perform another operation in our local component we can do that via `useAction`:
 
 ```tsx
-const friends = useResource(resource.friends);
+const get = {
+  friends: useResource(resource.friends),
+};
 
 actions.useAction(Actions.Broadcast.Name, async (context, name) => {
-  const data = await friends({ name });
+  const data = await get.friends({ name });
 
   context.actions.produce(({ model }) => void (model.friends = data));
 });
@@ -204,12 +212,14 @@ actions.useAction(Actions.Broadcast.Name, async (context, name) => {
 Both `read` and `peek` access the latest cached broadcast value without subscribing via `useAction`. The difference is that `read` waits for any pending annotations on the corresponding model field to settle before resolving, whereas `peek` returns the value immediately:
 
 ```tsx
-const friends = useResource(resource.friends);
+const get = {
+  friends: useResource(resource.friends),
+};
 
 actions.useAction(Actions.FetchFriends, async (context) => {
   const name = await context.actions.resolution(Actions.Broadcast.Name);
   if (!name) return;
-  const data = await friends({ name });
+  const data = await get.friends({ name });
   context.actions.produce(({ model }) => void (model.friends = data));
 });
 ```
@@ -280,16 +290,22 @@ export function useActions() {
   // Bind the resources first so we can seed the initial model from the
   // cache via `.else(fallback)` — if a previous mount populated the
   // slot, the model starts with that value; otherwise the fallback.
-  const user = useResource(resource.user);
-  const pay = useResource(resource.pay);
+  // Bindings are grouped by HTTP verb so call sites advertise read vs.
+  // write at a glance.
+  const get = {
+    user: useResource(resource.user),
+  };
+  const post = {
+    pay: useResource(resource.pay),
+  };
 
   const actions = useActions<Model, typeof Actions>({
-    user: user.else(null),
-    receipt: pay.else(null),
+    user: get.user.else(null),
+    receipt: post.pay.else(null),
   });
 
   actions.useAction(Actions.Mount, async (context) => {
-    const data = await user.if(
+    const data = await get.user.if(
       { over: { minutes: 5 } },
       context.task.controller.signal,
     );
@@ -297,7 +313,7 @@ export function useActions() {
   });
 
   actions.useAction(Actions.Submit, async (context, body) => {
-    const receipt = await pay(context.task.controller.signal, body);
+    const receipt = await post.pay(context.task.controller.signal, body);
     context.actions.produce(({ model }) => void (model.receipt = receipt));
   });
 
@@ -313,7 +329,7 @@ export function useActions() {
 export const user = Resource(() => ky.get("/api/user").json<User>());
 
 actions.useAction(Actions.Mount, async (context) => {
-  const data = await user();
+  const data = await get.user();
   await context.actions.dispatch(Actions.Broadcast.UserUpdated, data);
   context.actions.produce(({ model }) => void (model.user = data));
 });
@@ -330,8 +346,10 @@ export const feed = Resource((signal, { cursor }: Params) =>
     .json<Page<Item>>(),
 );
 
-const feed = useResource(resource.feed);
-const page = await feed({ cursor: context.model.cursor });
+const get = {
+  feed: useResource(resource.feed),
+};
+const page = await get.feed({ cursor: context.model.cursor });
 ```
 
 A complete IntersectionObserver-driven infinite-scroll demo lives at [`src/example/transactions/`](./src/example/transactions/) &ndash; mock paginated API, scroll-triggered `LoadMore`, `pending()` guard, broadcast on success.
@@ -341,7 +359,7 @@ For typed failure routing, wrap the call in `try/catch` and use `instanceof` &nd
 ```ts
 actions.useAction(Actions.Mount, async (context) => {
   try {
-    const data = await user();
+    const data = await get.user();
     context.actions.produce(({ model }) => void (model.user = data));
   } catch (error) {
     if (error instanceof RateLimitedError) {

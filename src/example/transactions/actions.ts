@@ -5,7 +5,9 @@ import * as resource from "./resources.ts";
 const initialModel: Model = { items: [], cursor: null, hasMore: true };
 
 export function useTransactionsActions() {
-  const transactions = useResource(resource.transactions);
+  const get = {
+    transactions: useResource(resource.transactions),
+  };
   const actions = useActions<Model, typeof Actions>(initialModel);
 
   actions.useAction(Actions.Mount, async (context) => {
@@ -17,7 +19,7 @@ export function useTransactionsActions() {
         )),
     );
 
-    const page = await transactions(context.task.controller.signal, {
+    const page = await get.transactions(context.task.controller.signal, {
       cursor: null,
     });
     await context.actions.dispatch(
@@ -45,7 +47,7 @@ export function useTransactionsActions() {
         )),
     );
 
-    const page = await transactions(context.task.controller.signal, {
+    const page = await get.transactions(context.task.controller.signal, {
       cursor,
     });
     await context.actions.dispatch(
@@ -69,7 +71,7 @@ export function useTransactionsActions() {
         )),
     );
 
-    const page = await transactions(context.task.controller.signal, {
+    const page = await get.transactions(context.task.controller.signal, {
       cursor: null,
     });
     await context.actions.dispatch(
