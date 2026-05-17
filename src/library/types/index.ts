@@ -7,6 +7,7 @@ import type {
   Tasks,
 } from "../boundary/components/tasks/types.ts";
 import type { Fault } from "../error/types.ts";
+import type { ResourceHandle, BoundResourceHandle } from "../resource/index.ts";
 import { describe } from "../utils.ts";
 
 export type { ActionId, Box, Task, Tasks };
@@ -853,30 +854,33 @@ export type UseActions<
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void;
   /**
-   * Connects a {@link Resource} declared at module scope to this component.
-   * Returns a frozen `{ run, data, at }` object &ndash; `run` triggers a
-   * fresh network call (concurrent calls share the in-flight promise),
-   * while `data` and `at` are read-only snapshots of the most recent
-   * successful payload and the instant it resolved.
+   * Connects a {@link Resource.Query} or {@link Resource.Mutation}
+   * declared at module scope to this component. The returned value is
+   * itself the fetch callable &ndash; `await user()` triggers a
+   * request &ndash; with two attached methods:
    *
-   * `data` and `at` are non-reactive &mdash; reading them does not
-   * subscribe the component to updates. Drive UI from the model.
+   * - `.if({ over })` skips the network when the cached payload is
+   *   still inside the supplied freshness window.
+   * - `.else(fallback)` returns the cached payload synchronously,
+   *   falling back to the supplied default when nothing has resolved
+   *   successfully yet.
+   *
+   * The runtime difference between the two kinds is purely in how
+   * concurrent identical calls are handled &mdash; Query coalesces
+   * them, Mutation does not. Both cache the most recent successful
+   * response, so `.if` and `.else` work on either kind.
    *
    * @example
    * ```ts
    * const user = actions.useResource(resources.user);
    *
    * actions.useAction(Actions.Mount, async (context) => {
-   *   const data = await user.run();
+   *   const data = await user();
    *   context.actions.produce(({ model }) => { model.user = data; });
    * });
    * ```
    */
   useResource<T, P extends object>(
-    resource: import("../resource/index.ts").ResourceHandle<T, P>,
-  ): Readonly<{
-    run: import("../resource/index.ts").BoundRun<T, P>;
-    data: T | null;
-    at: Temporal.Instant | null;
-  }>;
+    resource: ResourceHandle<T, P>,
+  ): BoundResourceHandle<T, P>;
 };

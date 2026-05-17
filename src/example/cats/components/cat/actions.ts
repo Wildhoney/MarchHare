@@ -15,13 +15,13 @@ export function useCatActions({ index }: { index: number }) {
   const cat = actions.useResource(resources.cat);
 
   actions.useAction(Actions.Mount, async (context) => {
-    const data = await cat.run();
+    const data = await cat();
 
     context.actions.produce(({ model }) => void (model.cat = data));
   });
 
   actions.useAction(Actions.Refresh, async (context) => {
-    const data = await cat.run.if({ over: { minutes: 5 } });
+    const data = await cat.if({ over: { minutes: 5 } });
 
     context.actions.produce(({ model }) => void (model.cat = data));
   });

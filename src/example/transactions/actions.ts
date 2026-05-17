@@ -17,7 +17,7 @@ export function useTransactionsActions() {
         )),
     );
 
-    const page = await transactions.run({ cursor: null });
+    const page = await transactions({ cursor: null });
     await context.actions.dispatch(
       Actions.Broadcast.TransactionsLoaded,
       page.items,
@@ -43,7 +43,7 @@ export function useTransactionsActions() {
         )),
     );
 
-    const page = await transactions.run({ cursor });
+    const page = await transactions({ cursor });
     await context.actions.dispatch(
       Actions.Broadcast.TransactionsLoaded,
       page.items,
@@ -65,7 +65,7 @@ export function useTransactionsActions() {
         )),
     );
 
-    const page = await transactions.run({ cursor: null });
+    const page = await transactions({ cursor: null });
     await context.actions.dispatch(
       Actions.Broadcast.TransactionsLoaded,
       page.items,

@@ -82,7 +82,7 @@ When you need to do more than just assign the payload &ndash; such as making an 
 // resources.ts
 import { Resource } from "march-hare";
 
-export const user = Resource("user", () => ky.get(api.user()).json<User>());
+export const user = Resource(() => ky.get(api.user()).json<User>());
 ```
 
 ```tsx
@@ -94,13 +94,13 @@ actions.useAction(Actions.Name, async (context) => {
       void (model.name = context.actions.annotate(model.name, Op.Update)),
   );
 
-  const data = await user.run();
+  const data = await user();
 
   context.actions.produce(({ model }) => void (model.name = data.name));
 });
 ```
 
-Notice we're using `annotate` which you can read more about in the [Immertation documentation](https://github.com/Wildhoney/Immertation). Once the request is finished we update the model again with the name fetched from the response and re-render the React component. `Resource` dedupes concurrent calls and exposes typed params &ndash; the full API is covered [further down](#remote-data).
+Notice we're using `annotate` which you can read more about in the [Immertation documentation](https://github.com/Wildhoney/Immertation). Once the request is finished we update the model again with the name fetched from the response and re-render the React component. `Resource` caches the most recent successful payload and exposes typed params &ndash; the full API is covered [further down](#remote-data).
 
 If you need to access external reactive values (like props or `useState` from parent components) that always reflect the latest value even after `await` operations, pass a data callback to `useActions`:
 
@@ -113,7 +113,7 @@ const actions = useActions<Model, typeof Actions, { query: string }>(
 const search = actions.useResource(resource.search);
 
 actions.useAction(Actions.Search, async (context) => {
-  await search.run({ query: context.data.query });
+  await search({ query: context.data.query });
   // context.data.query is always the latest value, even after await
   console.log(context.data.query);
 });
@@ -181,7 +181,7 @@ actions.useAction(Actions.Profile, async (context) => {
       void (model.name = context.actions.annotate(model.name, Op.Update)),
   );
 
-  const data = await user.run();
+  const data = await user();
 
   context.actions.produce(({ model }) => void (model.name = data.name));
 
@@ -195,7 +195,7 @@ Once we have the broadcast action, if we want to listen for it and perform anoth
 const friends = actions.useResource(resource.friends);
 
 actions.useAction(Actions.Broadcast.Name, async (context, name) => {
-  const data = await friends.run({ name });
+  const data = await friends({ name });
 
   context.actions.produce(({ model }) => void (model.friends = data));
 });
@@ -209,7 +209,7 @@ const friends = actions.useResource(resource.friends);
 actions.useAction(Actions.FetchFriends, async (context) => {
   const name = await context.actions.resolution(Actions.Broadcast.Name);
   if (!name) return;
-  const data = await friends.run({ name });
+  const data = await friends({ name });
   context.actions.produce(({ model }) => void (model.friends = data));
 });
 ```
@@ -258,13 +258,17 @@ Components that mount after a broadcast has already been dispatched automaticall
 
 <a id="remote-data"></a>
 
-For remote data, declare a `Resource` at module scope &ndash; same shape as `Action` &ndash; and consume it via `actions.useResource` inside a component. Convention is to keep all resources in `resources.ts` and import them as a namespace:
+For remote data, declare a `Resource` at module scope and consume it via `actions.useResource`. Every call fires its own request; the most recent successful response is cached in a module-level `WeakMap` keyed by the fetcher so `.if(...)` and `.else(...)` on the bound handle have something to read from. Convention is to keep all resources in `resources.ts` and import them as a namespace:
 
 ```ts
 // resources.ts
 import { Resource } from "march-hare";
 
-export const user = Resource("user", () => ky.get("/api/user").json<User>());
+export const user = Resource(() => ky.get("/api/user").json<User>());
+
+export const pay = Resource<Receipt, Body>((body) =>
+  ky.post("/api/pay", { json: body }).json<Receipt>(),
+);
 ```
 
 ```tsx
@@ -276,44 +280,50 @@ export function useActions() {
   const actions = marchHare.useActions<Model, typeof Actions>(initialModel);
 
   const user = actions.useResource(resource.user);
+  const pay = actions.useResource(resource.pay);
 
   actions.useAction(Actions.Mount, async (context) => {
-    const data = await user.run.if({ over: { minutes: 5 } });
+    const data = await user.if({ over: { minutes: 5 } });
 
     context.actions.produce(({ model }) => void (model.user = data));
+  });
+
+  actions.useAction(Actions.Submit, async (context, body) => {
+    const receipt = await pay(body);
+    context.actions.produce(({ model }) => void (model.receipt = receipt));
   });
 
   return actions;
 }
 ```
 
-`actions.useResource(handle)` returns a frozen `{ run, data, at }` object. Every call to `run()` hits the network &ndash; concurrent calls share one in-flight request, but there is no memoised result. `data` and `at` are read-only snapshots of the most recent successful payload and a `Temporal.Instant` of when it resolved (both `null` until the first success). Coordination across components still happens at the broadcast layer; `data` is a diagnostic snapshot, not a reactive subscription. `Temporal` is read from the host runtime &ndash; bring a polyfill (e.g. [`@js-temporal/polyfill`](https://github.com/js-temporal/temporal-polyfill)) if your target environment does not yet expose it natively. `run.if({ over })` accepts a `Temporal.Duration`, a `DurationLike` object, or an ISO 8601 duration string.
+`actions.useResource(handle)` returns the fetch callable directly. The callable has two attached methods: `.if({ over })` skips the network when the cached payload is still fresh, and `.else(fallback)` reads the cached payload synchronously with a default. `Temporal` is read from the host runtime &ndash; bring a polyfill (e.g. [`@js-temporal/polyfill`](https://github.com/js-temporal/temporal-polyfill)) if your target environment does not yet expose it natively. `.if({ over })` accepts a `Temporal.Duration`, a `DurationLike` object, or an ISO 8601 duration string.
 
-`Resource` takes two arguments: a key and a fetcher. The fetcher receives the call-site `params` object as its only argument and returns a `Promise<T>`. There are no callbacks &ndash; no `onSuccess`, no `onError`, no injected `dispatch`. Side-effects after a run (broadcasting, analytics, model writes) live in the `useAction` handler that awaited `run()`, next to the rest of the flow:
+`Resource` takes a single fetcher argument. The fetcher receives the call-site `params` object as its only argument and returns a `Promise<T>`. There are no callbacks &ndash; no `onSuccess`, no `onError`, no injected `dispatch`. Side-effects after a run (broadcasting, analytics, model writes) live in the `useAction` handler that awaited the call, next to the rest of the flow:
 
 ```ts
-export const user = Resource("user", () => ky.get("/api/user").json<User>());
+export const user = Resource(() => ky.get("/api/user").json<User>());
 
 actions.useAction(Actions.Mount, async (context) => {
-  const data = await user.run();
+  const data = await user();
   await context.actions.dispatch(Actions.Broadcast.UserUpdated, data);
   context.actions.produce(({ model }) => void (model.user = data));
 });
 ```
 
-`params` is the second generic on `Resource` and defaults to `{}`. Declare it when the fetcher needs call-time inputs &ndash; cursors, ids, query strings. `params` is a single object (not positional args), which keeps call sites self-documenting and lets in-flight dedup key cleanly per param shape:
+`params` is the second generic on `Resource` and defaults to `{}`. Declare it when the fetcher needs call-time inputs &ndash; cursors, ids, query strings, request bodies. `params` is a single object (not positional args), which keeps call sites self-documenting:
 
 ```ts
 type Params = { cursor: string | null };
 
-export const feed = Resource<Page<Item>, Params>("feed", ({ cursor }) =>
+export const feed = Resource<Page<Item>, Params>(({ cursor }) =>
   http
     .get("feed", { searchParams: { cursor: cursor ?? "" } })
     .json<Page<Item>>(),
 );
 
 const feed = actions.useResource(resource.feed);
-const page = await feed.run({ cursor: context.model.cursor });
+const page = await feed({ cursor: context.model.cursor });
 ```
 
 A complete IntersectionObserver-driven infinite-scroll demo lives at [`src/example/transactions/`](./src/example/transactions/) &ndash; mock paginated API, scroll-triggered `LoadMore`, `pending()` guard, broadcast on success.
@@ -323,7 +333,7 @@ For typed failure routing, wrap the call in `try/catch` and use `instanceof` &nd
 ```ts
 actions.useAction(Actions.Mount, async (context) => {
   try {
-    const data = await user.run();
+    const data = await user();
     context.actions.produce(({ model }) => void (model.user = data));
   } catch (error) {
     if (error instanceof RateLimitedError) {

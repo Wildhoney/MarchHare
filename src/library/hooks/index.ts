@@ -33,7 +33,11 @@ import {
   AnyAction,
   FaultSymbol,
 } from "../types/index.ts";
-import type { BoundRun, ResourceHandle, IfOptions } from "../resource/index.ts";
+import type {
+  ResourceHandle,
+  BoundResourceHandle,
+  IfOptions,
+} from "../resource/index.ts";
 
 import { getReason, getError } from "../error/utils.ts";
 import EventEmitter from "eventemitter3";
@@ -478,11 +482,12 @@ export function useActions<
     useRegisterHandler<M, A, D>(registry, action, <Handler<M, A, D>>handler);
   };
 
-  (<UseActions<M, A, D>>result).useResource = <T, P extends object>(
+  function useResource<T, P extends object>(
     resource: ResourceHandle<T, P>,
-  ) => {
-    const run = React.useMemo<BoundRun<T, P>>(() => {
+  ): BoundResourceHandle<T, P> {
+    return React.useMemo(() => {
       const call = (params?: P): Promise<T> => resource.run(<P>(params ?? {}));
+
       const ifOver = (options: IfOptions, params?: P): Promise<T> => {
         const { data, at } = resource;
         if (at !== null && data !== null) {
@@ -494,24 +499,20 @@ export function useActions<
         }
         return call(params);
       };
-      // eslint-disable-next-line fp/no-mutating-assign
-      return <BoundRun<T, P>>(<unknown>Object.assign(call, { if: ifOver }));
-    }, [resource]);
 
-    return React.useMemo(
-      () =>
-        Object.freeze({
-          run,
-          get data() {
-            return resource.data;
-          },
-          get at() {
-            return resource.at;
-          },
-        }),
-      [resource, run],
-    );
-  };
+      const elseFallback = <U>(fallback: U): T | U =>
+        resource.data === null ? fallback : resource.data;
+
+      Object.defineProperties(call, {
+        if: { value: ifOver, enumerable: true },
+        else: { value: elseFallback, enumerable: true },
+      });
+
+      return <BoundResourceHandle<T, P>>(<unknown>call);
+    }, [resource]);
+  }
+
+  (<UseActions<M, A, D>>result).useResource = useResource;
 
   return <UseActions<M, A, D>>result;
 }

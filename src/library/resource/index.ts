@@ -1,17 +1,17 @@
 /**
- * Options accepted by `run.if(...)`.
+ * Options accepted by `.if(...)` on a bound resource handle.
  *
  * - `over` &ndash; a `Temporal.Duration`, a `DurationLike` object
  *   (e.g. `{ minutes: 5 }`), or an ISO 8601 duration string (`"PT5M"`).
  *   If the most recent successful run resolved longer ago than this
- *   window, `run(...)` is called. Otherwise the cached data is returned
- *   without hitting the network.
+ *   window, the underlying fetcher is called. Otherwise the cached
+ *   data is returned without hitting the network.
  *
  * @example
  * ```ts
- * await user.run.if({ over: { minutes: 5 } });
- * await user.run.if({ over: "PT5M" });
- * await user.run.if({ over: Temporal.Duration.from({ minutes: 5 }) });
+ * await user.if({ over: { minutes: 5 } });
+ * await user.if({ over: "PT5M" });
+ * await user.if({ over: Temporal.Duration.from({ minutes: 5 }) });
  * ```
  */
 export type IfOptions = {
@@ -21,126 +21,125 @@ export type IfOptions = {
 /**
  * Fetcher signature accepted by {@link Resource}. Receives the
  * call-site `params` object and returns a `Promise` of the response.
- * Side-effects (dispatching broadcasts, analytics, etc.) belong in
- * the calling `useAction` handler, not inside the fetcher.
+ * Side-effects (dispatching broadcasts, analytics, etc.) belong in the
+ * calling `useAction` handler, not inside the fetcher.
  */
 export type ResourceFetcher<T, P extends object = Record<never, never>> = (
   params: P,
 ) => Promise<T>;
 
 /**
- * Component-bound `run` callable returned by `actions.useResource`. It
- * is invokable like the underlying fetcher (`run(params)`) and also
- * carries an `if` method that triggers the network call only when the
- * cached data is older than the supplied freshness window.
- *
- * The conditional specialisation collapses the call signature when
- * `P` is empty &mdash; `run()` instead of `run({})`.
- */
-export type BoundRun<T, P extends object> = [keyof P] extends [never]
-  ? {
-      (): Promise<T>;
-      /**
-       * Calls `run()` if the most recent successful run resolved longer
-       * ago than `options.over`. Otherwise returns the cached data.
-       */
-      readonly if: (options: IfOptions) => Promise<T>;
-    }
-  : {
-      (params: P): Promise<T>;
-      /**
-       * Calls `run(params)` if the most recent successful run resolved
-       * longer ago than `options.over`. Otherwise returns the cached data.
-       */
-      readonly if: (options: IfOptions, params: P) => Promise<T>;
-    };
-
-/**
  * Module-scope handle returned by {@link Resource}. Pass to
- * `actions.useResource(handle)` inside a component to obtain a
- * `{ run, data, at }` object.
+ * `actions.useResource(handle)` to obtain the bound, component-scoped
+ * callable.
+ *
+ * Every call to the underlying fetcher fires its own request. The most
+ * recent successful response is cached in a module-level `WeakMap`
+ * keyed by the fetcher itself, so `.if(...)` and `.else(...)` on the
+ * bound handle have something to read from.
  */
 export type ResourceHandle<T, P extends object = Record<never, never>> = {
-  readonly key: string;
   /** @internal */
   readonly run: (params: P) => Promise<T>;
-  /** Most recent successful data across all param-sets, or `null`. */
+  /** @internal */
   readonly data: T | null;
-  /** Instant of the most recent successful run, or `null`. */
+  /** @internal */
   readonly at: Temporal.Instant | null;
 };
 
 /**
- * Defines a remote resource &mdash; declare at module scope and consume
- * via `actions.useResource(handle)`. Mirrors the {@link Action} factory
- * pattern: the declaration is a value, not a hook.
+ * Component-bound handle returned by `actions.useResource`. The handle
+ * is itself the fetch callable &mdash; `await user()` triggers a
+ * request &mdash; with two attached methods:
+ *
+ * - `.if({ over })` &mdash; fetch only if the cached payload is older
+ *   than the supplied freshness window; otherwise return the cached
+ *   payload synchronously (wrapped in a resolved promise).
+ * - `.else(fallback)` &mdash; synchronous read of the cached payload,
+ *   falling back to the supplied default when nothing has resolved
+ *   successfully yet.
+ *
+ * The call signature collapses when `P` is empty &mdash; `user()`
+ * instead of `user({})`.
+ */
+export type BoundResourceHandle<T, P extends object> = [keyof P] extends [never]
+  ? {
+      (): Promise<T>;
+      /**
+       * Calls the underlying fetcher if the most recent successful run
+       * resolved longer ago than `options.over`. Otherwise returns the
+       * cached data without hitting the network.
+       */
+      readonly if: (options: IfOptions) => Promise<T>;
+      /**
+       * Returns the cached payload from the most recent successful run,
+       * or `fallback` if no run has succeeded yet.
+       */
+      readonly else: <U>(fallback: U) => T | U;
+    }
+  : {
+      (params: P): Promise<T>;
+      /**
+       * Calls the underlying fetcher if the most recent successful run
+       * resolved longer ago than `options.over`. Otherwise returns the
+       * cached data without hitting the network.
+       */
+      readonly if: (options: IfOptions, params: P) => Promise<T>;
+      /**
+       * Returns the cached payload from the most recent successful run,
+       * or `fallback` if no run has succeeded yet.
+       */
+      readonly else: <U>(fallback: U) => T | U;
+    };
+
+type CacheEntry = {
+  data: unknown;
+  at: Temporal.Instant | null;
+};
+
+const cache = new WeakMap<object, CacheEntry>();
+
+/**
+ * Defines a remote resource &mdash; declared at module scope and
+ * consumed via `actions.useResource(handle)`.
  *
  * The fetcher takes a single `params` argument (defaults to `{}`) and
  * returns a `Promise<T>`. Resources do **not** carry any callbacks
- * &ndash; any side-effects the caller wants on success or failure
- * (broadcasting, logging, model updates) belong in the `useAction`
- * handler that called `await user.run(...)`.
+ * &ndash; side-effects (broadcasting, logging, model updates) belong
+ * in the `useAction` handler that called `await handle(...)`.
  *
- * `params` are typed via the second generic and forwarded to every
- * `run(params)` call site. In-flight dedup keys per params shape, so
- * `feed.run({ cursor: null })` and `feed.run({ cursor: "abc" })` execute
- * independently while two concurrent `feed.run({ cursor: "abc" })` calls
- * share one network request.
- *
- * Each call to `run()` always hits the network; `data` and `at`
- * are read-only snapshots of the most recent successful payload and
- * the instant it resolved &ndash; not a memoised result.
+ * Every call fires its own request. The most recent successful
+ * payload is cached in a module-level `WeakMap` keyed by the fetcher,
+ * so `.if(...)` and `.else(...)` on the bound handle behave
+ * consistently across all components that share the same Resource.
  *
  * @example
  * ```ts
  * import { Resource } from "march-hare";
  *
- * export const feed = Resource<Page<Item>, { cursor: string | null }>(
- *   "feed",
- *   ({ cursor }) =>
- *     http
- *       .get("feed", { searchParams: { cursor: cursor ?? "" } })
- *       .json<Page<Item>>(),
+ * export const user = Resource<User>(() => ky.get("user").json<User>());
+ *
+ * export const pay = Resource<Receipt, Body>((body) =>
+ *   ky.post("pay", { json: body }).json<Receipt>(),
  * );
  * ```
  */
 export function Resource<T, P extends object = Record<never, never>>(
-  key: string,
   fetcher: ResourceFetcher<T, P>,
 ): ResourceHandle<T, P> {
-  const inflight = new Map<string, Promise<T>>();
-  let data: T | null = null;
-  let at: Temporal.Instant | null = null;
+  const run = (params: P): Promise<T> =>
+    fetcher(params).then((resolved) => {
+      cache.set(fetcher, { data: resolved, at: Temporal.Now.instant() });
+      return resolved;
+    });
 
-  const runWith = (params: P): Promise<T> => {
-    const paramsKey = JSON.stringify(params);
-    const existing = inflight.get(paramsKey);
-    if (existing) return existing;
-
-    const promise = fetcher(params).then(
-      (resolved) => {
-        if (inflight.get(paramsKey) === promise) inflight.delete(paramsKey);
-        data = resolved;
-        at = Temporal.Now.instant();
-        return resolved;
-      },
-      (error: unknown) => {
-        if (inflight.get(paramsKey) === promise) inflight.delete(paramsKey);
-        throw error;
-      },
-    );
-    inflight.set(paramsKey, promise);
-    return promise;
-  };
-
-  return Object.freeze({
-    key,
-    run: runWith,
+  return {
+    run,
     get data() {
-      return data;
+      return <T | null>(cache.get(fetcher)?.data ?? null);
     },
     get at() {
-      return at;
+      return cache.get(fetcher)?.at ?? null;
     },
-  });
+  };
 }

@@ -14,7 +14,7 @@ export { Resource } from "./resource/index.ts";
 export type {
   ResourceHandle,
   ResourceFetcher,
-  BoundRun,
+  BoundResourceHandle,
   IfOptions,
 } from "./resource/index.ts";
 export * as utils from "./utils/index.ts";
