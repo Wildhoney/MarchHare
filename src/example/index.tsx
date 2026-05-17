@@ -8,7 +8,7 @@ import Transactions from "./transactions/index.tsx";
 const root = ReactDOM.createRoot(document.body);
 
 root.render(
-  <BrowserRouter>
+  <BrowserRouter basename={import.meta.env.BASE_URL}>
     <Routes>
       <Route path="/" element={<App />} />
       <Route path="/cats/*" element={<Cats />} />
