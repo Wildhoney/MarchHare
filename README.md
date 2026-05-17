@@ -273,23 +273,31 @@ export const pay = Resource((signal, body: Body) =>
 
 ```tsx
 // actions.ts
-import * as marchHare from "march-hare";
+import { useActions, useResource } from "march-hare";
 import * as resource from "./resources";
 
 export function useActions() {
-  const actions = marchHare.useActions<Model, typeof Actions>(initialModel);
-
+  // Bind the resources first so we can seed the initial model from the
+  // cache via `.else(fallback)` — if a previous mount populated the
+  // slot, the model starts with that value; otherwise the fallback.
   const user = useResource(resource.user);
   const pay = useResource(resource.pay);
 
-  actions.useAction(Actions.Mount, async (context) => {
-    const data = await user.if({ over: { minutes: 5 } });
+  const actions = useActions<Model, typeof Actions>({
+    user: user.else(null),
+    receipt: pay.else(null),
+  });
 
+  actions.useAction(Actions.Mount, async (context) => {
+    const data = await user.if(
+      { over: { minutes: 5 } },
+      context.task.controller.signal,
+    );
     context.actions.produce(({ model }) => void (model.user = data));
   });
 
   actions.useAction(Actions.Submit, async (context, body) => {
-    const receipt = await pay(body);
+    const receipt = await pay(context.task.controller.signal, body);
     context.actions.produce(({ model }) => void (model.receipt = receipt));
   });
 
@@ -422,7 +430,7 @@ See the [multicast recipe](./recipes/multicast-actions.md) for more details.
 For coordinating between async handlers without re-rendering the JSX tree, use the per-`<Boundary>` mode handle returned by `useMode()`. Thread it through the `useActions` data callback so it shows up as `context.data.mode` inside handlers, fully typed. Mode is **not** reactive &mdash; drive view state through the model, not mode.
 
 ```ts
-import * as marchHare from "march-hare";
+import { useActions, useMode } from "march-hare";
 
 enum Mode {
   Idle,
@@ -430,14 +438,13 @@ enum Mode {
 }
 
 export function useActions() {
-  const mode = marchHare.useMode<Mode>();
+  const mode = useMode<Mode>();
   // Spell the data shape as the third generic so `context.data.mode` keeps
   // its concrete type inside handlers.
-  const actions = marchHare.useActions<
-    Model,
-    typeof Actions,
-    { mode: typeof mode }
-  >(model, () => ({ mode }));
+  const actions = useActions<Model, typeof Actions, { mode: typeof mode }>(
+    model,
+    () => ({ mode }),
+  );
 
   actions.useAction(Actions.SignOut, async (context) => {
     context.data.mode.update(Mode.SigningOut);

@@ -23,24 +23,27 @@ export const pay = Resource((signal, body: Body) =>
 
 ```tsx
 // actions.ts
-import * as marchHare from "march-hare";
+import { useActions, useResource } from "march-hare";
 import * as resource from "./resources";
 
 export function useActions() {
-  const user = marchHare.useResource(resource.user);
-  const pay = marchHare.useResource(resource.pay);
-  const actions = marchHare.useActions<Model, typeof Actions>({
+  const user = useResource(resource.user);
+  const pay = useResource(resource.pay);
+  const actions = useActions<Model, typeof Actions>({
     user: user.else(null),
     receipt: pay.else(null),
   });
 
   actions.useAction(Actions.Mount, async (context) => {
-    const data = await user.if({ over: { minutes: 5 } });
+    const data = await user.if(
+      { over: { minutes: 5 } },
+      context.task.controller.signal,
+    );
     context.actions.produce(({ model }) => void (model.user = data));
   });
 
   actions.useAction(Actions.Submit, async (context, body) => {
-    const receipt = await pay(body);
+    const receipt = await pay(context.task.controller.signal, body);
     context.actions.produce(({ model }) => void (model.receipt = receipt));
   });
 
@@ -303,12 +306,12 @@ type Model = {
 };
 
 export function useActions() {
-  const actions = marchHare.useActions<Model, typeof Actions>({
+  const feed = useResource(resource.feed);
+  const actions = useActions<Model, typeof Actions>({
     items: [],
     cursor: null,
     hasMore: true,
   });
-  const feed = useResource(resource.feed);
 
   actions.useAction(Actions.Mount, async (context) => {
     const page = await feed({ cursor: null });
