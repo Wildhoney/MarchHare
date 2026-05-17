@@ -1,12 +1,12 @@
-import { Operation, useActions } from "../../library/index.ts";
+import { Operation, useActions, useResource } from "../../library/index.ts";
 import { Actions, type Model } from "./types.ts";
 import * as resource from "./resources.ts";
 
 const initialModel: Model = { items: [], cursor: null, hasMore: true };
 
 export function useTransactionsActions() {
+  const transactions = useResource(resource.transactions);
   const actions = useActions<Model, typeof Actions>(initialModel);
-  const transactions = actions.useResource(resource.transactions);
 
   actions.useAction(Actions.Mount, async (context) => {
     context.actions.produce(
@@ -17,7 +17,9 @@ export function useTransactionsActions() {
         )),
     );
 
-    const page = await transactions({ cursor: null });
+    const page = await transactions(context.task.controller.signal, {
+      cursor: null,
+    });
     await context.actions.dispatch(
       Actions.Broadcast.TransactionsLoaded,
       page.items,
@@ -43,7 +45,9 @@ export function useTransactionsActions() {
         )),
     );
 
-    const page = await transactions({ cursor });
+    const page = await transactions(context.task.controller.signal, {
+      cursor,
+    });
     await context.actions.dispatch(
       Actions.Broadcast.TransactionsLoaded,
       page.items,
@@ -65,7 +69,9 @@ export function useTransactionsActions() {
         )),
     );
 
-    const page = await transactions({ cursor: null });
+    const page = await transactions(context.task.controller.signal, {
+      cursor: null,
+    });
     await context.actions.dispatch(
       Actions.Broadcast.TransactionsLoaded,
       page.items,

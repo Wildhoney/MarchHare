@@ -71,9 +71,21 @@ function buildPage(pageIndex: number): TransactionsPage {
 
 export async function fetchTransactions(
   cursor: string | null,
+  signal: AbortSignal | undefined,
 ): Promise<TransactionsPage> {
-  // Simulate network latency
-  await new Promise((resolve) => setTimeout(resolve, 600));
+  // Simulate network latency, but honour the cancellation token so
+  // unmounting / supplanted actions don't leave a dangling promise.
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(resolve, 600);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(new DOMException("aborted", "AbortError"));
+      },
+      { once: true },
+    );
+  });
   const pageIndex = cursor === null ? 0 : Number(cursor);
   return buildPage(pageIndex);
 }

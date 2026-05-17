@@ -33,11 +33,6 @@ import {
   AnyAction,
   FaultSymbol,
 } from "../types/index.ts";
-import type {
-  ResourceHandle,
-  BoundResourceHandle,
-  IfOptions,
-} from "../resource/index.ts";
 
 import { getReason, getError } from "../error/utils.ts";
 import EventEmitter from "eventemitter3";
@@ -481,38 +476,6 @@ export function useActions<
   ): void => {
     useRegisterHandler<M, A, D>(registry, action, <Handler<M, A, D>>handler);
   };
-
-  function useResource<T, P extends object>(
-    resource: ResourceHandle<T, P>,
-  ): BoundResourceHandle<T, P> {
-    return React.useMemo(() => {
-      const call = (params?: P): Promise<T> => resource.run(<P>(params ?? {}));
-
-      const ifOver = (options: IfOptions, params?: P): Promise<T> => {
-        const { data, at } = resource;
-        if (at !== null && data !== null) {
-          const elapsed = Temporal.Now.instant().since(at);
-          const window = Temporal.Duration.from(options.over);
-          if (Temporal.Duration.compare(elapsed, window) <= 0) {
-            return Promise.resolve(data);
-          }
-        }
-        return call(params);
-      };
-
-      const elseFallback = <U>(fallback: U): T | U =>
-        resource.data === null ? fallback : resource.data;
-
-      Object.defineProperties(call, {
-        if: { value: ifOver, enumerable: true },
-        else: { value: elseFallback, enumerable: true },
-      });
-
-      return <BoundResourceHandle<T, P>>(<unknown>call);
-    }, [resource]);
-  }
-
-  (<UseActions<M, A, D>>result).useResource = useResource;
 
   return <UseActions<M, A, D>>result;
 }

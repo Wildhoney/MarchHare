@@ -1,6 +1,6 @@
 # Resource
 
-`Resource(fetcher)` declares a remote interaction at module scope. Components consume it via `actions.useResource(handle)`, which returns the fetch callable directly &ndash; `await user()` triggers a request. The callable exposes two attached methods:
+`Resource(fetcher)` declares a remote interaction at module scope. Components consume it via `useResource(handle)`, which returns the fetch callable directly &ndash; `await user()` triggers a request. The callable exposes two attached methods:
 
 - `.if({ over })` &ndash; conditional refresh; fetch only if the cached payload is older than the supplied freshness window.
 - `.else(fallback)` &ndash; synchronous read of the cached payload with a default for the "nothing cached yet" case.
@@ -11,10 +11,13 @@ Every call fires its own request. The most recent successful payload is cached i
 // resources.ts
 import { Resource } from "march-hare";
 
-export const user = Resource<User>(() => ky.get("user").json<User>());
+// `T` is inferred from the fetcher's return type — no generics needed.
+export const user = Resource((signal) =>
+  ky.get("user", { signal }).json<User>(),
+);
 
-export const pay = Resource<Receipt, Body>((body) =>
-  ky.post("pay", { json: body }).json<Receipt>(),
+export const pay = Resource((signal, body: Body) =>
+  ky.post("pay", { json: body, signal }).json<Receipt>(),
 );
 ```
 
@@ -24,9 +27,12 @@ import * as marchHare from "march-hare";
 import * as resource from "./resources";
 
 export function useActions() {
-  const actions = marchHare.useActions<Model, typeof Actions>(initialModel);
-  const user = actions.useResource(resource.user);
-  const pay = actions.useResource(resource.pay);
+  const user = marchHare.useResource(resource.user);
+  const pay = marchHare.useResource(resource.pay);
+  const actions = marchHare.useActions<Model, typeof Actions>({
+    user: user.else(null),
+    receipt: pay.else(null),
+  });
 
   actions.useAction(Actions.Mount, async (context) => {
     const data = await user.if({ over: { minutes: 5 } });
@@ -46,7 +52,7 @@ Fetchers take a single `params` argument (defaults to `{}`) and return a `Promis
 
 > **One primitive for reads and writes.** `Resource` doesn't distinguish GETs from POSTs. The cache and the freshness window apply uniformly. Every call fires its own request &mdash; no implicit coalescing &mdash; so accidental double-submits aren't masked. If you want a deliberate duplicate-submit guard, use `.if({ over })` explicitly.
 
-> **Convention:** import resources as a namespace (`import * as resource`) so call sites read `resource.user`, `resource.pay`, etc. The grouping signals "remote interactions, declared at module scope" at a glance. The local binding then mirrors the resource &ndash; `const user = actions.useResource(resource.user)`.
+> **Convention:** import resources as a namespace (`import * as resource`) so call sites read `resource.user`, `resource.pay`, etc. The grouping signals "remote interactions, declared at module scope" at a glance. The local binding then mirrors the resource &ndash; `const user = useResource(resource.user)`.
 
 > **Temporal runtime requirement.** `.if({ over })` reads a `Temporal.Instant` internally. March Hare reads `Temporal` from the host global, so consumers targeting runtimes that do not yet expose it natively must install a polyfill (e.g. [`@js-temporal/polyfill`](https://github.com/js-temporal/temporal-polyfill)) once at app entry.
 
@@ -58,21 +64,22 @@ The second generic on `Resource` types a single `params` object that the fetcher
 // resources.ts
 type Params = { id: number };
 
-export const user = Resource<User, Params>(({ id }) =>
-  ky.get(`users/${id}`).json<User>(),
+export const user = Resource((signal, { id }: Params) =>
+  ky.get(`users/${id}`, { signal }).json<User>(),
 );
 
-export const updateUser = Resource<User, { id: number; name: string }>(
-  ({ id, name }) => ky.patch(`users/${id}`, { json: { name } }).json<User>(),
+export const updateUser = Resource(
+  (signal, { id, name }: { id: number; name: string }) =>
+    ky.patch(`users/${id}`, { json: { name }, signal }).json<User>(),
 );
 ```
 
 ```ts
 // actions.ts
-const user = actions.useResource(resource.user);
+const user = useResource(resource.user);
 //    ^ (params: Params) => Promise<User>; with .if, .else attached
 
-const updateUser = actions.useResource(resource.updateUser);
+const updateUser = useResource(resource.updateUser);
 //    ^ (params: { id: number; name: string }) => Promise<User>; with .if, .else attached
 ```
 
@@ -103,7 +110,7 @@ The cache slot is shared across components using the same Resource handle &mdash
 For "refresh, but don't bother if we just ran" semantics, call `.if({ over })`:
 
 ```ts
-const user = actions.useResource(resource.user);
+const user = useResource(resource.user);
 
 actions.useAction(Actions.Refresh, async (context) => {
   const data = await user.if({ over: { minutes: 5 } });
@@ -280,9 +287,9 @@ Variadic fetchers are how you build pagination. Declare the cursor as a param, p
 // resources.ts
 type Params = { cursor: string | null };
 
-export const feed = Resource<Page<Item>, Params>(({ cursor }) =>
+export const feed = Resource((signal, { cursor }: Params) =>
   http
-    .get("feed", { searchParams: { cursor: cursor ?? "" } })
+    .get("feed", { searchParams: { cursor: cursor ?? "" }, signal })
     .json<Page<Item>>(),
 );
 ```
@@ -301,7 +308,7 @@ export function useActions() {
     cursor: null,
     hasMore: true,
   });
-  const feed = actions.useResource(resource.feed);
+  const feed = useResource(resource.feed);
 
   actions.useAction(Actions.Mount, async (context) => {
     const page = await feed({ cursor: null });
@@ -328,9 +335,24 @@ export function useActions() {
 
 There's no in-flight coalescing &ndash; clicking "load more" twice rapidly fires two requests. Guard against duplicate dispatches with a `pending()` check or by gating on `model.hasMore` / `model.cursor` movement. See the live `/transactions` example at [`src/example/transactions/`](../src/example/transactions/) for the IntersectionObserver pattern.
 
-## Why `actions.useResource` instead of a free hook?
+## Seeding the initial model with `.else`
 
-Putting `useResource` on the `actions` tuple keeps the surface consistent &ndash; both `useAction` and `useResource` are methods on the same tuple. Mirroring `useAction`'s shape means handlers, resources, and reactive `data` all reach for the same object.
+Because `useResource` is a standalone hook, you can call it _before_ `useActions` and feed the cached value into the initial model literal:
+
+```ts
+const cat = useResource(resources.cat);
+const actions = useActions<Model, typeof Actions, Data>(
+  { cat: cat.else(null) },
+  () => ({ index, router }),
+);
+
+actions.useAction(Actions.Mount, async (context) => {
+  const fresh = await cat.if({ over: { minutes: 5 } });
+  context.actions.produce(({ model }) => void (model.cat = fresh));
+});
+```
+
+`cat.else(null)` reads the cached payload synchronously &ndash; if a previous mount (or another component using the same Resource) populated the cache, the model starts with that value rather than `null`. The mount handler then refreshes lazily via `.if`.
 
 ## Limitations
 

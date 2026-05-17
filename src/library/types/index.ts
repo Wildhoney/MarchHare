@@ -7,7 +7,6 @@ import type {
   Tasks,
 } from "../boundary/components/tasks/types.ts";
 import type { Fault } from "../error/types.ts";
-import type { ResourceHandle, BoundResourceHandle } from "../resource/index.ts";
 import { describe } from "../utils.ts";
 
 export type { ActionId, Box, Task, Tasks };
@@ -853,34 +852,4 @@ export type UseActions<
       ...args: [Payload<A>] extends [never] ? [] : [payload: Payload<A>]
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void;
-  /**
-   * Connects a {@link Resource.Query} or {@link Resource.Mutation}
-   * declared at module scope to this component. The returned value is
-   * itself the fetch callable &ndash; `await user()` triggers a
-   * request &ndash; with two attached methods:
-   *
-   * - `.if({ over })` skips the network when the cached payload is
-   *   still inside the supplied freshness window.
-   * - `.else(fallback)` returns the cached payload synchronously,
-   *   falling back to the supplied default when nothing has resolved
-   *   successfully yet.
-   *
-   * The runtime difference between the two kinds is purely in how
-   * concurrent identical calls are handled &mdash; Query coalesces
-   * them, Mutation does not. Both cache the most recent successful
-   * response, so `.if` and `.else` work on either kind.
-   *
-   * @example
-   * ```ts
-   * const user = actions.useResource(resources.user);
-   *
-   * actions.useAction(Actions.Mount, async (context) => {
-   *   const data = await user();
-   *   context.actions.produce(({ model }) => { model.user = data; });
-   * });
-   * ```
-   */
-  useResource<T, P extends object>(
-    resource: ResourceHandle<T, P>,
-  ): BoundResourceHandle<T, P>;
 };

@@ -76,7 +76,7 @@ export default function Profile(): React.ReactElement {
 }
 ```
 
-When you need to do more than just assign the payload &ndash; such as making an API request &ndash; expand `useAction` to a full function. It can be synchronous, asynchronous, or even a generator. Remote data goes through `Resource` rather than a bare `fetch` &ndash; declare the resource at module scope and consume it via `actions.useResource`:
+When you need to do more than just assign the payload &ndash; such as making an API request &ndash; expand `useAction` to a full function. It can be synchronous, asynchronous, or even a generator. Remote data goes through `Resource` rather than a bare `fetch` &ndash; declare the resource at module scope and consume it via `useResource`:
 
 ```ts
 // resources.ts
@@ -86,7 +86,7 @@ export const user = Resource(() => ky.get(api.user()).json<User>());
 ```
 
 ```tsx
-const user = actions.useResource(resource.user);
+const user = useResource(resource.user);
 
 actions.useAction(Actions.Name, async (context) => {
   context.actions.produce(
@@ -110,7 +110,7 @@ const actions = useActions<Model, typeof Actions, { query: string }>(
   () => ({ query: props.query }),
 );
 
-const search = actions.useResource(resource.search);
+const search = useResource(resource.search);
 
 actions.useAction(Actions.Search, async (context) => {
   await search({ query: context.data.query });
@@ -173,7 +173,7 @@ class Actions {
 ```
 
 ```tsx
-const user = actions.useResource(resource.user);
+const user = useResource(resource.user);
 
 actions.useAction(Actions.Profile, async (context) => {
   context.actions.produce(
@@ -192,7 +192,7 @@ actions.useAction(Actions.Profile, async (context) => {
 Once we have the broadcast action, if we want to listen for it and perform another operation in our local component we can do that via `useAction`:
 
 ```tsx
-const friends = actions.useResource(resource.friends);
+const friends = useResource(resource.friends);
 
 actions.useAction(Actions.Broadcast.Name, async (context, name) => {
   const data = await friends({ name });
@@ -204,7 +204,7 @@ actions.useAction(Actions.Broadcast.Name, async (context, name) => {
 Both `read` and `peek` access the latest cached broadcast value without subscribing via `useAction`. The difference is that `read` waits for any pending annotations on the corresponding model field to settle before resolving, whereas `peek` returns the value immediately:
 
 ```tsx
-const friends = actions.useResource(resource.friends);
+const friends = useResource(resource.friends);
 
 actions.useAction(Actions.FetchFriends, async (context) => {
   const name = await context.actions.resolution(Actions.Broadcast.Name);
@@ -258,7 +258,7 @@ Components that mount after a broadcast has already been dispatched automaticall
 
 <a id="remote-data"></a>
 
-For remote data, declare a `Resource` at module scope and consume it via `actions.useResource`. Every call fires its own request; the most recent successful response is cached in a module-level `WeakMap` keyed by the fetcher so `.if(...)` and `.else(...)` on the bound handle have something to read from. Convention is to keep all resources in `resources.ts` and import them as a namespace:
+For remote data, declare a `Resource` at module scope and consume it via `useResource`. Every call fires its own request; the most recent successful response is cached in a module-level `WeakMap` keyed by the fetcher so `.if(...)` and `.else(...)` on the bound handle have something to read from. Convention is to keep all resources in `resources.ts` and import them as a namespace:
 
 ```ts
 // resources.ts
@@ -266,8 +266,8 @@ import { Resource } from "march-hare";
 
 export const user = Resource(() => ky.get("/api/user").json<User>());
 
-export const pay = Resource<Receipt, Body>((body) =>
-  ky.post("/api/pay", { json: body }).json<Receipt>(),
+export const pay = Resource((signal, body: Body) =>
+  ky.post("/api/pay", { json: body, signal }).json<Receipt>(),
 );
 ```
 
@@ -279,8 +279,8 @@ import * as resource from "./resources";
 export function useActions() {
   const actions = marchHare.useActions<Model, typeof Actions>(initialModel);
 
-  const user = actions.useResource(resource.user);
-  const pay = actions.useResource(resource.pay);
+  const user = useResource(resource.user);
+  const pay = useResource(resource.pay);
 
   actions.useAction(Actions.Mount, async (context) => {
     const data = await user.if({ over: { minutes: 5 } });
@@ -297,7 +297,7 @@ export function useActions() {
 }
 ```
 
-`actions.useResource(handle)` returns the fetch callable directly. The callable has two attached methods: `.if({ over })` skips the network when the cached payload is still fresh, and `.else(fallback)` reads the cached payload synchronously with a default. `Temporal` is read from the host runtime &ndash; bring a polyfill (e.g. [`@js-temporal/polyfill`](https://github.com/js-temporal/temporal-polyfill)) if your target environment does not yet expose it natively. `.if({ over })` accepts a `Temporal.Duration`, a `DurationLike` object, or an ISO 8601 duration string.
+`useResource(handle)` returns the fetch callable directly. The callable has two attached methods: `.if({ over })` skips the network when the cached payload is still fresh, and `.else(fallback)` reads the cached payload synchronously with a default. `Temporal` is read from the host runtime &ndash; bring a polyfill (e.g. [`@js-temporal/polyfill`](https://github.com/js-temporal/temporal-polyfill)) if your target environment does not yet expose it natively. `.if({ over })` accepts a `Temporal.Duration`, a `DurationLike` object, or an ISO 8601 duration string.
 
 `Resource` takes a single fetcher argument. The fetcher receives the call-site `params` object as its only argument and returns a `Promise<T>`. There are no callbacks &ndash; no `onSuccess`, no `onError`, no injected `dispatch`. Side-effects after a run (broadcasting, analytics, model writes) live in the `useAction` handler that awaited the call, next to the rest of the flow:
 
@@ -316,13 +316,13 @@ actions.useAction(Actions.Mount, async (context) => {
 ```ts
 type Params = { cursor: string | null };
 
-export const feed = Resource<Page<Item>, Params>(({ cursor }) =>
+export const feed = Resource((signal, { cursor }: Params) =>
   http
-    .get("feed", { searchParams: { cursor: cursor ?? "" } })
+    .get("feed", { searchParams: { cursor: cursor ?? "" }, signal })
     .json<Page<Item>>(),
 );
 
-const feed = actions.useResource(resource.feed);
+const feed = useResource(resource.feed);
 const page = await feed({ cursor: context.model.cursor });
 ```
 

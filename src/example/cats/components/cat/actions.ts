@@ -1,4 +1,4 @@
-import { useActions } from "../../../../library/index.ts";
+import { useActions, useResource } from "../../../../library/index.ts";
 import { useRouter } from "react-wayfinder";
 import { Actions, type Data, type Model } from "./types.ts";
 import { urls } from "../../utils.tsx";
@@ -6,22 +6,24 @@ import { resources } from "./utils.ts";
 
 export function useCatActions({ index }: { index: number }) {
   const router = useRouter();
+  const cat = useResource(resources.cat);
 
   const actions = useActions<Model, typeof Actions, Data>(
-    { cat: null },
+    { cat: cat.else(null) },
     () => ({ index, router }),
   );
 
-  const cat = actions.useResource(resources.cat);
-
   actions.useAction(Actions.Mount, async (context) => {
-    const data = await cat();
+    const data = await cat(context.task.controller.signal);
 
     context.actions.produce(({ model }) => void (model.cat = data));
   });
 
   actions.useAction(Actions.Refresh, async (context) => {
-    const data = await cat.if({ over: { minutes: 5 } });
+    const data = await cat.if(
+      { over: { minutes: 5 } },
+      context.task.controller.signal,
+    );
 
     context.actions.produce(({ model }) => void (model.cat = data));
   });

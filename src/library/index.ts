@@ -10,7 +10,7 @@ export { useMode } from "./boundary/components/mode/index.tsx";
 export type { ModeHandle } from "./boundary/components/mode/index.tsx";
 
 export { useActions, With } from "./hooks/index.ts";
-export { Resource } from "./resource/index.ts";
+export { Resource, useResource } from "./resource/index.ts";
 export type {
   ResourceHandle,
   ResourceFetcher,
