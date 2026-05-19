@@ -1,7 +1,7 @@
 import { useActions, useResource } from "../../../../library/index.ts";
 import { useRouter } from "react-wayfinder";
-import { Actions, type Data, type Model } from "./types.ts";
-import { urls } from "../../utils.tsx";
+import { Actions, Snapshots, type Data, type Model } from "./types.ts";
+import { store, urls } from "../../utils.tsx";
 import { resources } from "./utils.ts";
 
 export function useCatActions({ index }: { index: number }) {
@@ -11,12 +11,16 @@ export function useCatActions({ index }: { index: number }) {
   };
 
   const actions = useActions<Model, typeof Actions, Data>(
-    { cat: get.cat.else(null) },
+    { cat: get.cat.else(store.get(Snapshots.Cat)).else(null) },
     () => ({ index, router }),
   );
 
   actions.useAction(Actions.Mount, async (context) => {
-    const data = await get.cat(context.task.controller.signal);
+    const data = await get.cat.if(
+      { over: { minutes: 5 } },
+      context.task.controller.signal,
+    );
+    store.set(Snapshots.Cat, get.cat.snapshot());
 
     context.actions.produce(({ model }) => void (model.cat = data));
   });
@@ -26,6 +30,7 @@ export function useCatActions({ index }: { index: number }) {
       { over: { minutes: 5 } },
       context.task.controller.signal,
     );
+    store.set(Snapshots.Cat, get.cat.snapshot());
 
     context.actions.produce(({ model }) => void (model.cat = data));
   });

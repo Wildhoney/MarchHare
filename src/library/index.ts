@@ -18,6 +18,7 @@ export type {
   IfOptions,
 } from "./resource/index.ts";
 export * as utils from "./utils/index.ts";
+export type { Stored, Unset, Adapter, Store } from "./utils/index.ts";
 
 export type { Box } from "immertation";
 export type { Fault } from "./error/index.ts";

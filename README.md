@@ -375,6 +375,42 @@ actions.useAction(Actions.Mount, async (context) => {
 
 See the [Resource recipe](./recipes/use-resource.md) for the three-tier error handling model, parameterised resources, and limitations.
 
+### Persisting resources across reloads
+
+`useResource`'s cache lives in a `WeakMap` that's reset on every page load. To keep the most recent successful payload around between sessions, pair it with `utils.store(...)` &ndash; a synchronous key/value wrapper around any backing store (`localStorage` on web, `MMKV` on React Native, etc.) that traffics in the same `Stored<T>` shape as the Resource cache.
+
+```ts
+import { utils } from "march-hare";
+
+export const store = utils.store({
+  get: (key) => localStorage.getItem(key),
+  set: (key, value) => localStorage.setItem(key, value),
+  remove: (key) => localStorage.removeItem(key),
+});
+```
+
+`get.cat.else(...)` is overloaded: pass a `Stored<T>` (from `store.get(key)`) and the bound handle seeds its own cache from it when empty &ndash; then chain `.else(null)` for the leaf fallback. `get.cat.snapshot()` produces the symmetric `Stored<T>` for writing back. After this single chain, `.if({ over })` short-circuits on the persisted timestamp on the _first_ mount after a reload, with no second method to call.
+
+```ts
+const get = { cat: useResource(resource.cat) };
+const actions = useActions<Model, typeof Actions>({
+  // First render reads cache → storage → null.
+  cat: get.cat.else(store.get(Snapshots.Cat)).else(null),
+});
+
+actions.useAction(Actions.Mount, async (context) => {
+  // Short-circuits when storage held a payload < 5 minutes old.
+  const fresh = await get.cat.if(
+    { over: { minutes: 5 } },
+    context.task.controller.signal,
+  );
+  store.set(Snapshots.Cat, get.cat.snapshot());
+  context.actions.produce(({ model }) => void (model.cat = fresh));
+});
+```
+
+See the [storage recipe](./recipes/storage.md) for backend adapters (React Native MMKV, browser extension `chrome.storage`), sign-out purge, and the `unset` sentinel that keeps "nothing stored" distinct from "a legitimately stored null".
+
 For targeted event delivery, use channeled actions. Define a channel type as the second generic argument and call the action with a channel object &ndash; handlers fire when the dispatch channel matches:
 
 ```tsx

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { Resource, useResource } from "./index.ts";
+import { unset, type Stored } from "../utils/index.ts";
 
 describe("Resource() — invoking", () => {
   it("runs on first call and resolves with the data", async () => {
@@ -306,5 +307,163 @@ describe(".if({ over })", () => {
     await result.current.if({ over: "PT5M" });
 
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe(".snapshot()", () => {
+  it("returns an empty Stored before any successful run", () => {
+    const user = Resource(() => Promise.resolve({ name: "Adam" }));
+    const { result } = renderHook(() => useResource(user));
+
+    const snap = result.current.snapshot();
+    expect(snap.data).toBe(unset);
+    expect(snap.at).toBeNull();
+    expect(snap.else(null)).toBeNull();
+  });
+
+  it("returns a present Stored after a successful run", async () => {
+    const user = Resource(() => Promise.resolve({ name: "Adam" }));
+    const { result } = renderHook(() => useResource(user));
+
+    await result.current();
+    const snap = result.current.snapshot();
+
+    expect(snap.data).toEqual({ name: "Adam" });
+    expect(snap.at).toBeInstanceOf(Temporal.Instant);
+    expect(snap.else(null)).toEqual({ name: "Adam" });
+  });
+
+  it("snapshot reflects the latest successful run, not the first", async () => {
+    const fetcher = vi
+      .fn<() => Promise<{ name: string }>>()
+      .mockResolvedValueOnce({ name: "Adam" })
+      .mockResolvedValueOnce({ name: "Eve" });
+    const user = Resource(fetcher);
+    const { result } = renderHook(() => useResource(user));
+
+    await result.current();
+    await result.current();
+
+    expect(result.current.snapshot().data).toEqual({ name: "Eve" });
+  });
+});
+
+describe("Resource.seed(data, at)", () => {
+  it("populates the cache without invoking the fetcher", () => {
+    const fetcher = vi.fn(() => Promise.resolve({ name: "Adam" }));
+    const user = Resource(fetcher);
+    const at = Temporal.Now.instant();
+
+    user.seed({ name: "Seeded" }, at);
+
+    const { result } = renderHook(() => useResource(user));
+    expect(result.current.else(null)).toEqual({ name: "Seeded" });
+    expect(result.current.at?.toString()).toBe(at.toString());
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("allows .if({ over }) to short-circuit using the seeded timestamp", async () => {
+    const fetcher = vi.fn(() => Promise.resolve({ name: "Adam" }));
+    const user = Resource(fetcher);
+    user.seed({ name: "Seeded" }, Temporal.Now.instant());
+
+    const { result } = renderHook(() => useResource(user));
+
+    await expect(result.current.if({ over: { minutes: 5 } })).resolves.toEqual({
+      name: "Seeded",
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it(".if({ over }) still falls through when the seeded timestamp is stale", async () => {
+    const fetcher = vi.fn(() => Promise.resolve({ name: "Fresh" }));
+    const user = Resource(fetcher);
+    // Seed with a timestamp from an hour ago — outside the 5-minute window.
+    const at = Temporal.Now.instant().subtract({ hours: 1 });
+    user.seed({ name: "Stale" }, at);
+
+    const { result } = renderHook(() => useResource(user));
+
+    await expect(result.current.if({ over: { minutes: 5 } })).resolves.toEqual({
+      name: "Fresh",
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe(".else(Stored) overload", () => {
+  function present<T>(data: T, at: Temporal.Instant): Stored<T> {
+    return {
+      data,
+      at,
+      else: <U>(_fallback: U): T | U => data,
+    };
+  }
+
+  function empty<T>(): Stored<T> {
+    return {
+      data: unset,
+      at: null,
+      else: <U>(fallback: U): T | U => fallback,
+    };
+  }
+
+  it("seeds the cache from a present Stored when the cache is empty", async () => {
+    const fetcher = vi.fn(() => Promise.resolve({ name: "Network" }));
+    const user = Resource(fetcher);
+    const stored = present({ name: "FromStorage" }, Temporal.Now.instant());
+
+    const { result } = renderHook(() => useResource(user));
+    const chained = result.current.else(stored);
+
+    expect(chained.else(null)).toEqual({ name: "FromStorage" });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("returns a chainable handle so a terminal .else(value) follows naturally", () => {
+    const user = Resource(() => Promise.resolve({ name: "Network" }));
+    const { result } = renderHook(() => useResource(user));
+
+    const value = result.current.else(empty()).else("default");
+    expect(value).toBe("default");
+  });
+
+  it("does not seed when the cache already has fresher data", async () => {
+    const user = Resource(() => Promise.resolve({ name: "Network" }));
+    const { result } = renderHook(() => useResource(user));
+
+    await result.current();
+    const fresh = result.current.snapshot();
+
+    // Try to overwrite with a stale Stored — should be a no-op.
+    result.current.else(
+      present({ name: "Stale" }, Temporal.Now.instant().subtract({ hours: 1 })),
+    );
+
+    expect(result.current.snapshot().data).toEqual(fresh.data);
+    expect(result.current.snapshot().at?.toString()).toBe(fresh.at?.toString());
+  });
+
+  it("is a no-op when both cache and Stored are empty", () => {
+    const user = Resource(() => Promise.resolve({ name: "Network" }));
+    const { result } = renderHook(() => useResource(user));
+
+    const value = result.current.else(empty<{ name: string }>()).else(null);
+    expect(value).toBeNull();
+    expect(result.current.snapshot().data).toBe(unset);
+  });
+
+  it("composes with a chained Stored fallback (session → persistent → null)", () => {
+    const user = Resource(() => Promise.resolve({ name: "Network" }));
+    const { result } = renderHook(() => useResource(user));
+
+    const session = empty<{ name: string }>();
+    const persistent = present(
+      { name: "PersistedAdam" },
+      Temporal.Now.instant(),
+    );
+
+    const value = result.current.else(session).else(persistent).else(null);
+    expect(value).toEqual({ name: "PersistedAdam" });
   });
 });

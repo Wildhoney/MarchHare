@@ -578,6 +578,7 @@ docs: update the README file
   - `real-time-applications.md` - SSE/WebSocket patterns
   - `referential-equality.md` - Avoiding stale closures
   - `stateful-props.md` - Box<T> type for stateful props
+  - `storage.md` - utils.store, Stored<T>, .snapshot(), .else(stored) for cross-reload persistence
   - `use-resource.md` - useResource for cached fetches with subscriptions and typed errors
   - `utility-functions.md` - sleep, pk utilities
   - `utility-types.md` - Handler, Handlers types

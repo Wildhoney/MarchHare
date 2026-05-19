@@ -1,24 +1,4 @@
-/**
- * Module-private sentinel marking "no successful run has happened yet"
- * on a resource handle's cache slot. Required so `.else(fallback)` can
- * distinguish that case from "the fetcher legitimately resolved with
- * `null`". Re-exported only via the `config` bag below; consumers
- * outside this module cannot construct or compare against this value.
- *
- * @internal
- */
-const unset: unique symbol = Symbol("march-hare.resource.unset");
-
-/**
- * Internal configuration constants for the resource module. Wraps the
- * `unset` sentinel so its `unique symbol` type stays nominal when
- * imported elsewhere via `typeof config.unset`.
- *
- * @internal
- */
-export const config = <const>{
-  unset,
-};
+import { unset } from "../utils/index.ts";
 
 /**
  * Module-level cache shared by every `Resource` declaration. Keyed by
@@ -35,3 +15,14 @@ export const cache = new WeakMap<
     at: Temporal.Instant;
   }
 >();
+
+/**
+ * Re-export of the shared `unset` sentinel from {@link "../utils/index.ts"}.
+ * Kept under `config` for back-compatibility with existing imports in this
+ * module's siblings; new code should import `unset` directly from `utils`.
+ *
+ * @internal
+ */
+export const config = <const>{
+  unset,
+};

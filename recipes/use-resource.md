@@ -374,7 +374,7 @@ actions.useAction(Actions.Mount, async (context) => {
 
 ## Limitations
 
-- **No persistence across reloads.** A hard reload starts every Resource fresh.
+- **No persistence across reloads by default.** Opt in with `utils.store(adapter)` &mdash; the bound handle's `.else(stored)` overload seeds the cache from persisted state on first render, so `.if({ over })` short-circuits on the persisted timestamp. See [storage](./storage.md).
 - **No focus or reconnect revalidation.** Wire a `window` listener and call the handle again if you need this.
 - **No SSR isolation.** The cache `WeakMap` is module-global, so server-side rendering would leak across requests. `Resource` is client-only.
 - **No subscription on the awaiter.** `await get.user()` resolves once and does not re-fire when the broadcast goes out. Use a `useAction(broadcastAction)` handler in consuming components for change notifications.

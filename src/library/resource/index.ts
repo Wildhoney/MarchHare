@@ -5,7 +5,8 @@ import type {
   ResourceHandle,
   BoundResourceHandle,
 } from "./types.ts";
-import { cache, config } from "./utils.ts";
+import { cache } from "./utils.ts";
+import { empty, present, unset, type Stored } from "../utils/index.ts";
 
 export type {
   IfOptions,
@@ -58,19 +59,39 @@ export function Resource<T, P extends object = Record<never, never>>(
     run,
     get data() {
       const entry = cache.get(fetcher);
-      return entry === undefined ? config.unset : <T>entry.data;
+      return entry === undefined ? unset : <T>entry.data;
     },
     get at() {
       return cache.get(fetcher)?.at ?? null;
+    },
+    seed(data, at) {
+      cache.set(fetcher, { data, at });
     },
   };
 }
 
 /**
+ * Type-guard recognising the {@link Stored} structural shape on the
+ * fallback argument to `.else(...)`. Matches anything that exposes
+ * `data`, `at`, and `else` properties &mdash; including the bound handle
+ * itself, which is a deliberate no-op (seeding from cache into cache).
+ */
+function isStored<T>(value: unknown): value is Stored<T> {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "data" in value &&
+    "at" in value &&
+    "else" in value
+  );
+}
+
+/**
  * Binds a module-scope {@link ResourceHandle} to the component, returning
- * the fetch callable with `.if` and `.else` attached. The hook is
- * standalone &ndash; call it *before* `useActions` when you want to
- * seed the initial model from the cache via `.else(fallback)`.
+ * the fetch callable with `.if`, `.else`, `.snapshot`, `.data`, and `.at`
+ * attached. The hook is standalone &ndash; call it *before* `useActions`
+ * when you want to seed the initial model from the cache via
+ * `.else(fallback)`.
  *
  * Pass `context.task.controller.signal` as the first argument to thread
  * cancellation from the surrounding action handler through to the
@@ -81,7 +102,7 @@ export function Resource<T, P extends object = Record<never, never>>(
  * ```ts
  * const cat = useResource(resources.cat);
  * const actions = useActions<Model, typeof Actions, Data>(
- *   { cat: cat.else(null) },
+ *   { cat: cat.else(store.get(Snapshots.Cat)).else(null) },
  *   () => ({ index, router }),
  * );
  *
@@ -90,6 +111,7 @@ export function Resource<T, P extends object = Record<never, never>>(
  *     { over: { minutes: 5 } },
  *     context.task.controller.signal,
  *   );
+ *   store.set(Snapshots.Cat, cat.snapshot());
  *   context.actions.produce(({ model }) => void (model.cat = fresh));
  * });
  * ```
@@ -108,7 +130,7 @@ export function useResource<T, P extends object>(
     ): Promise<T> => {
       const data = resource.data;
       const at = resource.at;
-      if (data !== config.unset && at !== null) {
+      if (data !== unset && at !== null) {
         const elapsed = Temporal.Now.instant().since(at);
         const window = Temporal.Duration.from(options.over);
         if (Temporal.Duration.compare(elapsed, window) <= 0) {
@@ -118,14 +140,38 @@ export function useResource<T, P extends object>(
       return resource.run(signal ?? undefined, <P>(params ?? {}));
     };
 
-    const elseFallback = <U>(fallback: U): T | U => {
+    const snapshot = (): Stored<T> => {
       const data = resource.data;
-      return data === config.unset ? fallback : data;
+      const at = resource.at;
+      if (data === unset || at === null) return empty<T>();
+      return present(data, at);
     };
+
+    function elseFallback(stored: Stored<T>): BoundResourceHandle<T, P>;
+    function elseFallback<U>(fallback: U): T | U;
+    function elseFallback<U>(
+      fallback: U | Stored<T>,
+    ): (T | U) | BoundResourceHandle<T, P> {
+      if (isStored<T>(fallback)) {
+        if (
+          resource.data === unset &&
+          fallback.data !== unset &&
+          fallback.at !== null
+        ) {
+          resource.seed(fallback.data, fallback.at);
+        }
+        return <BoundResourceHandle<T, P>>(<unknown>call);
+      }
+      const data = resource.data;
+      return data === unset ? fallback : data;
+    }
 
     Object.defineProperties(call, {
       if: { value: ifOver, enumerable: true },
       else: { value: elseFallback, enumerable: true },
+      snapshot: { value: snapshot, enumerable: true },
+      data: { get: () => resource.data, enumerable: true },
+      at: { get: () => resource.at, enumerable: true },
     });
 
     return <BoundResourceHandle<T, P>>(<unknown>call);

@@ -16,6 +16,10 @@ export class Actions {
   static Refresh = Action("Refresh");
 }
 
+export enum Snapshots {
+  Cat = "cat",
+}
+
 export type Model = {
   cat: Cat | null;
 };
