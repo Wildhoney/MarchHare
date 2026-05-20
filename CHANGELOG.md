@@ -4,18 +4,16 @@ All notable changes to this project will be documented in this file. See [commit
 
 ## [0.6.1](https://github.com/Wildhoney/MarchHare/compare/v0.6.0...v0.6.1) (2026-05-20)
 
-
 ### Features
 
-* **resource:** persist cache across reloads via utils.store and Stored<T> ([7c4a140](https://github.com/Wildhoney/MarchHare/commit/7c4a140623c04c34684d389a59a322d5e6c7721f))
-* **utils:** add Adapter.clear, boolean Store.set, Encoded type, σ alias ([fd2291d](https://github.com/Wildhoney/MarchHare/commit/fd2291d3de2b06861da79baadeff778f07d1bfc0))
-
+- **resource:** persist cache across reloads via utils.store and Stored<T> ([7c4a140](https://github.com/Wildhoney/MarchHare/commit/7c4a140623c04c34684d389a59a322d5e6c7721f))
+- **utils:** add Adapter.clear, boolean Store.set, Encoded type, σ alias ([fd2291d](https://github.com/Wildhoney/MarchHare/commit/fd2291d3de2b06861da79baadeff778f07d1bfc0))
 
 ### Bug Fixes
 
-* **deploy:** flatten example index.html to dist-example root ([c30c7a5](https://github.com/Wildhoney/MarchHare/commit/c30c7a5a36b1262ee03c4c56ff9b81da07badabb))
-* **example:** pass BASE_URL as BrowserRouter basename so deployed routes resolve under /MarchHare/ ([838b10c](https://github.com/Wildhoney/MarchHare/commit/838b10c11f9f4cb65852e336ab59c307d246690b))
-* update path for example ([4608dbf](https://github.com/Wildhoney/MarchHare/commit/4608dbfbf04974a2d175a7417b8934eee84524dc))
+- **deploy:** flatten example index.html to dist-example root ([c30c7a5](https://github.com/Wildhoney/MarchHare/commit/c30c7a5a36b1262ee03c4c56ff9b81da07badabb))
+- **example:** pass BASE_URL as BrowserRouter basename so deployed routes resolve under /MarchHare/ ([838b10c](https://github.com/Wildhoney/MarchHare/commit/838b10c11f9f4cb65852e336ab59c307d246690b))
+- update path for example ([4608dbf](https://github.com/Wildhoney/MarchHare/commit/4608dbfbf04974a2d175a7417b8934eee84524dc))
 
 ## [0.6.0](https://github.com/Wildhoney/Chizu/compare/v0.2.27...v0.6.0) (2026-05-13)
 
