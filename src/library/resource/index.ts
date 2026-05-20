@@ -6,7 +6,8 @@ import type {
   BoundResourceHandle,
 } from "./types.ts";
 import { cache } from "./utils.ts";
-import { empty, present, unset, type Stored } from "../utils/index.ts";
+import { empty, present, unset } from "../utils/utils.ts";
+import type { Stored } from "../utils/types.ts";
 
 export type {
   IfOptions,

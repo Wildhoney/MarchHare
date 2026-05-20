@@ -15,6 +15,9 @@ function memoryAdapter(): Adapter & { entries: Map<string, string> } {
     remove: (key) => {
       entries.delete(key);
     },
+    clear: () => {
+      entries.clear();
+    },
   };
 }
 
