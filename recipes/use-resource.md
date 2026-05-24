@@ -1,53 +1,56 @@
 # Resource
 
-`Resource(fetcher)` declares a remote interaction at module scope. Components consume it via `useResource(handle)`, which returns the fetch callable directly &ndash; `await get.user()` triggers a request. The callable exposes two attached methods:
+`Resource(fetcher)` declares a remote interaction at module scope. There's no `useResource` hook &mdash; consume Resources directly:
 
-- `.if({ over })` &ndash; conditional refresh; fetch only if the cached payload is older than the supplied freshness window.
-- `.else(fallback)` &ndash; synchronous read of the cached payload with a default for the "nothing cached yet" case.
+- **`resources.cat.get(params?)`** &mdash; synchronous read of the cached payload for those params. Returns `T | null`. Safe to call at module scope, in the model literal, anywhere.
+- **`context.actions.resource(resources.cat, params?)`** &mdash; fires the fetch from an action handler. Auto-threads the `AbortSignal` from `context.task.controller.signal` and the per-`<Boundary>` Store snapshot. Returns a thenable that's also chainable with `.exceeds({ minutes: 5 })` for cache-aware refresh.
 
-Every call fires its own request. The most recent successful payload is cached in a module-level `WeakMap` keyed by the fetcher function itself, so `.if(...)` and `.else(...)` always have something to read from. A failed call doesn't disturb the cache.
+The fetcher itself receives `{ store, signal, params }` &mdash; destructure whichever you need.
 
 ```ts
 // resources.ts
-import { Resource } from "march-hare";
+import { Resource, type FetcherArgs } from "march-hare";
 
-// `T` is inferred from the fetcher's return type — no generics needed.
-export const user = Resource((signal) =>
-  ky.get("user", { signal }).json<User>(),
+export const user = Resource(
+  ({ signal, params }: FetcherArgs<{ id: number }>) =>
+    ky.get(`users/${params.id}`, { signal }).json<User>(),
 );
 
-export const pay = Resource((signal, body: Body) =>
-  ky.post("pay", { json: body, signal }).json<Receipt>(),
+export const pay = Resource(({ signal, params }: FetcherArgs<Body>) =>
+  ky.post("pay", { json: params, signal }).json<Receipt>(),
 );
+
+// Simple no-store, no-params:
+export const ping = Resource(({ signal }) => ky.get("ping", { signal }).text());
 ```
 
 ```tsx
 // actions.ts
-import { useActions, useResource } from "march-hare";
+import { useActions } from "march-hare";
 import * as resource from "./resources";
 
 export function useActions() {
-  const get = {
-    user: useResource(resource.user),
-  };
-  const post = {
-    pay: useResource(resource.pay),
-  };
   const actions = useActions<Model, typeof Actions>({
-    user: get.user.else(null),
-    receipt: post.pay.else(null),
+    // Sync cache read at the model literal — returns null when nothing is cached.
+    user: resource.user.get({ id: 5 }),
   });
 
   actions.useAction(Actions.Mount, async (context) => {
-    const data = await get.user.if(
-      { over: { minutes: 5 } },
-      context.task.controller.signal,
-    );
+    // Fires immediately (no freshness window).
+    const data = await context.actions.resource(resource.user, { id: 5 });
+    context.actions.produce(({ model }) => void (model.user = data));
+  });
+
+  actions.useAction(Actions.Refresh, async (context) => {
+    // Reuses cache when < 5 minutes old; otherwise fetches.
+    const data = await context.actions
+      .resource(resource.user, { id: 5 })
+      .exceeds({ minutes: 5 });
     context.actions.produce(({ model }) => void (model.user = data));
   });
 
   actions.useAction(Actions.Submit, async (context, body) => {
-    const receipt = await post.pay(context.task.controller.signal, body);
+    const receipt = await context.actions.resource(resource.pay, body);
     context.actions.produce(({ model }) => void (model.receipt = receipt));
   });
 
@@ -55,109 +58,126 @@ export function useActions() {
 }
 ```
 
-Fetchers take a single `params` argument (defaults to `{}`) and return a `Promise<T>`. Resources do **not** carry any callbacks &mdash; side-effects (broadcasting, logging, model updates) belong in the `useAction` handler that called `await handle(...)`.
+Every successful fetch writes through to the per-fetcher {@link Cache} (in-memory by default, persistent when an adapter is supplied via the second arg to `Resource`).
 
-> **One primitive for reads and writes.** `Resource` doesn't distinguish GETs from POSTs. The cache and the freshness window apply uniformly. Every call fires its own request &mdash; no implicit coalescing &mdash; so accidental double-submits aren't masked. If you want a deliberate duplicate-submit guard, use `.if({ over })` explicitly.
+> **Convention:** import resources as a namespace (`import * as resource`) so call sites read `resource.user`, `resource.pay`, etc. The grouping signals "remote interactions, declared at module scope" at a glance.
 
-> **Convention:** import resources as a namespace (`import * as resource`) so call sites read `resource.user`, `resource.pay`, etc. The grouping signals "remote interactions, declared at module scope" at a glance. Bind the local handles into one object per HTTP verb &mdash; `const get = { ... }`, `const post = { ... }`, `const patch = { ... }` &mdash; so call sites read `get.user()`, `post.pay()`, `patch.updateUser()`. The verb at the call site advertises read vs. write without jumping back to the resource definition.
+> **Temporal runtime requirement.** `.exceeds({...})` reads a `Temporal.Instant` internally. March Hare reads `Temporal` from the host global, so consumers targeting runtimes that do not yet expose it natively must install a polyfill (e.g. [`@js-temporal/polyfill`](https://github.com/js-temporal/temporal-polyfill)) once at app entry.
 
-> **Temporal runtime requirement.** `.if({ over })` reads a `Temporal.Instant` internally. March Hare reads `Temporal` from the host global, so consumers targeting runtimes that do not yet expose it natively must install a polyfill (e.g. [`@js-temporal/polyfill`](https://github.com/js-temporal/temporal-polyfill)) once at app entry.
-
-## Passing params
-
-The second generic on `Resource` types a single `params` object that the fetcher receives as its only argument. Defaults to no params, in which case the bound handle takes no arguments. With params declared, the call site requires them:
+## The fetcher's args object
 
 ```ts
-// resources.ts
-type Params = { id: number };
-
-export const user = Resource((signal, { id }: Params) =>
-  ky.get(`users/${id}`, { signal }).json<User>(),
-);
-
-export const updateUser = Resource(
-  (signal, { id, name }: { id: number; name: string }) =>
-    ky.patch(`users/${id}`, { json: { name }, signal }).json<User>(),
-);
-```
-
-```ts
-// actions.ts
-const get = {
-  user: useResource(resource.user),
-  // ^ (params: Params) => Promise<User>; with .if, .else attached
-};
-const patch = {
-  updateUser: useResource(resource.updateUser),
-  // ^ (params: { id: number; name: string }) => Promise<User>; with .if, .else attached
+type FetcherArgs<P> = {
+  store: Store; // per-<Boundary> ambient state snapshot (read-only)
+  signal: AbortSignal | undefined;
+  params: P;
 };
 ```
 
-Params are passed as a single object &mdash; not positional arguments. This keeps the call site self-documenting (`get.user({ id: 5 })` is clearer than `get.user(5)`).
+- **`store`** &mdash; a snapshot of the per-`<Boundary>` [Store](./store.md) at the moment of fetch. Read session tokens, locale, feature flags, anything cross-cutting. The snapshot is captured at fetcher-start; mid-flight Store changes don't affect this fetch but the next one picks them up.
+- **`signal`** &mdash; the `AbortSignal` auto-threaded from `context.task.controller.signal`. Pass it to `ky`/`fetch`/`EventSource` to thread cancellation; when the action's task is aborted (component unmount, supersede, manual abort), the in-flight request is cancelled.
+- **`params`** &mdash; the call-site params object, typed by the Resource's second generic.
 
-## `.else(fallback)` &mdash; sync read of the cache
+Destructure only what you need. No-store, no-params resources collapse to `({ signal })`.
 
-`.else(fallback)` reads the most recent successful payload synchronously, falling back to whatever you pass when nothing has resolved yet. Useful for seeding model state, rendering placeholder UI from a previous-session cache (if hydrated separately), or recovering from a failed refresh:
+## Per-params caching
+
+Each unique params object gets its own cache slot, keyed internally by `JSON.stringify(params)`. `user.get({ id: 5 })` and `user.get({ id: 6 })` therefore have independent caches:
+
+```ts
+// First fetch populates the {"id":5} slot.
+await context.actions.resource(resource.user, { id: 5 });
+
+// Different params — independent slot, independent freshness window.
+await context.actions.resource(resource.user, { id: 6 });
+
+// Reuse cache for {"id":5} when < 5 min old.
+await context.actions
+  .resource(resource.user, { id: 5 })
+  .exceeds({ minutes: 5 });
+
+// Sync read of whichever slot you want.
+const fiveCached: User | null = resource.user.get({ id: 5 });
+```
+
+Two callers producing structurally equal params (same key order, same primitive values) hit the same slot.
+
+## `.get(params)` &mdash; sync cache read
+
+`.get(params)` reads the most recent successful payload for those params synchronously. Returns `null` when nothing has resolved yet (whether through "never fetched" or "fetch is still pending").
+
+Use it in the model literal to seed initial state from the cache:
+
+```ts
+const actions = useActions<Model, typeof Actions>({
+  user: resource.user.get({ id }), // User | null
+});
+```
+
+Or in a handler to recover from a failed refresh:
 
 ```ts
 actions.useAction(Actions.Refresh, async (context) => {
   try {
-    const data = await get.user();
+    const data = await context.actions.resource(resource.user, { id });
     context.actions.produce(({ model }) => void (model.user = data));
   } catch {
-    // Refresh failed — fall back to the last good value, or null.
     context.actions.produce(
-      ({ model }) => void (model.user = get.user.else(null)),
+      ({ model }) => void (model.user = resource.user.get({ id })),
     );
   }
 });
 ```
 
-The signature is `else<U>(fallback: U): T | U` &mdash; the fallback's type widens the return so the empty-case is always handled at the call site. There is no way to read the cache without supplying a default.
+The cache is module-scope, so every caller of `resource.user.get({ id: 5 })` &mdash; from a model literal, a handler, even a non-React utility &mdash; sees the same payload.
 
-The cache slot is shared across components using the same Resource handle &mdash; whichever component runs the fetcher first populates the slot for everyone reading via `.else`.
+## `.exceeds({...})` &mdash; conditional refresh
 
-## `.if({ over })` &mdash; conditional refresh
-
-For "refresh, but don't bother if we just ran" semantics, call `.if({ over })`:
+For "refresh, but don't bother if we just ran" semantics:
 
 ```ts
-const get = {
-  user: useResource(resource.user),
-};
-
 actions.useAction(Actions.Refresh, async (context) => {
-  const data = await get.user.if({ over: { minutes: 5 } });
+  const data = await context.actions
+    .resource(resource.user, { id })
+    .exceeds({ minutes: 5 });
   context.actions.produce(({ model }) => void (model.user = data));
 });
 ```
 
-`over` accepts a `Temporal.Duration`, a `DurationLike` object (`{ minutes: 5 }`, `{ seconds: 30 }`), or an ISO 8601 duration string (`"PT5M"`). If the most recent successful run resolved longer ago than the window, the fetcher is called. Otherwise the cached data is returned without hitting the network.
+`.exceeds(duration)` accepts a `Temporal.Duration`, a `DurationLike` object (`{ minutes: 5 }`, `{ seconds: 30 }`), or an ISO 8601 duration string (`"PT5M"`).
+
+If the most recent successful fetch for those params resolved longer ago than the window (i.e. the cache age _exceeds_ the duration), the fetcher fires. Otherwise the cached value resolves immediately.
+
+`.exceeds` is also a duplicate-submit guard for writes &mdash; `await context.actions.resource(resource.pay, body).exceeds({ seconds: 5 })` only fires if no `pay(body)` has succeeded in the last five seconds.
+
+## Reading the Store inside fetchers
+
+Every fetcher receives the per-`<Boundary>` Store on its args object. Use it for ambient values like the session token:
 
 ```ts
-await get.user.if({ over: { minutes: 5 } });
-await get.user.if({ over: "PT5M" });
-await get.user.if({ over: Temporal.Duration.from({ minutes: 5 }) });
+export const user = Resource(
+  ({ store, signal, params }: FetcherArgs<{ id: number }>) =>
+    ky
+      .get(`users/${params.id}`, {
+        headers: store.session
+          ? { Authorization: `Bearer ${store.session.accessToken}` }
+          : {},
+        signal,
+      })
+      .json<User>(),
+);
 ```
 
-For parameterised resources, params come after the options object:
-
-```ts
-const data = await get.feed.if({ over: { minutes: 1 } }, { cursor });
-```
-
-The freshness check uses the resource's module-scoped timestamp, which reflects the most recent successful call across all param-sets. For parameterised resources, a fresh `feed({ cursor: null })` will short-circuit a subsequent `feed.if({ over: { minutes: 5 } }, { cursor: "page-2" })`. Treat it as "did _anyone_ run this resource recently?", not "did we run _these params_ recently".
-
-`.if` is also useful as an explicit duplicate-submit guard for writes &mdash; `await post.pay.if({ over: { seconds: 5 } }, body)` will only fire if the last successful `pay` was more than five seconds ago. The cached receipt may not match the current intent, so use this deliberately.
+See [session-tokens](./session-tokens.md) for the full auth pattern and [store](./store.md) for the underlying primitive.
 
 ## Fanning out on success or failure
 
-Resources don't dispatch anything themselves. Compose dispatch (and any other side-effects) in the calling handler &mdash; the same place the `await` lives:
+Resources don't dispatch anything themselves. Compose dispatch and other side-effects in the calling handler &mdash; the same place the `await` lives:
 
 ```ts
 actions.useAction(Actions.Mount, async (context) => {
   try {
-    const data = await get.user();
+    const data = await context.actions.resource(resource.user, { id: 5 });
     await context.actions.dispatch(Actions.Broadcast.UserUpdated, data);
     context.actions.produce(({ model }) => void (model.user = data));
   } catch (error) {
@@ -172,9 +192,9 @@ actions.useAction(Actions.Mount, async (context) => {
 });
 ```
 
-When several components need to react to a resource update, the natural pattern is: one component awaits the run and dispatches the broadcast; every other component subscribes to that broadcast via `useAction`. See [broadcast-actions.md](./broadcast-actions.md) for the receiving side &ndash; late-mounting components automatically pick up the cached broadcast value.
+When several components need to react to a resource update, the pattern is: one component awaits the run and dispatches a broadcast; every other component subscribes to that broadcast via `useAction`. See [broadcast-actions](./broadcast-actions.md) for the receiving side.
 
-> **Note:** TypeScript cannot type promise rejections, so `await handle(...)` rejects with `unknown`. To narrow inline, use `error instanceof YourErrorClass` checks within a `try/catch` block in the handler.
+> **Note:** TypeScript cannot type promise rejections, so `await context.actions.resource(...)` rejects with `unknown`. To narrow inline, use `error instanceof YourErrorClass` checks within a `try/catch`.
 
 ## Optimistic updates
 
@@ -190,7 +210,10 @@ actions.useAction(Actions.Rename, async (context, name) => {
   });
 
   try {
-    const updated = await patch.updateUser({ id: previous!.id, name });
+    const updated = await context.actions.resource(resource.updateUser, {
+      id: previous!.id,
+      name,
+    });
     context.actions.produce(({ model }) => void (model.user = updated));
   } catch (error) {
     context.actions.produce(({ model }) => void (model.user = previous));
@@ -199,183 +222,72 @@ actions.useAction(Actions.Rename, async (context, name) => {
 });
 ```
 
-Pending state drives the UI via `actions.inspect.user.pending()` &mdash; see [model-annotations.md](./model-annotations.md). Nothing on the `Resource` itself participates in the optimistic flow; the handler owns the rollback because the handler is what knows the previous value.
+Pending state drives the UI via `actions.inspect.user.pending()` &mdash; see [model-annotations](./model-annotations.md).
 
 ## Run semantics
 
-Every awaited call triggers a fresh network request. There is **no in-flight coalescing** &ndash; calling `user()` three times concurrently produces three requests. Coordination across components happens at the broadcast layer (see above), not at a hidden cache.
+Every `await context.actions.resource(...)` fires a fresh network request. There is **no in-flight coalescing** &mdash; calling it three times concurrently produces three requests. Coordination across components happens at the broadcast layer, not at a hidden cache.
 
 ```ts
-const a = get.user({ id: 5 });
-const b = get.user({ id: 5 });
-const c = get.user({ id: 5 });
-// Three network requests.
-
-const d = get.user({ id: 6 });
-// A fourth, with different params.
+const a = context.actions.resource(resource.user, { id: 5 });
+const b = context.actions.resource(resource.user, { id: 5 });
+const c = context.actions.resource(resource.user, { id: 5 });
+await Promise.all([a, b, c]); // three network requests
 ```
 
-Each successful response updates the module-scope cache for that fetcher; whichever resolves last wins. Refresh is a synonym for "call the handle again" &ndash; no `invalidate()`, no second function to import.
-
-## Three-tier error handling
-
-Errors can be handled at three layers, each with a distinct responsibility:
-
-```tsx
-// Tier 1: dispatch a typed broadcast in the calling handler — every listener reacts
-actions.useAction(Actions.Mount, async (context) => {
-  try {
-    const data = await get.user();
-    context.actions.produce(({ model }) => void (model.user = data));
-  } catch (error) {
-    if (error instanceof RateLimitedError) {
-      await context.actions.dispatch(
-        Actions.Broadcast.RateLimited,
-        error.retryAfter,
-      );
-    }
-    throw error;
-  }
-});
-
-// Tier 2: handler-level inline recovery — branch on a specific error
-actions.useAction(Actions.Submit, async (context, body) => {
-  try {
-    const receipt = await post.pay(body);
-    context.actions.produce(({ model }) => void (model.receipt = receipt));
-  } catch (error) {
-    if (error instanceof InsufficientFundsError) {
-      context.actions.produce(({ model }) => void (model.declined = true));
-      return;
-    }
-    throw error; // bubble to the boundary
-  }
-});
-
-// Tier 3: Lifecycle.Fault — global catch-all
-const actions = useActions();
-actions.useAction(Lifecycle.Fault, (_context, { reason, error, tasks }) => {
-  if (reason !== Reason.Errored) return;
-  if (error instanceof UnauthorisedError) {
-    for (const task of tasks) task.controller.abort();
-    redirectToLogin();
-  }
-});
-```
-
-| Tier               | Use for                                                                               |
-| ------------------ | ------------------------------------------------------------------------------------- |
-| Handler `dispatch` | Cross-component reactions to fresh failures &ndash; toast, retry banner, analytics    |
-| `try/catch`        | Component-specific recovery where the error becomes part of the model state           |
-| `Lifecycle.Fault`  | App-level concerns &ndash; sign-out on auth failure, sentry reporting, abort cascades |
-
-Pick the lowest tier that suits the concern. Routine, expected failures (404 means "deleted", "insufficient funds" means "show the error inline") belong in tier 2. Authentication and network-level failures usually belong in tier 3. Tier 1 is for events other components need to react to without awaiting the resource themselves. See [error-handling.md](./error-handling.md) for the global fault contract.
+Each successful response writes through to the per-params cache slot; whichever resolves last for a given params hash wins.
 
 ## Mount-time pattern
-
-The canonical pattern is to call `await get.user()` from a `Lifecycle.Mount` handler and write the result into the model:
 
 ```ts
 actions.useAction(Actions.Mount, async (context) => {
   context.actions.produce(
     ({ model }) =>
-      void (model.user = context.actions.annotate(
-        model.user,
-        Operation.Update,
-      )),
+      void (model.user = context.actions.annotate(model.user, Op.Update)),
   );
 
-  const data = await get.user();
+  const data = await context.actions.resource(resource.user, { id });
 
   context.actions.produce(({ model }) => void (model.user = data));
 });
 ```
 
-The `annotate` call drives the loading UI via `actions.inspect.user.pending()` &ndash; see [model-annotations.md](./model-annotations.md). Refresh has the same body &ndash; just call the handle again, no invalidate step.
+The `annotate` call drives the loading UI via `actions.inspect.user.pending()` &mdash; see [model-annotations](./model-annotations.md). Refresh has the same body, just call `context.actions.resource(...)` again.
 
 ## Infinite scroll
 
-Variadic fetchers are how you build pagination. Declare the cursor as a param, pass it at call time, append each page into the model:
-
 ```ts
 // resources.ts
-type Params = { cursor: string | null };
-
-export const feed = Resource((signal, { cursor }: Params) =>
-  http
-    .get("feed", { searchParams: { cursor: cursor ?? "" }, signal })
-    .json<Page<Item>>(),
+export const feed = Resource(
+  ({ signal, params }: FetcherArgs<{ cursor: string | null }>) =>
+    http
+      .get("feed", { searchParams: { cursor: params.cursor ?? "" }, signal })
+      .json<Page<Item>>(),
 );
 ```
 
 ```ts
 // actions.ts
-type Model = {
-  items: Item[];
-  cursor: string | null;
-  hasMore: boolean;
-};
-
-export function useActions() {
-  const get = {
-    feed: useResource(resource.feed),
-  };
-  const actions = useActions<Model, typeof Actions>({
-    items: [],
-    cursor: null,
-    hasMore: true,
+actions.useAction(Actions.LoadMore, async (context) => {
+  if (!context.model.hasMore) return;
+  const page = await context.actions.resource(resource.feed, {
+    cursor: context.model.cursor,
   });
-
-  actions.useAction(Actions.Mount, async (context) => {
-    const page = await get.feed({ cursor: null });
-    context.actions.produce(({ model }) => {
-      model.items = page.items;
-      model.cursor = page.nextCursor;
-      model.hasMore = page.nextCursor !== null;
-    });
+  context.actions.produce(({ model }) => {
+    model.items.push(...page.items);
+    model.cursor = page.nextCursor;
+    model.hasMore = page.nextCursor !== null;
   });
-
-  actions.useAction(Actions.LoadMore, async (context) => {
-    if (!context.model.hasMore) return;
-    const page = await get.feed({ cursor: context.model.cursor });
-    context.actions.produce(({ model }) => {
-      model.items.push(...page.items);
-      model.cursor = page.nextCursor;
-      model.hasMore = page.nextCursor !== null;
-    });
-  });
-
-  return actions;
-}
-```
-
-There's no in-flight coalescing &ndash; clicking "load more" twice rapidly fires two requests. Guard against duplicate dispatches with a `pending()` check or by gating on `model.hasMore` / `model.cursor` movement. See the live `/transactions` example at [`src/example/transactions/`](../src/example/transactions/) for the IntersectionObserver pattern.
-
-## Seeding the initial model with `.else`
-
-Because `useResource` is a standalone hook, you can call it _before_ `useActions` and feed the cached value into the initial model literal:
-
-```ts
-const get = {
-  cat: useResource(resources.cat),
-};
-const actions = useActions<Model, typeof Actions, Data>(
-  { cat: get.cat.else(null) },
-  () => ({ index, router }),
-);
-
-actions.useAction(Actions.Mount, async (context) => {
-  const fresh = await get.cat.if({ over: { minutes: 5 } });
-  context.actions.produce(({ model }) => void (model.cat = fresh));
 });
 ```
 
-`get.cat.else(null)` reads the cached payload synchronously &ndash; if a previous mount (or another component using the same Resource) populated the cache, the model starts with that value rather than `null`. The mount handler then refreshes lazily via `.if`.
+Each cursor gets its own cache slot &mdash; `.exceeds({...})` is per-cursor, so a fresh page-1 fetch doesn't short-circuit a page-2 refresh. See `src/example/transactions/` for the live IntersectionObserver pattern.
 
 ## Limitations
 
-- **No persistence across reloads by default.** Opt in with `utils.store(adapter)` &mdash; the bound handle's `.else(stored)` overload seeds the cache from persisted state on first render, so `.if({ over })` short-circuits on the persisted timestamp. See [storage](./storage.md).
-- **No focus or reconnect revalidation.** Wire a `window` listener and call the handle again if you need this.
-- **No SSR isolation.** The cache `WeakMap` is module-global, so server-side rendering would leak across requests. `Resource` is client-only.
-- **No subscription on the awaiter.** `await get.user()` resolves once and does not re-fire when the broadcast goes out. Use a `useAction(broadcastAction)` handler in consuming components for change notifications.
-- **`.else` is not reactive.** Reading it inside render does not subscribe the component to updates &mdash; it is a snapshot, not a signal. Drive UI from the model.
+- **No persistence across reloads by default.** Opt in by wiring a `Cache` instance into the Resource: `Resource(fetcher, new Cache(adapter))`. The Cache writes through on every successful fetch and auto-seeds from storage on first read. See [storage](./storage.md).
+- **No focus or reconnect revalidation.** Wire a `window` listener and call `context.actions.resource(...)` again if you need this.
+- **No SSR isolation.** The cache is module-global, so server-side rendering would leak across requests. `Resource` is client-only.
+- **No subscription on the awaiter.** `await context.actions.resource(...)` resolves once and does not re-fire when a broadcast goes out. Use `useAction(broadcastAction)` for change notifications.
+- **`.get(params)` is not reactive.** Reading it inside render does not subscribe the component to updates &mdash; it is a snapshot, not a signal. Drive UI from the model.
+- **Params keying is structural via `JSON.stringify`.** Two callers must produce structurally equal params (same key order, same primitive values) to share a cache slot. Avoid `Date`, `BigInt`, `Symbol`, or non-stable object identities in params.

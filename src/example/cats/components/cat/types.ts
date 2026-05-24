@@ -16,12 +16,10 @@ export class Actions {
   static Refresh = Action("Refresh");
 }
 
-export enum Snapshots {
-  Cat = "cat",
-}
-
 export type Model = {
   cat: Cat | null;
 };
 
-export type Data = { index: number; router: Router };
+export type Props = { index: number };
+
+export type Data = Props & { router: Router };

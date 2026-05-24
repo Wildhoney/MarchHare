@@ -38,6 +38,11 @@ import { getReason, getError } from "../error/utils.ts";
 import EventEmitter from "eventemitter3";
 import { useBroadcast } from "../boundary/components/broadcast/index.tsx";
 import { useScope, getScope } from "../boundary/components/scope/index.tsx";
+import { useStore, useStoreRef } from "../boundary/components/store/utils.ts";
+import type { Store } from "../boundary/components/store/index.tsx";
+import { produce as produceImmer } from "immer";
+import type { ResourceHandle } from "../resource/types.ts";
+import { unset } from "../utils/utils.ts";
 import {
   isBroadcastAction,
   isMulticastAction,
@@ -111,6 +116,8 @@ export function useActions<
   const broadcast = useBroadcast();
   const scope = useScope();
   const tasks = useTasks();
+  const store = useStore();
+  const slot = useStoreRef();
   const rerender = useRerender();
   const initialised = React.useRef(false);
   const hydration = React.useRef<Process | null>(null);
@@ -155,18 +162,25 @@ export function useActions<
         task,
         data,
         tasks,
+        store,
         actions: {
           produce(
             f: (draft: {
               model: M;
               readonly inspect: Readonly<Inspect<M>>;
+              store: Store;
             }) => void,
           ) {
             if (controller.signal.aborted) return;
             const process = state.current.produce((draft) => {
-              f({
-                model: <M>(<unknown>draft),
-                inspect: <Readonly<Inspect<M>>>(<unknown>state.current.inspect),
+              slot.current = produceImmer(slot.current, (storeDraft) => {
+                f({
+                  model: <M>(<unknown>draft),
+                  inspect: <Readonly<Inspect<M>>>(
+                    (<unknown>state.current.inspect)
+                  ),
+                  store: <Store>storeDraft,
+                });
               });
             });
             setModel(<M>(<unknown>state.current.model));
@@ -199,6 +213,65 @@ export function useActions<
           annotate<T>(value: T, operation: Operation = Operation.Update): T {
             return state.current.annotate(operation, value);
           },
+          resource: Object.assign(
+            function resourceCall<T, P extends object>(
+              resource: ResourceHandle<T, P>,
+              params?: P,
+            ) {
+              const effective = <P>(params ?? {});
+              const fetch = (): Promise<T> =>
+                resource.run(slot.current, controller.signal, effective);
+              const exceeds = (duration: Temporal.DurationLike): Promise<T> => {
+                const { data, at } = resource.read(effective);
+                if (data !== unset && at !== null) {
+                  const elapsed = Temporal.Now.instant().since(at);
+                  const window = Temporal.Duration.from(duration);
+                  if (Temporal.Duration.compare(elapsed, window) <= 0) {
+                    return Promise.resolve(<T>data);
+                  }
+                }
+                return fetch();
+              };
+              return {
+                then<U = T, V = never>(
+                  onFulfilled?:
+                    | ((value: T) => U | PromiseLike<U>)
+                    | null
+                    | undefined,
+                  onRejected?:
+                    | ((reason: unknown) => V | PromiseLike<V>)
+                    | null
+                    | undefined,
+                ): Promise<U | V> {
+                  return fetch().then(onFulfilled, onRejected);
+                },
+                exceeds,
+              };
+            },
+            {
+              /**
+               * Writes `data` into a {@link ResourceHandle}'s per-params
+               * cache slot with a fresh timestamp. Subsequent reads via
+               * `.get(params)` see the new value, and `.exceeds(...)`
+               * short-circuits against the new timestamp.
+               *
+               * Use this when payloads arrive out-of-band (SSE, WebSocket,
+               * postMessage) and need to be reflected in the Resource
+               * cache without a fetcher round-trip.
+               */
+              set: <T, P extends object>(
+                resource: ResourceHandle<T, P>,
+                ...args: [keyof P] extends [never]
+                  ? [data: T]
+                  : [params: P, data: T]
+              ): void => {
+                const data: T = args.length === 2 ? args[1] : args[0];
+                const params: P =
+                  args.length === 2 ? args[0] : <P>(<unknown>{});
+                resource.seed(params, data, Temporal.Now.instant());
+              },
+            },
+          ),
           async resolution(action: AnyAction) {
             if (controller.signal.aborted) return null;
 

@@ -76,27 +76,26 @@ export default function Profile(): React.ReactElement {
 }
 ```
 
-When you need to do more than just assign the payload &ndash; such as making an API request &ndash; expand `useAction` to a full function. It can be synchronous, asynchronous, or even a generator. Remote data goes through `Resource` rather than a bare `fetch` &ndash; declare the resource at module scope and consume it via `useResource`:
+When you need to do more than just assign the payload &ndash; such as making an API request &ndash; expand `useAction` to a full function. It can be synchronous, asynchronous, or even a generator. Remote data goes through `Resource` rather than a bare `fetch` &ndash; declare the resource at module scope, fetch from handlers via `context.actions.resource(...)`:
 
 ```ts
 // resources.ts
 import { Resource } from "march-hare";
 
-export const user = Resource(() => ky.get(api.user()).json<User>());
+export const user = Resource(({ signal }) =>
+  ky.get(api.user(), { signal }).json<User>(),
+);
 ```
 
 ```tsx
-const get = {
-  user: useResource(resource.user),
-};
-
 actions.useAction(Actions.Name, async (context) => {
   context.actions.produce(
     ({ model }) =>
       void (model.name = context.actions.annotate(model.name, Op.Update)),
   );
 
-  const data = await get.user();
+  // Auto-threads context.task.controller.signal and the Store snapshot.
+  const data = await context.actions.resource(resource.user);
 
   context.actions.produce(({ model }) => void (model.name = data.name));
 });
@@ -112,14 +111,12 @@ const actions = useActions<Model, typeof Actions, { query: string }>(
   () => ({ query: props.query }),
 );
 
-const get = {
-  search: useResource(resource.search),
-};
-
 actions.useAction(Actions.Search, async (context) => {
-  await get.search({ query: context.data.query });
+  const results = await context.actions.resource(resource.search, {
+    query: context.data.query,
+  });
   // context.data.query is always the latest value, even after await
-  console.log(context.data.query);
+  console.log(context.data.query, results);
 });
 ```
 
@@ -177,17 +174,13 @@ class Actions {
 ```
 
 ```tsx
-const get = {
-  user: useResource(resource.user),
-};
-
 actions.useAction(Actions.Profile, async (context) => {
   context.actions.produce(
     ({ model }) =>
       void (model.name = context.actions.annotate(model.name, Op.Update)),
   );
 
-  const data = await get.user();
+  const data = await context.actions.resource(resource.user);
 
   context.actions.produce(({ model }) => void (model.name = data.name));
 
@@ -198,12 +191,8 @@ actions.useAction(Actions.Profile, async (context) => {
 Once we have the broadcast action, if we want to listen for it and perform another operation in our local component we can do that via `useAction`:
 
 ```tsx
-const get = {
-  friends: useResource(resource.friends),
-};
-
 actions.useAction(Actions.Broadcast.Name, async (context, name) => {
-  const data = await get.friends({ name });
+  const data = await context.actions.resource(resource.friends, { name });
 
   context.actions.produce(({ model }) => void (model.friends = data));
 });
@@ -212,14 +201,10 @@ actions.useAction(Actions.Broadcast.Name, async (context, name) => {
 Both `read` and `peek` access the latest cached broadcast value without subscribing via `useAction`. The difference is that `read` waits for any pending annotations on the corresponding model field to settle before resolving, whereas `peek` returns the value immediately:
 
 ```tsx
-const get = {
-  friends: useResource(resource.friends),
-};
-
 actions.useAction(Actions.FetchFriends, async (context) => {
   const name = await context.actions.resolution(Actions.Broadcast.Name);
   if (!name) return;
-  const data = await get.friends({ name });
+  const data = await context.actions.resource(resource.friends, { name });
   context.actions.produce(({ model }) => void (model.friends = data));
 });
 ```
@@ -268,52 +253,42 @@ Components that mount after a broadcast has already been dispatched automaticall
 
 <a id="remote-data"></a>
 
-For remote data, declare a `Resource` at module scope and consume it via `useResource`. Every call fires its own request; the most recent successful response is cached in a module-level `WeakMap` keyed by the fetcher so `.if(...)` and `.else(...)` on the bound handle have something to read from. Convention is to keep all resources in `resources.ts` and import them as a namespace:
+For remote data, declare a `Resource` at module scope and use it directly. `resource.user.get(params)` is a sync cache read; `context.actions.resource(resource.user, params?)` is the fetch path with auto-threaded abort signal and Store snapshot. Every successful fetch caches the response in a module-level slot keyed by the fetcher and the stringified params, so different param-sets are independent. Convention is to keep all resources in `resources.ts` and import them as a namespace:
 
 ```ts
 // resources.ts
-import { Resource } from "march-hare";
+import { Resource, type FetcherArgs } from "march-hare";
 
-export const user = Resource(() => ky.get("/api/user").json<User>());
+export const user = Resource(({ signal }) =>
+  ky.get("/api/user", { signal }).json<User>(),
+);
 
-export const pay = Resource((signal, body: Body) =>
-  ky.post("/api/pay", { json: body, signal }).json<Receipt>(),
+export const pay = Resource(({ signal, params }: FetcherArgs<Body>) =>
+  ky.post("/api/pay", { json: params, signal }).json<Receipt>(),
 );
 ```
 
 ```tsx
 // actions.ts
-import { useActions, useResource } from "march-hare";
+import { useActions } from "march-hare";
 import * as resource from "./resources";
 
 export function useActions() {
-  // Bind the resources first so we can seed the initial model from the
-  // cache via `.else(fallback)` — if a previous mount populated the
-  // slot, the model starts with that value; otherwise the fallback.
-  // Bindings are grouped by HTTP verb so call sites advertise read vs.
-  // write at a glance.
-  const get = {
-    user: useResource(resource.user),
-  };
-  const post = {
-    pay: useResource(resource.pay),
-  };
-
   const actions = useActions<Model, typeof Actions>({
-    user: get.user.else(null),
-    receipt: post.pay.else(null),
+    // Sync cache read at the model literal — returns null when nothing is cached.
+    user: resource.user.get(),
+    receipt: null,
   });
 
   actions.useAction(Actions.Mount, async (context) => {
-    const data = await get.user.if(
-      { over: { minutes: 5 } },
-      context.task.controller.signal,
-    );
+    const data = await context.actions
+      .resource(resource.user)
+      .exceeds({ minutes: 5 });
     context.actions.produce(({ model }) => void (model.user = data));
   });
 
   actions.useAction(Actions.Submit, async (context, body) => {
-    const receipt = await post.pay(context.task.controller.signal, body);
+    const receipt = await context.actions.resource(resource.pay, body);
     context.actions.produce(({ model }) => void (model.receipt = receipt));
   });
 
@@ -321,15 +296,17 @@ export function useActions() {
 }
 ```
 
-`useResource(handle)` returns the fetch callable directly. The callable has two attached methods: `.if({ over })` skips the network when the cached payload is still fresh, and `.else(fallback)` reads the cached payload synchronously with a default. `Temporal` is read from the host runtime &ndash; bring a polyfill (e.g. [`@js-temporal/polyfill`](https://github.com/js-temporal/temporal-polyfill)) if your target environment does not yet expose it natively. `.if({ over })` accepts a `Temporal.Duration`, a `DurationLike` object, or an ISO 8601 duration string.
+`context.actions.resource(resource, params?)` returns a thenable. Awaiting it fires the fetch unconditionally; chaining `.exceeds({ minutes: 5 })` short-circuits when the per-params cache age does not yet exceed the supplied freshness window. `.exceeds(duration)` accepts a `Temporal.Duration`, a `DurationLike` object, or an ISO 8601 duration string. `Temporal` is read from the host runtime &ndash; bring a polyfill (e.g. [`@js-temporal/polyfill`](https://github.com/js-temporal/temporal-polyfill)) if your target environment does not yet expose it natively.
 
-`Resource` takes a single fetcher argument. The fetcher receives the call-site `params` object as its only argument and returns a `Promise<T>`. There are no callbacks &ndash; no `onSuccess`, no `onError`, no injected `dispatch`. Side-effects after a run (broadcasting, analytics, model writes) live in the `useAction` handler that awaited the call, next to the rest of the flow:
+`Resource` takes a single fetcher argument. The fetcher receives `{ store, signal, params }` &mdash; destructure whichever you need. There are no callbacks &ndash; no `onSuccess`, no `onError`, no injected `dispatch`. Side-effects after a run (broadcasting, analytics, model writes) live in the `useAction` handler that awaited the call, next to the rest of the flow:
 
 ```ts
-export const user = Resource(() => ky.get("/api/user").json<User>());
+export const user = Resource(({ signal }) =>
+  ky.get("/api/user", { signal }).json<User>(),
+);
 
 actions.useAction(Actions.Mount, async (context) => {
-  const data = await get.user();
+  const data = await context.actions.resource(resource.user);
   await context.actions.dispatch(Actions.Broadcast.UserUpdated, data);
   context.actions.produce(({ model }) => void (model.user = data));
 });
@@ -340,16 +317,15 @@ actions.useAction(Actions.Mount, async (context) => {
 ```ts
 type Params = { cursor: string | null };
 
-export const feed = Resource((signal, { cursor }: Params) =>
+export const feed = Resource(({ signal, params }: FetcherArgs<Params>) =>
   http
-    .get("feed", { searchParams: { cursor: cursor ?? "" }, signal })
+    .get("feed", { searchParams: { cursor: params.cursor ?? "" }, signal })
     .json<Page<Item>>(),
 );
 
-const get = {
-  feed: useResource(resource.feed),
-};
-const page = await get.feed({ cursor: context.model.cursor });
+const page = await context.actions.resource(resource.feed, {
+  cursor: context.model.cursor,
+});
 ```
 
 A complete IntersectionObserver-driven infinite-scroll demo lives at [`src/example/transactions/`](./src/example/transactions/) &ndash; mock paginated API, scroll-triggered `LoadMore`, `pending()` guard, broadcast on success.
@@ -359,7 +335,7 @@ For typed failure routing, wrap the call in `try/catch` and use `instanceof` &nd
 ```ts
 actions.useAction(Actions.Mount, async (context) => {
   try {
-    const data = await get.user();
+    const data = await context.actions.resource(resource.user);
     context.actions.produce(({ model }) => void (model.user = data));
   } catch (error) {
     if (error instanceof RateLimitedError) {
@@ -377,37 +353,40 @@ See the [Resource recipe](./recipes/use-resource.md) for the three-tier error ha
 
 ### Persisting resources across reloads
 
-`useResource`'s cache lives in a `WeakMap` that's reset on every page load. To keep the most recent successful payload around between sessions, pair it with `utils.store(...)` &ndash; a synchronous key/value wrapper around any backing store (`localStorage` on web, `MMKV` on React Native, etc.) that traffics in the same `Stored<T>` shape as the Resource cache.
+By default a `Resource`'s cache is in-memory only &ndash; it resets on every page load. To keep the most recent successful payload around between sessions, wire a `Cache` instance to the `Resource` definition. The Cache writes through to its adapter on every successful run and seeds the per-params slot from storage on first read, so call sites stay free of explicit `store.set` / `store.get` ceremony.
 
 ```ts
-import { utils } from "march-hare";
+// resources.ts
+import { Cache, Resource } from "march-hare";
 
-export const store = utils.store({
+const cache = new Cache({
   get: (key) => localStorage.getItem(key),
   set: (key, value) => localStorage.setItem(key, value),
   remove: (key) => localStorage.removeItem(key),
+  clear: () => localStorage.clear(),
 });
+
+export const cat = Resource(async ({ signal }) => fetchCat(signal), cache);
 ```
 
-`get.cat.else(...)` is overloaded: pass a `Stored<T>` (from `store.get(key)`) and the bound handle seeds its own cache from it when empty &ndash; then chain `.else(null)` for the leaf fallback. `get.cat.snapshot()` produces the symmetric `Stored<T>` for writing back. After this single chain, `.if({ over })` short-circuits on the persisted timestamp on the _first_ mount after a reload, with no second method to call.
-
 ```ts
-const get = { cat: useResource(resource.cat) };
+// actions.ts
 const actions = useActions<Model, typeof Actions>({
-  // First render reads cache → storage → null.
-  cat: get.cat.else(store.get(Snapshots.Cat)).else(null),
+  // First render reads the Cache automatically.
+  cat: resource.cat.get(),
 });
 
 actions.useAction(Actions.Mount, async (context) => {
-  // Short-circuits when storage held a payload < 5 minutes old.
-  const fresh = await get.cat.if(
-    { over: { minutes: 5 } },
-    context.task.controller.signal,
-  );
-  store.set(Snapshots.Cat, get.cat.snapshot());
+  // Short-circuits when the persisted payload is < 5 minutes old.
+  // The Cache writes through automatically on success.
+  const fresh = await context.actions
+    .resource(resource.cat)
+    .exceeds({ minutes: 5 });
   context.actions.produce(({ model }) => void (model.cat = fresh));
 });
 ```
+
+`new Cache()` with no adapter is an in-memory scope &ndash; useful in tests or when you want a holdable cache without persistence. Per-params keying via `JSON.stringify(params)` is automatic, so `user.get({ id: 5 })` and `user.get({ id: 6 })` are distinct slots.
 
 See the [storage recipe](./recipes/storage.md) for backend adapters (React Native MMKV, browser extension `chrome.storage`), sign-out purge, and the `unset` sentinel that keeps "nothing stored" distinct from "a legitimately stored null".
 
@@ -481,33 +460,41 @@ Unlike broadcast which reaches all mounted components, multicast is confined to 
 
 See the [multicast recipe](./recipes/multicast-actions.md) for more details.
 
-For coordinating between async handlers without re-rendering the JSX tree, use the per-`<Boundary>` mode handle returned by `useMode()`. Thread it through the `useActions` data callback so it shows up as `context.data.mode` inside handlers, fully typed. Mode is **not** reactive &mdash; drive view state through the model, not mode.
+For coordinating between async handlers and threading ambient values (session tokens, locale, feature flags, current operational mode) without re-rendering the JSX tree, use the per-`<Boundary>` `Store`. Declare your app's Store shape once via module augmentation, supply the initial value to `<Boundary store={...}>`, read via dot notation (`store.session`, `context.store.locale`), and write via `context.actions.produce(({ store }) => { ... })` &mdash; the same Immer-style recipe used for the model. Every `Resource` fetcher also receives a snapshot of the Store on its args object. Store is **not** reactive &mdash; drive view state through the model.
 
 ```ts
-import { useActions, useMode } from "march-hare";
+import { useActions } from "march-hare";
 
-enum Mode {
-  Idle,
-  SigningOut,
+// Declare your Store's shape once. Every read/write is typed against this.
+declare module "march-hare" {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+  interface Store {
+    session: Session | null;
+    operating: "idle" | "signing-out";
+  }
 }
 
-export function useActions() {
-  const mode = useMode<Mode>();
-  // Spell the data shape as the third generic so `context.data.mode` keeps
-  // its concrete type inside handlers.
-  const actions = useActions<Model, typeof Actions, { mode: typeof mode }>(
-    model,
-    () => ({ mode }),
-  );
+// Wire the initial Store into Boundary at app root.
+<Boundary store={{ session: null, operating: "idle" }}>
+  <App />
+</Boundary>;
+
+export function useAuthActions() {
+  const actions = useActions<void, typeof Actions>();
 
   actions.useAction(Actions.SignOut, async (context) => {
-    context.data.mode.update(Mode.SigningOut);
+    context.actions.produce(({ store }) => {
+      store.operating = "signing-out";
+    });
     await api.signOut();
-    context.data.mode.update(Mode.Idle);
+    context.actions.produce(({ store }) => {
+      store.session = null;
+      store.operating = "idle";
+    });
   });
 
   actions.useAction(Actions.Refresh, async (context) => {
-    if (context.data.mode.read() === Mode.SigningOut) return;
+    if (context.store.operating === "signing-out") return;
     // ...
   });
 

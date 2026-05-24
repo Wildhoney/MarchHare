@@ -5,4 +5,4 @@ import type { TransactionsPage } from "./types.ts";
 export const transactions = Resource<
   TransactionsPage,
   { cursor: string | null }
->((signal, { cursor }) => fetchTransactions(cursor, signal));
+>(({ signal, params }) => fetchTransactions(params.cursor, signal));

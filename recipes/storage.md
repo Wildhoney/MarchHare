@@ -1,18 +1,17 @@
 # Persisting resources across reloads
 
-`useResource`'s cache is a module-level `WeakMap` &ndash; everything resets on a hard reload. To survive page loads without changing every call site, March Hare ships a small storage layer that traffics in the same `Stored<T>` shape as the Resource cache. The bound handle's overloaded `.else(...)` knows how to seed itself from a `Stored<T>` fallback, so the only thing that changes at the call site is _what_ you pass to `.else`.
+By default a `Resource`'s cache is in-memory only &ndash; it resets on every page load. To keep the most recent successful payload around between sessions, wire a `Cache` instance to the `Resource` definition. The Cache writes through to its adapter on every successful fetch and seeds the per-params slot from storage on first read, so call sites stay free of explicit `store.set` / `store.get` ceremony.
 
 This recipe covers:
 
-- The `utils.store(adapter)` factory and its `get`/`set`/`remove` API.
-- The `.else(stored).else(value)` chain that hydrates the cache and falls back to a leaf.
-- The `.snapshot()` getter that produces a write-ready `Stored<T>`.
+- The `new Cache(adapter)` constructor and its `get`/`set`/`remove`/`clear` API.
+- The `Resource(fetcher, cache)` second argument that wires a Resource to a Cache.
 - Adapter examples for browser `localStorage`, React Native MMKV, and browser-extension `chrome.storage`.
 - Sign-out purge, schema versioning, and the `unset` sentinel.
 
 ## The shape: `Stored<T>`
 
-Both `store.get(key)` and `boundHandle.snapshot()` return the same type:
+`cache.get(key)` returns a `Stored<T>`:
 
 ```ts
 type Stored<T> = {
@@ -22,64 +21,80 @@ type Stored<T> = {
 };
 ```
 
-`Unset` is a shared sentinel exported as `utils.unset` &ndash; the same one the Resource cache uses internally. It exists so a legitimately stored `null` payload is distinguishable from "nothing stored yet".
+`Unset` is a shared sentinel exported as `utils.unset` &ndash; it exists so a legitimately stored `null` payload is distinguishable from "nothing stored yet".
 
-## Setting up the store
+## Setting up the Cache
 
-`utils.store(adapter)` wraps a synchronous key/value adapter. The adapter handles raw strings; JSON encoding and `Temporal.Instant` round-tripping happen inside the wrapper, so adapters stay trivial:
+`new Cache(adapter)` wraps a synchronous key/value adapter. The adapter handles raw strings; JSON encoding and `Temporal.Instant` round-tripping happen inside the Cache, so adapters stay trivial:
 
 ```ts
-import { utils } from "march-hare";
+import { Cache } from "march-hare";
 
-export const store = utils.store({
+const cache = new Cache({
   get: (key) => localStorage.getItem(key),
   set: (key, value) => localStorage.setItem(key, value),
   remove: (key) => localStorage.removeItem(key),
+  clear: () => localStorage.clear(),
 });
 ```
+
+`new Cache()` with no adapter is in-memory only &ndash; useful in tests or when you want a first-class, holdable cache without persistence.
 
 Reads return a `Stored<T>`; writes accept a `Stored<T>` and short-circuit on the empty state so a placeholder snapshot never serialises:
 
 ```ts
-const stored = store.get<User>("user");
+const stored = cache.get<User>("user");
 // stored.data: User | Unset
 // stored.at: Temporal.Instant | null
 // stored.else(null): User | null
 
-store.set("user", boundUser.snapshot());
-store.remove("user");
+cache.set("user", { data: user, at: Temporal.Now.instant(), else: () => user });
+cache.remove("user");
+cache.clear();
 ```
 
-> **Why a factory, not a singleton.** `utils.store(...)` returns a fresh `Store` instance, so an app can have several &mdash; e.g. a plain `localStorage`-backed one for cached resources and a `sessionStorage`-backed one for ephemeral state &mdash; without a global setter to clash over.
+## Wiring a Cache into a Resource
 
-## The call-site pattern
-
-The `useResource` bound handle's `.else(...)` is overloaded:
-
-- `.else(value: U)` &mdash; terminal. Returns the cached payload or `value`.
-- `.else(stored: Stored<T>)` &mdash; chainable. If the cache is empty and the Stored carries `data` and `at`, seeds the cache from it (so subsequent `.if({ over })` calls see the persisted timestamp), then returns the same bound handle so a final `.else(value)` follows naturally.
-
-Putting it together:
+Pass the `Cache` as the second argument to `Resource(fetcher, cache)`. Every successful fetch writes through to the Cache under a key derived from the call-site params; first reads via `.get(params)` auto-seed from the Cache's adapter. The pattern collapses to:
 
 ```ts
-import { useActions, useResource } from "march-hare";
-import { store } from "../utils.tsx";
-import { Snapshots } from "./types.ts";
-import { resources } from "./resources.ts";
+// resources.ts
+import ky from "ky";
+import { Cache, Resource } from "march-hare";
+import type { Cat } from "./types";
+
+const cache = new Cache({
+  get: (key) => localStorage.getItem(key),
+  set: (key, value) => localStorage.setItem(key, value),
+  remove: (key) => localStorage.removeItem(key),
+  clear: () => localStorage.clear(),
+});
+
+export const cat = Resource(async ({ signal }) => {
+  const cats = await ky
+    .get("https://api.thecatapi.com/v1/images/search", { signal })
+    .json<Cat[]>();
+  return cats[0];
+}, cache);
+```
+
+```ts
+// actions.ts
+import { useActions } from "march-hare";
+import * as resource from "./resources";
 
 export function useCatActions() {
-  const get = { cat: useResource(resources.cat) };
-
   const actions = useActions<Model, typeof Actions>({
-    cat: get.cat.else(store.get(Snapshots.Cat)).else(null),
+    // First render reads the Cache automatically — no explicit get.
+    cat: resource.cat.get(),
   });
 
   actions.useAction(Actions.Mount, async (context) => {
-    const data = await get.cat.if(
-      { over: { minutes: 5 } },
-      context.task.controller.signal,
-    );
-    store.set(Snapshots.Cat, get.cat.snapshot());
+    // Short-circuits when the persisted payload is < 5 minutes old.
+    // The Cache writes through automatically — no explicit set.
+    const data = await context.actions
+      .resource(resource.cat)
+      .exceeds({ minutes: 5 });
     context.actions.produce(({ model }) => void (model.cat = data));
   });
 
@@ -89,40 +104,72 @@ export function useCatActions() {
 
 What happens on a cold reload:
 
-1. The model literal calls `get.cat.else(store.get("cat"))`.
-2. The cache is empty (fresh load). `store.get("cat")` finds the persisted entry and returns a `Stored<Cat>` with both `data` and `at` populated.
-3. `.else(stored)` sees the empty cache and seeds it from the Stored.
-4. `.else(null)` reads the freshly-seeded cache and returns the `Cat`.
-5. The component renders the previous session's payload immediately.
-6. `Mount` fires. `get.cat.if({ over: { minutes: 5 } })` checks the seeded `at`. If it's within five minutes, the fetcher _doesn't run_; otherwise it does. Either way the snapshot is written back.
+1. The model literal calls `resource.cat.get()`.
+2. The Cache reads from the adapter using the params key (here `"{}"` since `cat` is no-params).
+3. If a previous session persisted a payload, `.get()` returns it.
+4. The component renders the previous session's payload immediately.
+5. `Mount` fires. `context.actions.resource(resource.cat).exceeds({ minutes: 5 })` checks the persisted `at`. If it's within five minutes, the fetcher _doesn't run_; otherwise it does. On a successful fetch, the Cache writes through.
 
-> **Use a `Snapshots` enum for keys.** Pulling literal strings out into an enum keeps "what's persisted" grep-able at a glance and stops typos from silently dropping persistence on the floor. Pair the enum with the components that own each key &ndash; one enum per feature, not a global registry.
+> **One Cache per Resource is the default.** The Cache's whole adapter namespace belongs to the Resource it's wired to &mdash; different Resources should each declare their own Cache (with a distinct prefix in the adapter if sharing one backing store like `localStorage`).
 
-## `snapshot()` &mdash; the symmetric write side
+## Per-params keying
 
-`get.cat.snapshot()` returns a `Stored<Cat>` pointing at the bound handle's current cache slot:
+Cache entries are keyed automatically by `JSON.stringify(params)`. For a parameterised resource like `user.get({ id: 5 })`, the storage key is `"{\"id\":5}"`. Different params produce independent persistent slots:
 
-- Before any successful run: `{ data: unset, at: null, else: f => f }`.
-- After a successful run: `{ data: cat, at: Temporal.Instant, else: _ => cat }`.
+```ts
+const userCache = new Cache(namespacedAdapter("users"));
+export const user = Resource(
+  ({ signal, params }: FetcherArgs<{ id: number }>) =>
+    ky.get(`users/${params.id}`, { signal }).json<User>(),
+  userCache,
+);
 
-Pass it straight to `store.set(key, ...)`. Writes with `data === unset` or `at === null` are no-ops, so calling `store.set(Snapshots.Cat, get.cat.snapshot())` before any fetch has succeeded is safe &ndash; it just doesn't write.
+// Each cache slot is independent.
+await context.actions.resource(user, { id: 5 }); // stored under "{\"id\":5}"
+await context.actions.resource(user, { id: 6 }); // stored under "{\"id\":6}"
+
+// Sync reads pull from each slot.
+const five: User | null = user.get({ id: 5 });
+const six: User | null = user.get({ id: 6 });
+```
+
+If you want to namespace by resource name when sharing a backing store, prefix in the adapter:
+
+```ts
+function namespacedAdapter(prefix: string): Adapter {
+  return {
+    get: (key) => localStorage.getItem(`${prefix}/${key}`),
+    set: (key, value) => localStorage.setItem(`${prefix}/${key}`, value),
+    remove: (key) => localStorage.removeItem(`${prefix}/${key}`),
+    clear: () => {
+      for (const k of Object.keys(localStorage)) {
+        if (k.startsWith(`${prefix}/`)) localStorage.removeItem(k);
+      }
+    },
+  };
+}
+
+const catCache = new Cache(namespacedAdapter("cat"));
+const userCache = new Cache(namespacedAdapter("user"));
+```
 
 ## Adapter examples
 
 ### React Native &mdash; `react-native-mmkv`
 
-`AsyncStorage` is incompatible because the read path must be synchronous (the model literal is evaluated synchronously). Use `MMKV`, which is sync and fast:
+`AsyncStorage` is incompatible because the read path must be synchronous (the model literal is evaluated synchronously). Use `MMKV`:
 
 ```ts
-import { utils } from "march-hare";
+import { Cache } from "march-hare";
 import { MMKV } from "react-native-mmkv";
 
 const mmkv = new MMKV();
 
-export const store = utils.store({
+export const cache = new Cache({
   get: (key) => mmkv.getString(key) ?? null,
   set: (key, value) => mmkv.set(key, value),
   remove: (key) => mmkv.delete(key),
+  clear: () => mmkv.clearAll(),
 });
 ```
 
@@ -131,39 +178,40 @@ export const store = utils.store({
 `chrome.storage.local` is async, so wrap it with an in-memory cache hydrated at startup:
 
 ```ts
-import { utils } from "march-hare";
+import { Cache } from "march-hare";
 
-const cache = new Map<string, string>();
+const memory = new Map<string, string>();
 
-// Preload all keys before mounting the app. Block on this in your entry file.
 export async function hydrate(): Promise<void> {
   const all = await chrome.storage.local.get(null);
   for (const [key, value] of Object.entries(all)) {
-    if (typeof value === "string") cache.set(key, value);
+    if (typeof value === "string") memory.set(key, value);
   }
 }
 
-export const store = utils.store({
-  get: (key) => cache.get(key) ?? null,
+export const cache = new Cache({
+  get: (key) => memory.get(key) ?? null,
   set: (key, value) => {
-    cache.set(key, value);
+    memory.set(key, value);
     void chrome.storage.local.set({ [key]: value });
   },
   remove: (key) => {
-    cache.delete(key);
+    memory.delete(key);
     void chrome.storage.local.remove(key);
+  },
+  clear: () => {
+    memory.clear();
+    void chrome.storage.local.clear();
   },
 });
 ```
 
 ### Server-rendered apps &mdash; SSR-safe localStorage
 
-`localStorage` doesn't exist on the server. Guard with a `typeof` check so the adapter compiles in both environments:
-
 ```ts
 const browser = typeof localStorage !== "undefined";
 
-export const store = utils.store({
+export const cache = new Cache({
   get: (key) => (browser ? localStorage.getItem(key) : null),
   set: (key, value) => {
     if (browser) localStorage.setItem(key, value);
@@ -171,10 +219,13 @@ export const store = utils.store({
   remove: (key) => {
     if (browser) localStorage.removeItem(key);
   },
+  clear: () => {
+    if (browser) localStorage.clear();
+  },
 });
 ```
 
-On the server, reads return empty Stored handles and writes are no-ops. The model literal falls through to the leaf fallback.
+On the server, reads return empty Stored handles and writes are no-ops.
 
 ## Sign-out and per-user data
 
@@ -182,84 +233,42 @@ Persisted entries survive sign-out by default. Clear them explicitly when the us
 
 ```ts
 actions.useAction(Actions.SignOut, async (context) => {
-  await api.signOut();
-  store.remove(Snapshots.Cat);
-  store.remove(Snapshots.User);
-  // ... per persisted key
+  await context.actions.resource(resource.signOut);
+  context.actions.produce(({ store }) => {
+    store.session = null;
+  });
+  catCache.clear();
+  userCache.clear();
 });
 ```
-
-There's deliberately no `store.clear()` helper. Wiping all entries would also clear unrelated state like dismissed banners and route hints &ndash; explicit `remove` calls per known key keep the boundary clear.
 
 ## Schema drift
 
 If the shape of `T` changes between deploys, the persisted JSON may not match the new type. Two ways to handle it:
 
-- **Rename the key.** `Snapshots.Cat = "cat"` becomes `Snapshots.Cat = "cat-v2"`. Old entries become orphaned (no consumer reads them) and the browser will eventually evict them.
-- **Validate after read.** Wrap `store.get(...)` with a parser that returns an empty Stored when the payload doesn't match the new shape:
-
-```ts
-function safeGet<T>(
-  key: string,
-  validate: (value: unknown) => value is T,
-): Stored<T> {
-  const stored = store.get<T>(key);
-  if (stored.data === utils.unset) return stored;
-  if (!validate(stored.data)) {
-    store.remove(key); // purge corrupted entry
-    return store.get(key); // re-read, now empty
-  }
-  return stored;
-}
-```
-
-Pick whichever fits the team's release cadence &ndash; rename is simpler for one-off changes, validate is steadier for frequent schema drift.
+- **Bump the adapter namespace.** Change `namespacedAdapter("cat")` to `namespacedAdapter("cat-v2")`. Old entries become orphaned and the browser will eventually evict them.
+- **Validate after read.** Wrap the Cache's read with a parser that returns an empty Stored when the payload doesn't match the new shape.
 
 ## The `unset` sentinel
 
-`utils.unset` is exported so consumers can narrow against it when needed:
+`utils.unset` is exported so consumers can narrow against it:
 
 ```ts
 import { utils } from "march-hare";
 
-const stored = store.get<User | null>("maybe-user");
+const stored = cache.get<User | null>("maybe-user");
 if (stored.data === utils.unset) {
-  // No entry recorded. Distinct from `data === null`, which means a previous
-  // session legitimately stored a `null` payload.
+  // No entry recorded.
 } else if (stored.data === null) {
-  // The fetcher previously resolved with null and we persisted it.
+  // Persisted null payload.
 } else {
   // Real User.
 }
 ```
 
-In practice, prefer `stored.else(fallback)` for the common case &ndash; the sentinel is there for the rare narrowing path.
-
-## Composition: chaining multiple sources
-
-`.else(stored)` returns the bound handle, so any number of Stored fallbacks compose &ndash; first non-empty source wins, all later ones no-op:
-
-```ts
-const session = utils.store({
-  /* sessionStorage adapter */
-});
-const persistent = utils.store({
-  /* localStorage adapter */
-});
-
-const actions = useActions<Model, typeof Actions>({
-  cat: get.cat
-    .else(session.get(Snapshots.Cat)) // tier 1: same-session cache
-    .else(persistent.get(Snapshots.Cat)) // tier 2: cross-session cache
-    .else(null), // leaf: nothing anywhere
-});
-```
-
-Useful when you want fast-recover from a tab switch (sessionStorage) but a slower-but-broader fallback (localStorage) for cold loads.
-
 ## Limitations
 
-- **Synchronous adapters only.** `.else(stored)` is evaluated inside the model literal, which runs synchronously. Async backends (`AsyncStorage`, plain `chrome.storage`, IndexedDB) need a sync facade hydrated at app entry.
-- **No cross-tab coherence.** Tab A writes; tab B's in-memory cache stays stale until its own next fetch. Wire a `BroadcastChannel` listener that calls `store.get(key)` and dispatches a broadcast action if you need this.
-- **No quota recovery.** If `localStorage` is full, the write silently no-ops. The Resource cache is unaffected, so the current session keeps working &ndash; the next reload just won't find a persisted entry.
-- **No SSR support out of the box.** Use the `typeof localStorage !== "undefined"` guard pattern above; on the server, `.else(stored)` is always empty and the leaf fallback wins.
+- **Synchronous adapters only.** The Cache reads during render (via the model literal). Async backends need a sync facade hydrated at app entry.
+- **No cross-tab coherence.** Tab A writes; tab B's in-memory state stays stale until its own next fetch. Wire a `BroadcastChannel` listener if you need this.
+- **No quota recovery.** If `localStorage` is full, the write silently no-ops (the Cache catches the throw). The in-memory slot is unaffected.
+- **No SSR support out of the box.** Use the `typeof localStorage !== "undefined"` guard pattern.

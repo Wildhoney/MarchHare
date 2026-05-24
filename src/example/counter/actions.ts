@@ -1,14 +1,10 @@
-import { useActions, useResource } from "../../library/index.ts";
+import { useActions } from "../../library/index.ts";
 import { Model, Actions } from "./types.ts";
 import { resources } from "./utils.ts";
 
 export function useCounterActions() {
-  const get = {
-    user: useResource(resources.user),
-  };
-
   const actions = useActions<Model, typeof Actions>({
-    user: get.user.else(null),
+    user: resources.user.get(),
   });
 
   actions.useAction(Actions.Mount, async (context) => {
@@ -16,8 +12,8 @@ export function useCounterActions() {
   });
 
   actions.useAction(Actions.User, async (context) => {
-    const user = await get.user();
-    context.actions.produce(({ model }) => void (model.user = user));
+    const data = await context.actions.resource(resources.user);
+    context.actions.produce(({ model }) => void (model.user = data));
   });
 
   return actions;

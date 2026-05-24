@@ -1,13 +1,10 @@
-import { Operation, useActions, useResource } from "../../library/index.ts";
+import { Operation, useActions } from "../../library/index.ts";
 import { Actions, type Model } from "./types.ts";
 import * as resource from "./resources.ts";
 
 const initialModel: Model = { items: [], cursor: null, hasMore: true };
 
 export function useTransactionsActions() {
-  const get = {
-    transactions: useResource(resource.transactions),
-  };
   const actions = useActions<Model, typeof Actions>(initialModel);
 
   actions.useAction(Actions.Mount, async (context) => {
@@ -19,7 +16,7 @@ export function useTransactionsActions() {
         )),
     );
 
-    const page = await get.transactions(context.task.controller.signal, {
+    const page = await context.actions.resource(resource.transactions, {
       cursor: null,
     });
     await context.actions.dispatch(
@@ -47,7 +44,7 @@ export function useTransactionsActions() {
         )),
     );
 
-    const page = await get.transactions(context.task.controller.signal, {
+    const page = await context.actions.resource(resource.transactions, {
       cursor,
     });
     await context.actions.dispatch(
@@ -71,7 +68,7 @@ export function useTransactionsActions() {
         )),
     );
 
-    const page = await get.transactions(context.task.controller.signal, {
+    const page = await context.actions.resource(resource.transactions, {
       cursor: null,
     });
     await context.actions.dispatch(

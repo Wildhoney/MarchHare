@@ -13,7 +13,8 @@ import {
   With,
   utils,
   withScope,
-  useMode,
+  useStore,
+  Cache,
   Boundary,
   Error,
   Reason,
@@ -25,7 +26,7 @@ import type {
   Fault,
   Handler,
   Handlers,
-  ModeHandle,
+  Store,
   Pk,
   Task,
   Tasks,
@@ -364,43 +365,70 @@ actions.useAction(Actions.Search, async (context, query) => {
 });
 ```
 
-## Mode (Per-Boundary Coordination Value)
+## Store (Per-Boundary Ambient State)
 
-A single mutable value shared across every component inside a `<Boundary>`. Mode is **opt-in**: components that need it call `useMode()` and thread the handle through the `useActions` data callback. Mode is **not** reactive &mdash; mutating it does not re-render. Use it for cross-handler coordination only; drive view state through the model.
+A typed record of cross-cutting, mutable state shared across every component inside a `<Boundary>`. Holds whatever doesn't belong in the model: session tokens, locale, feature flags, current operational mode, etc.
+
+Declare the shape once via module augmentation; supply the initial value via the `<Boundary store={...}>` prop. **Reads** are plain dot notation (`store.session`); **writes** go through `context.actions.produce(({ store }) => { store.x = ... })`, the same Immer-style recipe used for the model. No `.get`/`.set`/`.read` methods on the handle.
+
+- `useStore()` &mdash; read-only Proxy. Dot reads always reflect the latest value (delegates to the live ref).
+- `context.store` &mdash; same Proxy inside `useActions` handlers.
+- The `store` field on every `Resource` fetcher's args object &mdash; a snapshot per fetcher call.
+
+Store is **not** reactive &mdash; mutating it does not re-render. Drive view state through the model; use the Store for cross-handler coordination.
 
 ```ts
-import { useMode, useActions, Action } from "march-hare";
+import { useActions, Boundary, Action, Resource } from "march-hare";
 
-enum Mode {
-  Idle,
-  SigningOut,
+// 1. Declare the Store's shape via module augmentation.
+declare module "march-hare" {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+  interface Store {
+    session: Session | null;
+    operating: "idle" | "signing-out";
+  }
 }
 
+// 2. Supply the initial Store at the Boundary.
+<Boundary store={{ session: null, operating: "idle" }}>
+  <App />
+</Boundary>;
+
+// 3. Read with dot notation, write with context.actions.produce.
 function useSignOutActions() {
-  const mode = useMode<Mode>();
-  // Spell the data shape as the third generic so `context.data.mode` keeps
-  // its concrete type inside handlers.
-  const actions = useActions<Model, typeof Actions, { mode: typeof mode }>(
-    model,
-    () => ({ mode }),
-  );
+  const actions = useActions<void, typeof Actions>();
 
   actions.useAction(Actions.SignOut, async (context) => {
-    context.data.mode.update(Mode.SigningOut);
+    context.actions.produce(({ store }) => {
+      store.operating = "signing-out";
+    });
     await api.signOut();
-    context.data.mode.update(Mode.Idle);
+    context.actions.produce(({ store }) => {
+      store.session = null;
+      store.operating = "idle";
+    });
   });
 
   actions.useAction(Actions.Refresh, async (context) => {
-    if (context.data.mode.read() === Mode.SigningOut) return;
+    if (context.store.operating === "signing-out") return;
     // ...
   });
 
   return actions;
 }
+
+// 4. Resource fetchers read the Store via the args object.
+export const user = Resource(({ store, signal }) =>
+  ky.get("/api/user", {
+    headers: store.session
+      ? { Authorization: `Bearer ${store.session.accessToken}` }
+      : {},
+    signal,
+  }).json<User>(),
+);
 ```
 
-`context.data.mode` is fully typed via the `useActions` data generic, no extra annotations needed. Reads stay fresh across `await` boundaries because `context.data` already does.
+Dot reads stay fresh across `await` boundaries because the handle is a Proxy that delegates to the live ref at every access.
 
 ## Context Providers
 
@@ -409,7 +437,7 @@ function useSignOutActions() {
 ```tsx
 import { Boundary } from "march-hare";
 
-// Wraps app with Broadcaster, Mode, and Tasks providers
+// Wraps app with Broadcaster, Store, and Tasks providers
 <Boundary>
   <App />
 </Boundary>;
@@ -557,7 +585,7 @@ docs: update the README file
 - `src/library/boundary/components/broadcast/` - Broadcast system
 - `src/library/boundary/components/consumer/` - Consumer store (internal)
 - `src/library/boundary/components/tasks/` - Task tracking context
-- `src/library/boundary/components/mode/` - Per-Boundary mode handle context
+- `src/library/boundary/components/store/` - Per-Boundary Store: typed cross-cutting state primitive
 
 ### Documentation
 
@@ -570,16 +598,17 @@ docs: update the README file
   - `error-handling.md` - Error component and fault handling
   - `ky-http-client.md` - Integration with ky HTTP client
   - `lifecycle-actions.md` - Mount, Unmount, Error, Update
-  - `mode.md` - Per-Boundary handler coordination value
+  - `store.md` - Per-Boundary Store: typed ambient state (session, locale, feature flags); auto-threaded to Resource fetchers and `context.store`
   - `mount-broadcast-deduplication.md` - Avoiding duplicate fetches on mount with broadcast/multicast
   - `model-annotations.md` - Async state tracking with Immertation
   - `multicast-actions.md` - Scoped component communication
   - `react-context-in-handlers.md` - Using context.data
   - `real-time-applications.md` - SSE/WebSocket patterns
   - `referential-equality.md` - Avoiding stale closures
+  - `session-tokens.md` - Session tokens in the Store; HttpOnly cookies vs. Bearer in Store; refresh-on-401 via ky `afterResponse` hook
   - `stateful-props.md` - Box<T> type for stateful props
-  - `storage.md` - utils.store, Stored<T>, .snapshot(), .else(stored) for cross-reload persistence
-  - `use-resource.md` - useResource for cached fetches with subscriptions and typed errors
+  - `storage.md` - Cache class for cross-reload persistence; adapters for localStorage / MMKV / chrome.storage
+  - `use-resource.md` - Resource: declare at module scope, sync read via `.get(params)`, fetch via `context.actions.resource(...).exceeds(...)`
   - `utility-functions.md` - sleep, pk utilities
   - `utility-types.md` - Handler, Handlers types
   - `void-model.md` - Actions without local state

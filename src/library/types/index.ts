@@ -7,6 +7,8 @@ import type {
   Tasks,
 } from "../boundary/components/tasks/types.ts";
 import type { Fault } from "../error/types.ts";
+import type { Store } from "../boundary/components/store/index.tsx";
+import type { ResourceHandle } from "../resource/types.ts";
 import { describe } from "../utils.ts";
 
 export type { ActionId, Box, Task, Tasks };
@@ -604,17 +606,92 @@ export type HandlerContext<
    * ```
    */
   readonly tasks: ReadonlySet<Task>;
+  /**
+   * Read-only view of the per-`<Boundary>` Store &mdash; ambient,
+   * cross-cutting state (session, locale, feature flags, etc.) typed
+   * via module augmentation on the library's `Store` interface.
+   * Identical to the value returned by `useStore()` at the hook level.
+   *
+   * Reads use plain dot notation and always reflect the latest value,
+   * even after `await` boundaries. Writes go through
+   * `context.actions.produce(({ store }) => { store.x = ... })`
+   * &mdash; the same Immer-style recipe used for the model.
+   *
+   * @example
+   * ```ts
+   * actions.useAction(Actions.SignIn, async (context, creds) => {
+   *   const result = await signIn(creds).run(context.task.controller.signal);
+   *   context.actions.produce(({ store }) => {
+   *     store.session = result;
+   *   });
+   * });
+   *
+   * actions.useAction(Actions.Refresh, async (context) => {
+   *   if (context.store.session === null) return;
+   *   // ...
+   * });
+   * ```
+   */
+  readonly store: Store;
   readonly actions: {
     produce<
       F extends (draft: {
         model: M;
         readonly inspect: Readonly<Inspect<M>>;
+        store: Store;
       }) => void,
     >(
       ƒ: F & AssertSync<F>,
     ): void;
     dispatch(action: ActionOrChanneled, payload?: unknown): Promise<void>;
     annotate<T>(value: T, operation?: Operation): T;
+    /**
+     * Fetches a {@link ResourceHandle} with the abort signal and Store
+     * snapshot auto-threaded from the current handler context. The
+     * return value is a thenable &mdash; `await` it to fire the fetch
+     * unconditionally, or use `.exceeds(duration)` to short-circuit
+     * when the per-params cache slot is still within the supplied
+     * freshness window (i.e. fetch only when the cache age *exceeds*
+     * the duration).
+     *
+     * @example
+     * ```ts
+     * actions.useAction(Actions.Mount, async (context) => {
+     *   // Always fetch.
+     *   const fresh = await context.actions.resource(resources.user, { id: 5 });
+     *
+     *   // Reuse cache when < 5 minutes old.
+     *   const maybe = await context.actions.resource(resources.user, { id: 5 })
+     *     .exceeds({ minutes: 5 });
+     *
+     *   context.actions.produce(({ model }) => void (model.user = fresh));
+     * });
+     * ```
+     */
+    resource: (<T, P extends object>(
+      resource: ResourceHandle<T, P>,
+      ...args: [keyof P] extends [never] ? [params?: P] : [params: P]
+    ) => PromiseLike<T> & {
+      readonly exceeds: (duration: Temporal.DurationLike) => Promise<T>;
+    }) & {
+      /**
+       * Writes `data` into a {@link ResourceHandle}'s per-params cache
+       * slot with a fresh timestamp. Use this when payloads arrive
+       * out-of-band (SSE, WebSocket, postMessage) and need to be
+       * reflected in the Resource cache without a fetcher round-trip.
+       *
+       * @example
+       * ```ts
+       * actions.useAction(Actions.Broadcast.UserSSE, (context, payload) => {
+       *   context.actions.resource.set(resource.user, { id: payload.id }, payload);
+       * });
+       * ```
+       */
+      set<T, P extends object>(
+        resource: ResourceHandle<T, P>,
+        ...args: [keyof P] extends [never] ? [data: T] : [params: P, data: T]
+      ): void;
+    };
     /**
      * Returns the resolved broadcast or multicast value, waiting for any
      * pending annotations to settle before resolving.

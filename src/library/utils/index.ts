@@ -1,10 +1,8 @@
 import { Pk } from "../types/index.ts";
 import { AbortError } from "../error/types.ts";
-import { empty, present, unset } from "./utils.ts";
-import type { Adapter, Encoded, Store, Stored } from "./types.ts";
 
 export { unset } from "./utils.ts";
-export type { Adapter, Encoded, Store, Stored, Unset } from "./types.ts";
+export type { Stored, Unset } from "./types.ts";
 
 /**
  * Returns a promise that resolves after the specified number of
@@ -89,78 +87,6 @@ export function pk<T>(id?: Pk<T>): boolean | symbol {
   return Symbol(`pk.${Date.now()}.${crypto.randomUUID()}`);
 }
 
-/**
- * Wraps a synchronous {@link Adapter} into a {@link Store} that traffics
- * in {@link Stored} values. Storage entries serialise as
- * {@link Encoded}`<T>` so the `Temporal.Instant` timestamp survives the
- * string round-trip and `BoundResourceHandle.if({ over })` can
- * short-circuit on the persisted timestamp after a reload.
- *
- * @param adapter Backend implementation providing raw string `get`/`set`/
- *                `remove`/`clear`. The Store layers JSON encoding and
- *                timestamp serialisation on top.
- * @returns A {@link Store} bound to `adapter`. Reads return {@link Stored}
- *          envelopes; writes accept Stored envelopes and return `true`
- *          when the entry landed in the adapter.
- *
- * @example
- * ```ts
- * const store = utils.store({
- *   get: (key) => localStorage.getItem(key),
- *   set: (key, value) => localStorage.setItem(key, value),
- *   remove: (key) => localStorage.removeItem(key),
- *   clear: () => localStorage.clear(),
- * });
- *
- * // Read into a Resource fallback chain.
- * { cat: get.cat.else(store.get(Snapshots.Cat)).else(null) }
- *
- * // Write the latest cached value back to storage.
- * store.set(Snapshots.Cat, get.cat.snapshot());
- *
- * // Drop a snapshot on sign-out, cache invalidation, etc.
- * store.remove(Snapshots.Cat);
- *
- * // Or wipe the whole backing store (scope is the adapter's call).
- * store.clear();
- * ```
- */
-export function store(adapter: Adapter): Store {
-  return {
-    get<T>(key: string): Stored<T> {
-      try {
-        const raw = adapter.get(key);
-        if (raw === null) return empty<T>();
-        const parsed = <Encoded<T>>JSON.parse(raw);
-        return present(parsed.data, Temporal.Instant.from(parsed.at));
-      } catch {
-        return empty<T>();
-      }
-    },
-    set<T>(key: string, value: Stored<T>): boolean {
-      if (value.data === unset || value.at === null) return false;
-      try {
-        adapter.set(
-          key,
-          JSON.stringify(<Encoded<T>>{
-            data: value.data,
-            at: value.at.toString(),
-          }),
-        );
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    remove(key: string): void {
-      adapter.remove(key);
-    },
-    clear(): void {
-      adapter.clear();
-    },
-  };
-}
-
 /** Shorthand alias for {@link sleep}. */
 export const ζ = sleep;
 
@@ -169,6 +95,3 @@ export const π = poll;
 
 /** Shorthand alias for {@link pk}. */
 export const κ = pk;
-
-/** Shorthand alias for {@link store}. */
-export const σ = store;

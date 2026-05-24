@@ -1,37 +1,28 @@
-import { useActions, useResource } from "../../../../library/index.ts";
+import { useActions } from "../../../../library/index.ts";
 import { useRouter } from "react-wayfinder";
-import { Actions, Snapshots, type Data, type Model } from "./types.ts";
-import { store, urls } from "../../utils.tsx";
+import { Actions, type Data, type Model, type Props } from "./types.ts";
+import { urls } from "../../utils.tsx";
 import { resources } from "./utils.ts";
 
-export function useCatActions({ index }: { index: number }) {
+export function useCatActions({ index }: Props) {
   const router = useRouter();
-  const get = {
-    cat: useResource(resources.cat),
-  };
 
   const actions = useActions<Model, typeof Actions, Data>(
-    { cat: get.cat.else(store.get(Snapshots.Cat)).else(null) },
+    { cat: resources.cat.get() },
     () => ({ index, router }),
   );
 
   actions.useAction(Actions.Mount, async (context) => {
-    const data = await get.cat.if(
-      { over: { minutes: 5 } },
-      context.task.controller.signal,
-    );
-    store.set(Snapshots.Cat, get.cat.snapshot());
-
+    const data = await context.actions
+      .resource(resources.cat)
+      .exceeds({ minutes: 5 });
     context.actions.produce(({ model }) => void (model.cat = data));
   });
 
   actions.useAction(Actions.Refresh, async (context) => {
-    const data = await get.cat.if(
-      { over: { minutes: 5 } },
-      context.task.controller.signal,
-    );
-    store.set(Snapshots.Cat, get.cat.snapshot());
-
+    const data = await context.actions
+      .resource(resources.cat)
+      .exceeds({ minutes: 5 });
     context.actions.produce(({ model }) => void (model.cat = data));
   });
 

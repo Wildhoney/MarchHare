@@ -1,9 +1,9 @@
 import * as React from "react";
 import { useCatActions } from "./actions.ts";
-import { Actions } from "./types.ts";
+import { Actions, type Props } from "./types.ts";
 import * as styles from "./styles.ts";
 
-export function Cat({ index }: { index: number }): React.ReactElement {
+export function Cat({ index }: Props): React.ReactElement {
   const [model, actions] = useCatActions({ index });
   const cat = model.cat;
 
@@ -11,6 +11,7 @@ export function Cat({ index }: { index: number }): React.ReactElement {
     <main className={styles.layout}>
       <header className={styles.header}>
         <h1>Cat #{index + 1}</h1>
+
         <p className={styles.tagline}>
           Powered by March Hare, ky &amp; Wayfinder
         </p>
@@ -32,6 +33,7 @@ export function Cat({ index }: { index: number }): React.ReactElement {
         >
           &larr; Previous
         </button>
+
         <button
           className={styles.button}
           onClick={() => actions.dispatch(Actions.Refresh)}
@@ -39,6 +41,7 @@ export function Cat({ index }: { index: number }): React.ReactElement {
         >
           &#x21bb; Refresh
         </button>
+
         <button
           className={`${styles.button} ${styles.primary}`}
           onClick={() => actions.dispatch(Actions.Next)}

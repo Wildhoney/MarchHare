@@ -1,18 +1,10 @@
 import { route, type Routes } from "react-wayfinder";
-import { utils } from "../../library/index.ts";
 import { Cat } from "./components/cat/index.tsx";
 
 export const urls = {
   cat: "/:index",
   fallback: "*",
 } as const;
-
-export const store = utils.store({
-  get: (key) => localStorage.getItem(key),
-  set: (key, value) => localStorage.setItem(key, value),
-  remove: (key) => localStorage.removeItem(key),
-  clear: () => localStorage.clear(),
-});
 
 export const routes = [
   route({
