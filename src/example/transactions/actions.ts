@@ -1,6 +1,6 @@
 import { Operation, useActions } from "../../library/index.ts";
 import { Actions, type Model } from "./types.ts";
-import * as resource from "./resources.ts";
+import { transactions } from "./resources.ts";
 
 const initialModel: Model = { items: [], cursor: null, hasMore: true };
 
@@ -16,9 +16,7 @@ export function useTransactionsActions() {
         )),
     );
 
-    const page = await context.actions.resource(resource.transactions, {
-      cursor: null,
-    });
+    const page = await context.actions.resource(transactions({ cursor: null }));
     await context.actions.dispatch(
       Actions.Broadcast.TransactionsLoaded,
       page.items,
@@ -44,9 +42,7 @@ export function useTransactionsActions() {
         )),
     );
 
-    const page = await context.actions.resource(resource.transactions, {
-      cursor,
-    });
+    const page = await context.actions.resource(transactions({ cursor }));
     await context.actions.dispatch(
       Actions.Broadcast.TransactionsLoaded,
       page.items,
@@ -68,9 +64,7 @@ export function useTransactionsActions() {
         )),
     );
 
-    const page = await context.actions.resource(resource.transactions, {
-      cursor: null,
-    });
+    const page = await context.actions.resource(transactions({ cursor: null }));
     await context.actions.dispatch(
       Actions.Broadcast.TransactionsLoaded,
       page.items,

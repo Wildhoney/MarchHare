@@ -11,11 +11,7 @@ export type { Store } from "./boundary/components/store/index.tsx";
 
 export { useActions, With } from "./hooks/index.ts";
 export { Resource } from "./resource/index.ts";
-export type {
-  ResourceHandle,
-  ResourceFetcher,
-  FetcherArgs,
-} from "./resource/index.ts";
+export type { Fetcher } from "./resource/index.ts";
 export { Cache } from "./cache/index.ts";
 export type { Adapter, Encoded } from "./cache/index.ts";
 export * as utils from "./utils/index.ts";

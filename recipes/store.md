@@ -74,8 +74,8 @@ function useAuthActions() {
 Writes happen inside an action handler through the same `produce` mechanism the model uses:
 
 ```ts
-actions.useAction(Actions.SignIn, async (context, creds) => {
-  const result = await context.actions.resource(resource.signIn, creds);
+actions.useAction(Actions.SignIn, async (context, credentials) => {
+  const result = await context.actions.resource(signIn(credentials));
   context.actions.produce(({ store }) => {
     store.session = result;
     store.operating = "idle";
@@ -86,7 +86,7 @@ actions.useAction(Actions.SignOut, async (context) => {
   context.actions.produce(({ store }) => {
     store.operating = "signing-out";
   });
-  await context.actions.resource(resource.signOut);
+  await context.actions.resource(signOut());
   context.actions.produce(({ store }) => {
     store.session = null;
     store.operating = "idle";
@@ -132,14 +132,14 @@ This is a deliberate guard. If you need to set the Store during component setup 
 Every fetcher's args object includes a `store` field &mdash; a snapshot of the Store at the moment the fetcher is invoked:
 
 ```ts
-export const user = Resource(
-  ({ store, signal, params }: FetcherArgs<{ id: number }>) =>
+export const user = Resource<User, { id: number }>(
+  ({ store, controller, params }) =>
     ky
       .get(`users/${params.id}`, {
         headers: store.session
           ? { Authorization: `Bearer ${store.session.accessToken}` }
           : {},
-        signal,
+        signal: controller.signal,
       })
       .json<User>(),
 );

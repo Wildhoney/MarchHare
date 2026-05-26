@@ -48,8 +48,8 @@ export const Context = React.createContext<RefObject<Store>>(fallback);
  *   const store = useStore();
  *   const actions = useActions<void, typeof Actions>();
  *
- *   actions.useAction(Actions.SignIn, async (context, creds) => {
- *     const result = await signIn(creds).run(context.task.controller.signal);
+ *   actions.useAction(Actions.SignIn, async (context, credentials) => {
+ *     const result = await context.actions.resource(signIn(credentials));
  *     context.actions.produce(({ store }) => {
  *       store.session = result;
  *     });

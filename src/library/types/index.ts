@@ -8,7 +8,6 @@ import type {
 } from "../boundary/components/tasks/types.ts";
 import type { Fault } from "../error/types.ts";
 import type { Store } from "../boundary/components/store/index.tsx";
-import type { ResourceHandle } from "../resource/types.ts";
 import { describe } from "../utils.ts";
 
 export type { ActionId, Box, Task, Tasks };
@@ -619,8 +618,8 @@ export type HandlerContext<
    *
    * @example
    * ```ts
-   * actions.useAction(Actions.SignIn, async (context, creds) => {
-   *   const result = await signIn(creds).run(context.task.controller.signal);
+   * actions.useAction(Actions.SignIn, async (context, credentials) => {
+   *   const result = await context.actions.resource(signIn(credentials));
    *   context.actions.produce(({ store }) => {
    *     store.session = result;
    *   });
@@ -646,51 +645,49 @@ export type HandlerContext<
     dispatch(action: ActionOrChanneled, payload?: unknown): Promise<void>;
     annotate<T>(value: T, operation?: Operation): T;
     /**
-     * Fetches a {@link ResourceHandle} with the abort signal and Store
+     * Fetches a {@link Resource} with the abort controller and Store
      * snapshot auto-threaded from the current handler context. The
-     * return value is a thenable &mdash; `await` it to fire the fetch
-     * unconditionally, or use `.exceeds(duration)` to short-circuit
-     * when the per-params cache slot is still within the supplied
-     * freshness window (i.e. fetch only when the cache age *exceeds*
-     * the duration).
+     * argument is a resource invocation (`cat({ id: 5 })`) &mdash; the
+     * call primes a slot with the resource and params, and
+     * `.resource(...)` reads it. The return value is a thenable &mdash;
+     * `await` it to fire the fetch unconditionally, or use
+     * `.exceeds(duration)` to short-circuit when the per-params cache
+     * slot is still within the supplied freshness window (i.e. fetch
+     * only when the cache age *exceeds* the duration).
      *
      * @example
      * ```ts
      * actions.useAction(Actions.Mount, async (context) => {
      *   // Always fetch.
-     *   const fresh = await context.actions.resource(resources.user, { id: 5 });
+     *   const fresh = await context.actions.resource(user({ id: 5 }));
      *
      *   // Reuse cache when < 5 minutes old.
-     *   const maybe = await context.actions.resource(resources.user, { id: 5 })
+     *   const maybe = await context.actions
+     *     .resource(user({ id: 5 }))
      *     .exceeds({ minutes: 5 });
      *
      *   context.actions.produce(({ model }) => void (model.user = fresh));
      * });
      * ```
      */
-    resource: (<T, P extends object>(
-      resource: ResourceHandle<T, P>,
-      ...args: [keyof P] extends [never] ? [params?: P] : [params: P]
-    ) => PromiseLike<T> & {
+    resource: (<T>(invocation: T | null) => PromiseLike<T> & {
       readonly exceeds: (duration: Temporal.DurationLike) => Promise<T>;
     }) & {
       /**
-       * Writes `data` into a {@link ResourceHandle}'s per-params cache
-       * slot with a fresh timestamp. Use this when payloads arrive
-       * out-of-band (SSE, WebSocket, postMessage) and need to be
-       * reflected in the Resource cache without a fetcher round-trip.
+       * Writes `data` into the per-params cache slot of the resource
+       * invocation passed as the first argument, with a fresh timestamp.
+       * Use this when payloads arrive out-of-band (SSE, WebSocket,
+       * postMessage) and need to be reflected in the Resource cache
+       * without a fetcher round-trip.
        *
        * @example
        * ```ts
        * actions.useAction(Actions.Broadcast.UserSSE, (context, payload) => {
-       *   context.actions.resource.set(resource.user, { id: payload.id }, payload);
+       *   context.actions.resource.set(user({ id: payload.id }), payload);
        * });
        * ```
        */
-      set<T, P extends object>(
-        resource: ResourceHandle<T, P>,
-        ...args: [keyof P] extends [never] ? [data: T] : [params: P, data: T]
-      ): void;
+      set<T>(invocation: T | null, data: T): void;
     };
     /**
      * Returns the resolved broadcast or multicast value, waiting for any

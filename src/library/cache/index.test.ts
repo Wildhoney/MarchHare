@@ -21,7 +21,7 @@ function memoryAdapter(): Adapter & { entries: Map<string, string> } {
 
 describe("Cache (persistent)", () => {
   it("returns an empty Stored for a missing key", () => {
-    const cache = new Cache(memoryAdapter());
+    const cache = Cache(memoryAdapter());
     const stored = cache.get<string>("missing");
 
     expect(stored.data).toBe(unset);
@@ -31,7 +31,7 @@ describe("Cache (persistent)", () => {
 
   it("round-trips data and timestamp through set then get", () => {
     const adapter = memoryAdapter();
-    const cache = new Cache(adapter);
+    const cache = Cache(adapter);
     const at = Temporal.Now.instant();
 
     cache.set("user", {
@@ -48,7 +48,7 @@ describe("Cache (persistent)", () => {
 
   it("set is a no-op for an empty Stored (no key created)", () => {
     const adapter = memoryAdapter();
-    const cache = new Cache(adapter);
+    const cache = Cache(adapter);
 
     cache.set("nothing", { data: unset, at: null, else: (f) => f });
 
@@ -57,7 +57,7 @@ describe("Cache (persistent)", () => {
 
   it("set is a no-op when at is missing even if data is present", () => {
     const adapter = memoryAdapter();
-    const cache = new Cache(adapter);
+    const cache = Cache(adapter);
 
     cache.set("user", {
       data: { name: "Adam" },
@@ -70,7 +70,7 @@ describe("Cache (persistent)", () => {
 
   it("remove deletes the persisted entry", () => {
     const adapter = memoryAdapter();
-    const cache = new Cache(adapter);
+    const cache = Cache(adapter);
     const at = Temporal.Now.instant();
 
     cache.set("user", {
@@ -87,7 +87,7 @@ describe("Cache (persistent)", () => {
   it("returns an empty Stored for malformed JSON rather than throwing", () => {
     const adapter = memoryAdapter();
     adapter.entries.set("corrupt", "{not json");
-    const cache = new Cache(adapter);
+    const cache = Cache(adapter);
 
     const stored = cache.get<string>("corrupt");
     expect(stored.data).toBe(unset);
@@ -100,7 +100,7 @@ describe("Cache (persistent)", () => {
       "broken-at",
       JSON.stringify({ data: { name: "Adam" }, at: "not-an-instant" }),
     );
-    const cache = new Cache(adapter);
+    const cache = Cache(adapter);
 
     const stored = cache.get<{ name: string }>("broken-at");
     expect(stored.data).toBe(unset);
@@ -109,7 +109,7 @@ describe("Cache (persistent)", () => {
 
   it("preserves a legitimately stored null payload through round-trip", () => {
     const adapter = memoryAdapter();
-    const cache = new Cache(adapter);
+    const cache = Cache(adapter);
     const at = Temporal.Now.instant();
 
     cache.set<string | null>("maybe", {
@@ -124,7 +124,7 @@ describe("Cache (persistent)", () => {
   });
 
   it("swallows adapter write errors so a resolved fetch isn't poisoned", () => {
-    const cache = new Cache({
+    const cache = Cache({
       get: () => null,
       set: () => {
         throw new Error("quota exceeded");
@@ -144,7 +144,7 @@ describe("Cache (persistent)", () => {
 
   it("clear wipes every entry", () => {
     const adapter = memoryAdapter();
-    const cache = new Cache(adapter);
+    const cache = Cache(adapter);
     const at = Temporal.Now.instant();
 
     cache.set("a", { data: 1, at, else: <U>(_: U) => 1 });
@@ -158,7 +158,7 @@ describe("Cache (persistent)", () => {
 
 describe("Cache (in-memory, no adapter)", () => {
   it("works as a scoped in-memory store", () => {
-    const cache = new Cache();
+    const cache = Cache();
     const at = Temporal.Now.instant();
 
     cache.set("user", {
@@ -171,8 +171,8 @@ describe("Cache (in-memory, no adapter)", () => {
   });
 
   it("two in-memory caches are independent", () => {
-    const a = new Cache();
-    const b = new Cache();
+    const a = Cache();
+    const b = Cache();
     const at = Temporal.Now.instant();
 
     a.set("user", {
@@ -186,7 +186,7 @@ describe("Cache (in-memory, no adapter)", () => {
   });
 
   it("clear empties the in-memory entries", () => {
-    const cache = new Cache();
+    const cache = Cache();
     const at = Temporal.Now.instant();
 
     cache.set("a", { data: 1, at, else: <U>(_: U) => 1 });

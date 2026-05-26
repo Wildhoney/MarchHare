@@ -126,7 +126,7 @@ describe("Resource fetchers receive the Store snapshot", () => {
       () => {
         const actions = useActions<void, typeof Actions>();
         actions.useAction(Actions.Fetch, async (context) => {
-          await context.actions.resource(resource);
+          await context.actions.resource(resource());
         });
         return actions;
       },
@@ -168,7 +168,7 @@ describe("Resource fetchers receive the Store snapshot", () => {
       () => {
         const actions = useActions<void, typeof Actions>();
         actions.useAction(Actions.Fetch, async (context) => {
-          await context.actions.resource(resource);
+          await context.actions.resource(resource());
         });
         actions.useAction(Actions.SetToken, (context, value) => {
           context.actions.produce(({ store }) => {
@@ -195,7 +195,7 @@ describe("Resource fetchers receive the Store snapshot", () => {
 });
 
 describe("context.actions.resource.set(...) for out-of-band updates", () => {
-  it("writes into the cache so subsequent .get(params) sees the new value", async () => {
+  it("writes into the cache so subsequent invocations see the new value", async () => {
     const fetcher = vi.fn(() => Promise.resolve({ name: "Network" }));
     const resource = Resource(fetcher);
 
@@ -213,20 +213,20 @@ describe("context.actions.resource.set(...) for out-of-band updates", () => {
       () => {
         const actions = useActions<void, typeof Actions>();
         actions.useAction(Actions.Push, (context, payload) => {
-          context.actions.resource.set(resource, payload);
+          context.actions.resource.set(resource(), payload);
         });
         return actions;
       },
       { wrapper },
     );
 
-    expect(resource.get()).toBeNull();
+    expect(resource()).toBeNull();
 
     await act(async () => {
       await result.current[1].dispatch(Actions.Push, { name: "FromSSE" });
     });
 
-    expect(resource.get()).toEqual({ name: "FromSSE" });
+    expect(resource()).toEqual({ name: "FromSSE" });
     expect(fetcher).not.toHaveBeenCalled();
   });
 
@@ -250,7 +250,7 @@ describe("context.actions.resource.set(...) for out-of-band updates", () => {
       () => {
         const actions = useActions<void, typeof Actions>();
         actions.useAction(Actions.Push, (context, payload) => {
-          context.actions.resource.set(resource, { id: payload.id }, payload);
+          context.actions.resource.set(resource({ id: payload.id }), payload);
         });
         return actions;
       },
@@ -264,8 +264,8 @@ describe("context.actions.resource.set(...) for out-of-band updates", () => {
       });
     });
 
-    expect(resource.get({ id: 5 })).toEqual({ id: 5, name: "Pushed" });
-    expect(resource.get({ id: 6 })).toBeNull();
+    expect(resource({ id: 5 })).toEqual({ id: 5, name: "Pushed" });
+    expect(resource({ id: 6 })).toBeNull();
   });
 });
 
@@ -290,14 +290,14 @@ describe("context.actions.resource(...).exceeds({...})", () => {
       () => {
         const actions = useActions<Model, typeof Actions>({ value: null });
         actions.useAction(Actions.Mount, async (context) => {
-          const data = await context.actions.resource(resource);
+          const data = await context.actions.resource(resource());
           context.actions.produce(({ model }) => {
             model.value = data.name;
           });
         });
         actions.useAction(Actions.Refresh, async (context) => {
           // Should NOT fetch — cache is fresh within window.
-          await context.actions.resource(resource).exceeds({ minutes: 5 });
+          await context.actions.resource(resource()).exceeds({ minutes: 5 });
         });
         return actions;
       },

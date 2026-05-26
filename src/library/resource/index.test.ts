@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { Resource } from "./index.ts";
+import { Resource, consumePending } from "./index.ts";
 import { Cache, type Adapter } from "../cache/index.ts";
 import type { Store } from "../boundary/components/store/index.tsx";
 
@@ -21,17 +21,21 @@ function memoryAdapter(): Adapter & { entries: Map<string, string> } {
 }
 
 const noStore = <Store>{};
+const noController = (): AbortController => new AbortController();
 
 describe("Resource() fetcher invocation", () => {
-  it("invokes the fetcher with { store, signal, params }", async () => {
+  it("invokes the fetcher with { store, controller, params }", async () => {
     const fetcher = vi.fn(() => Promise.resolve({ name: "Adam" }));
     const user = Resource(fetcher);
+    const controller = noController();
 
-    await user.run(noStore, undefined, {});
+    user();
+    const call = consumePending();
+    await call.run(noStore, controller, call.params);
 
     expect(fetcher).toHaveBeenCalledWith({
       store: noStore,
-      signal: undefined,
+      controller,
       params: {},
     });
   });
@@ -41,12 +45,14 @@ describe("Resource() fetcher invocation", () => {
     const user = Resource(fetcher);
     const store = <Store>{ token: "abc-123" };
 
-    await user.run(store, undefined, {});
+    user();
+    const call = consumePending();
+    await call.run(store, noController(), call.params);
 
     expect(fetcher).toHaveBeenCalledWith(expect.objectContaining({ store }));
   });
 
-  it("forwards params and signal to the fetcher", async () => {
+  it("forwards params and controller to the fetcher", async () => {
     type Params = { id: number };
     const fetcher = vi.fn(({ params }: { params: Params }) =>
       Promise.resolve({ id: params.id }),
@@ -54,11 +60,13 @@ describe("Resource() fetcher invocation", () => {
     const item = Resource<{ id: number }, Params>(fetcher);
     const controller = new AbortController();
 
-    await item.run(noStore, controller.signal, { id: 5 });
+    item({ id: 5 });
+    const call = consumePending();
+    await call.run(noStore, controller, call.params);
 
     expect(fetcher).toHaveBeenCalledWith(
       expect.objectContaining({
-        signal: controller.signal,
+        controller,
         params: { id: 5 },
       }),
     );
@@ -67,33 +75,45 @@ describe("Resource() fetcher invocation", () => {
   it("propagates errors from the fetcher", async () => {
     const pay = Resource(() => Promise.reject(new Error("declined")));
 
-    await expect(pay.run(noStore, undefined, {})).rejects.toThrow("declined");
+    pay();
+    const call = consumePending();
+    await expect(
+      call.run(noStore, noController(), call.params),
+    ).rejects.toThrow("declined");
   });
 
   it("runs fresh on every call (no in-flight coalescing)", async () => {
     const fetcher = vi.fn(() => Promise.resolve({ name: "Adam" }));
     const user = Resource(fetcher);
 
-    await Promise.all([
-      user.run(noStore, undefined, {}),
-      user.run(noStore, undefined, {}),
-      user.run(noStore, undefined, {}),
-    ]);
+    const runOnce = async () => {
+      user();
+      const call = consumePending();
+      await call.run(noStore, noController(), call.params);
+    };
+
+    await Promise.all([runOnce(), runOnce(), runOnce()]);
 
     expect(fetcher).toHaveBeenCalledTimes(3);
   });
 });
 
-describe("Resource.get(params) sync read", () => {
+describe("Resource(params) sync read", () => {
   it("returns null before any successful fetch", () => {
     const user = Resource(() => Promise.resolve({ name: "Adam" }));
-    expect(user.get()).toBeNull();
+    expect(user()).toBeNull();
+    consumePending();
   });
 
   it("returns the cached payload after a successful fetch", async () => {
     const user = Resource(() => Promise.resolve({ name: "Adam" }));
-    await user.run(noStore, undefined, {});
-    expect(user.get()).toEqual({ name: "Adam" });
+
+    user();
+    const first = consumePending();
+    await first.run(noStore, noController(), first.params);
+
+    expect(user()).toEqual({ name: "Adam" });
+    consumePending();
   });
 
   it("returns null after a failed fetch (cache not poisoned)", async () => {
@@ -102,20 +122,28 @@ describe("Resource.get(params) sync read", () => {
       .mockRejectedValueOnce(new Error("boom"));
     const user = Resource(fetcher);
 
-    await expect(user.run(noStore, undefined, {})).rejects.toThrow("boom");
+    user();
+    const first = consumePending();
+    await expect(
+      first.run(noStore, noController(), first.params),
+    ).rejects.toThrow("boom");
 
-    expect(user.get()).toBeNull();
+    expect(user()).toBeNull();
+    consumePending();
   });
 
   it("returns null verbatim when the fetcher resolved with null", async () => {
     const user = Resource<string | null>(() => Promise.resolve(null));
-    await user.run(noStore, undefined, {});
 
-    // `.get()` returns null for both "not fetched" and "fetched a null".
-    // Use the internal `.read()` to distinguish if needed.
-    expect(user.get()).toBeNull();
-    expect(user.read({}).data).toBeNull();
-    expect(user.read({}).at).toBeInstanceOf(Temporal.Instant);
+    user();
+    const first = consumePending();
+    await first.run(noStore, noController(), first.params);
+
+    // `user()` returns null for both "not fetched" and "fetched a null".
+    expect(user()).toBeNull();
+    const second = consumePending();
+    expect(second.read({}).data).toBeNull();
+    expect(second.read({}).at).toBeInstanceOf(Temporal.Instant);
   });
 
   it("keeps separate cache slots for different params", async () => {
@@ -125,34 +153,38 @@ describe("Resource.get(params) sync read", () => {
     );
     const user = Resource<{ id: number; name: string }, Params>(fetcher);
 
-    await user.run(noStore, undefined, { id: 5 });
-    await user.run(noStore, undefined, { id: 6 });
+    user({ id: 5 });
+    const five = consumePending();
+    await five.run(noStore, noController(), five.params);
 
-    expect(user.get({ id: 5 })).toEqual({ id: 5, name: "User 5" });
-    expect(user.get({ id: 6 })).toEqual({ id: 6, name: "User 6" });
-    expect(user.get({ id: 7 })).toBeNull();
-  });
+    user({ id: 6 });
+    const six = consumePending();
+    await six.run(noStore, noController(), six.params);
 
-  it("is shared across all callers (cache is module-scope)", async () => {
-    const user = Resource(() => Promise.resolve({ name: "Adam" }));
-    await user.run(noStore, undefined, {});
-    // A second reference to the same Resource handle sees the cache.
-    expect(user.get()).toEqual({ name: "Adam" });
+    expect(user({ id: 5 })).toEqual({ id: 5, name: "User 5" });
+    consumePending();
+    expect(user({ id: 6 })).toEqual({ id: 6, name: "User 6" });
+    consumePending();
+    expect(user({ id: 7 })).toBeNull();
+    consumePending();
   });
 });
 
-describe("AbortSignal", () => {
-  it("aborts the fetch when the signal fires", async () => {
+describe("AbortController", () => {
+  it("aborts the fetch when the controller fires", async () => {
     const controller = new AbortController();
-    const user = Resource<{ name: string }>(({ signal }) => {
-      return new Promise<{ name: string }>((_resolve, reject) => {
-        signal?.addEventListener("abort", () =>
-          reject(new DOMException("aborted", "AbortError")),
-        );
-      });
-    });
+    const user = Resource<{ name: string }>(
+      ({ controller: c }) =>
+        new Promise<{ name: string }>((_resolve, reject) => {
+          c.signal.addEventListener("abort", () =>
+            reject(new DOMException("aborted", "AbortError")),
+          );
+        }),
+    );
 
-    const promise = user.run(noStore, controller.signal, {});
+    user();
+    const call = consumePending();
+    const promise = call.run(noStore, controller, call.params);
     controller.abort();
 
     await expect(promise).rejects.toThrow("aborted");
@@ -162,10 +194,12 @@ describe("AbortSignal", () => {
 describe("Resource(fetcher, cache)", () => {
   it("writes through to the supplied Cache on every successful fetch", async () => {
     const adapter = memoryAdapter();
-    const cache = new Cache(adapter);
+    const cache = Cache(adapter);
     const user = Resource(() => Promise.resolve({ name: "Adam" }), cache);
 
-    await user.run(noStore, undefined, {});
+    user();
+    const call = consumePending();
+    await call.run(noStore, noController(), call.params);
 
     expect(adapter.entries.has("{}")).toBe(true);
     const stored = cache.get<{ name: string }>("{}");
@@ -176,62 +210,101 @@ describe("Resource(fetcher, cache)", () => {
     const adapter = memoryAdapter();
     const first = Resource(
       () => Promise.resolve({ name: "FromFirst" }),
-      new Cache(adapter),
+      Cache(adapter),
     );
 
-    await first.run(noStore, undefined, {});
+    first();
+    const a = consumePending();
+    await a.run(noStore, noController(), a.params);
     expect(adapter.entries.has("{}")).toBe(true);
 
     const fetcher = vi.fn(() => Promise.resolve({ name: "Network" }));
-    const second = Resource(fetcher, new Cache(adapter));
+    const second = Resource(fetcher, Cache(adapter));
 
-    expect(second.get()).toEqual({ name: "FromFirst" });
+    expect(second()).toEqual({ name: "FromFirst" });
+    consumePending();
     expect(fetcher).not.toHaveBeenCalled();
   });
 
   it("per-params slots are persisted independently", async () => {
     type Params = { id: number };
     const adapter = memoryAdapter();
-    const cache = new Cache(adapter);
+    const cache = Cache(adapter);
     const fetcher = vi.fn(({ params: { id } }: { params: Params }) =>
       Promise.resolve({ id }),
     );
     const item = Resource<{ id: number }, Params>(fetcher, cache);
 
-    await item.run(noStore, undefined, { id: 5 });
-    await item.run(noStore, undefined, { id: 6 });
+    item({ id: 5 });
+    const five = consumePending();
+    await five.run(noStore, noController(), five.params);
+
+    item({ id: 6 });
+    const six = consumePending();
+    await six.run(noStore, noController(), six.params);
 
     expect(adapter.entries.has('{"id":5}')).toBe(true);
     expect(adapter.entries.has('{"id":6}')).toBe(true);
 
-    const reloaded = Resource<{ id: number }, Params>(
-      fetcher,
-      new Cache(adapter),
-    );
+    const reloaded = Resource<{ id: number }, Params>(fetcher, Cache(adapter));
 
-    expect(reloaded.get({ id: 5 })).toEqual({ id: 5 });
-    expect(reloaded.get({ id: 6 })).toEqual({ id: 6 });
+    expect(reloaded({ id: 5 })).toEqual({ id: 5 });
+    consumePending();
+    expect(reloaded({ id: 6 })).toEqual({ id: 6 });
+    consumePending();
   });
 
   it("falls back to the default in-memory Cache when none is supplied", async () => {
     const user = Resource(() => Promise.resolve({ name: "Adam" }));
 
-    expect(user.get()).toBeNull();
-    await user.run(noStore, undefined, {});
-    expect(user.get()).toEqual({ name: "Adam" });
+    expect(user()).toBeNull();
+    consumePending();
+
+    user();
+    const call = consumePending();
+    await call.run(noStore, noController(), call.params);
+
+    expect(user()).toEqual({ name: "Adam" });
+    consumePending();
   });
 });
 
-describe("Resource.seed(params, data, at)", () => {
+describe("seed via .resource.set semantics", () => {
   it("populates the per-params cache slot without invoking the fetcher", () => {
     const fetcher = vi.fn(() => Promise.resolve({ name: "Adam" }));
     const user = Resource(fetcher);
     const at = Temporal.Now.instant();
 
-    user.seed({}, { name: "Seeded" }, at);
+    user();
+    const call = consumePending();
+    call.seed({}, { name: "Seeded" }, at);
 
-    expect(user.get()).toEqual({ name: "Seeded" });
-    expect(user.read({}).at?.toString()).toBe(at.toString());
+    expect(user()).toEqual({ name: "Seeded" });
+    consumePending();
+
+    user();
+    expect(consumePending().read({}).at?.toString()).toBe(at.toString());
     expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+describe("consumePending() invariants", () => {
+  it("throws when called with no pending invocation", () => {
+    // Drain any pending from prior tests.
+    try {
+      consumePending();
+    } catch {
+      // Intentionally swallowed.
+    }
+    expect(() => consumePending()).toThrow(
+      /must be called with a fresh resource invocation/,
+    );
+  });
+
+  it("clears the slot on next microtask if not consumed", async () => {
+    const user = Resource(() => Promise.resolve({ name: "Adam" }));
+    user();
+    await Promise.resolve(); // run microtasks
+    expect(() => consumePending()).toThrow();
   });
 });

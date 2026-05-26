@@ -41,7 +41,7 @@ import { useScope, getScope } from "../boundary/components/scope/index.tsx";
 import { useStore, useStoreRef } from "../boundary/components/store/utils.ts";
 import type { Store } from "../boundary/components/store/index.tsx";
 import { produce as produceImmer } from "immer";
-import type { ResourceHandle } from "../resource/types.ts";
+import { consumePending } from "../resource/index.ts";
 import { unset } from "../utils/utils.ts";
 import {
   isBroadcastAction,
@@ -214,15 +214,12 @@ export function useActions<
             return state.current.annotate(operation, value);
           },
           resource: Object.assign(
-            function resourceCall<T, P extends object>(
-              resource: ResourceHandle<T, P>,
-              params?: P,
-            ) {
-              const effective = <P>(params ?? {});
+            function resourceCall<T>(_value: T | null) {
+              const call = consumePending();
               const fetch = (): Promise<T> =>
-                resource.run(slot.current, controller.signal, effective);
+                <Promise<T>>call.run(slot.current, controller, call.params);
               const exceeds = (duration: Temporal.DurationLike): Promise<T> => {
-                const { data, at } = resource.read(effective);
+                const { data, at } = call.read(call.params);
                 if (data !== unset && at !== null) {
                   const elapsed = Temporal.Now.instant().since(at);
                   const window = Temporal.Duration.from(duration);
@@ -250,25 +247,24 @@ export function useActions<
             },
             {
               /**
-               * Writes `data` into a {@link ResourceHandle}'s per-params
-               * cache slot with a fresh timestamp. Subsequent reads via
-               * `.get(params)` see the new value, and `.exceeds(...)`
-               * short-circuits against the new timestamp.
+               * Writes `data` into the per-params cache slot of the
+               * resource invocation passed as the first argument, with a
+               * fresh timestamp. Subsequent reads via `cat(params)` see
+               * the new value, and `.exceeds(...)` short-circuits against
+               * the new timestamp.
                *
                * Use this when payloads arrive out-of-band (SSE, WebSocket,
                * postMessage) and need to be reflected in the Resource
                * cache without a fetcher round-trip.
+               *
+               * @example
+               * ```ts
+               * context.actions.resource.set(cat({ id: payload.id }), payload);
+               * ```
                */
-              set: <T, P extends object>(
-                resource: ResourceHandle<T, P>,
-                ...args: [keyof P] extends [never]
-                  ? [data: T]
-                  : [params: P, data: T]
-              ): void => {
-                const data: T = args.length === 2 ? args[1] : args[0];
-                const params: P =
-                  args.length === 2 ? args[0] : <P>(<unknown>{});
-                resource.seed(params, data, Temporal.Now.instant());
+              set: <T>(_value: T | null, data: T): void => {
+                const call = consumePending();
+                call.seed(call.params, data, Temporal.Now.instant());
               },
             },
           ),

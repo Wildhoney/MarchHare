@@ -1,6 +1,6 @@
 # Session tokens
 
-`Resource` fetchers receive an args object with `store`, `signal`, and `params`. The `store` field is a snapshot of the per-`<Boundary>` [Store](./store.md) &mdash; exactly the right place to put a session token: typed, declared once via module augmentation, written from a single sign-in handler, read automatically by every fetcher.
+`Resource` fetchers receive an args object with `store`, `controller`, and `params`. The `store` field is a snapshot of the per-`<Boundary>` [Store](./store.md) &mdash; exactly the right place to put a session token: typed, declared once via module augmentation, written from a single sign-in handler, read automatically by every fetcher.
 
 This recipe covers:
 
@@ -28,8 +28,8 @@ export const api = ky.create({
 import { Resource } from "march-hare";
 import { api } from "./api/client";
 
-export const user = Resource(({ signal }) =>
-  api.get("user", { signal }).json<User>(),
+export const user = Resource(({ controller }) =>
+  api.get("user", { signal: controller.signal }).json<User>(),
 );
 ```
 
@@ -67,7 +67,7 @@ If the session should survive reloads, hydrate the initial value from persistent
 ```tsx
 import { Cache, utils } from "march-hare";
 
-const sessionCache = new Cache({
+const sessionCache = Cache({
   get: (key) => sessionStorage.getItem(key),
   set: (key, value) => sessionStorage.setItem(key, value),
   remove: (key) => sessionStorage.removeItem(key),
@@ -91,28 +91,28 @@ Every fetcher receives the Store on its args object. Read the token with plain d
 ```ts
 // resources.ts
 import ky from "ky";
-import { Resource, type FetcherArgs } from "march-hare";
+import { Resource } from "march-hare";
 
-export const user = Resource(
-  ({ store, signal, params }: FetcherArgs<{ id: number }>) =>
+export const user = Resource<User, { id: number }>(
+  ({ store, controller, params }) =>
     ky
       .get(`/api/users/${params.id}`, {
         headers: store.session
           ? { Authorization: `Bearer ${store.session.accessToken}` }
           : {},
-        signal,
+        signal: controller.signal,
       })
       .json<User>(),
 );
 
-export const pay = Resource(({ store, signal, params }: FetcherArgs<Body>) =>
+export const pay = Resource<Receipt, Body>(({ store, controller, params }) =>
   ky
     .post("/api/pay", {
       headers: store.session
         ? { Authorization: `Bearer ${store.session.accessToken}` }
         : {},
       json: params,
-      signal,
+      signal: controller.signal,
     })
     .json<Receipt>(),
 );
@@ -126,13 +126,13 @@ No module-level mutable, no `getSession()` helper, no `ky.beforeRequest` reading
 // auth/actions.ts
 import { useActions } from "march-hare";
 import { Actions } from "./types";
-import * as resource from "./resources";
+import { signIn, signOut } from "./resources";
 
 export function useAuthActions() {
   const actions = useActions<void, typeof Actions>();
 
-  actions.useAction(Actions.SignIn, async (context, creds) => {
-    const result = await context.actions.resource(resource.signIn, creds);
+  actions.useAction(Actions.SignIn, async (context, credentials) => {
+    const result = await context.actions.resource(signIn(credentials));
     context.actions.produce(({ store }) => {
       store.session = {
         accessToken: result.accessToken,
@@ -143,7 +143,7 @@ export function useAuthActions() {
   });
 
   actions.useAction(Actions.SignOut, async (context) => {
-    await context.actions.resource(resource.signOut);
+    await context.actions.resource(signOut());
     context.actions.produce(({ store }) => {
       store.session = null;
     });
@@ -158,93 +158,84 @@ Components that need to react to sign-in/sign-out subscribe to the broadcast act
 
 ## Refresh on 401
 
-When the access token expires, refresh once and retry transparently. This belongs on a shared `ky` client's `afterResponse` hook. Since the hook runs outside React, give it a direct reference to the Store ref via a small auth-flow function that owns the `ky` client lifetime:
+When the access token expires, refresh once and retry transparently. This belongs on a shared `ky` client's `afterResponse` hook. The hook runs outside React, so the client is created once at module scope and reads the latest session through two binder functions &mdash; one to read, one to write &mdash; that a small top-level component plugs in on every render.
 
 ```ts
 // api/client.ts
-import ky, { type KyInstance } from "ky";
+import ky from "ky";
 import type { Store } from "march-hare";
+
+type Session = Store["session"];
+
+let readSession: () => Session = () => null;
+let writeSession: (next: Session) => void = () => {};
+
+export function bindSession(
+  read: () => Session,
+  write: (next: Session) => void,
+): void {
+  readSession = read;
+  writeSession = write;
+}
 
 // Bare client used only for refresh — never goes through `api`, otherwise
 // a 401 on refresh would re-enter afterResponse → infinite loop.
 const refreshClient = ky.create({ prefixUrl: "/api" });
 
-// The Store ref is mutated by sign-in / sign-out / refresh. We expose a
-// small accessor so the ky hooks can read and write it without going
-// through React.
-type SessionAccessor = {
-  read: () => Store["session"];
-  write: (next: Store["session"]) => void;
-};
+export const api = ky.create({
+  prefixUrl: "/api",
+  hooks: {
+    beforeRequest: [
+      (request) => {
+        const current = readSession();
+        if (current) {
+          request.headers.set("Authorization", `Bearer ${current.accessToken}`);
+        }
+      },
+    ],
+    afterResponse: [
+      async (request, _options, response) => {
+        if (response.status !== 401) return;
+        const current = readSession();
+        if (!current) return; // not signed in — bubble the 401
 
-export function makeApiClient(session: SessionAccessor): KyInstance {
-  return ky.create({
-    prefixUrl: "/api",
-    hooks: {
-      beforeRequest: [
-        (request) => {
-          const current = session.read();
-          if (current) {
-            request.headers.set(
-              "Authorization",
-              `Bearer ${current.accessToken}`,
-            );
-          }
-        },
-      ],
-      afterResponse: [
-        async (request, _options, response) => {
-          if (response.status !== 401) return;
-          const current = session.read();
-          if (!current) return; // not signed in — bubble the 401
+        const next = await refreshClient
+          .post("auth/refresh", {
+            json: { refreshToken: current.refreshToken },
+          })
+          .json<Session>()
+          .catch(() => null);
 
-          const next = await refreshClient
-            .post("auth/refresh", {
-              json: { refreshToken: current.refreshToken },
-            })
-            .json<{ accessToken: string; refreshToken: string }>()
-            .catch(() => null);
+        if (next === null) {
+          writeSession(null);
+          return; // bubble the original 401
+        }
 
-          if (next === null) {
-            session.write(null);
-            return; // bubble the original 401
-          }
-
-          session.write(next);
-          request.headers.set("Authorization", `Bearer ${next.accessToken}`);
-          return ky(request);
-        },
-      ],
-    },
-  });
-}
+        writeSession(next);
+        request.headers.set("Authorization", `Bearer ${next.accessToken}`);
+        return ky(request);
+      },
+    ],
+  },
+});
 ```
 
-Wire the accessor at app boot using a component that bridges the Store into the `ky` client and dispatches actions for any writes the hooks need to make:
+A tiny top-level component plugs the live Store reader and an internal dispatch into those binders. It renders `null` &mdash; no provider, no children wrapping, no ref dance:
 
 ```tsx
 import { useStore } from "march-hare";
+import { bindSession } from "./api/client";
 
-function AuthBridge({ children }: { children: React.ReactNode }) {
+function AuthBridge(): null {
   const store = useStore();
-  const actions = useAuthActions();
+  const [, actions] = useAuthActions();
 
-  // Use a ref so the api client closes over a stable accessor that always
-  // reads the latest store.session via dot notation.
-  const apiRef = React.useRef<KyInstance | null>(null);
-  if (apiRef.current === null) {
-    apiRef.current = makeApiClient({
-      read: () => store.session,
-      write: (next) => {
-        // Dispatch an internal action that writes session via produce.
-        void actions[1].dispatch(Actions.RefreshSession, next);
-      },
-    });
-  }
-
-  return (
-    <ApiContext.Provider value={apiRef.current}>{children}</ApiContext.Provider>
+  bindSession(
+    () => store.session,
+    (next) => void actions.dispatch(Actions.RefreshSession, next),
   );
+
+  return null;
 }
 
 // Internal action that writes the refresh result back to the Store.
@@ -255,7 +246,7 @@ actions.useAction(Actions.RefreshSession, (context, next) => {
 });
 ```
 
-Resources then read the client from `ApiContext` (via React context, since the client is React-scoped now) or from a module export &mdash; pick whichever fits your wiring.
+Mount `<AuthBridge />` once inside the `<Boundary>` and Resources go on importing `api` from `./api/client` as if nothing fancy was happening. `bindSession` is called every render but it just rebinds two function references &mdash; no allocations, no lifecycle hooks, no `useRef`.
 
 Notes:
 
@@ -271,7 +262,7 @@ If your Resources are wired to persistent `Cache`s, the previous user's cached p
 import { userCache, ordersCache, settingsCache } from "../caches";
 
 actions.useAction(Actions.SignOut, async (context) => {
-  await context.actions.resource(resource.signOut);
+  await context.actions.resource(signOut);
 
   context.actions.produce(({ store }) => {
     store.session = null;
@@ -293,17 +284,15 @@ The Store reset and Cache clears are independent concerns (token vs. cached data
 If a single call needs a different token than the ambient session (impersonation, service-to-service hops, etc.), pass an explicit override via `params` and merge in the fetcher:
 
 ```ts
-export const adminUser = Resource(
-  ({
-    store,
-    signal,
-    params,
-  }: FetcherArgs<{ id: number; asToken?: string }>) => {
+type AdminUserParams = { id: number; asToken?: string };
+
+export const adminUser = Resource<User, AdminUserParams>(
+  ({ store, controller, params }) => {
     const token = params.asToken ?? store.session?.accessToken;
     return ky
       .get(`/api/users/${params.id}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
-        signal,
+        signal: controller.signal,
       })
       .json<User>();
   },

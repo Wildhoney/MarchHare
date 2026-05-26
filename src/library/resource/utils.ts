@@ -22,7 +22,7 @@ export const defaults = new WeakMap<object, Cache>();
 export function defaultCache(fetcher: object): Cache {
   let cache = defaults.get(fetcher);
   if (cache === undefined) {
-    cache = new Cache();
+    cache = Cache();
     defaults.set(fetcher, cache);
   }
   return cache;

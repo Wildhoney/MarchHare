@@ -82,8 +82,8 @@ When you need to do more than just assign the payload &ndash; such as making an 
 // resources.ts
 import { Resource } from "march-hare";
 
-export const user = Resource(({ signal }) =>
-  ky.get(api.user(), { signal }).json<User>(),
+export const user = Resource(({ controller }) =>
+  ky.get(api.user(), { signal: controller.signal }).json<User>(),
 );
 ```
 
@@ -94,8 +94,8 @@ actions.useAction(Actions.Name, async (context) => {
       void (model.name = context.actions.annotate(model.name, Op.Update)),
   );
 
-  // Auto-threads context.task.controller.signal and the Store snapshot.
-  const data = await context.actions.resource(resource.user);
+  // Auto-threads context.task.controller and the Store snapshot.
+  const data = await context.actions.resource(user());
 
   context.actions.produce(({ model }) => void (model.name = data.name));
 });
@@ -112,9 +112,9 @@ const actions = useActions<Model, typeof Actions, { query: string }>(
 );
 
 actions.useAction(Actions.Search, async (context) => {
-  const results = await context.actions.resource(resource.search, {
-    query: context.data.query,
-  });
+  const results = await context.actions.resource(
+    search({ query: context.data.query }),
+  );
   // context.data.query is always the latest value, even after await
   console.log(context.data.query, results);
 });
@@ -180,7 +180,7 @@ actions.useAction(Actions.Profile, async (context) => {
       void (model.name = context.actions.annotate(model.name, Op.Update)),
   );
 
-  const data = await context.actions.resource(resource.user);
+  const data = await context.actions.resource(user());
 
   context.actions.produce(({ model }) => void (model.name = data.name));
 
@@ -192,7 +192,7 @@ Once we have the broadcast action, if we want to listen for it and perform anoth
 
 ```tsx
 actions.useAction(Actions.Broadcast.Name, async (context, name) => {
-  const data = await context.actions.resource(resource.friends, { name });
+  const data = await context.actions.resource(friends({ name }));
 
   context.actions.produce(({ model }) => void (model.friends = data));
 });
@@ -204,7 +204,7 @@ Both `read` and `peek` access the latest cached broadcast value without subscrib
 actions.useAction(Actions.FetchFriends, async (context) => {
   const name = await context.actions.resolution(Actions.Broadcast.Name);
   if (!name) return;
-  const data = await context.actions.resource(resource.friends, { name });
+  const data = await context.actions.resource(friends({ name }));
   context.actions.produce(({ model }) => void (model.friends = data));
 });
 ```
@@ -253,42 +253,42 @@ Components that mount after a broadcast has already been dispatched automaticall
 
 <a id="remote-data"></a>
 
-For remote data, declare a `Resource` at module scope and use it directly. `resource.user.get(params)` is a sync cache read; `context.actions.resource(resource.user, params?)` is the fetch path with auto-threaded abort signal and Store snapshot. Every successful fetch caches the response in a module-level slot keyed by the fetcher and the stringified params, so different param-sets are independent. Convention is to keep all resources in `resources.ts` and import them as a namespace:
+For remote data, declare a `Resource` at module scope and use it directly. `user(params)` is the unified call form &mdash; it returns the sync cache read (`User | null`) and primes a slot that `context.actions.resource(user(params))` consumes for the fetch path (with auto-threaded abort controller and Store snapshot). Every successful fetch caches the response in a module-level slot keyed by the fetcher and the stringified params, so different param-sets are independent. Keep all resources in `resources.ts` and pull them in with named imports:
 
 ```ts
 // resources.ts
-import { Resource, type FetcherArgs } from "march-hare";
+import { Resource } from "march-hare";
 
-export const user = Resource(({ signal }) =>
-  ky.get("/api/user", { signal }).json<User>(),
+export const user = Resource(({ controller }) =>
+  ky.get("/api/user", { signal: controller.signal }).json<User>(),
 );
 
-export const pay = Resource(({ signal, params }: FetcherArgs<Body>) =>
-  ky.post("/api/pay", { json: params, signal }).json<Receipt>(),
+export const pay = Resource<Receipt, Body>(({ controller, params }) =>
+  ky
+    .post("/api/pay", { json: params, signal: controller.signal })
+    .json<Receipt>(),
 );
 ```
 
 ```tsx
 // actions.ts
 import { useActions } from "march-hare";
-import * as resource from "./resources";
+import { user, pay } from "./resources";
 
 export function useActions() {
   const actions = useActions<Model, typeof Actions>({
     // Sync cache read at the model literal — returns null when nothing is cached.
-    user: resource.user.get(),
+    user: user(),
     receipt: null,
   });
 
   actions.useAction(Actions.Mount, async (context) => {
-    const data = await context.actions
-      .resource(resource.user)
-      .exceeds({ minutes: 5 });
+    const data = await context.actions.resource(user()).exceeds({ minutes: 5 });
     context.actions.produce(({ model }) => void (model.user = data));
   });
 
   actions.useAction(Actions.Submit, async (context, body) => {
-    const receipt = await context.actions.resource(resource.pay, body);
+    const receipt = await context.actions.resource(pay(body));
     context.actions.produce(({ model }) => void (model.receipt = receipt));
   });
 
@@ -296,17 +296,17 @@ export function useActions() {
 }
 ```
 
-`context.actions.resource(resource, params?)` returns a thenable. Awaiting it fires the fetch unconditionally; chaining `.exceeds({ minutes: 5 })` short-circuits when the per-params cache age does not yet exceed the supplied freshness window. `.exceeds(duration)` accepts a `Temporal.Duration`, a `DurationLike` object, or an ISO 8601 duration string. `Temporal` is read from the host runtime &ndash; bring a polyfill (e.g. [`@js-temporal/polyfill`](https://github.com/js-temporal/temporal-polyfill)) if your target environment does not yet expose it natively.
+`context.actions.resource(invocation)` returns a thenable. Awaiting it fires the fetch unconditionally; chaining `.exceeds({ minutes: 5 })` short-circuits when the per-params cache age does not yet exceed the supplied freshness window. `.exceeds(duration)` accepts a `Temporal.Duration`, a `DurationLike` object, or an ISO 8601 duration string. `Temporal` is read from the host runtime &ndash; bring a polyfill (e.g. [`@js-temporal/polyfill`](https://github.com/js-temporal/temporal-polyfill)) if your target environment does not yet expose it natively.
 
-`Resource` takes a single fetcher argument. The fetcher receives `{ store, signal, params }` &mdash; destructure whichever you need. There are no callbacks &ndash; no `onSuccess`, no `onError`, no injected `dispatch`. Side-effects after a run (broadcasting, analytics, model writes) live in the `useAction` handler that awaited the call, next to the rest of the flow:
+`Resource` takes a single fetcher argument. The fetcher receives `{ store, controller, params }` &mdash; destructure whichever you need. There are no callbacks &ndash; no `onSuccess`, no `onError`, no injected `dispatch`. Side-effects after a run (broadcasting, analytics, model writes) live in the `useAction` handler that awaited the call, next to the rest of the flow:
 
 ```ts
-export const user = Resource(({ signal }) =>
-  ky.get("/api/user", { signal }).json<User>(),
+export const user = Resource(({ controller }) =>
+  ky.get("/api/user", { signal: controller.signal }).json<User>(),
 );
 
 actions.useAction(Actions.Mount, async (context) => {
-  const data = await context.actions.resource(resource.user);
+  const data = await context.actions.resource(user());
   await context.actions.dispatch(Actions.Broadcast.UserUpdated, data);
   context.actions.produce(({ model }) => void (model.user = data));
 });
@@ -317,15 +317,18 @@ actions.useAction(Actions.Mount, async (context) => {
 ```ts
 type Params = { cursor: string | null };
 
-export const feed = Resource(({ signal, params }: FetcherArgs<Params>) =>
+export const feed = Resource<Page<Item>, Params>(({ controller, params }) =>
   http
-    .get("feed", { searchParams: { cursor: params.cursor ?? "" }, signal })
+    .get("feed", {
+      searchParams: { cursor: params.cursor ?? "" },
+      signal: controller.signal,
+    })
     .json<Page<Item>>(),
 );
 
-const page = await context.actions.resource(resource.feed, {
-  cursor: context.model.cursor,
-});
+const page = await context.actions.resource(
+  feed({ cursor: context.model.cursor }),
+);
 ```
 
 A complete IntersectionObserver-driven infinite-scroll demo lives at [`src/example/transactions/`](./src/example/transactions/) &ndash; mock paginated API, scroll-triggered `LoadMore`, `pending()` guard, broadcast on success.
@@ -335,7 +338,7 @@ For typed failure routing, wrap the call in `try/catch` and use `instanceof` &nd
 ```ts
 actions.useAction(Actions.Mount, async (context) => {
   try {
-    const data = await context.actions.resource(resource.user);
+    const data = await context.actions.resource(user());
     context.actions.produce(({ model }) => void (model.user = data));
   } catch (error) {
     if (error instanceof RateLimitedError) {
@@ -359,34 +362,35 @@ By default a `Resource`'s cache is in-memory only &ndash; it resets on every pag
 // resources.ts
 import { Cache, Resource } from "march-hare";
 
-const cache = new Cache({
+const cache = Cache({
   get: (key) => localStorage.getItem(key),
   set: (key, value) => localStorage.setItem(key, value),
   remove: (key) => localStorage.removeItem(key),
   clear: () => localStorage.clear(),
 });
 
-export const cat = Resource(async ({ signal }) => fetchCat(signal), cache);
+export const cat = Resource(
+  async ({ controller }) => fetchCat(controller.signal),
+  cache,
+);
 ```
 
 ```ts
 // actions.ts
 const actions = useActions<Model, typeof Actions>({
   // First render reads the Cache automatically.
-  cat: resource.cat.get(),
+  cat: cat(),
 });
 
 actions.useAction(Actions.Mount, async (context) => {
   // Short-circuits when the persisted payload is < 5 minutes old.
   // The Cache writes through automatically on success.
-  const fresh = await context.actions
-    .resource(resource.cat)
-    .exceeds({ minutes: 5 });
+  const fresh = await context.actions.resource(cat()).exceeds({ minutes: 5 });
   context.actions.produce(({ model }) => void (model.cat = fresh));
 });
 ```
 
-`new Cache()` with no adapter is an in-memory scope &ndash; useful in tests or when you want a holdable cache without persistence. Per-params keying via `JSON.stringify(params)` is automatic, so `user.get({ id: 5 })` and `user.get({ id: 6 })` are distinct slots.
+`Cache()` with no adapter is an in-memory scope &ndash; useful in tests or when you want a holdable cache without persistence. Per-params keying via `JSON.stringify(params)` is automatic, so `user({ id: 5 })` and `user({ id: 6 })` are distinct slots.
 
 See the [storage recipe](./recipes/storage.md) for backend adapters (React Native MMKV, browser extension `chrome.storage`), sign-out purge, and the `unset` sentinel that keeps "nothing stored" distinct from "a legitimately stored null".
 

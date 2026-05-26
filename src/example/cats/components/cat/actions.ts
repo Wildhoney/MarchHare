@@ -2,26 +2,26 @@ import { useActions } from "../../../../library/index.ts";
 import { useRouter } from "react-wayfinder";
 import { Actions, type Data, type Model, type Props } from "./types.ts";
 import { urls } from "../../utils.tsx";
-import { resources } from "./utils.ts";
+import { cat } from "./utils.ts";
 
 export function useCatActions({ index }: Props) {
   const router = useRouter();
 
   const actions = useActions<Model, typeof Actions, Data>(
-    { cat: resources.cat.get() },
+    { cat: cat({ id: 5 }) },
     () => ({ index, router }),
   );
 
   actions.useAction(Actions.Mount, async (context) => {
     const data = await context.actions
-      .resource(resources.cat)
+      .resource(cat({ id: 5 }))
       .exceeds({ minutes: 5 });
     context.actions.produce(({ model }) => void (model.cat = data));
   });
 
   actions.useAction(Actions.Refresh, async (context) => {
     const data = await context.actions
-      .resource(resources.cat)
+      .resource(cat({ id: 5 }))
       .exceeds({ minutes: 5 });
     context.actions.produce(({ model }) => void (model.cat = data));
   });
