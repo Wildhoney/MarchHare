@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Boundary } from "../../library/index.ts";
+import { Boundary } from "march-hare";
 import { useTransactionsActions } from "./actions.ts";
 import { Actions } from "./types.ts";
 import * as styles from "./styles.ts";

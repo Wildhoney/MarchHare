@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
@@ -13,6 +14,9 @@ export default defineConfig({
   ],
   resolve: {
     dedupe: ["react", "react-dom"],
+    alias: {
+      "march-hare": resolve(__dirname, "src/library/index.ts"),
+    },
   },
   test: {
     environment: "happy-dom",

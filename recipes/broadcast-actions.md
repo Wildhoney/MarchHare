@@ -51,7 +51,7 @@ When a component mounts with a `useAction()` handler for a broadcast action, the
 ```tsx
 // Component A dispatches the action
 function ComponentA() {
-  const [, actions] = useActions<Model, typeof Actions>(model);
+  const [, actions] = useActions<Model, Actions>(model);
 
   return (
     <button onClick={() => actions.dispatch(Actions.Counter, 42)}>
@@ -62,7 +62,7 @@ function ComponentA() {
 
 // Component B mounts later and receives the cached value
 function ComponentB() {
-  const actions = useActions<Model, typeof Actions>(model);
+  const actions = useActions<Model, Actions>(model);
 
   // This handler is invoked with 42 when the component mounts
   // (assuming ComponentA dispatched before ComponentB mounted)

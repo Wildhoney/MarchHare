@@ -1,4 +1,4 @@
-import { Action, Lifecycle } from "../../library/index.ts";
+import { Action, Lifecycle } from "march-hare";
 import { BroadcastActions } from "../types.ts";
 
 export type Country = {

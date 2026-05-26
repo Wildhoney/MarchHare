@@ -1,8 +1,9 @@
 import * as React from "react";
+import { Link } from "react-router-dom";
 import Counter from "../counter/index.tsx";
 import Mood from "../mood/index.tsx";
 import Visitor from "../visitor/index.tsx";
-import { Lifecycle, Reason, useActions } from "../../library/index.ts";
+import { Lifecycle, Reason, useActions } from "march-hare";
 import { message } from "antd";
 import * as styles from "./styles.ts";
 import logo from "../assets/logo.png";
@@ -54,6 +55,15 @@ export default function App(): React.ReactElement {
             >
               Documentation
             </a>
+          </div>
+
+          <div className={styles.cta}>
+            <Link to="/cats" className={`${styles.button} secondary`}>
+              Cats demo
+            </Link>
+            <Link to="/transactions" className={`${styles.button} secondary`}>
+              Transactions demo
+            </Link>
           </div>
 
           <div className={styles.install}>

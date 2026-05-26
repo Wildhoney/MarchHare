@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import * as React from "react";
-import { Boundary } from "../../../../library/index.ts";
+import { Boundary } from "march-hare";
 import { Cat } from "./index.tsx";
 
 const fakeCat = {

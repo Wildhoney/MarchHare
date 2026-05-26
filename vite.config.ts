@@ -103,6 +103,11 @@ export default defineConfig(({ mode }) => {
   const isExample = mode === "example";
 
   return {
+    resolve: {
+      alias: {
+        "march-hare": resolve(__dirname, "src/library/index.ts"),
+      },
+    },
     plugins: isExample
       ? [
           react({

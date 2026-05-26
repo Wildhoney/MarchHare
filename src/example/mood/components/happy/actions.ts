@@ -1,4 +1,4 @@
-import { useActions } from "../../../../library/index.ts";
+import { useActions } from "march-hare";
 import { Model, Scope } from "../../types.ts";
 import { Actions } from "./types.ts";
 
@@ -7,7 +7,7 @@ const model: Model = {
 };
 
 export function useHappyActions() {
-  const actions = useActions<Model, typeof Actions>(model);
+  const actions = useActions<Model, Actions>(model);
 
   actions.useAction(Actions.Select, (context, mood) => {
     context.actions.dispatch(Scope.Mood, mood);

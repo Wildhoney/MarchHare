@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen, waitFor, act } from "@testing-library/react";
-import { Boundary } from "../../library/index.ts";
+import { Boundary } from "march-hare";
 import Counter from "./index.tsx";
 
 describe("Counter", () => {

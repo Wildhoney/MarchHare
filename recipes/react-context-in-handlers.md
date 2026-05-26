@@ -23,7 +23,7 @@ import { useActions } from "march-hare";
 type Data = { theme: Theme; user: User };
 
 export function useFormActions() {
-  const actions = useActions<Model, typeof Actions, Data>(model, () => ({
+  const actions = useActions<Model, Actions, Data>(model, () => ({
     theme: use(ThemeContext),
     user: use(UserContext),
   }));

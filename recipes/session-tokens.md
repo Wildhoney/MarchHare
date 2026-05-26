@@ -129,7 +129,7 @@ import { Actions } from "./types";
 import { signIn, signOut } from "./resources";
 
 export function useAuthActions() {
-  const actions = useActions<void, typeof Actions>();
+  const actions = useActions<void, Actions>();
 
   actions.useAction(Actions.SignIn, async (context, credentials) => {
     const result = await context.actions.resource(signIn(credentials));

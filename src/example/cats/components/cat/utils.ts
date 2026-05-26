@@ -1,5 +1,5 @@
 import ky from "ky";
-import { Cache, Resource } from "../../../../library/index.ts";
+import { Cache, Resource } from "march-hare";
 import type { Cat } from "./types.ts";
 
 const cache = Cache({

@@ -47,7 +47,7 @@ Dispatch the multicast action like any other; the scope is read from the action 
 
 ```tsx
 function useScoreActions() {
-  const actions = useActions<Model, typeof Actions>(model);
+  const actions = useActions<Model, Actions>(model);
 
   actions.useAction(Scope.Update, (context, score) => {
     context.actions.produce(({ model }) => void (model.score = score));
@@ -94,7 +94,7 @@ Like broadcast, multicast caches the last dispatched value per scope. Components
 
 ```tsx
 function LateComponent() {
-  const actions = useActions<Model, typeof Actions>(model);
+  const actions = useActions<Model, Actions>(model);
 
   actions.useAction(Scope.Update, (context, value) => {
     console.log("Received cached value:", value);

@@ -1,4 +1,4 @@
-import { Action, Distribution, Lifecycle } from "../../library/index.ts";
+import { Action, Distribution, Lifecycle } from "march-hare";
 
 export type Transaction = {
   id: string;

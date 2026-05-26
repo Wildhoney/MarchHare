@@ -39,7 +39,7 @@ March Hare is an event-driven state management library for React built on the pu
 
 - **Model:** The application state, a plain JavaScript object. Pass `void` for actions-only components with no local state.
 - **Actions:** Typed events that trigger state changes. Created with `Action<Payload>("name")`.
-- **`useActions` hook:** Returns `[model, actions]` tuple with pre-typed methods. Use `useActions<void, typeof Actions>()` when no model is needed.
+- **`useActions` hook:** Returns `[model, actions]` tuple with pre-typed methods. Use `useActions<void, Actions>()` when no model is needed.
 - **`actions.useAction`:** Registers handlers for actions. Receives `context` and `payload`.
 - **`context.actions.produce`:** Immutable state updates via Immer/Immertation. Receives `{ model, inspect }`.
 - **`context.data`:** Reactive external values (props, context) that stay fresh after `await`.
@@ -56,7 +56,7 @@ export class Actions {
 }
 
 export function useNameActions() {
-  const actions = useActions<Model, typeof Actions>({ name: null });
+  const actions = useActions<Model, Actions>({ name: null });
 
   // Simple assignment using With.Update helper
   actions.useAction(Actions.Name, With.Update("name"));
@@ -396,7 +396,7 @@ declare module "march-hare" {
 
 // 3. Read with dot notation, write with context.actions.produce.
 function useSignOutActions() {
-  const actions = useActions<void, typeof Actions>();
+  const actions = useActions<void, Actions>();
 
   actions.useAction(Actions.SignOut, async (context) => {
     context.actions.produce(({ store }) => {
@@ -458,10 +458,9 @@ Pass external values via `useActions` data callback for access after `await`:
 
 ```ts
 function useSearchActions(props: { query: string }) {
-  const actions = useActions<Model, typeof Actions, { query: string }>(
-    model,
-    () => ({ query: props.query }),
-  );
+  const actions = useActions<Model, Actions, { query: string }>(model, () => ({
+    query: props.query,
+  }));
 
   actions.useAction(Actions.Search, async (context) => {
     await fetch("/search");

@@ -1,4 +1,4 @@
-import { Action, Lifecycle } from "../../library/index.ts";
+import { Action, Lifecycle } from "march-hare";
 
 export type User = {
   name: string;

@@ -1,11 +1,11 @@
-import { Operation, useActions } from "../../library/index.ts";
+import { Operation, useActions } from "march-hare";
 import { Actions, type Model } from "./types.ts";
 import { transactions } from "./resources.ts";
 
 const initialModel: Model = { items: [], cursor: null, hasMore: true };
 
 export function useTransactionsActions() {
-  const actions = useActions<Model, typeof Actions>(initialModel);
+  const actions = useActions<Model, Actions>(initialModel);
 
   actions.useAction(Actions.Mount, async (context) => {
     context.actions.produce(

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { withScope } from "../../library/index.ts";
+import { withScope } from "march-hare";
 import Happy from "./components/happy/index.tsx";
 import Sad from "./components/sad/index.tsx";
 import { Scope } from "./types.ts";

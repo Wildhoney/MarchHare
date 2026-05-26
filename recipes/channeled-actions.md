@@ -17,7 +17,7 @@ class Actions {
 }
 
 function UserCard({ userId }: { userId: number }) {
-  const actions = useActions<Model, typeof Actions>(model);
+  const actions = useActions<Model, Actions>(model);
 
   // Only fires when dispatched with matching channel
   actions.useAction(
@@ -133,7 +133,7 @@ class Actions {
 
 // WebSocket connection component
 function UserWebSocket() {
-  const actions = useActions<Model, typeof Actions>(model);
+  const actions = useActions<Model, Actions>(model);
 
   actions.useAction(Actions.Mount, (context) => {
     const ws = new WebSocket("/users/stream");
@@ -154,7 +154,7 @@ function UserWebSocket() {
 
 // Individual user card - only receives its own updates
 function UserCard({ userId }: { userId: number }) {
-  const actions = useActions<Model, typeof Actions>(model);
+  const actions = useActions<Model, Actions>(model);
 
   // Only fires for this specific user's updates
   actions.useAction(

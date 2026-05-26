@@ -10,7 +10,7 @@ class Actions {
 }
 
 // Bare call — M defaults to void
-const actions = useActions<void, typeof Actions>();
+const actions = useActions<void, Actions>();
 
 actions.useAction(Actions.Mount, () => {
   console.log("Mounted!");
@@ -26,7 +26,7 @@ class Actions {
   static Ping = Action("Ping");
 }
 
-const actions = useActions<void, typeof Actions>();
+const actions = useActions<void, Actions>();
 
 actions.useAction(Actions.Ping, () => {
   console.log("Pinged!");
@@ -57,7 +57,7 @@ class Actions {
   static Ping = Action("Ping");
 }
 
-const actions = useActions<void, typeof Actions>();
+const actions = useActions<void, Actions>();
 
 actions.useAction(Actions.Mount, () => {
   console.log("Component mounted");
@@ -74,7 +74,7 @@ If you need access to props or other external values, pass a data callback as th
 
 ```ts
 function useTrackingActions(props: { userId: string }) {
-  const actions = useActions<void, typeof Actions, { userId: string }>(() => ({
+  const actions = useActions<void, Actions, { userId: string }>(() => ({
     userId: props.userId,
   }));
 
@@ -102,7 +102,7 @@ class Actions {
 }
 
 export default function useAnalyticsActions() {
-  const actions = useActions<void, typeof Actions>();
+  const actions = useActions<void, Actions>();
 
   actions.useAction(Actions.Broadcast.UserLoggedIn, (_context, username) => {
     analytics.track("login", { username });

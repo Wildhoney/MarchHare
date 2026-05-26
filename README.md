@@ -60,7 +60,7 @@ export class Actions {
 }
 
 export default function Profile(): React.ReactElement {
-  const [state, actions] = useActions<Model, typeof Actions>(model);
+  const [state, actions] = useActions<Model, Actions>(model);
 
   actions.useAction(Actions.Name, With.Update("name"));
 
@@ -106,10 +106,9 @@ Notice we're using `annotate` which you can read more about in the [Immertation 
 If you need to access external reactive values (like props or `useState` from parent components) that always reflect the latest value even after `await` operations, pass a data callback to `useActions`:
 
 ```tsx
-const actions = useActions<Model, typeof Actions, { query: string }>(
-  model,
-  () => ({ query: props.query }),
-);
+const actions = useActions<Model, Actions, { query: string }>(model, () => ({
+  query: props.query,
+}));
 
 actions.useAction(Actions.Search, async (context) => {
   const results = await context.actions.resource(
@@ -131,7 +130,7 @@ class Actions {
   static Mount = Lifecycle.Mount();
 }
 
-const actions = useActions<void, typeof Actions>();
+const actions = useActions<void, Actions>();
 
 actions.useAction(Actions.Mount, () => {
   console.log("Mounted!");
@@ -148,7 +147,7 @@ export class Actions {
 }
 
 export default function Pinger(): React.ReactElement {
-  const [, actions] = useActions<void, typeof Actions>();
+  const [, actions] = useActions<void, Actions>();
 
   actions.useAction(Actions.Ping, () => {
     console.log("Pinged!");
@@ -237,7 +236,7 @@ You can also render broadcast values declaratively in JSX with `actions.stream`.
 
 ```tsx
 function Dashboard() {
-  const [model, actions] = useActions<Model, typeof Actions>(initialModel);
+  const [model, actions] = useActions<Model, Actions>(initialModel);
 
   return (
     <div>
@@ -276,7 +275,7 @@ import { useActions } from "march-hare";
 import { user, pay } from "./resources";
 
 export function useActions() {
-  const actions = useActions<Model, typeof Actions>({
+  const actions = useActions<Model, Actions>({
     // Sync cache read at the model literal — returns null when nothing is cached.
     user: user(),
     receipt: null,
@@ -377,7 +376,7 @@ export const cat = Resource(
 
 ```ts
 // actions.ts
-const actions = useActions<Model, typeof Actions>({
+const actions = useActions<Model, Actions>({
   // First render reads the Cache automatically.
   cat: cat(),
 });
@@ -484,7 +483,7 @@ declare module "march-hare" {
 </Boundary>;
 
 export function useAuthActions() {
-  const actions = useActions<void, typeof Actions>();
+  const actions = useActions<void, Actions>();
 
   actions.useAction(Actions.SignOut, async (context) => {
     context.actions.produce(({ store }) => {
@@ -521,7 +520,7 @@ export class Actions {
   static ToggleSidebar = Action("ToggleSidebar");
 }
 
-const [model, actions] = useActions<Model, typeof Actions>({
+const [model, actions] = useActions<Model, Actions>({
   paymentDialog: false,
   sidebar: false,
 });

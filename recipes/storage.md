@@ -86,7 +86,7 @@ import { useActions } from "march-hare";
 import { cat } from "./resources";
 
 export function useCatActions() {
-  const actions = useActions<Model, typeof Actions>({
+  const actions = useActions<Model, Actions>({
     // First render reads the Cache automatically — no explicit get.
     cat: cat(),
   });

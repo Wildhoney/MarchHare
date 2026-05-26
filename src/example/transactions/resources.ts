@@ -1,4 +1,4 @@
-import { Resource } from "../../library/index.ts";
+import { Resource } from "march-hare";
 import { fetchTransactions } from "./api.ts";
 import type { TransactionsPage } from "./types.ts";
 

@@ -1,4 +1,4 @@
-import { useActions } from "../../../../library/index.ts";
+import { useActions } from "march-hare";
 import { useRouter } from "react-wayfinder";
 import { Actions, type Data, type Model, type Props } from "./types.ts";
 import { urls } from "../../utils.tsx";
@@ -7,7 +7,7 @@ import { cat } from "./utils.ts";
 export function useCatActions({ index }: Props) {
   const router = useRouter();
 
-  const actions = useActions<Model, typeof Actions, Data>(
+  const actions = useActions<Model, Actions, Data>(
     { cat: cat({ id: 5 }) },
     () => ({ index, router }),
   );
@@ -15,14 +15,12 @@ export function useCatActions({ index }: Props) {
   actions.useAction(Actions.Mount, async (context) => {
     const data = await context.actions
       .resource(cat({ id: 5 }))
-      .exceeds({ minutes: 5 });
     context.actions.produce(({ model }) => void (model.cat = data));
   });
 
   actions.useAction(Actions.Refresh, async (context) => {
     const data = await context.actions
       .resource(cat({ id: 5 }))
-      .exceeds({ minutes: 5 });
     context.actions.produce(({ model }) => void (model.cat = data));
   });
 

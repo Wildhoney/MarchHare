@@ -31,7 +31,7 @@ export class Actions {
 const initial: Model = { visitor: null, history: [], source: null };
 
 export function useVisitorActions() {
-  const actions = useActions<Model, typeof Actions>(initial);
+  const actions = useActions<Model, Actions>(initial);
 
   actions.useAction(Actions.Mount, (context) => {
     const source = new EventSource("/visitors");
@@ -98,7 +98,7 @@ type Model = {
 };
 
 export function useUserStreamActions() {
-  const actions = useActions<Model, typeof Actions>({ source: null });
+  const actions = useActions<Model, Actions>({ source: null });
 
   actions.useAction(Actions.Mount, (context) => {
     const source = new EventSource("/users/stream");

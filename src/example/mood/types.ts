@@ -1,4 +1,4 @@
-import { Action, Distribution } from "../../library/index.ts";
+import { Action, Distribution } from "march-hare";
 
 export enum Mood {
   Happy,

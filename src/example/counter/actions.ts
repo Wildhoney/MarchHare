@@ -1,9 +1,9 @@
-import { useActions } from "../../library/index.ts";
+import { useActions } from "march-hare";
 import { Model, Actions } from "./types.ts";
 import { user } from "./utils.ts";
 
 export function useCounterActions() {
-  const actions = useActions<Model, typeof Actions>({
+  const actions = useActions<Model, Actions>({
     user: user(),
   });
 

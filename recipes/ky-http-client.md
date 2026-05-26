@@ -25,7 +25,7 @@ const model: Model = {
 };
 
 export function useUserActions() {
-  const actions = useActions<Model, typeof Actions>(model);
+  const actions = useActions<Model, Actions>(model);
 
   actions.useAction(Actions.FetchUser, async (context, userId) => {
     context.actions.produce(
@@ -109,7 +109,7 @@ export function useUserActions(authToken: string) {
     timeout: 30_000,
   });
 
-  const actions = useActions<Model, typeof Actions, Data>(model, () => ({
+  const actions = useActions<Model, Actions, Data>(model, () => ({
     api,
   }));
 
