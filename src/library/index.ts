@@ -19,4 +19,13 @@ export type { Stored, Unset } from "./utils/index.ts";
 
 export type { Box } from "immertation";
 export type { Fault } from "./error/index.ts";
-export type { Pk, Task, Tasks, Handlers } from "./types/index.ts";
+export type {
+  Pk,
+  Task,
+  Tasks,
+  Handlers,
+  Handler,
+  LeafActions,
+  Dispatchable,
+  Subscribable,
+} from "./types/index.ts";

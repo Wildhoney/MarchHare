@@ -3,7 +3,7 @@ import { Model, Actions } from "./types.ts";
 import { user } from "./utils.ts";
 
 export function useCounterActions() {
-  const actions = useActions<Model, Actions>({
+  const actions = useActions<Model, typeof Actions>({
     user: user(),
   });
 

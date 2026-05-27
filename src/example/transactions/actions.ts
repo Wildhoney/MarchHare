@@ -5,7 +5,7 @@ import { transactions } from "./resources.ts";
 const initialModel: Model = { items: [], cursor: null, hasMore: true };
 
 export function useTransactionsActions() {
-  const actions = useActions<Model, Actions>(initialModel);
+  const actions = useActions<Model, typeof Actions>(initialModel);
 
   actions.useAction(Actions.Mount, async (context) => {
     context.actions.produce(

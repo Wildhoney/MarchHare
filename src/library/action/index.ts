@@ -24,37 +24,46 @@ export {
 type ActionFactory = {
   /**
    * Creates a new unicast action with the given name.
+   *
+   * `K` is the literal type of the action name and is captured as a phantom
+   * brand so `Action("A")` and `Action("B")` produce structurally-distinct
+   * types. **Note:** when the caller supplies any explicit generic
+   * (`Action<P>("Name")`), TypeScript fills `K` from its default and the
+   * literal is lost. The Name brand still helps for `Action("Name")` calls
+   * (e.g. lifecycle / no-payload actions) which is the most common source of
+   * foreign-class collisions.
+   *
    * @template P The payload type for the action.
-   * @template C The channel type for channeled dispatches (defaults to never).
-   * @param name The action name, used for debugging purposes.
-   * @returns A typed action object.
+   * @template C The channel type for channeled dispatches.
+   * @template K The literal type of the action name (inferred when no other
+   *   generics are supplied; defaults to `string` otherwise).
    */
-  <P = never, C extends Filter = never>(name: string): HandlerPayload<P, C>;
+  <P = never, C extends Filter = never, K extends string = string>(
+    name: K,
+  ): HandlerPayload<P, C, K>;
 
   /**
    * Creates a new action with the specified distribution mode.
-   * @template P The payload type for the action.
-   * @template C The channel type for channeled dispatches (defaults to never).
-   * @param name The action name, used for debugging purposes.
-   * @param distribution The distribution mode (Unicast, Broadcast, or Multicast).
-   * @returns A typed action object (BroadcastPayload if Broadcast, MulticastPayload if Multicast).
    */
-  <P = never, C extends Filter = never>(
-    name: string,
+  <P = never, C extends Filter = never, K extends string = string>(
+    name: K,
     distribution: Distribution.Broadcast,
-  ): BroadcastPayload<P, C>;
-  <P = never, C extends Filter = never>(
-    name: string,
+  ): BroadcastPayload<P, C, K>;
+  <P = never, C extends Filter = never, K extends string = string>(
+    name: K,
     distribution: Distribution.Multicast,
-  ): MulticastPayload<P, C>;
-  <P = never, C extends Filter = never>(
-    name: string,
+  ): MulticastPayload<P, C, K>;
+  <P = never, C extends Filter = never, K extends string = string>(
+    name: K,
     distribution: Distribution.Unicast,
-  ): HandlerPayload<P, C>;
-  <P = never, C extends Filter = never>(
-    name: string,
+  ): HandlerPayload<P, C, K>;
+  <P = never, C extends Filter = never, K extends string = string>(
+    name: K,
     distribution: Distribution,
-  ): HandlerPayload<P, C> | BroadcastPayload<P, C> | MulticastPayload<P, C>;
+  ):
+    | HandlerPayload<P, C, K>
+    | BroadcastPayload<P, C, K>
+    | MulticastPayload<P, C, K>;
 };
 
 /**
@@ -114,6 +123,7 @@ export const Action = <ActionFactory>(<unknown>(<
       [Brand.Action]: symbol,
       [Brand.Payload]: <P>undefined,
       [Brand.Channel]: channel,
+      [Brand.Name]: name,
       channel,
     };
   };
@@ -128,6 +138,8 @@ export const Action = <ActionFactory>(<unknown>(<
     value: undefined,
     enumerable: false,
   });
+  // eslint-disable-next-line fp/no-mutating-methods
+  Object.defineProperty(action, Brand.Name, { value: name, enumerable: false });
   if (distribution === Distribution.Broadcast) {
     // eslint-disable-next-line fp/no-mutating-methods
     Object.defineProperty(action, Brand.Broadcast, {

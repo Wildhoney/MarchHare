@@ -10,7 +10,7 @@ const model: Model = {
 };
 
 export function useVisitorActions() {
-  const actions = useActions<Model, Actions>(model);
+  const actions = useActions<Model, typeof Actions>(model);
 
   actions.useAction(Actions.Mount, (context) => {
     const source = new EventSource("/visitors");

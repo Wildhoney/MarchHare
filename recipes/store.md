@@ -53,7 +53,7 @@ import { useStore } from "march-hare";
 
 function useAuthActions() {
   const store = useStore();
-  const actions = useActions<void, Actions>();
+  const actions = useActions<void, typeof Actions>();
 
   actions.useAction(Actions.Refresh, async (context) => {
     if (context.store.operating === "signing-out") return;
@@ -163,7 +163,7 @@ Before Store, the canonical pattern for ambient values like the session token wa
 
 ```ts
 const session = useSessionContext();
-const actions = useActions<Model, Actions, { session: Session | null }>(
+const actions = useActions<Model, typeof Actions, { session: Session | null }>(
   model,
   () => ({ session }),
 );

@@ -10,7 +10,7 @@ import { useActions } from "march-hare";
 type Data = { filters: string[] };
 
 function useSearchActions(props: Props) {
-  const actions = useActions<Model, Actions, Data>(model, () => ({
+  const actions = useActions<Model, typeof Actions, Data>(model, () => ({
     filters: props.filters,
   }));
 

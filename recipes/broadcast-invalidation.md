@@ -7,7 +7,7 @@ When a domain event occurs (e.g. user signs out, permissions change, locale swit
 A component fetches user data on mount and broadcasts it:
 
 ```ts
-async function fetchUser(context: HandlerContext<Model, Actions, Data>) {
+async function fetchUser(context: HandlerContext<Model, typeof Actions, Data>) {
   const user = await api.fetchUser(context.data.userId, {
     signal: context.task.controller.signal,
   });
@@ -20,7 +20,7 @@ actions.useAction(Actions.Mount, fetchUser);
 Another component fetches settings:
 
 ```ts
-async function fetchSettings(context: HandlerContext<Model, Actions>) {
+async function fetchSettings(context: HandlerContext<Model, typeof Actions>) {
   const settings = await api.fetchSettings({
     signal: context.task.controller.signal,
   });
@@ -54,7 +54,7 @@ export class Actions {
   static Broadcast = BroadcastActions;
 }
 
-async function fetchUser(context: HandlerContext<Model, Actions, Data>) {
+async function fetchUser(context: HandlerContext<Model, typeof Actions, Data>) {
   const user = await api.fetchUser(context.data.userId, {
     signal: context.task.controller.signal,
   });
@@ -72,7 +72,7 @@ export class Actions {
   static Broadcast = BroadcastActions;
 }
 
-async function fetchSettings(context: HandlerContext<Model, Actions>) {
+async function fetchSettings(context: HandlerContext<Model, typeof Actions>) {
   const settings = await api.fetchSettings({
     signal: context.task.controller.signal,
   });

@@ -62,6 +62,13 @@ export class Brand {
   static readonly Action = Symbol("march-hare.brand/Action");
   /** Identifies channeled actions (result of calling Action(channel)) */
   static readonly Channel = Symbol("march-hare.brand/Channel");
+  /**
+   * Phantom brand carrying the action's literal name. Used purely at the
+   * type level to make `Action("X")` and `Action("Y")` produce
+   * structurally-distinct types so `dispatch`/`useAction` can reject
+   * symbols imported from a class outside `AC`.
+   */
+  static readonly Name = Symbol("march-hare.brand/Name");
 }
 
 /**
@@ -71,15 +78,18 @@ export class Brand {
  *
  * @internal
  */
-function createLifecycleAction<P = never, C extends Filter = never>(
-  name: string,
-): HandlerPayload<P, C> {
+function createLifecycleAction<
+  P = never,
+  C extends Filter = never,
+  K extends string = string,
+>(name: K): HandlerPayload<P, C, K> {
   const symbol = Symbol(`march-hare.action.lifecycle/${name}`);
-  const action = function (channel: C): ChanneledAction<P, C> {
+  const action = function (channel: C): ChanneledAction<P, C, K> {
     return {
       [Brand.Action]: symbol,
       [Brand.Payload]: <P>undefined,
       [Brand.Channel]: channel,
+      [Brand.Name]: name,
       channel,
     };
   };
@@ -93,7 +103,9 @@ function createLifecycleAction<P = never, C extends Filter = never>(
     value: undefined,
     enumerable: false,
   });
-  return <HandlerPayload<P, C>>action;
+  // eslint-disable-next-line fp/no-mutating-methods
+  Object.defineProperty(action, Brand.Name, { value: name, enumerable: false });
+  return <HandlerPayload<P, C, K>>action;
 }
 
 /**
@@ -131,23 +143,25 @@ export const FaultSymbol: unique symbol = <typeof FaultSymbol>(
  */
 export class Lifecycle {
   /** Creates a Mount lifecycle action. Triggered once on component mount (`useLayoutEffect`). */
-  static Mount(): HandlerPayload<never> {
-    return createLifecycleAction("Mount");
+  static Mount(): HandlerPayload<never, never, "Mount"> {
+    return createLifecycleAction<never, never, "Mount">("Mount");
   }
 
   /** Creates an Unmount lifecycle action. Triggered when the component unmounts. */
-  static Unmount(): HandlerPayload<never> {
-    return createLifecycleAction("Unmount");
+  static Unmount(): HandlerPayload<never, never, "Unmount"> {
+    return createLifecycleAction<never, never, "Unmount">("Unmount");
   }
 
   /** Creates an Error lifecycle action. Triggered when an action throws. Receives `Fault` as payload. */
-  static Error(): HandlerPayload<Fault> {
-    return createLifecycleAction<Fault>("Error");
+  static Error(): HandlerPayload<Fault, never, "Error"> {
+    return createLifecycleAction<Fault, never, "Error">("Error");
   }
 
   /** Creates an Update lifecycle action. Triggered when `context.data` changes (not on initial mount). */
-  static Update(): HandlerPayload<Record<string, unknown>> {
-    return createLifecycleAction<Record<string, unknown>>("Update");
+  static Update(): HandlerPayload<Record<string, unknown>, never, "Update"> {
+    return createLifecycleAction<Record<string, unknown>, never, "Update">(
+      "Update",
+    );
   }
 
   /**
@@ -169,7 +183,7 @@ export class Lifecycle {
    * });
    * ```
    */
-  static Fault: BroadcastPayload<Fault> = (() => {
+  static Fault: BroadcastPayload<Fault, never, "Fault"> = (() => {
     const action: Record<symbol, unknown> = {};
     // eslint-disable-next-line fp/no-mutating-methods
     Object.defineProperty(action, Brand.Action, {
@@ -186,7 +200,12 @@ export class Lifecycle {
       value: true,
       enumerable: false,
     });
-    return <BroadcastPayload<Fault>>(<unknown>action);
+    // eslint-disable-next-line fp/no-mutating-methods
+    Object.defineProperty(action, Brand.Name, {
+      value: "Fault",
+      enumerable: false,
+    });
+    return <BroadcastPayload<Fault, never, "Fault">>(<unknown>action);
   })();
 }
 
@@ -289,14 +308,19 @@ export type Model<M = Record<string, unknown>> = M;
  * dispatch(UserUpdated({ UserId: 5 }), user);     // channeled dispatch
  * ```
  */
-export type HandlerPayload<P = unknown, C extends Filter = never> = {
+export type HandlerPayload<
+  P = unknown,
+  C extends Filter = never,
+  Name extends string = string,
+> = {
   readonly [Brand.Action]: symbol;
   readonly [Brand.Payload]: P;
+  readonly [Brand.Name]: Name;
   readonly [Brand.Broadcast]?: boolean;
 } & ([C] extends [never]
   ? unknown
   : {
-      (channel: C): ChanneledAction<P, C>;
+      (channel: C): ChanneledAction<P, C, Name>;
     });
 
 /**
@@ -314,10 +338,15 @@ export type HandlerPayload<P = unknown, C extends Filter = never> = {
  * dispatch(UserUpdated({ UserId: 5 }), user);
  * ```
  */
-export type ChanneledAction<P = unknown, C = unknown> = {
+export type ChanneledAction<
+  P = unknown,
+  C = unknown,
+  Name extends string = string,
+> = {
   readonly [Brand.Action]: symbol;
   readonly [Brand.Payload]: P;
   readonly [Brand.Channel]: C;
+  readonly [Brand.Name]: Name;
   readonly channel: C;
 };
 
@@ -347,7 +376,8 @@ export type ChanneledAction<P = unknown, C = unknown> = {
 export type BroadcastPayload<
   P = unknown,
   C extends Filter = never,
-> = HandlerPayload<P, C> & {
+  Name extends string = string,
+> = HandlerPayload<P, C, Name> & {
   readonly [Brand.Broadcast]: true;
 };
 
@@ -397,7 +427,8 @@ export type BroadcastPayload<
 export type MulticastPayload<
   P = unknown,
   C extends Filter = never,
-> = HandlerPayload<P, C> & {
+  Name extends string = string,
+> = HandlerPayload<P, C, Name> & {
   readonly [Brand.Multicast]: true;
 };
 
@@ -514,7 +545,7 @@ export type Result = {
 
 export type HandlerContext<
   M extends Model | void,
-  _AC extends Actions | void,
+  AC extends Actions | void,
   D extends Props = Props,
 > = {
   readonly model: Readonly<M>;
@@ -642,7 +673,11 @@ export type HandlerContext<
     >(
       ƒ: F & AssertSync<F>,
     ): void;
-    dispatch(action: ActionOrChanneled, payload?: unknown): Promise<void>;
+    dispatch(action: NoPayloadActions<Dispatchable<AC>>): Promise<void>;
+    dispatch<A extends WithPayloadActions<Dispatchable<AC>>>(
+      action: A,
+      payload: Payload<A>,
+    ): Promise<void>;
     annotate<T>(value: T, operation?: Operation): T;
     /**
      * Fetches a {@link Resource} with the abort controller and Store
@@ -795,6 +830,67 @@ export type Handler<
 type OwnKeys<AC> = Exclude<keyof AC & string, "prototype">;
 
 /**
+ * Recursively flattens an actions class into the union of its leaf action
+ * types. A "leaf" is any property whose own string keys are empty &mdash; the
+ * branded `HandlerPayload` / `BroadcastPayload` / `MulticastPayload` values
+ * produced by `Action(...)` and `Lifecycle.*()`. Nested namespace classes
+ * (e.g. `static Broadcast = BroadcastActions`) are descended into.
+ *
+ * Used to constrain `dispatch` and `useAction` so that only actions owned by
+ * the component's `AC` (plus the global `Lifecycle.Fault`) can be referenced.
+ */
+export type LeafActions<AC> = AC extends void
+  ? never
+  : {
+      [K in OwnKeys<AC>]: OwnKeys<AC[K]> extends never
+        ? AC[K]
+        : LeafActions<AC[K]>;
+    }[OwnKeys<AC>];
+
+/**
+ * Maps each action in a union to its channeled-call variant, when one exists.
+ * Distributes over unions so a mixed bag of leaf actions produces the union
+ * of their `ChanneledAction<P, C>` results.
+ */
+export type ChanneledOf<A> =
+  A extends HandlerPayload<infer P, infer C>
+    ? [C] extends [never]
+      ? never
+      : ChanneledAction<P, C>
+    : never;
+
+/**
+ * Everything `dispatch` accepts for a given `AC`: leaf actions on the class
+ * and their channeled-call variants. The shared `Lifecycle.Fault` broadcast
+ * is excluded — it's library-internal and not user-dispatchable.
+ */
+export type Dispatchable<AC> = LeafActions<AC> | ChanneledOf<LeafActions<AC>>;
+
+/**
+ * Everything `useAction` will subscribe to for a given `AC`: same as
+ * `Dispatchable<AC>` plus the shared `Lifecycle.Fault` broadcast which lives
+ * outside `AC` but is subscribable by any component.
+ */
+export type Subscribable<AC> = Dispatchable<AC> | typeof Lifecycle.Fault;
+
+/**
+ * Subset of a union of actions whose payload type is `never`. Used to split
+ * `dispatch`/`useAction` into a no-payload and a with-payload overload so
+ * TypeScript reports a clear "no overload matches" error instead of widening
+ * the inferred action type when constraints don't match.
+ */
+export type NoPayloadActions<U> = Extract<
+  U,
+  { readonly [Brand.Payload]: never }
+>;
+
+/** Subset of a union of actions whose payload type is non-`never`. */
+export type WithPayloadActions<U> = Exclude<
+  U,
+  { readonly [Brand.Payload]: never }
+>;
+
+/**
  * Recursive mapped type for action handlers that mirrors the action class hierarchy.
  *
  * For leaf actions (values with no own string keys, i.e. `HandlerPayload`), produces
@@ -857,12 +953,10 @@ export type UseActions<
      * their scope from the action declaration, so no extra options are
      * required at the call site.
      */
-    dispatch<P>(action: HandlerPayload<P>, payload?: P): Promise<void>;
-    dispatch<P>(action: BroadcastPayload<P>, payload?: P): Promise<void>;
-    dispatch<P>(action: MulticastPayload<P>, payload?: P): Promise<void>;
-    dispatch<P, C extends Filter>(
-      action: ChanneledAction<P, C>,
-      payload?: P,
+    dispatch(action: NoPayloadActions<Dispatchable<AC>>): Promise<void>;
+    dispatch<A extends WithPayloadActions<Dispatchable<AC>>>(
+      action: A,
+      payload: Payload<A>,
     ): Promise<void>;
     inspect: Inspect<M>;
     /**
@@ -919,11 +1013,17 @@ export type UseActions<
    * });
    * ```
    */
-  useAction<A extends ActionId | HandlerPayload | ChanneledAction>(
+  useAction(
+    action: NoPayloadActions<Subscribable<AC>>,
+    handler: (
+      context: HandlerContext<M, AC, D>,
+    ) => void | Promise<void> | AsyncGenerator | Generator,
+  ): void;
+  useAction<A extends WithPayloadActions<Subscribable<AC>>>(
     action: A,
     handler: (
       context: HandlerContext<M, AC, D>,
-      ...args: [Payload<A>] extends [never] ? [] : [payload: Payload<A>]
+      payload: Payload<A>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void;
 };

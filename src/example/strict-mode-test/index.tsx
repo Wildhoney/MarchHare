@@ -22,7 +22,7 @@ function StrictModeFixture(): React.ReactElement {
   const handlerCountRef = React.useRef(0);
   const [, forceRender] = React.useState(0);
 
-  const result = useActions<Model, Actions>(model);
+  const result = useActions<Model, typeof Actions>(model);
 
   result.useAction(Actions.Mount, () => {
     mountCountRef.current++;

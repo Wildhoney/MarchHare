@@ -7,7 +7,7 @@ const model: Model = {
 };
 
 export function useSadActions() {
-  const actions = useActions<Model, Actions>(model);
+  const actions = useActions<Model, typeof Actions>(model);
 
   actions.useAction(Actions.Select, (context, mood) => {
     context.actions.dispatch(Scope.Mood, mood);

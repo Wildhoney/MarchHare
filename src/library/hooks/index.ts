@@ -20,7 +20,6 @@ import {
   Phase,
   Model,
   HandlerPayload,
-  Payload,
   Props,
   Actions,
   ActionId,
@@ -491,8 +490,7 @@ export function useActions<
   });
 
   const result = React.useMemo(
-    () =>
-      <UseActions<M, A, D>>[
+    () => <UseActions<M, A, D>>(<unknown>[
         model,
         {
           dispatch(
@@ -528,23 +526,24 @@ export function useActions<
             });
           },
         },
-      ],
+      ]),
     [model, unicast],
   );
 
-  (<UseActions<M, A, D>>result).useAction = <
-    Action extends ActionId | HandlerPayload | ChanneledAction,
-  >(
-    action: Action,
-    handler: (
-      context: HandlerContext<M, A, D>,
-      ...args: [Payload<Action>] extends [never]
-        ? []
-        : [payload: Payload<Action>]
-    ) => void | Promise<void> | AsyncGenerator | Generator,
+  // The public `useAction` signature constrains the action argument to
+  // `Subscribable<AC>` (leaf actions on `AC` plus `Lifecycle.Fault`) split
+  // into no-payload / with-payload overloads. The runtime is AC-agnostic,
+  // so the impl is typed against the loose `ActionOrChanneled` union and
+  // cast back to the strict public type.
+  const useActionImpl = (
+    action: ActionId | HandlerPayload | ChanneledAction,
+    handler: Handler<M, A, D>,
   ): void => {
-    useRegisterHandler<M, A, D>(registry, action, <Handler<M, A, D>>handler);
+    useRegisterHandler<M, A, D>(registry, action, handler);
   };
+  (<UseActions<M, A, D>>result).useAction = <UseActions<M, A, D>["useAction"]>(
+    (<unknown>useActionImpl)
+  );
 
   return <UseActions<M, A, D>>result;
 }

@@ -34,7 +34,7 @@ export const handleSetAge: Handler<Model, typeof Actions, "SetAge"> = (
 
 // Use in component
 export default function useUserActions() {
-  const actions = useActions<Model, Actions>(model);
+  const actions = useActions<Model, typeof Actions>(model);
   actions.useAction(Actions.SetName, handleSetName);
   actions.useAction(Actions.SetAge, handleSetAge);
   return actions;
@@ -56,7 +56,7 @@ For most cases, inline handlers with full type inference are simpler:
 
 ```tsx
 export default function useUserActions() {
-  const actions = useActions<Model, Actions>(model);
+  const actions = useActions<Model, typeof Actions>(model);
 
   // Types are fully inferred - no explicit typing needed
   actions.useAction(Actions.SetName, (context, name) => {

@@ -17,7 +17,7 @@ export class Actions {
 }
 
 export function useMyActions() {
-  const actions = useActions<Model, Actions>(model);
+  const actions = useActions<Model, typeof Actions>(model);
 
   actions.useAction(Actions.Mount, (context) => {
     // Setup logic when component mounts
