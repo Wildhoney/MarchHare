@@ -40,6 +40,29 @@ export type BrandedMulticast = {
 export type BrandedObject = { readonly [x: symbol]: unknown };
 
 /**
+ * Recursive readonly. Locks every nested property so that read-only
+ * projections on `context` (model, data, store) reject direct assignment
+ * &mdash; mutation must go through `context.actions.produce(...)`.
+ *
+ * Function types pass through untouched so method calls (e.g.
+ * `AbortController#abort`) remain callable. Built-in mutable containers
+ * are mapped to their readonly counterparts.
+ *
+ * @internal
+ */
+export type DeepReadonly<T> = T extends (...args: never) => unknown
+  ? T
+  : T extends ReadonlyArray<infer U>
+    ? ReadonlyArray<DeepReadonly<U>>
+    : T extends ReadonlyMap<infer K, infer V>
+      ? ReadonlyMap<DeepReadonly<K>, DeepReadonly<V>>
+      : T extends ReadonlySet<infer U>
+        ? ReadonlySet<DeepReadonly<U>>
+        : T extends object
+          ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
+          : T;
+
+/**
  * Union type representing any valid action that can be passed to action utilities.
  * This includes raw ActionIds (symbol/string), and any branded object.
  */
@@ -548,7 +571,7 @@ export type HandlerContext<
   AC extends Actions | void,
   D extends Props = Props,
 > = {
-  readonly model: Readonly<M>;
+  readonly model: DeepReadonly<M>;
   /**
    * The current lifecycle phase of the component.
    * Useful for determining if the handler was called during mount (e.g., from a cached
@@ -604,7 +627,7 @@ export type HandlerContext<
    * });
    * ```
    */
-  readonly data: D;
+  readonly data: DeepReadonly<D>;
   /**
    * Set of all running tasks across all components in the context.
    * Tasks are ordered by creation time (oldest first).
@@ -662,13 +685,13 @@ export type HandlerContext<
    * });
    * ```
    */
-  readonly store: Store;
+  readonly store: DeepReadonly<Store>;
   readonly actions: {
     produce<
       F extends (draft: {
         model: M;
-        readonly inspect: Readonly<Inspect<M>>;
         store: Store;
+        readonly inspect: Readonly<Inspect<M>>;
       }) => void,
     >(
       ƒ: F & AssertSync<F>,

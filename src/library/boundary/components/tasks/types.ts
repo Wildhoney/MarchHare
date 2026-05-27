@@ -29,9 +29,9 @@ export type ActionId = symbol | string;
  * ```
  */
 export type Task<P = unknown> = {
-  controller: AbortController;
-  action: ActionId;
-  payload: P;
+  readonly controller: AbortController;
+  readonly action: ActionId;
+  readonly payload: P;
 };
 
 /**

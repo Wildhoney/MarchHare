@@ -46,5 +46,6 @@ export interface Store {}
 
 export function Store({ initial, children }: Props): React.ReactNode {
   const ref = React.useRef<Store>(initial);
+
   return <Context.Provider value={ref}>{children}</Context.Provider>;
 }
