@@ -131,9 +131,20 @@ export default defineConfig(({ mode }) => {
           visualizer(),
           ssePlugin(),
           dts({
-            include: ["src/library"],
+            tsconfigPath: "tsconfig.build.json",
             outDir: "dist",
             entryRoot: "src/library",
+            beforeWriteFile(filePath, content) {
+              // Strip TypeScript source extensions from re-export specifiers
+              // so consumers don't need `allowImportingTsExtensions`.
+              return {
+                filePath,
+                content: content.replace(
+                  /(from\s+['"])(\.{1,2}\/[^'"]+?)\.tsx?(['"])/g,
+                  "$1$2$3",
+                ),
+              };
+            },
           }),
         ],
     build: isExample
