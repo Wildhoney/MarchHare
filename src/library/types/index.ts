@@ -143,6 +143,17 @@ export const FaultSymbol: unique symbol = <typeof FaultSymbol>(
 );
 
 /**
+ * Internal symbol for the global `Lifecycle.Store` broadcast. The store
+ * mutation path in `useActions` fires this symbol whenever a
+ * `produce({ store })` call changes the slot reference.
+ *
+ * @internal
+ */
+export const StoreSymbol: unique symbol = <typeof StoreSymbol>(
+  Symbol(describe.broadcast("Store"))
+);
+
+/**
  * Factory functions for lifecycle actions.
  *
  * Each call returns a **unique** action symbol so that each component can
@@ -161,8 +172,10 @@ export const FaultSymbol: unique symbol = <typeof FaultSymbol>(
  * }
  * ```
  *
- * `Lifecycle.Fault` is a singleton broadcast (not a factory). All components
- * subscribe to the same shared symbol to receive global fault notifications.
+ * `Lifecycle.Fault` and `Lifecycle.Store` are singleton broadcasts (not
+ * factories). All components subscribe to the same shared symbol &mdash;
+ * `Fault` delivers global fault notifications, `Store` delivers per-`Boundary`
+ * store-change notifications.
  */
 export class Lifecycle {
   /** Creates a Mount lifecycle action. Triggered once on component mount (`useLayoutEffect`). */
@@ -229,6 +242,55 @@ export class Lifecycle {
       enumerable: false,
     });
     return <BroadcastPayload<Fault, never, "Fault">>(<unknown>action);
+  })();
+
+  /**
+   * Global store-change broadcast. Receives the latest {@link Store}
+   * snapshot whenever a `context.actions.produce(({ store }) => ...)` call
+   * mutates the slot. Subscribe via
+   * `actions.useAction(Lifecycle.Store, handler)` &mdash; or render against
+   * it directly with `actions.stream(Lifecycle.Store, (store) => ...)`.
+   *
+   * Like `Lifecycle.Fault`, this is a singleton broadcast (not a factory):
+   * every subscriber points at the same shared symbol. The latest value is
+   * cached on the broadcast emitter so that late-mounting handlers and
+   * streams receive the current store on mount.
+   *
+   * @example
+   * ```tsx
+   * actions.useAction(Lifecycle.Store, (context, store) => {
+   *   console.log("store changed", store);
+   * });
+   *
+   * // In JSX:
+   * {actions.stream(Lifecycle.Store, (store) => (
+   *   <span>{store.locale}</span>
+   * ))}
+   * ```
+   */
+  static Store: BroadcastPayload<Store, never, "Store"> = (() => {
+    const action: Record<symbol, unknown> = {};
+    // eslint-disable-next-line fp/no-mutating-methods
+    Object.defineProperty(action, Brand.Action, {
+      value: StoreSymbol,
+      enumerable: false,
+    });
+    // eslint-disable-next-line fp/no-mutating-methods
+    Object.defineProperty(action, Brand.Payload, {
+      value: undefined,
+      enumerable: false,
+    });
+    // eslint-disable-next-line fp/no-mutating-methods
+    Object.defineProperty(action, Brand.Broadcast, {
+      value: true,
+      enumerable: false,
+    });
+    // eslint-disable-next-line fp/no-mutating-methods
+    Object.defineProperty(action, Brand.Name, {
+      value: "Store",
+      enumerable: false,
+    });
+    return <BroadcastPayload<Store, never, "Store">>(<unknown>action);
   })();
 }
 
@@ -860,7 +922,8 @@ type OwnKeys<AC> = Exclude<keyof AC & string, "prototype">;
  * (e.g. `static Broadcast = BroadcastActions`) are descended into.
  *
  * Used to constrain `dispatch` and `useAction` so that only actions owned by
- * the component's `AC` (plus the global `Lifecycle.Fault`) can be referenced.
+ * the component's `AC` (plus the global `Lifecycle.Fault` /
+ * `Lifecycle.Store`) can be referenced.
  */
 export type LeafActions<AC> = AC extends void
   ? never
@@ -891,10 +954,13 @@ export type Dispatchable<AC> = LeafActions<AC> | ChanneledOf<LeafActions<AC>>;
 
 /**
  * Everything `useAction` will subscribe to for a given `AC`: same as
- * `Dispatchable<AC>` plus the shared `Lifecycle.Fault` broadcast which lives
- * outside `AC` but is subscribable by any component.
+ * `Dispatchable<AC>` plus the shared `Lifecycle.Fault` and `Lifecycle.Store`
+ * broadcasts which live outside `AC` but are subscribable by any component.
  */
-export type Subscribable<AC> = Dispatchable<AC> | typeof Lifecycle.Fault;
+export type Subscribable<AC> =
+  | Dispatchable<AC>
+  | typeof Lifecycle.Fault
+  | typeof Lifecycle.Store;
 
 /**
  * Subset of a union of actions whose payload type is `never`. Used to split
@@ -1010,6 +1076,18 @@ export type UseActions<
     ): React.ReactNode;
   },
 ] & {
+  /**
+   * Dispatches an action with an optional payload &mdash; same as
+   * `result[1].dispatch`, exposed on the tuple itself so call sites that
+   * already have `actions` in scope can write `actions.dispatch(...)`
+   * without indexing into `actions[1]`.
+   */
+  dispatch(action: NoPayloadActions<Dispatchable<AC>>): Promise<void>;
+  dispatch<A extends WithPayloadActions<Dispatchable<AC>>>(
+    action: A,
+    payload: Payload<A>,
+  ): Promise<void>;
+
   /**
    * Registers an action handler with the current scope.
    * Types are pre-baked from the useActions call, so no type parameter is needed.

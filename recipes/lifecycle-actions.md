@@ -57,3 +57,23 @@ actions.useAction(Lifecycle.Fault, (_context, fault) => {
 ```
 
 It does not need to be assigned as a static action property &ndash; reference it directly. See [error-handling.md](./error-handling.md) for the full contract.
+
+## `Lifecycle.Store` (global broadcast)
+
+`Lifecycle.Store` is a **singleton broadcast** &ndash; same shape as `Lifecycle.Fault`. It fires whenever a `context.actions.produce(({ store }) => ...)` call mutates the Store, delivering the full latest snapshot to every subscriber in the surrounding `<Boundary>`. The initial Store passed to `<Boundary store={...}>` seeds the broadcast cache, so late-mounting subscribers and `stream(...)` consumers see the current value on mount.
+
+```ts
+actions.useAction(Lifecycle.Store, (_context, store) => {
+  console.log("store changed", store);
+});
+```
+
+Render directly against the store in JSX with `stream`:
+
+```tsx
+{
+  actions.stream(Lifecycle.Store, (store) => <span>{store.locale}</span>);
+}
+```
+
+Reference it directly &ndash; no need to assign it as a static action property. The handler does **not** fire when a `produce` call mutates only the model; the slot reference is checked after each `produce` and the broadcast is emitted only when it changes. See [store.md](./store.md) for full Store semantics.

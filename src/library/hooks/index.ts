@@ -31,6 +31,7 @@ import {
   ActionOrChanneled,
   AnyAction,
   FaultSymbol,
+  StoreSymbol,
 } from "../types/index.ts";
 
 import { getReason, getError } from "../error/utils.ts";
@@ -171,6 +172,7 @@ export function useActions<
             }) => void,
           ) {
             if (controller.signal.aborted) return;
+            const slotBefore = slot.current;
             const process = state.current.produce((draft) => {
               slot.current = produceImmer(slot.current, (storeDraft) => {
                 f({
@@ -183,6 +185,9 @@ export function useActions<
               });
             });
             setModel(<M>(<unknown>state.current.model));
+            if (slot.current !== slotBefore) {
+              broadcast.emit(StoreSymbol, slot.current);
+            }
             result.processes.add(process);
             if (hydration.current) {
               result.processes.add(hydration.current);
@@ -543,6 +548,9 @@ export function useActions<
   };
   (<UseActions<M, A, D>>result).useAction = <UseActions<M, A, D>["useAction"]>(
     (<unknown>useActionImpl)
+  );
+  (<UseActions<M, A, D>>result).dispatch = <UseActions<M, A, D>["dispatch"]>(
+    (<unknown>result[1].dispatch)
   );
 
   return <UseActions<M, A, D>>result;

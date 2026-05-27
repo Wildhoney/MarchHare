@@ -375,7 +375,7 @@ Declare the shape once via module augmentation; supply the initial value via the
 - `context.store` &mdash; same Proxy inside `useActions` handlers.
 - The `store` field on every `Resource` fetcher's args object &mdash; a snapshot per fetcher call.
 
-Store is **not** reactive &mdash; mutating it does not re-render. Drive view state through the model; use the Store for cross-handler coordination.
+Direct `useStore()` reads are **not** reactive &mdash; mutating the Store does not re-render components that called `useStore()`. When the view side needs to react to Store changes, subscribe to the global `Lifecycle.Store` broadcast via `actions.useAction(Lifecycle.Store, ...)` or render against it with `actions.stream(Lifecycle.Store, (store) => ...)`. Use plain dot reads for the _handler_ side; reach for `Lifecycle.Store` for the _view_ side.
 
 ```ts
 import { useActions, Boundary, Action, Resource } from "march-hare";

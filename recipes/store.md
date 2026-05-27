@@ -149,13 +149,25 @@ The `store` snapshot is read once per fetcher invocation, so a single fetch sees
 
 ## Reactivity caveats
 
-The Store is **not** a React state primitive. Mutations:
+The Store is **not** a React state primitive. Direct `useStore()` reads do not re-render components when the Store changes &mdash; the hook returns a Proxy that delegates to the live ref. Use the Store for the _handler_ side of your app where dot reads inside handlers and fetchers are always fresh.
 
-- Do **not** trigger re-renders of components that called `useStore()`.
-- Do **not** notify subscribers (broadcast actions are the right tool for that).
-- Become visible to the **next** read of any handler, fetcher, or hook that reads the Store.
+For the view side, subscribe to `Lifecycle.Store` &mdash; a singleton broadcast that fires every time `produce` mutates the Store. It delivers the full latest snapshot to every subscriber in the surrounding `<Boundary>`, and seeds with the initial Store so late mounters see the current value on mount:
 
-If a component needs to render based on a Store value, lift the value into the model (or fire a broadcast action when it changes and subscribe via `useAction`). The Store is for the _handler_ side of your app, not the view side.
+```ts
+actions.useAction(Lifecycle.Store, (_context, store) => {
+  // runs every time produce({ store }) changes the slot
+});
+```
+
+Render directly against the Store in JSX without lifting it into the model:
+
+```tsx
+{
+  actions.stream(Lifecycle.Store, (store) => <span>{store.locale}</span>);
+}
+```
+
+`Lifecycle.Store` does **not** fire when a `produce` call mutates only the model &mdash; the slot reference is checked after each `produce` and the broadcast is emitted only when it changes. See [lifecycle-actions.md](./lifecycle-actions.md#lifecyclestore-global-broadcast) for the full contract.
 
 ## Why Store rather than threading via `useActions` data callback
 

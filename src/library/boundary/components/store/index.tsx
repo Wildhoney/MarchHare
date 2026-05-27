@@ -1,6 +1,8 @@
 import * as React from "react";
 import type { Props } from "./types.ts";
 import { Context } from "./utils.ts";
+import { useBroadcast } from "../broadcast/index.tsx";
+import { StoreSymbol } from "../../../types/index.ts";
 
 export { useStore } from "./utils.ts";
 
@@ -46,6 +48,11 @@ export interface Store {}
 
 export function Store({ initial, children }: Props): React.ReactNode {
   const ref = React.useRef<Store>(initial);
+  const broadcast = useBroadcast();
+
+  if (broadcast.getCached(StoreSymbol) === undefined) {
+    broadcast.setCache(StoreSymbol, ref.current);
+  }
 
   return <Context.Provider value={ref}>{children}</Context.Provider>;
 }

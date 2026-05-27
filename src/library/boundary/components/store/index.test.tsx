@@ -1,6 +1,6 @@
 import * as React from "react";
 import { describe, expect, it, vi } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, render, screen } from "@testing-library/react";
 import { Store, useStore } from "./index.tsx";
 import { Boundary } from "../../index.tsx";
 import { Resource } from "../../../resource/index.ts";
@@ -312,5 +312,154 @@ describe("context.actions.resource(...).exceeds({...})", () => {
     });
 
     expect(fetcher).toHaveBeenCalledTimes(1); // no second fetch
+  });
+});
+
+describe("Lifecycle.Store broadcast", () => {
+  it("fires the handler when produce mutates the store", async () => {
+    const seen: Array<number | undefined> = [];
+
+    class Actions {
+      static Bump = Action("Bump");
+    }
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <Boundary store={{ counter: 0, label: null, token: null }}>
+        {children}
+      </Boundary>
+    );
+
+    const { result } = renderHook(
+      () => {
+        const actions = useActions<void, typeof Actions>();
+        actions.useAction(Actions.Bump, (context) => {
+          context.actions.produce(({ store }) => {
+            store.counter = (store.counter ?? 0) + 1;
+          });
+        });
+        actions.useAction(Lifecycle.Store, (_context, store) => {
+          seen.push(store.counter);
+        });
+        return actions;
+      },
+      { wrapper },
+    );
+
+    // Initial replay on mount delivers the seeded value.
+    await vi.waitFor(() => expect(seen).toEqual([0]));
+
+    await act(async () => {
+      await result.current[1].dispatch(Actions.Bump);
+    });
+    await act(async () => {
+      await result.current[1].dispatch(Actions.Bump);
+    });
+
+    expect(seen).toEqual([0, 1, 2]);
+  });
+
+  it("does not fire when only the model changes", async () => {
+    const seen: unknown[] = [];
+
+    class Actions {
+      static SetModel = Action<string>("SetModel");
+    }
+    type Model = { value: string | null };
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <Boundary store={{ counter: 0, label: null, token: null }}>
+        {children}
+      </Boundary>
+    );
+
+    const { result } = renderHook(
+      () => {
+        const actions = useActions<Model, typeof Actions>({ value: null });
+        actions.useAction(Actions.SetModel, (context, value) => {
+          context.actions.produce(({ model }) => {
+            model.value = value;
+          });
+        });
+        actions.useAction(Lifecycle.Store, (_context, store) => {
+          seen.push(store);
+        });
+        return actions;
+      },
+      { wrapper },
+    );
+
+    // Drain the initial replay so we can assert only on subsequent dispatches.
+    await vi.waitFor(() => expect(seen).toHaveLength(1));
+    seen.length = 0;
+
+    await act(async () => {
+      await result.current[1].dispatch(Actions.SetModel, "x");
+    });
+
+    expect(seen).toEqual([]);
+  });
+
+  it("delivers the initial store to a late-mounting subscriber via replay", async () => {
+    const seen: Array<string | null> = [];
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <Boundary store={{ counter: 0, label: "seeded", token: null }}>
+        {children}
+      </Boundary>
+    );
+
+    renderHook(
+      () => {
+        const actions = useActions();
+        actions.useAction(Lifecycle.Store, (_context, store) => {
+          seen.push(store.label);
+        });
+        return actions;
+      },
+      { wrapper },
+    );
+
+    await vi.waitFor(() => expect(seen).toEqual(["seeded"]));
+  });
+
+  it("renders the current store value via actions.stream(Lifecycle.Store, ...)", async () => {
+    class Actions {
+      static Set = Action<string>("Set");
+    }
+
+    function Probe() {
+      const actions = useActions<void, typeof Actions>();
+      actions.useAction(Actions.Set, (context, value) => {
+        context.actions.produce(({ store }) => {
+          store.label = value;
+        });
+      });
+
+      return (
+        <div>
+          <span data-testid="label">
+            {actions[1].stream(Lifecycle.Store, (store) => store.label ?? "—")}
+          </span>
+          <button
+            data-testid="set"
+            onClick={() => actions.dispatch(Actions.Set, "renamed")}
+          />
+        </div>
+      );
+    }
+
+    render(
+      <Boundary store={{ counter: 0, label: "initial", token: null }}>
+        <Probe />
+      </Boundary>,
+    );
+
+    expect(screen.getByTestId("label").textContent).toBe("initial");
+
+    await act(async () => {
+      screen.getByTestId("set").click();
+    });
+
+    expect(screen.getByTestId("label").textContent).toBe("renamed");
   });
 });

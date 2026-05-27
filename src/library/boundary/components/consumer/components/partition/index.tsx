@@ -44,10 +44,12 @@ export function Partition<T extends object>({
     if (existing) return existing as Entry<T>;
 
     const state = new State<Model<T>>();
+    const cached = broadcast.getCached(action);
+    if (cached !== undefined) state.hydrate({ value: cached as T });
     const entry: Entry<T> = { state, listeners: new Set() };
     consumer.set(action, entry);
     return entry;
-  }, [action, consumer]);
+  }, [action, broadcast, consumer]);
 
   React.useLayoutEffect(() => {
     entry.listeners.add(rerender);

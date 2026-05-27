@@ -38,6 +38,7 @@ For advanced topics, see the [recipes directory](./recipes/).
 - Granular async state tracking per model field.
 - Declarative lifecycle hooks without `useEffect`.
 - Centralised error handling via the global `Lifecycle.Fault` broadcast.
+- View-side reactivity for the per-`<Boundary>` Store via the global `Lifecycle.Store` broadcast.
 - React Native compatible &ndash; uses [eventemitter3](https://github.com/primus/eventemitter3) for cross-platform pub/sub.
 
 ## Getting started
@@ -466,7 +467,7 @@ Unlike broadcast which reaches all mounted components, multicast is confined to 
 
 See the [multicast recipe](./recipes/multicast-actions.md) for more details.
 
-For coordinating between async handlers and threading ambient values (session tokens, locale, feature flags, current operational mode) without re-rendering the JSX tree, use the per-`<Boundary>` `Store`. Declare your app's Store shape once via module augmentation, supply the initial value to `<Boundary store={...}>`, read via dot notation (`store.session`, `context.store.locale`), and write via `context.actions.produce(({ store }) => { ... })` &mdash; the same Immer-style recipe used for the model. Every `Resource` fetcher also receives a snapshot of the Store on its args object. Store is **not** reactive &mdash; drive view state through the model.
+For coordinating between async handlers and threading ambient values (session tokens, locale, feature flags, current operational mode) without re-rendering the JSX tree on every dot read, use the per-`<Boundary>` `Store`. Declare your app's Store shape once via module augmentation, supply the initial value to `<Boundary store={...}>`, read via dot notation (`store.session`, `context.store.locale`), and write via `context.actions.produce(({ store }) => { ... })` &mdash; the same Immer-style recipe used for the model. Every `Resource` fetcher also receives a snapshot of the Store on its args object. When the view side needs to react to Store changes, subscribe to the global `Lifecycle.Store` broadcast &mdash; `actions.useAction(Lifecycle.Store, handler)` for handler-level work and `actions.stream(Lifecycle.Store, (store) => ...)` for JSX. Both seed from the initial Store on mount.
 
 ```ts
 import { useActions } from "march-hare";

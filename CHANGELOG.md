@@ -4,10 +4,9 @@ All notable changes to this project will be documented in this file. See [commit
 
 ## [0.7.1](https://github.com/Wildhoney/MarchHare/compare/v0.7.0...v0.7.1) (2026-05-27)
 
-
 ### Bug Fixes
 
-* **build:** emit .d.ts at dist root and strip .ts/.tsx import extensions ([8b423c5](https://github.com/Wildhoney/MarchHare/commit/8b423c56bef1670370fa8f287d0a13d8a0124e00))
+- **build:** emit .d.ts at dist root and strip .ts/.tsx import extensions ([8b423c5](https://github.com/Wildhoney/MarchHare/commit/8b423c56bef1670370fa8f287d0a13d8a0124e00))
 
 ## [0.7.0](https://github.com/Wildhoney/MarchHare/compare/v0.6.1...v0.7.0) (2026-05-27)
 
