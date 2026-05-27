@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.7.0](https://github.com/Wildhoney/MarchHare/compare/v0.6.1...v0.7.0) (2026-05-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* **types:** dispatch/useAction reject foreign actions and require declared payloads
+* **resource:** collapse to single call-form — cat({id:5}) reads cache and primes context.actions.resource(...)/.set(...)
+* redesign Resource/Store/Cache — context.actions.resource(...).exceeds, dot-read Store, drop useResource/useMode
+
+### Features
+
+* redesign Resource/Store/Cache — context.actions.resource(...).exceeds, dot-read Store, drop useResource/useMode ([293732f](https://github.com/Wildhoney/MarchHare/commit/293732f37cba561e68fc1f17b55f76a91c34cbb6))
+* **resource:** collapse to single call-form — cat({id:5}) reads cache and primes context.actions.resource(...)/.set(...) ([4141169](https://github.com/Wildhoney/MarchHare/commit/414116930802c1ab1bd9f41cca8cd6d16bec5dc2))
+
+
+### Bug Fixes
+
+* **types:** dispatch/useAction reject foreign actions and require declared payloads ([3c23156](https://github.com/Wildhoney/MarchHare/commit/3c23156e6437a1a37bf24d80172a83ae72e5119c))
+
 ## [0.6.1](https://github.com/Wildhoney/MarchHare/compare/v0.6.0...v0.6.1) (2026-05-20)
 
 ### Features
