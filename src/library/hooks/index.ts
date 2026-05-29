@@ -538,7 +538,7 @@ type DispatchTarget = (action: unknown, payload?: unknown) => Promise<void>;
  * &mdash; the M and D pair of `useContext<M, AC, D>` &mdash; and
  * returns the `[model, actions, data]` tuple with `useAction`, `dispatch`,
  * `inspect`, and `stream` attached. The first invocation of
- * `context.dispatch(...)` must come from an event handler &mdash; not
+ * `context.actions.dispatch(...)` must come from an event handler &mdash; not
  * synchronously during render &mdash; because the underlying dispatch
  * target is wired up when `context.useActions(...)` runs in the same
  * render pass.
@@ -552,7 +552,7 @@ type DispatchTarget = (action: unknown, payload?: unknown) => Promise<void>;
  * const context = useContext<Model, typeof Actions, Data>();
  *
  * const form = useForm({
- *   onSubmit: () => void context.dispatch(Actions.Submit),
+ *   onSubmit: () => void context.actions.dispatch(Actions.Submit),
  * });
  *
  * const actions = context.useActions(
@@ -574,7 +574,7 @@ export function useContext<
       if (!target) {
         throw new Error(
           "march-hare: useContext handle dispatched before its paired " +
-            "context.useActions(...) ran. Call context.dispatch from " +
+            "context.useActions(...) ran. Call context.actions.dispatch from " +
             "event handlers, not synchronously during render.",
         );
       }
@@ -591,7 +591,7 @@ export function useContext<
     }
 
     return <ContextHandle<M, AC, D>>(<unknown>{
-      dispatch,
+      actions: { dispatch },
       useActions: useActionsMethod,
     });
   }, []);

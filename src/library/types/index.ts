@@ -992,7 +992,7 @@ export type Context<
   AC extends Actions | void,
   D extends Props = Props,
 > = {
-  dispatch: Dispatch<AC>;
+  readonly actions: { dispatch: Dispatch<AC> };
   useActions(getData?: () => D): UseActions<M, AC, D>;
   useActions(
     initialModel: M extends void ? never : M,

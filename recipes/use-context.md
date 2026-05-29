@@ -6,7 +6,7 @@ Some external libraries take a dispatch callback at construction time &mdash; fo
 - `context.useActions(initial, () => ({ form, ... }))` needs `form` to expose it as `data.form`.
 - Each depends on the other existing first.
 
-`useContext<Model, typeof Actions, Data>()` resolves this by returning a stable, typed handle up-front. The handle exposes `context.dispatch` (callable immediately) and `context.useActions(initialModel, getData?)` (registers the model and wires the controller's dispatch to the underlying emitter when it runs in the same render pass).
+`useContext<Model, typeof Actions, Data>()` resolves this by returning a stable, typed handle up-front. The handle exposes `context.actions.dispatch` (callable immediately) and `context.useActions(initialModel, getData?)` (registers the model and wires the controller's dispatch to the underlying emitter when it runs in the same render pass).
 
 ## The minimal shape
 
@@ -24,7 +24,7 @@ export function useActions() {
 
   const form = useForm<BillingSchema>({
     fields: billingFields,
-    onSubmit: () => void context.dispatch(Actions.Submit),
+    onSubmit: () => void context.actions.dispatch(Actions.Submit),
   });
 
   const actions = context.useActions({ user: user() }, () => ({
@@ -43,12 +43,12 @@ export function useActions() {
 Reading order maps directly to declaration order:
 
 1. `useContext<Model, typeof Actions, Data>()` &mdash; returns a stable, typed handle with `dispatch` and `useActions`.
-2. `useForm({ onSubmit })` &mdash; closes over `context.dispatch`. The handle's reference never changes, so the closure is safe across renders.
+2. `useForm({ onSubmit })` &mdash; closes over `context.actions.dispatch`. The handle's reference never changes, so the closure is safe across renders.
 3. `context.useActions(initial, () => ({ form }))` &mdash; registers the model and wires the controller to the underlying emitter. `form` is now available as `data.form` to handlers and to JSX via the third tuple element.
 
 ## Real-world example: card payment flow
 
-Below is a payment form integrating `formikate` (synchronous form library), a Worldpay SDK, and a Checkout.com SDK. The form's `onSubmit` needs `context.dispatch`, and the resulting form instance is consumed by both handlers (validation, value extraction) and JSX (rendering `<BillingForm form={data.form} />`). Multiple imperative SDKs converge on a single action surface.
+Below is a payment form integrating `formikate` (synchronous form library), a Worldpay SDK, and a Checkout.com SDK. The form's `onSubmit` needs `context.actions.dispatch`, and the resulting form instance is consumed by both handlers (validation, value extraction) and JSX (rendering `<BillingForm form={data.form} />`). Multiple imperative SDKs converge on a single action surface.
 
 ```ts
 import { useState } from "react";
@@ -93,7 +93,7 @@ export function useActions() {
     fields: billingFields,
     validateOnBlur: true,
     validateOnChange: false,
-    onSubmit: () => void context.dispatch(Actions.Submit),
+    onSubmit: () => void context.actions.dispatch(Actions.Submit),
   });
 
   const actions = context.useActions(model, () => ({
@@ -166,7 +166,7 @@ export function useActions() {
 
 The notable points:
 
-- **No `dispatchRef` and no manual wiring.** `context.dispatch` is stable from the first line, so `useForm`'s `onSubmit` captures it directly.
+- **No `dispatchRef` and no manual wiring.** `context.actions.dispatch` is stable from the first line, so `useForm`'s `onSubmit` captures it directly.
 - **The form flows back through `data`.** JSX in the consuming component renders `<BillingForm form={data.form} />` and handlers read `context.data.form` after `await` boundaries &mdash; both via the third tuple element / handler context.
 - **The handle is the only library import.** No bare `useActions` at the top of the file.
 
@@ -224,16 +224,16 @@ This works if you don't need `form` in `data` &mdash; i.e. JSX doesn't read it v
 
 **Drop `form` from `data` &mdash; when JSX doesn't read it.** If the form isn't consumed via the third tuple element, the cycle dissolves: `context.useActions` runs first, `useForm` runs second, no value flows back.
 
-Reach for the up-front `context.dispatch` capture when JSX or multiple handlers all need to read the form-like value across `await` boundaries via `context.data` &mdash; the case the `data` controller was built for.
+Reach for the up-front `context.actions.dispatch` capture when JSX or multiple handlers all need to read the form-like value across `await` boundaries via `context.data` &mdash; the case the `data` controller was built for.
 
 ## What the handle is
 
 The result of `useContext<AC>()` is a plain object with two members:
 
-- `context.dispatch(action, payload?)` &mdash; same signature as `actions.dispatch` returned by `context.useActions`. Typed against `AC`, with channeled-action overloads.
+- `context.actions.dispatch(action, payload?)` &mdash; same signature as `actions.dispatch` returned by `context.useActions`. Typed against `AC`, with channeled-action overloads.
 - `context.useActions(initialModel?, getData?)` &mdash; returns the `[model, actions, data]` tuple with `useAction`, `dispatch`, `inspect`, and `stream` attached.
 
-The handle is stable across renders, so capturing `context.dispatch` once in `useForm` (or any other external constructor) is safe. Invoking `context.dispatch(...)` before `context.useActions(...)` has run in the same render pass throws &mdash; in practice this only happens if you call it synchronously during render. Event-handler invocations always happen after the render commits and are safe.
+The handle is stable across renders, so capturing `context.actions.dispatch` once in `useForm` (or any other external constructor) is safe. Invoking `context.actions.dispatch(...)` before `context.useActions(...)` has run in the same render pass throws &mdash; in practice this only happens if you call it synchronously during render. Event-handler invocations always happen after the render commits and are safe.
 
 ## Naming convention
 

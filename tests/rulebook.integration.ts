@@ -959,7 +959,7 @@ test.describe("March Hare Rulebook", () => {
       await expect(currentEmail).toHaveText("initial@example.com");
     });
 
-    it("Rule 35: Use .context() to pass the entire context to child components - should allow child to update parent state via context.dispatch", async ({
+    it("Rule 35: Use .context() to pass the entire context to child components - should allow child to update parent state via context.actions.dispatch", async ({
       page,
     }) => {
       const parentName = page.getByTestId("rule-35-parent-name");

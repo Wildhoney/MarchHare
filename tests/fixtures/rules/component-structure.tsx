@@ -355,7 +355,7 @@ function useRule35Actions() {
  * This allows children to update parent state
  */
 type ContextForChild = {
-  dispatch: (action: symbol, payload?: unknown) => void;
+  actions: { dispatch: (action: symbol, payload?: unknown) => void };
   model: ProfileModel;
 };
 
@@ -379,13 +379,17 @@ function ProfileEditor({ context }: { context: ContextForChild }) {
       />
       <button
         data-testid="rule-35-save-name"
-        onClick={() => context.dispatch(LocalActions.UpdateName, localName)}
+        onClick={() =>
+          context.actions.dispatch(LocalActions.UpdateName, localName)
+        }
       >
         Save Name
       </button>
       <button
         data-testid="rule-35-save-email"
-        onClick={() => context.dispatch(LocalActions.UpdateEmail, localEmail)}
+        onClick={() =>
+          context.actions.dispatch(LocalActions.UpdateEmail, localEmail)
+        }
       >
         Save Email
       </button>
@@ -398,9 +402,9 @@ function ProfileEditor({ context }: { context: ContextForChild }) {
 function Rule35Context() {
   const [model, actions] = useRule35Actions();
 
-  // Pass context to child (dispatch + model)
+  // Pass context to child (actions.dispatch + model)
   const childContext: ContextForChild = {
-    dispatch: actions.dispatch,
+    actions: { dispatch: actions.dispatch },
     model,
   };
 
