@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.8.0](https://github.com/Wildhoney/MarchHare/compare/v0.7.5...v0.8.0) (2026-05-29)
+
+### ⚠ BREAKING CHANGES
+
+- rename core API to useContext returning Context with context.actions.dispatch
+- rename core API to useContext/Context with renamed action surface
+
+### Features
+
+- rename core API to useContext returning Context with context.actions.dispatch ([1854d65](https://github.com/Wildhoney/MarchHare/commit/1854d65ee24aee593fdd993193b2043681ff448d))
+- rename core API to useContext/Context with renamed action surface ([1676b70](https://github.com/Wildhoney/MarchHare/commit/1676b702f6db0685509e55d98698c26ae0a48f20))
+
 ## [0.7.5](https://github.com/Wildhoney/MarchHare/compare/v0.7.4...v0.7.5) (2026-05-29)
 
 ### Features
