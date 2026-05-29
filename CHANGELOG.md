@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.7.5](https://github.com/Wildhoney/MarchHare/compare/v0.7.4...v0.7.5) (2026-05-29)
+
+
+### Features
+
+* **hooks:** expose data as the third tuple element of useActions for JSX consumption ([cf7f27e](https://github.com/Wildhoney/MarchHare/commit/cf7f27e2e69a8a68157cfb05a6bebda5f839f966))
+
 ## [0.7.4](https://github.com/Wildhoney/MarchHare/compare/v0.7.3...v0.7.4) (2026-05-29)
 
 ## [0.7.3](https://github.com/Wildhoney/MarchHare/compare/v0.7.1...v0.7.3) (2026-05-29)
