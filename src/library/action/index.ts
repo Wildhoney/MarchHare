@@ -23,7 +23,7 @@ export {
  */
 type ActionFactory = {
   /**
-   * Creates a new unicast action with the given name.
+   * Creates a new unicast action with an optional name.
    *
    * `K` is the literal type of the action name and is captured as a phantom
    * brand so `Action("A")` and `Action("B")` produce structurally-distinct
@@ -33,32 +33,36 @@ type ActionFactory = {
    * (e.g. lifecycle / no-payload actions) which is the most common source of
    * foreign-class collisions.
    *
+   * Omitting the name produces an action whose symbol description has no
+   * suffix. Symbol identity (and therefore dispatch routing) is unaffected
+   * — names are only used for fault reporting and debugger readability.
+   *
    * @template P The payload type for the action.
    * @template C The channel type for channeled dispatches.
    * @template K The literal type of the action name (inferred when no other
    *   generics are supplied; defaults to `string` otherwise).
    */
   <P = never, C extends Filter = never, K extends string = string>(
-    name: K,
+    name?: K,
   ): HandlerPayload<P, C, K>;
 
   /**
    * Creates a new action with the specified distribution mode.
    */
   <P = never, C extends Filter = never, K extends string = string>(
-    name: K,
+    name: K | undefined,
     distribution: Distribution.Broadcast,
   ): BroadcastPayload<P, C, K>;
   <P = never, C extends Filter = never, K extends string = string>(
-    name: K,
+    name: K | undefined,
     distribution: Distribution.Multicast,
   ): MulticastPayload<P, C, K>;
   <P = never, C extends Filter = never, K extends string = string>(
-    name: K,
+    name: K | undefined,
     distribution: Distribution.Unicast,
   ): HandlerPayload<P, C, K>;
   <P = never, C extends Filter = never, K extends string = string>(
-    name: K,
+    name: K | undefined,
     distribution: Distribution,
   ):
     | HandlerPayload<P, C, K>
@@ -108,7 +112,7 @@ export const Action = <ActionFactory>(<unknown>(<
   P = never,
   C extends Filter = never,
 >(
-  name: string,
+  name: string = "",
   distribution: Distribution = Distribution.Unicast,
 ): HandlerPayload<P, C> | BroadcastPayload<P, C> | MulticastPayload<P, C> => {
   const symbol =

@@ -286,33 +286,22 @@ export function useActions<
             const cached = emitter.getCached(key);
             if (cached === undefined) return null;
 
-            // Derive the model path from the action name and wait for
-            // any pending Immertation annotations to settle.
-            const actionName = getName(action);
-            const path =
-              actionName !== "unknown"
-                ? actionName[0].toLowerCase() + actionName.slice(1)
-                : null;
-
-            if (path) {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const inspector = (<any>state.current.inspect)[path];
-              if (inspector?.pending?.()) {
-                await new Promise<void>((resolve, reject) => {
-                  if (controller.signal.aborted) {
-                    reject(controller.signal.reason);
-                    return;
-                  }
-                  const onAbort = () => reject(controller.signal.reason);
-                  controller.signal.addEventListener("abort", onAbort, {
-                    once: true,
-                  });
-                  inspector.settled().then(() => {
-                    controller.signal.removeEventListener("abort", onAbort);
-                    resolve();
-                  });
+            // Wait for any pending Immertation annotations on the local
+            // model to settle before returning the cached value.
+            const inspector = state.current.inspect;
+            if (inspector.pending()) {
+              await new Promise<void>((resolve, reject) => {
+                if (controller.signal.aborted)
+                  return void reject(controller.signal.reason);
+                const onAbort = () => reject(controller.signal.reason);
+                controller.signal.addEventListener("abort", onAbort, {
+                  once: true,
                 });
-              }
+                inspector.settled().then(() => {
+                  controller.signal.removeEventListener("abort", onAbort);
+                  resolve();
+                });
+              });
             }
 
             return emitter.getCached(key) ?? null;

@@ -4,15 +4,13 @@ All notable changes to this project will be documented in this file. See [commit
 
 ## [0.7.3](https://github.com/Wildhoney/MarchHare/compare/v0.7.1...v0.7.3) (2026-05-29)
 
-
 ### Features
 
-* **lifecycle:** add Lifecycle.Store broadcast and actions.dispatch convenience ([9226eee](https://github.com/Wildhoney/MarchHare/commit/9226eee4c85eb39435d15d4d25ff863445397431))
-
+- **lifecycle:** add Lifecycle.Store broadcast and actions.dispatch convenience ([9226eee](https://github.com/Wildhoney/MarchHare/commit/9226eee4c85eb39435d15d4d25ff863445397431))
 
 ### Bug Fixes
 
-* **types:** preserve root actions in Handlers context for nested handlers ([b6c0adb](https://github.com/Wildhoney/MarchHare/commit/b6c0adbea8c26034396778538e91e8b49430a540))
+- **types:** preserve root actions in Handlers context for nested handlers ([b6c0adb](https://github.com/Wildhoney/MarchHare/commit/b6c0adbea8c26034396778538e91e8b49430a540))
 
 ## [0.7.2](https://github.com/Wildhoney/MarchHare/compare/v0.7.1...v0.7.2) (2026-05-27)
 
