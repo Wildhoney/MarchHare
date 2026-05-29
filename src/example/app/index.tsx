@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import Counter from "../counter/index.tsx";
 import Mood from "../mood/index.tsx";
 import Visitor from "../visitor/index.tsx";
-import { Lifecycle, Reason, useActions } from "march-hare";
+import { Lifecycle, Reason, useContext } from "march-hare";
 import { message } from "antd";
 import * as styles from "./styles.ts";
 import logo from "../assets/logo.png";
@@ -11,7 +11,8 @@ import { features } from "./utils.ts";
 
 export default function App(): React.ReactElement {
   const [messageApi, contextHolder] = message.useMessage();
-  const actions = useActions();
+  const context = useContext();
+  const actions = context.useActions();
 
   actions.useAction(Lifecycle.Fault, (_context, { reason, error }) => {
     switch (reason) {

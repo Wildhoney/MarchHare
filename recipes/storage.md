@@ -82,11 +82,12 @@ export const cat = Resource(async ({ controller }) => {
 
 ```ts
 // actions.ts
-import { useActions } from "march-hare";
+import { useContext } from "march-hare";
 import { cat } from "./resources";
 
-export function useCatActions() {
-  const actions = useActions<Model, typeof Actions>({
+export function useActions() {
+  const context = useContext<Model, typeof Actions>();
+  const actions = context.useActions({
     // First render reads the Cache automatically — no explicit get.
     cat: cat(),
   });
@@ -94,7 +95,9 @@ export function useCatActions() {
   actions.useAction(Actions.Mount, async (context) => {
     // Short-circuits when the persisted payload is < 5 minutes old.
     // The Cache writes through automatically — no explicit set.
-    const data = await context.actions.resource(cat()).exceeds({ minutes: 5 });
+    const data = await context.controller
+      .resource(cat())
+      .exceeds({ minutes: 5 });
     context.actions.produce(({ model }) => void (model.cat = data));
   });
 

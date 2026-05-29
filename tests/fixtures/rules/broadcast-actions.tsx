@@ -8,12 +8,8 @@
  * Rule 41: Use actions.stream to render broadcast values declaratively in JSX
  */
 import * as React from "react";
-import {
-  Action,
-  Distribution,
-  Lifecycle,
-  useActions,
-} from "../../../src/library/index.ts";
+import { Action, Distribution, Lifecycle } from "../../../src/library/index.ts";
+import { useActions } from "../../../src/library/hooks/index.ts";
 
 // Broadcast actions that can be read
 class BroadcastActions {

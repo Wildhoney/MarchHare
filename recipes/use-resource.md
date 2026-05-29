@@ -27,11 +27,12 @@ export const ping = Resource(({ controller }) =>
 
 ```tsx
 // actions.ts
-import { useActions } from "march-hare";
+import { useContext } from "march-hare";
 import { user, pay } from "./resources";
 
 export function useActions() {
-  const actions = useActions<Model, typeof Actions>({
+  const context = useContext<Model, typeof Actions>();
+  const actions = context.useActions({
     // Sync cache read at the model literal — returns null when nothing is cached.
     user: user({ id: 5 }),
   });
@@ -119,7 +120,8 @@ Calling `user(params)` directly reads the most recent successful payload synchro
 Use it in the model literal to seed initial state from the cache:
 
 ```ts
-const actions = useActions<Model, typeof Actions>({
+const context = useContext<Model, typeof Actions>();
+const actions = context.useActions({
   user: user({ id }), // User | null
 });
 ```

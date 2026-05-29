@@ -3,10 +3,11 @@
 March Hare publishes every action failure as `Lifecycle.Fault`, a singleton broadcast action delivered through the surrounding `<Boundary>`. Subscribe to it like any other action to handle errors centrally:
 
 ```tsx
-import { useActions, Lifecycle, Reason } from "march-hare";
+import { useContext, Lifecycle, Reason } from "march-hare";
 
 function App() {
-  const actions = useActions();
+  const context = useContext();
+  const actions = context.useActions();
 
   actions.useAction(Lifecycle.Fault, (_context, { reason, error, action }) => {
     switch (reason) {

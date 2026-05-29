@@ -6,7 +6,8 @@
  * Rule 7: Nested produce() calls are allowed
  */
 import * as React from "react";
-import { Action, useActions, Op } from "../../../src/library/index.ts";
+import { Action, Op } from "../../../src/library/index.ts";
+import { useActions } from "../../../src/library/hooks/index.ts";
 
 class Actions {
   static SetValue = Action<number>("SetValue");

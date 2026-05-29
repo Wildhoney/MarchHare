@@ -1,6 +1,6 @@
 # React context in handlers
 
-React hooks like `use()` cannot be called inside action handlers &ndash; they run outside React's render cycle when actions are dispatched. Instead, March Hare provides `context.data` to access external values inside handlers and a third tuple element on `useActions` to expose the same snapshot to JSX.
+React hooks like `use()` cannot be called inside action handlers &ndash; they run outside React's render cycle when actions are dispatched. Instead, March Hare provides `context.data` to access external values inside handlers and a third tuple element on `context.useActions` to expose the same snapshot to JSX.
 
 ## The problem
 
@@ -15,21 +15,19 @@ actions.useAction(Actions.Submit, (context) => {
 
 ## The solution
 
-Pass a data function as the second argument to `useActions`. This function runs during render (where hooks are valid) and captures values for use in handlers:
+Pass a data function as the second argument to `context.useActions`. This function runs during render (where hooks are valid) and captures values for use in handlers:
 
 ```tsx
-import { useActions } from "march-hare";
+import { useContext } from "march-hare";
 
 type Data = { theme: Theme; user: User };
 
-export function useFormActions() {
-  const [model, actions, data] = useActions<Model, typeof Actions, Data>(
-    model,
-    () => ({
-      theme: use(ThemeContext),
-      user: use(UserContext),
-    }),
-  );
+export function useActions() {
+  const context = useContext<Model, typeof Actions, Data>();
+  const actions = context.useActions(model, () => ({
+    theme: use(ThemeContext),
+    user: use(UserContext),
+  }));
 
   actions.useAction(Actions.Submit, async (context) => {
     // Access context values via context.data in handlers.
@@ -48,11 +46,11 @@ export function useFormActions() {
 
 ## Reading data in JSX
 
-`useActions` returns a tuple `[model, actions, data]`. The third element is the same Proxy your handlers read via `context.data`, refreshed synchronously each render so JSX sees the current values. This lets a wrapper hook own all React-side dependencies internally and expose them through one named source:
+`context.useActions` returns a tuple `[model, actions, data]`. The third element is the same Proxy your handlers read via `context.data`, refreshed synchronously each render so JSX sees the current values. This lets a wrapper hook own all React-side dependencies internally and expose them through one named source:
 
 ```tsx
 function Form() {
-  const [model, actions, data] = useFormActions();
+  const [model, actions, data] = useActions();
 
   return (
     <fieldset className={data.theme === "dark" ? "is-dark" : "is-light"}>

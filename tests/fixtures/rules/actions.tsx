@@ -7,12 +7,8 @@
  * Rule 4: Action names should be descriptive for error tracing
  */
 import * as React from "react";
-import {
-  Action,
-  Distribution,
-  useActions,
-  Lifecycle,
-} from "../../../src/library/index.ts";
+import { Action, Distribution, Lifecycle } from "../../../src/library/index.ts";
+import { useActions } from "../../../src/library/hooks/index.ts";
 
 // Rule 1: Actions defined as static class members
 class LocalActions {

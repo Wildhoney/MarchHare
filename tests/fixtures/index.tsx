@@ -8,7 +8,8 @@
  */
 import * as React from "react";
 import { createRoot } from "react-dom/client";
-import { Boundary, Lifecycle, useActions } from "../../src/library/index.ts";
+import { Boundary, Lifecycle } from "../../src/library/index.ts";
+import { useActions } from "../../src/library/hooks/index.ts";
 
 // Fixture imports - Rules 1-4: Actions
 import { ActionsFixture } from "./rules/actions.tsx";

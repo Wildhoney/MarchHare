@@ -10,10 +10,10 @@ import * as React from "react";
 import {
   Action,
   Distribution,
-  useActions,
   utils,
   type Pk,
 } from "../../../src/library/index.ts";
+import { useActions } from "../../../src/library/hooks/index.ts";
 
 class UtilityActions {
   static SleepTest = Action<number>("SleepTest");

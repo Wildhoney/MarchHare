@@ -1,10 +1,10 @@
 import * as React from "react";
-import { useCatActions } from "./actions.ts";
+import { useActions } from "./actions.ts";
 import { Actions, type Props } from "./types.ts";
 import * as styles from "./styles.ts";
 
 export function Cat({ index }: Props): React.ReactElement {
-  const [model, actions] = useCatActions({ index });
+  const [model, actions] = useActions({ index });
   const cat = model.cat;
 
   return (

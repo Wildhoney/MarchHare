@@ -32,6 +32,7 @@ import {
   AnyAction,
   FaultSymbol,
   StoreSymbol,
+  Context as ContextHandle,
 } from "../types/index.ts";
 
 import { getReason, getError } from "../error/utils.ts";
@@ -221,6 +222,9 @@ export function useActions<
           annotate<T>(value: T, operation: Operation = Operation.Update): T {
             return state.current.annotate(operation, value);
           },
+          get inspect() {
+            return state.current.inspect;
+          },
           resource: Object.assign(
             function resourceCall<T>(_value: T | null) {
               const call = consumePending();
@@ -254,22 +258,6 @@ export function useActions<
               };
             },
             {
-              /**
-               * Writes `data` into the per-params cache slot of the
-               * resource invocation passed as the first argument, with a
-               * fresh timestamp. Subsequent reads via `cat(params)` see
-               * the new value, and `.exceeds(...)` short-circuits against
-               * the new timestamp.
-               *
-               * Use this when payloads arrive out-of-band (SSE, WebSocket,
-               * postMessage) and need to be reflected in the Resource
-               * cache without a fetcher round-trip.
-               *
-               * @example
-               * ```ts
-               * context.actions.resource.set(cat({ id: payload.id }), payload);
-               * ```
-               */
               set: <T>(_value: T | null, data: T): void => {
                 const call = consumePending();
                 call.seed(call.params, data, Temporal.Now.instant());
@@ -278,20 +266,13 @@ export function useActions<
           ),
           async resolution(action: AnyAction) {
             if (controller.signal.aborted) return null;
-
             const key = getActionSymbol(action);
-
             const emitter = isMulticastAction(action)
               ? (getScope(scope, key)?.emitter ?? null)
               : broadcast;
-
             if (!emitter) return null;
-
             const cached = emitter.getCached(key);
             if (cached === undefined) return null;
-
-            // Wait for any pending Immertation annotations on the local
-            // model to settle before returning the cached value.
             const inspector = state.current.inspect;
             if (inspector.pending()) {
               await new Promise<void>((resolve, reject) => {
@@ -307,20 +288,15 @@ export function useActions<
                 });
               });
             }
-
             return emitter.getCached(key) ?? null;
           },
           peek(action: AnyAction) {
             if (controller.signal.aborted) return null;
-
             const key = getActionSymbol(action);
-
             const emitter = isMulticastAction(action)
               ? (getScope(scope, key)?.emitter ?? null)
               : broadcast;
-
             if (!emitter) return null;
-
             return emitter.getCached(key) ?? null;
           },
         },
@@ -546,4 +522,77 @@ export function useActions<
   );
 
   return <UseActions<M, A, D>>result;
+}
+
+type DispatchTarget = (action: unknown, payload?: unknown) => Promise<void>;
+
+/**
+ * Returns a stable, typed controller handle up-front &mdash; before a
+ * model is declared via `context.useActions(...)`. Use this when an
+ * external imperative library (form, animation, third-party SDK) needs a
+ * dispatch callback at construction time, while the value that library
+ * returns must flow back into the controller's data callback.
+ *
+ * The handle exposes `dispatch(action, payload?)` and a `useView(...)`
+ * method that materialises the component-local model and reactive data
+ * &mdash; the M and D pair of `useContext<M, AC, D>` &mdash; and
+ * returns the `[model, actions, data]` tuple with `useAction`, `dispatch`,
+ * `inspect`, and `stream` attached. The first invocation of
+ * `context.dispatch(...)` must come from an event handler &mdash; not
+ * synchronously during render &mdash; because the underlying dispatch
+ * target is wired up when `context.useActions(...)` runs in the same
+ * render pass.
+ *
+ * @template M The model type representing the component's state.
+ * @template AC The actions class containing action definitions.
+ * @template D The data type for reactive external values.
+ *
+ * @example
+ * ```ts
+ * const context = useContext<Model, typeof Actions, Data>();
+ *
+ * const form = useForm({
+ *   onSubmit: () => void context.dispatch(Actions.Submit),
+ * });
+ *
+ * const actions = context.useActions(
+ *   { user: user() },
+ *   () => ({ form }),
+ * );
+ * ```
+ */
+export function useContext<
+  M extends Model | void = void,
+  AC extends Actions | void = void,
+  D extends Props = Props,
+>(): ContextHandle<M, AC, D> {
+  const ref = React.useRef<DispatchTarget | null>(null);
+
+  return React.useMemo(() => {
+    function dispatch(action: unknown, payload?: unknown): Promise<void> {
+      const target = ref.current;
+      if (!target) {
+        throw new Error(
+          "march-hare: useContext handle dispatched before its paired " +
+            "context.useActions(...) ran. Call context.dispatch from " +
+            "event handlers, not synchronously during render.",
+        );
+      }
+      return target(action, payload);
+    }
+
+    function useActionsMethod(...args: unknown[]): unknown {
+      const invoke = <(...passed: unknown[]) => UseActions<M, AC, D>>(
+        (<unknown>useActions)
+      );
+      const result = invoke(...args);
+      ref.current = <DispatchTarget>(<unknown>result.dispatch);
+      return result;
+    }
+
+    return <ContextHandle<M, AC, D>>(<unknown>{
+      dispatch,
+      useActions: useActionsMethod,
+    });
+  }, []);
 }

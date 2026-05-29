@@ -124,12 +124,13 @@ No module-level mutable, no `getSession()` helper, no `ky.beforeRequest` reading
 
 ```ts
 // auth/actions.ts
-import { useActions } from "march-hare";
+import { useContext } from "march-hare";
 import { Actions } from "./types";
 import { signIn, signOut } from "./resources";
 
-export function useAuthActions() {
-  const actions = useActions<void, typeof Actions>();
+export function useActions() {
+  const context = useContext<void, typeof Actions>();
+  const actions = context.useActions();
 
   actions.useAction(Actions.SignIn, async (context, credentials) => {
     const result = await context.actions.resource(signIn(credentials));

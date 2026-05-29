@@ -6,12 +6,8 @@
  * Rule 22: State updates are blocked after unmount
  */
 import * as React from "react";
-import {
-  Action,
-  useActions,
-  utils,
-  Lifecycle,
-} from "../../../src/library/index.ts";
+import { Action, utils, Lifecycle } from "../../../src/library/index.ts";
+import { useActions } from "../../../src/library/hooks/index.ts";
 import { getActionSymbol } from "../../../src/library/action/index.ts";
 
 class TaskActions {

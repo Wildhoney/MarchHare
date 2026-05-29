@@ -1,10 +1,10 @@
-import { useCounterActions } from "./actions.ts";
+import { useActions } from "./actions.ts";
 import { Actions } from "./types.ts";
 import * as styles from "./styles.ts";
 import * as React from "react";
 
 export default function Counter(): React.ReactElement {
-  const [model, actions] = useCounterActions();
+  const [model, actions] = useActions();
 
   return (
     <section className={styles.container}>

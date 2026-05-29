@@ -14,7 +14,7 @@ function MyLibraryRoot({ children }) {
 }
 ```
 
-Components inside `<Broadcaster>` have their own isolated broadcast channel. Broadcast actions dispatched inside won't reach components outside, and vice versa.
+Components inside `<Broadcaster>` have their own isolated broadcast controller. Broadcast actions dispatched inside won't reach components outside, and vice versa.
 
 ## `Consumer` (Internal)
 

@@ -1,5 +1,5 @@
 import { A } from "@mobily/ts-belt";
-import { useActions } from "march-hare";
+import { useContext } from "march-hare";
 import { Model, Actions, Country } from "./types.ts";
 
 const model: Model = {
@@ -9,8 +9,10 @@ const model: Model = {
   connected: false,
 };
 
-export function useVisitorActions() {
-  const actions = useActions<Model, typeof Actions>(model);
+export function useActions() {
+  const context = useContext<Model, typeof Actions>();
+
+  const actions = context.useActions(model);
 
   actions.useAction(Actions.Mount, (context) => {
     const source = new EventSource("/visitors");

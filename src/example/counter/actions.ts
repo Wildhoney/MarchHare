@@ -1,11 +1,10 @@
-import { useActions } from "march-hare";
+import { useContext } from "march-hare";
 import { Model, Actions } from "./types.ts";
 import { user } from "./utils.ts";
 
-export function useCounterActions() {
-  const actions = useActions<Model, typeof Actions>({
-    user: user(),
-  });
+export function useActions() {
+  const context = useContext<Model, typeof Actions>();
+  const actions = context.useActions({ user: user() });
 
   actions.useAction(Actions.Mount, async (context) => {
     await context.actions.dispatch(Actions.User);

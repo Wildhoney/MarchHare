@@ -10,11 +10,11 @@ import * as React from "react";
 import {
   Action,
   Boundary,
-  useActions,
   Lifecycle,
   Reason,
   utils,
 } from "../../../src/library/index.ts";
+import { useActions } from "../../../src/library/hooks/index.ts";
 import { O, R } from "@mobily/ts-belt";
 
 class ErrorActions {

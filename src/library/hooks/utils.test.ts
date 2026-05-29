@@ -180,7 +180,7 @@ describe("With.Update()", () => {
     const updatedModel = { ...model };
 
     const context = <HandlerContext<Model, object, object>>(<unknown>{
-      model,
+      model: updatedModel,
       actions: {
         produce: (fn: (draft: { model: Model }) => void) => {
           fn({ model: updatedModel });
@@ -201,7 +201,7 @@ describe("With.Update()", () => {
     const updatedModel = { ...model };
 
     const context = <HandlerContext<Model, object, object>>(<unknown>{
-      model,
+      model: updatedModel,
       actions: {
         produce: (fn: (draft: { model: Model }) => void) => {
           fn({ model: updatedModel });
@@ -221,7 +221,7 @@ describe("With.Update()", () => {
     const updatedModel = { ...model };
 
     const context = <HandlerContext<Model, object, object>>(<unknown>{
-      model,
+      model: updatedModel,
       actions: {
         produce: (fn: (draft: { model: Model }) => void) => {
           fn({ model: updatedModel });

@@ -12,7 +12,7 @@ This recipe covers two patterns:
 Tracks website visitors in real-time using SSE:
 
 ```ts
-import { useActions, Lifecycle, Action } from "march-hare";
+import { useContext, Lifecycle, Action } from "march-hare";
 
 type Country = { name: string; flag: string; timestamp: number };
 
@@ -30,8 +30,9 @@ export class Actions {
 
 const initial: Model = { visitor: null, history: [], source: null };
 
-export function useVisitorActions() {
-  const actions = useActions<Model, typeof Actions>(initial);
+export function useActions() {
+  const context = useContext<Model, typeof Actions>();
+  const actions = context.useActions(initial);
 
   actions.useAction(Actions.Mount, (context) => {
     const source = new EventSource("/visitors");
@@ -69,11 +70,11 @@ See the full implementation in the [Visitor example source code](https://github.
 
 ## Pattern 2: cache-driven (SSE pushes into a Resource)
 
-When a Resource is the canonical source of some data (e.g. a user profile fetched on demand) **and** a real-time channel can deliver updates for the same payload (server pushes a "user updated" event), use `context.actions.resource.set(...)` to write the incoming payload into the Resource's per-params cache slot. Subsequent reads via `user({ id })` or refreshes via `.exceeds({...})` see the freshest value with the freshest timestamp &mdash; without a round-trip.
+When a Resource is the canonical source of some data (e.g. a user profile fetched on demand) **and** a real-time controller can deliver updates for the same payload (server pushes a "user updated" event), use `context.actions.resource.set(...)` to write the incoming payload into the Resource's per-params cache slot. Subsequent reads via `user({ id })` or refreshes via `.exceeds({...})` see the freshest value with the freshest timestamp &mdash; without a round-trip.
 
 ```ts
 import {
-  useActions,
+  useContext,
   Lifecycle,
   Action,
   Distribution,
@@ -97,8 +98,9 @@ type Model = {
   source: EventSource | null;
 };
 
-export function useUserStreamActions() {
-  const actions = useActions<Model, typeof Actions>({ source: null });
+export function useActions() {
+  const context = useContext<Model, typeof Actions>();
+  const actions = context.useActions({ source: null });
 
   actions.useAction(Actions.Mount, (context) => {
     const source = new EventSource("/users/stream");

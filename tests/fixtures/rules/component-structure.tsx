@@ -10,10 +10,10 @@ import * as React from "react";
 import {
   Action,
   Distribution,
-  useActions,
   Boundary,
   type Box,
 } from "../../../src/library/index.ts";
+import { useActions } from "../../../src/library/hooks/index.ts";
 
 // Broadcast actions for boundary test
 class GlobalActions {

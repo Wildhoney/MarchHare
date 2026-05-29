@@ -1,42 +1,44 @@
 # Void Model and Void Actions
 
-Both the model and actions type parameters default to `void`, so you can omit them entirely when neither is needed:
+The model type parameter defaults to `void`, so you can omit it when no local state is needed:
 
 ```ts
-import { useActions, Lifecycle } from "march-hare";
+import { useContext, Lifecycle } from "march-hare";
 
 class Actions {
   static Mount = Lifecycle.Mount();
 }
 
-// Bare call — M defaults to void
-const actions = useActions<void, typeof Actions>();
+const context = useContext<void, typeof Actions>();
+const actions = context.useActions();
 
 actions.useAction(Actions.Mount, () => {
   console.log("Mounted!");
 });
 ```
 
-When a component needs to dispatch or listen to actions but doesn't manage any local state, pass `void` as the model type:
+When a component needs to dispatch or listen to actions but doesn't manage any local state, call `context.useActions()` with no arguments:
 
 ```ts
-import { useActions, Action } from "march-hare";
+import { useContext, Action } from "march-hare";
 
 class Actions {
   static Ping = Action("Ping");
 }
 
-const actions = useActions<void, typeof Actions>();
+const context = useContext<void, typeof Actions>();
+const actions = context.useActions();
 
 actions.useAction(Actions.Ping, () => {
   console.log("Pinged!");
 });
 ```
 
-You can also pass `void` for just the actions parameter while keeping a model:
+If you want a model but no typed actions class, declare the controller with only the model generic:
 
 ```ts
-const actions = useActions<Model, void>(initialModel);
+const context = useContext<Model>();
+const actions = context.useActions(initialModel);
 ```
 
 ## When to use a void model
@@ -57,7 +59,8 @@ class Actions {
   static Ping = Action("Ping");
 }
 
-const actions = useActions<void, typeof Actions>();
+const context = useContext<void, typeof Actions>();
+const actions = context.useActions();
 
 actions.useAction(Actions.Mount, () => {
   console.log("Component mounted");
@@ -73,8 +76,9 @@ actions.useAction(Actions.Unmount, () => {
 If you need access to props or other external values, pass a data callback as the first argument. The third generic specifies the data shape:
 
 ```ts
-function useTrackingActions(props: { userId: string }) {
-  const actions = useActions<void, typeof Actions, { userId: string }>(() => ({
+function useActions(props: { userId: string }) {
+  const context = useContext<{ userId: string }, typeof Actions>();
+  const actions = context.useActions(() => ({
     userId: props.userId,
   }));
 
@@ -91,7 +95,7 @@ function useTrackingActions(props: { userId: string }) {
 Void-model components can participate in broadcast and multicast communication. This is particularly useful for "listener-only" components:
 
 ```ts
-import { useActions, Action, Distribution } from "march-hare";
+import { useContext, Action, Distribution } from "march-hare";
 
 class BroadcastActions {
   static UserLoggedIn = Action<string>("UserLoggedIn", Distribution.Broadcast);
@@ -101,8 +105,9 @@ class Actions {
   static Broadcast = BroadcastActions;
 }
 
-export default function useAnalyticsActions() {
-  const actions = useActions<void, typeof Actions>();
+export default function useActions() {
+  const context = useContext<void, typeof Actions>();
+  const actions = context.useActions();
 
   actions.useAction(Actions.Broadcast.UserLoggedIn, (_context, username) => {
     analytics.track("login", { username });

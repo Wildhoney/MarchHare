@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useActions, Action, Lifecycle, annotate, Operation } from "march-hare";
+import { useContext, Action, Lifecycle, annotate, Operation } from "march-hare";
 
 type Model = {
   name: string | null;
@@ -22,7 +22,8 @@ function StrictModeFixture(): React.ReactElement {
   const handlerCountRef = React.useRef(0);
   const [, forceRender] = React.useState(0);
 
-  const result = useActions<Model, typeof Actions>(model);
+  const context = useContext<Model, typeof Actions>();
+  const result = context.useActions(model);
 
   result.useAction(Actions.Mount, () => {
     mountCountRef.current++;

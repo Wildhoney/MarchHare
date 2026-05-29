@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Boundary } from "march-hare";
-import { useTransactionsActions } from "./actions.ts";
+import { useActions } from "./actions.ts";
 import { Actions } from "./types.ts";
 import * as styles from "./styles.ts";
 
@@ -13,7 +13,7 @@ export default function Transactions(): React.ReactElement {
 }
 
 function Viewer(): React.ReactElement {
-  const [model, actions] = useTransactionsActions();
+  const [model, actions] = useActions();
   const sentinelRef = React.useRef<HTMLDivElement>(null);
   const pending = actions.inspect.items.pending();
 

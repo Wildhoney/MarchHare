@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useHappyActions } from "./actions.ts";
+import { useActions } from "./actions.ts";
 import { Actions } from "./types.ts";
 import { Mood } from "../../types.ts";
 import { isInactive } from "../../utils.ts";
@@ -7,7 +7,7 @@ import * as styles from "../../styles.ts";
 import { cx } from "@emotion/css";
 
 export default function Happy(): React.ReactElement {
-  const [model, actions] = useHappyActions();
+  const [model, actions] = useActions();
 
   return (
     <div

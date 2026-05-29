@@ -1,25 +1,26 @@
 # Channeled Actions
 
-Channeled actions allow targeted event delivery by subscribing with a channel object. This pattern is ideal for components that only care about updates relevant to them.
+Channeled actions allow targeted event delivery by subscribing with a controller object. This pattern is ideal for components that only care about updates relevant to them.
 
 ## Basic Usage
 
-Define a channel type as the second generic argument and call the action to create a channeled dispatch:
+Define a controller type as the second generic argument and call the action to create a channeled dispatch:
 
 ```tsx
-import { useActions, Action } from "march-hare";
+import { useContext, Action } from "march-hare";
 
 type User = { id: number; name: string };
 
 class Actions {
-  // Second generic arg defines the channel type
+  // Second generic arg defines the controller type
   static UserUpdated = Action<User, { UserId: number }>("UserUpdated");
 }
 
 function UserCard({ userId }: { userId: number }) {
-  const actions = useActions<Model, typeof Actions>(model);
+  const context = useContext<Model, typeof Actions>();
+  const actions = context.useActions(model);
 
-  // Only fires when dispatched with matching channel
+  // Only fires when dispatched with matching controller
   actions.useAction(
     Actions.UserUpdated({ UserId: userId }),
     (context, user) => {
@@ -27,22 +28,22 @@ function UserCard({ userId }: { userId: number }) {
     },
   );
 
-  return <div>{actions[0].user?.name}</div>;
+  return <div>{view[0].user?.name}</div>;
 }
 ```
 
 ## Channel Matching
 
-The channel is an object where each key-value pair must match. By convention, use **uppercase keys** (e.g., `{UserId: 4}` not `{userId: 4}`) to distinguish channel keys from payload properties.
+The controller is an object where each key-value pair must match. By convention, use **uppercase keys** (e.g., `{UserId: 4}` not `{userId: 4}`) to distinguish controller keys from payload properties.
 
-### Dispatch with exact channel
+### Dispatch with exact controller
 
 ```ts
 // Only handlers with matching UserId fire
 actions.dispatch(Actions.UserUpdated({ UserId: 5 }), user);
 ```
 
-### Dispatch with subset channel (fan out)
+### Dispatch with subset controller (fan out)
 
 ```ts
 // Fires ALL handlers where Role === "admin"
@@ -90,7 +91,7 @@ const myKey = Symbol("my-key");
 actions.useAction(Actions.UpdateByKey({ Key: myKey }), handler);
 ```
 
-`null` and `undefined` are explicitly forbidden as channel values.
+`null` and `undefined` are explicitly forbidden as controller values.
 
 ## Multi-Property Channels
 
@@ -111,14 +112,14 @@ actions.useAction(
   },
 );
 
-// Dispatch to all handlers matching the channel
+// Dispatch to all handlers matching the controller
 actions.dispatch(Actions.UserUpdated({ OrgId: 42, Role: "admin" }), user);
 ```
 
 ## Real-World Example: Multi-User Dashboard
 
 ```tsx
-import { useActions, Action, Lifecycle, Distribution } from "march-hare";
+import { useContext, Action, Lifecycle, Distribution } from "march-hare";
 
 type User = { id: number; name: string; status: string };
 type Model = { user: User | null };
@@ -133,14 +134,15 @@ class Actions {
 
 // WebSocket connection component
 function UserWebSocket() {
-  const actions = useActions<Model, typeof Actions>(model);
+  const context = useContext<Model, typeof Actions>();
+  const actions = context.useActions(model);
 
   actions.useAction(Actions.Mount, (context) => {
     const ws = new WebSocket("/users/stream");
 
     ws.onmessage = (event) => {
       const user = JSON.parse(event.data) as User;
-      // Dispatch to specific user's channel
+      // Dispatch to specific user's controller
       context.actions.dispatch(Actions.UserUpdated({ UserId: user.id }), user);
     };
 
@@ -154,7 +156,8 @@ function UserWebSocket() {
 
 // Individual user card - only receives its own updates
 function UserCard({ userId }: { userId: number }) {
-  const actions = useActions<Model, typeof Actions>(model);
+  const context = useContext<Model, typeof Actions>();
+  const actions = context.useActions(model);
 
   // Only fires for this specific user's updates
   actions.useAction(
@@ -166,8 +169,8 @@ function UserCard({ userId }: { userId: number }) {
 
   return (
     <div>
-      <h3>{actions[0].user?.name}</h3>
-      <span>{actions[0].user?.status}</span>
+      <h3>{view[0].user?.name}</h3>
+      <span>{view[0].user?.status}</span>
     </div>
   );
 }
@@ -197,13 +200,13 @@ actions.useAction(Actions.UserUpdated, (context, user) => {
   console.log("Any user updated:", user.id);
 });
 
-// Fires ONLY when channel matches
+// Fires ONLY when controller matches
 actions.useAction(Actions.UserUpdated({ UserId: 1 }), (context, user) => {
   console.log("User 1 specifically updated");
 });
 ```
 
-When you dispatch to a plain action, both handlers fire. When you dispatch with a channel, only matching channeled handlers fire (plus plain handlers always fire).
+When you dispatch to a plain action, both handlers fire. When you dispatch with a controller, only matching channeled handlers fire (plus plain handlers always fire).
 
 ## Summary
 

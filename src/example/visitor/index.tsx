@@ -1,10 +1,10 @@
 import * as React from "react";
-import { useVisitorActions } from "./actions.ts";
+import { useActions } from "./actions.ts";
 import * as styles from "./styles.ts";
 import { Popover } from "antd";
 import { A } from "@mobily/ts-belt";
 export default function Visitor(): React.ReactElement | null {
-  const [model] = useVisitorActions();
+  const [model] = useActions();
 
   if (!model.connected) return null;
 

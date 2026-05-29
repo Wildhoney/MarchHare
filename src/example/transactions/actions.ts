@@ -1,11 +1,13 @@
-import { Operation, useActions } from "march-hare";
+import { Operation, useContext } from "march-hare";
 import { Actions, type Model } from "./types.ts";
 import { transactions } from "./resources.ts";
 
 const initialModel: Model = { items: [], cursor: null, hasMore: true };
 
-export function useTransactionsActions() {
-  const actions = useActions<Model, typeof Actions>(initialModel);
+export function useActions() {
+  const context = useContext<Model, typeof Actions>();
+
+  const actions = context.useActions(initialModel);
 
   actions.useAction(Actions.Mount, async (context) => {
     context.actions.produce(
@@ -31,7 +33,7 @@ export function useTransactionsActions() {
 
   actions.useAction(Actions.LoadMore, async (context) => {
     if (!context.model.hasMore) return;
-    if (actions[1].inspect.items.pending()) return;
+    if (context.actions.inspect.items.pending()) return;
 
     const cursor = context.model.cursor;
     context.actions.produce(

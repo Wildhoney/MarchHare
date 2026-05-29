@@ -23,7 +23,7 @@ Any component that defines a handler for `Actions.Broadcast.SignedOut` will rece
 
 ## Filtering broadcast actions
 
-When multiple components subscribe to the same broadcast action, all handlers execute on dispatch. To respond only to specific instances, use a [channeled action](./channeled-actions.md) and subscribe with a channel filter:
+When multiple components subscribe to the same broadcast action, all handlers execute on dispatch. To respond only to specific instances, use a [channeled action](./channeled-actions.md) and subscribe with a controller filter:
 
 ```ts
 class Actions {
@@ -42,7 +42,7 @@ actions.useAction(
 );
 ```
 
-Dispatchers target a specific channel with `dispatch(Actions.Person({ PersonId: 5 }), person)`. Handlers registered for a different channel (or no channel) won't fire. This avoids unnecessary API calls without needing a runtime predicate.
+Dispatchers target a specific controller with `dispatch(Actions.Person({ PersonId: 5 }), person)`. Handlers registered for a different controller (or no controller) won't fire. This avoids unnecessary API calls without needing a runtime predicate.
 
 ## Cached values on mount
 
@@ -51,7 +51,8 @@ When a component mounts with a `useAction()` handler for a broadcast action, the
 ```tsx
 // Component A dispatches the action
 function ComponentA() {
-  const [, actions] = useActions<Model, typeof Actions>(model);
+  const context = useContext<Model, typeof Actions>();
+  const actions = context.useActions(model);
 
   return (
     <button onClick={() => actions.dispatch(Actions.Counter, 42)}>
@@ -62,7 +63,8 @@ function ComponentA() {
 
 // Component B mounts later and receives the cached value
 function ComponentB() {
-  const actions = useActions<Model, typeof Actions>(model);
+  const context = useContext<Model, typeof Actions>();
+  const actions = context.useActions(model);
 
   // This handler is invoked with 42 when the component mounts
   // (assuming ComponentA dispatched before ComponentB mounted)

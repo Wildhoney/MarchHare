@@ -62,7 +62,8 @@ Components using `useAction()` for broadcast actions also receive cached values 
 ```tsx
 // Component A dispatches a broadcast action
 function ComponentA() {
-  const [, actions] = useActions<Model, typeof Actions>(model);
+  const context = useContext<Model, typeof Actions>();
+  const actions = context.useActions(model);
 
   return (
     <button onClick={() => actions.dispatch(Actions.Counter, 42)}>
@@ -73,7 +74,8 @@ function ComponentA() {
 
 // Component B mounts later and receives the cached value
 function ComponentB() {
-  const actions = useActions<Model, typeof Actions>(model);
+  const context = useContext<Model, typeof Actions>();
+  const actions = context.useActions(model);
 
   // This handler is invoked with 42 when the component mounts
   // (assuming ComponentA dispatched before ComponentB mounted)

@@ -364,6 +364,16 @@ export enum Phase {
 export type Pk<T> = undefined | symbol | T;
 
 /**
+ * Reactive field type &mdash; a value that may be a concrete `T`, or
+ * `null` / `undefined` while loading, awaiting a fetch, or before
+ * upstream data has arrived. Use this for model fields whose presence
+ * is determined by async or external state.
+ *
+ * @template T - The concrete value type
+ */
+export type Reactive<T> = T | null | undefined;
+
+/**
  * Base constraint type for model state objects.
  * Models must be plain objects with string keys.
  *
@@ -634,119 +644,10 @@ export type HandlerContext<
   D extends Props = Props,
 > = {
   readonly model: DeepReadonly<M>;
-  /**
-   * The current lifecycle phase of the component.
-   * Useful for determining if the handler was called during mount (e.g., from a cached
-   * distributed action value) vs after the component is fully mounted.
-   *
-   * @example
-   * ```ts
-   * actions.useAction(Actions.Broadcast.Counter, (context, payload) => {
-   *   if (context.phase === Phase.Mounting) {
-   *     // Called with cached value during mount
-   *     console.log("Received cached value:", payload);
-   *   }
-   * });
-   * ```
-   */
   readonly phase: Phase;
-  /**
-   * The current task for the executing action handler.
-   * Contains the AbortController, action identifier, and payload for this specific invocation.
-   *
-   * Use `task.controller.signal` to check if the action was aborted, or `task.controller.abort()` to cancel it.
-   * The `task.action` and `task.payload` properties identify which action triggered this handler.
-   *
-   * @example
-   * ```ts
-   * actions.useAction(Actions.Fetch, async (context) => {
-   *   const response = await fetch("/api", {
-   *     signal: context.task.controller.signal,
-   *   });
-   *
-   *   if (context.task.controller.signal.aborted) return;
-   *
-   *   context.actions.produce((draft) => {
-   *     draft.model.data = response;
-   *   });
-   * });
-   * ```
-   */
   readonly task: Task;
-  /**
-   * Reactive data values passed to useActions.
-   * Always returns the latest values, even after awaits in async handlers.
-   *
-   * @example
-   * ```ts
-   * const [name, setName] = useState("Adam");
-   * const actions = useActions<Model, typeof Actions>(model, () => ({ name }));
-   *
-   * actions.useAction(Actions.Fetch, async (context) => {
-   *   await fetch("/api");
-   *   // context.data.name is always the latest value
-   *   console.log(context.data.name);
-   * });
-   * ```
-   */
   readonly data: DeepReadonly<D>;
-  /**
-   * Set of all running tasks across all components in the context.
-   * Tasks are ordered by creation time (oldest first).
-   *
-   * Each task contains:
-   * - `controller`: The AbortController to cancel this task
-   * - `action`: The action identifier that triggered this task
-   * - `payload`: The payload passed when the action was dispatched
-   *
-   * @example
-   * ```ts
-   * // Abort all tasks for a specific action
-   * for (const runningTask of context.tasks) {
-   *   if (runningTask.action === Actions.Fetch) {
-   *     runningTask.controller.abort();
-   *   }
-   * }
-   *
-   * // Abort the oldest task
-   * const oldest = context.tasks.values().next().value;
-   * oldest?.controller.abort();
-   *
-   * // Abort all tasks except the current one
-   * for (const runningTask of context.tasks) {
-   *   if (runningTask !== context.task) {
-   *     runningTask.controller.abort();
-   *   }
-   * }
-   * ```
-   */
   readonly tasks: ReadonlySet<Task>;
-  /**
-   * Read-only view of the per-`<Boundary>` Store &mdash; ambient,
-   * cross-cutting state (session, locale, feature flags, etc.) typed
-   * via module augmentation on the library's `Store` interface.
-   * Identical to the value returned by `useStore()` at the hook level.
-   *
-   * Reads use plain dot notation and always reflect the latest value,
-   * even after `await` boundaries. Writes go through
-   * `context.actions.produce(({ store }) => { store.x = ... })`
-   * &mdash; the same Immer-style recipe used for the model.
-   *
-   * @example
-   * ```ts
-   * actions.useAction(Actions.SignIn, async (context, credentials) => {
-   *   const result = await context.actions.resource(signIn(credentials));
-   *   context.actions.produce(({ store }) => {
-   *     store.session = result;
-   *   });
-   * });
-   *
-   * actions.useAction(Actions.Refresh, async (context) => {
-   *   if (context.store.session === null) return;
-   *   // ...
-   * });
-   * ```
-   */
   readonly store: DeepReadonly<Store>;
   readonly actions: {
     produce<
@@ -764,97 +665,15 @@ export type HandlerContext<
       payload: Payload<A>,
     ): Promise<void>;
     annotate<T>(value: T, operation?: Operation): T;
-    /**
-     * Fetches a {@link Resource} with the abort controller and Store
-     * snapshot auto-threaded from the current handler context. The
-     * argument is a resource invocation (`cat({ id: 5 })`) &mdash; the
-     * call primes a slot with the resource and params, and
-     * `.resource(...)` reads it. The return value is a thenable &mdash;
-     * `await` it to fire the fetch unconditionally, or use
-     * `.exceeds(duration)` to short-circuit when the per-params cache
-     * slot is still within the supplied freshness window (i.e. fetch
-     * only when the cache age *exceeds* the duration).
-     *
-     * @example
-     * ```ts
-     * actions.useAction(Actions.Mount, async (context) => {
-     *   // Always fetch.
-     *   const fresh = await context.actions.resource(user({ id: 5 }));
-     *
-     *   // Reuse cache when < 5 minutes old.
-     *   const maybe = await context.actions
-     *     .resource(user({ id: 5 }))
-     *     .exceeds({ minutes: 5 });
-     *
-     *   context.actions.produce(({ model }) => void (model.user = fresh));
-     * });
-     * ```
-     */
+    readonly inspect: Readonly<Inspect<M>>;
     resource: (<T>(invocation: T | null) => PromiseLike<T> & {
       readonly exceeds: (duration: Temporal.DurationLike) => Promise<T>;
     }) & {
-      /**
-       * Writes `data` into the per-params cache slot of the resource
-       * invocation passed as the first argument, with a fresh timestamp.
-       * Use this when payloads arrive out-of-band (SSE, WebSocket,
-       * postMessage) and need to be reflected in the Resource cache
-       * without a fetcher round-trip.
-       *
-       * @example
-       * ```ts
-       * actions.useAction(Actions.Broadcast.UserSSE, (context, payload) => {
-       *   context.actions.resource.set(user({ id: payload.id }), payload);
-       * });
-       * ```
-       */
       set<T>(invocation: T | null, data: T): void;
     };
-    /**
-     * Returns the resolved broadcast or multicast value, waiting for any
-     * pending annotations to settle before resolving.
-     *
-     * If a value has already been dispatched it resolves immediately.
-     * Otherwise it waits until the next dispatch of the action.
-     * Resolves with `null` if the task is aborted before a value arrives.
-     *
-     * @param action - The broadcast or multicast action to resolve. Multicast
-     *   actions read their scope from the action declaration.
-     * @returns The dispatched value, or `null` if aborted.
-     *
-     * @example
-     * ```ts
-     * actions.useAction(Actions.FetchPosts, async (context) => {
-     *   const user = await context.actions.resolution(Actions.Broadcast.User);
-     *   if (!user) return;
-     *   const posts = await fetchPosts(user.id, {
-     *     signal: context.task.controller.signal,
-     *   });
-     *   context.actions.produce(({ model }) => { model.posts = posts; });
-     * });
-     * ```
-     */
     resolution<T>(
       action: BroadcastPayload<T> | MulticastPayload<T>,
     ): Promise<T | null>;
-
-    /**
-     * Returns the latest broadcast or multicast value immediately without
-     * waiting for annotations to settle. Use this when you need the current
-     * cached value and do not need to wait for pending operations to complete.
-     *
-     * @param action - The broadcast or multicast action to peek at. Multicast
-     *   actions read their scope from the action declaration.
-     * @returns The cached value, or `null` if no value has been dispatched.
-     *
-     * @example
-     * ```ts
-     * actions.useAction(Actions.Check, (context) => {
-     *   const user = context.actions.peek(Actions.Broadcast.User);
-     *   if (!user) return;
-     *   console.log(user.name);
-     * });
-     * ```
-     */
     peek<T>(action: BroadcastPayload<T> | MulticastPayload<T>): T | null;
   };
 };
@@ -1102,7 +921,8 @@ export type UseActions<
 
   /**
    * Registers an action handler with the current scope.
-   * Types are pre-baked from the useActions call, so no type parameter is needed.
+   * Types are pre-baked from the `channel.use(...)` call, so no type
+   * parameter is needed.
    *
    * Supports two subscription patterns:
    * 1. **Plain action** - Receives ALL dispatches for that action (including channeled ones)
@@ -1113,7 +933,8 @@ export type UseActions<
    *
    * @example
    * ```ts
-   * const actions = useActions<typeof Actions>(model);
+   * const context = useContext<Model, typeof Actions>();
+   * const actions = context.useActions(model);
    *
    * // Subscribe to ALL UserUpdated events
    * actions.useAction(Actions.UserUpdated, (context, user) => {
@@ -1139,4 +960,42 @@ export type UseActions<
       payload: Payload<A>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void;
+};
+
+/**
+ * Stable, typed dispatch function for the actions class `AC`. Same call
+ * signatures as `actions.dispatch` returned by `useActions`, available
+ * before the paired `useActions` has run via {@link Context}.
+ */
+export type Dispatch<AC extends Actions | void> = {
+  (action: NoPayloadActions<Dispatchable<AC>>): Promise<void>;
+  <A extends WithPayloadActions<Dispatchable<AC>>>(
+    action: A,
+    payload: Payload<A>,
+  ): Promise<void>;
+};
+
+/**
+ * Handle returned by `useContext<M, AC, D>()`. Exposes
+ * `dispatch(action, payload?)` and a `useActions` method that materialises
+ * the component-local model and reactive data against the same dispatch
+ * target. Generics are declared on `useContext`; `useActions` inherits
+ * them &mdash; the call site does not re-state `Model` / `Actions` /
+ * `Data`.
+ *
+ * Note: this `Context` type is distinct from React's `useContext` /
+ * `React.Context` &mdash; it's the March Hare action surface returned by
+ * the `useContext` hook of this library.
+ */
+export type Context<
+  M extends Model | void,
+  AC extends Actions | void,
+  D extends Props = Props,
+> = {
+  dispatch: Dispatch<AC>;
+  useActions(getData?: () => D): UseActions<M, AC, D>;
+  useActions(
+    initialModel: M extends void ? never : M,
+    getData?: () => D,
+  ): UseActions<M, AC, D>;
 };

@@ -9,10 +9,10 @@ import * as React from "react";
 import {
   Action,
   Distribution,
-  useActions,
   Lifecycle,
   Fault,
 } from "../../../src/library/index.ts";
+import { useActions } from "../../../src/library/hooks/index.ts";
 
 class LifecycleActions {
   static Mount = Lifecycle.Mount();

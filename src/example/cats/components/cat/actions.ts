@@ -1,16 +1,18 @@
-import { useActions } from "march-hare";
+import { useContext } from "march-hare";
 import { useRouter } from "react-wayfinder";
 import { Actions, type Data, type Model, type Props } from "./types.ts";
 import { urls } from "../../utils.tsx";
 import { cat, getCat } from "./utils.ts";
 
-export function useCatActions({ index }: Props) {
+export function useActions({ index }: Props) {
   const router = useRouter();
 
-  const actions = useActions<Model, typeof Actions, Data>(
-    { cat: cat({ id: 5 }) },
-    () => ({ index, router }),
-  );
+  const context = useContext<Model, typeof Actions, Data>();
+
+  const actions = context.useActions({ cat: cat({ id: 5 }) }, () => ({
+    index,
+    router,
+  }));
 
   actions.useAction(Actions.Mount, getCat);
   actions.useAction(Actions.Get, getCat);

@@ -43,10 +43,10 @@ For advanced topics, see the [recipes directory](./recipes/).
 
 ## Getting started
 
-We dispatch the `Actions.Name` event upon clicking the "Sign in" button and within the component we subscribe to that same event via `useActions` so that when it's triggered it updates the model with the payload &ndash; in the React component we render `model.name`. The `With.Update` helper binds the action's payload directly to a model property.
+We dispatch the `Actions.Name` event upon clicking the "Sign in" button and within the component we subscribe to that same event via `useContext` so that when it's triggered it updates the model with the payload &ndash; in the React component we render `model.name`. The `With.Update` helper binds the action's payload directly to a model property.
 
 ```tsx
-import { useActions, Action, With } from "march-hare";
+import { useContext, Action, With } from "march-hare";
 
 type Model = {
   name: string | null;
@@ -60,14 +60,21 @@ export class Actions {
   static Name = Action<string>("Name");
 }
 
-export default function Profile(): React.ReactElement {
-  const [state, actions] = useActions<Model, typeof Actions>(model);
+function useActions() {
+  const context = useContext<Model, typeof Actions>();
+  const actions = context.useActions(model);
 
   actions.useAction(Actions.Name, With.Update("name"));
 
+  return actions;
+}
+
+export default function Profile(): React.ReactElement {
+  const [model, actions] = useActions();
+
   return (
     <>
-      <p>Hey {state.name}</p>
+      <p>Hey {model.name}</p>
 
       <button onClick={() => actions.dispatch(Actions.Name, randomName())}>
         Sign in
@@ -104,16 +111,16 @@ actions.useAction(Actions.Name, async (context) => {
 
 Notice we're using `annotate` which you can read more about in the [Immertation documentation](https://github.com/Wildhoney/Immertation). Once the request is finished we update the model again with the name fetched from the response and re-render the React component. `Resource` caches the most recent successful payload and exposes typed params &ndash; the full API is covered [further down](#remote-data).
 
-If you need to access external reactive values (like props or `useState` from parent components) that always reflect the latest value even after `await` operations, pass a data callback to `useActions`. The same snapshot is exposed as the third tuple element so JSX and handlers read from a single named source:
+If you need to access external reactive values (like props or `useState` from parent components) that always reflect the latest value even after `await` operations, pass a data callback to `context.useActions`. The same snapshot is exposed as the third tuple element so JSX and handlers read from a single named source:
 
 ```tsx
-const [model, actions, data] = useActions<
-  Model,
-  typeof Actions,
-  { query: string }
->(model, () => ({
-  query: props.query,
-}));
+const context = useContext<Model, typeof Actions, { query: string }>();
+const actions = context.useActions(
+  model,
+  () => ({
+    query: props.query,
+  }),
+);
 
 actions.useAction(Actions.Search, async (context) => {
   const results = await context.actions.resource(
@@ -128,33 +135,37 @@ return <input value={data.query} onChange={…} />;
 
 `data` is read-only from the view side &ndash; handlers read fresh values via `context.data` (Proxy delegating to a ref kept current across `await`s), JSX reads via the third tuple element (the same Proxy, refreshed synchronously each render). If a handler needs to _react_ to a change in `data`, subscribe to `Lifecycle.Update()` &mdash; it fires whenever `getData`'s result differs from the previous render. For more details, see the [referential equality recipe](./recipes/referential-equality.md) and the [React context in handlers recipe](./recipes/react-context-in-handlers.md).
 
-Both the model and actions type parameters default to `void`, so you can call `useActions()` with no generics at all when neither is needed:
+When an external library needs the dispatch callback at construction time (form libraries, animation engines) _and_ its return value must flow back into `context.useActions` via the data callback, there's a chicken-and-egg &mdash; each side wants the other to exist first. `useContext` resolves this by returning a stable handle up-front: `context.dispatch` is callable from the first line, the external library closes over it, and `context.useActions(initialModel, getData?)` completes the binding once the external value is in scope. See the [`useContext` recipe](./recipes/use-context.md) for the full pattern.
+
+The model defaults to `void`, so you can call `context.useActions()` with no generics or initial state when only handlers are needed:
 
 ```tsx
-import { useActions, Lifecycle } from "march-hare";
+import { useContext, Lifecycle } from "march-hare";
 
 class Actions {
   static Mount = Lifecycle.Mount();
 }
 
-const actions = useActions<void, typeof Actions>();
+const context = useContext<void, typeof Actions>();
+const actions = context.useActions();
 
 actions.useAction(Actions.Mount, () => {
   console.log("Mounted!");
 });
 ```
 
-If your component doesn't need local state but still needs to dispatch or listen to typed actions, pass `void` as the model type. No initial model is required:
+If your component doesn't need local state but still needs to dispatch or listen to typed actions, call `context.useActions()` with no initial model. No state is allocated:
 
 ```tsx
-import { useActions, Action, Lifecycle } from "march-hare";
+import { useContext, Action, Lifecycle } from "march-hare";
 
 export class Actions {
   static Ping = Action("Ping");
 }
 
 export default function Pinger(): React.ReactElement {
-  const [, actions] = useActions<void, typeof Actions>();
+  const context = useContext<void, typeof Actions>();
+  const actions = context.useActions();
 
   actions.useAction(Actions.Ping, () => {
     console.log("Pinged!");
@@ -243,7 +254,8 @@ You can also render broadcast values declaratively in JSX with `actions.stream`.
 
 ```tsx
 function Dashboard() {
-  const [model, actions] = useActions<Model, typeof Actions>(initialModel);
+  const context = useContext<Model, typeof Actions>();
+  const actions = context.useActions(initialModel);
 
   return (
     <div>
@@ -278,18 +290,22 @@ export const pay = Resource<Receipt, Body>(({ controller, params }) =>
 
 ```tsx
 // actions.ts
-import { useActions } from "march-hare";
+import { useContext } from "march-hare";
 import { user, pay } from "./resources";
 
 export function useActions() {
-  const actions = useActions<Model, typeof Actions>({
+  const context = useContext<Model, typeof Actions>();
+
+  const actions = context.useActions({
     // Sync cache read at the model literal — returns null when nothing is cached.
     user: user(),
     receipt: null,
   });
 
   actions.useAction(Actions.Mount, async (context) => {
-    const data = await context.actions.resource(user()).exceeds({ minutes: 5 });
+    const data = await context.controller
+      .resource(user())
+      .exceeds({ minutes: 5 });
     context.actions.produce(({ model }) => void (model.user = data));
   });
 
@@ -383,7 +399,8 @@ export const cat = Resource(
 
 ```ts
 // actions.ts
-const actions = useActions<Model, typeof Actions>({
+const context = useContext<Model, typeof Actions>();
+const actions = context.useActions({
   // First render reads the Cache automatically.
   cat: cat(),
 });
@@ -391,7 +408,9 @@ const actions = useActions<Model, typeof Actions>({
 actions.useAction(Actions.Mount, async (context) => {
   // Short-circuits when the persisted payload is < 5 minutes old.
   // The Cache writes through automatically on success.
-  const fresh = await context.actions.resource(cat()).exceeds({ minutes: 5 });
+  const fresh = await context.controller
+    .resource(cat())
+    .exceeds({ minutes: 5 });
   context.actions.produce(({ model }) => void (model.cat = fresh));
 });
 ```
@@ -400,11 +419,11 @@ actions.useAction(Actions.Mount, async (context) => {
 
 See the [storage recipe](./recipes/storage.md) for backend adapters (React Native MMKV, browser extension `chrome.storage`), sign-out purge, and the `unset` sentinel that keeps "nothing stored" distinct from "a legitimately stored null".
 
-For targeted event delivery, use channeled actions. Define a channel type as the second generic argument and call the action with a channel object &ndash; handlers fire when the dispatch channel matches:
+For targeted event delivery, use channeled actions. Define a controller type as the second generic argument and call the action with a controller object &ndash; handlers fire when the dispatch controller matches:
 
 ```tsx
 class Actions {
-  // Second generic arg defines the channel type
+  // Second generic arg defines the controller type
   static UserUpdated = Action<User, { UserId: number }>("UserUpdated");
 }
 
@@ -434,7 +453,7 @@ actions.dispatch(Actions.UserUpdated({ Role: Role.Admin }), user);
 actions.dispatch(Actions.UserUpdated, user);
 ```
 
-Channel values support non-nullable primitives: `string`, `number`, `boolean`, or `symbol`. By convention, use uppercase keys like `{UserId: 4}` to distinguish channel keys from payload properties.
+Channel values support non-nullable primitives: `string`, `number`, `boolean`, or `symbol`. By convention, use uppercase keys like `{UserId: 4}` to distinguish controller keys from payload properties.
 
 For scoped communication between component groups, use multicast actions with the `withScope` HOC. Each multicast action defines its own scope &ndash; pass the same action to `withScope` and to `dispatch`, no separate scope name required:
 
@@ -473,7 +492,7 @@ See the [multicast recipe](./recipes/multicast-actions.md) for more details.
 For coordinating between async handlers and threading ambient values (session tokens, locale, feature flags, current operational mode) without re-rendering the JSX tree on every dot read, use the per-`<Boundary>` `Store`. Declare your app's Store shape once via module augmentation, supply the initial value to `<Boundary store={...}>`, read via dot notation (`store.session`, `context.store.locale`), and write via `context.actions.produce(({ store }) => { ... })` &mdash; the same Immer-style recipe used for the model. Every `Resource` fetcher also receives a snapshot of the Store on its args object. When the view side needs to react to Store changes, subscribe to the global `Lifecycle.Store` broadcast &mdash; `actions.useAction(Lifecycle.Store, handler)` for handler-level work and `actions.stream(Lifecycle.Store, (store) => ...)` for JSX. Both seed from the initial Store on mount.
 
 ```ts
-import { useActions } from "march-hare";
+import { useContext } from "march-hare";
 
 // Declare your Store's shape once. Every read/write is typed against this.
 declare module "march-hare" {
@@ -490,7 +509,8 @@ declare module "march-hare" {
 </Boundary>;
 
 export function useAuthActions() {
-  const actions = useActions<void, typeof Actions>();
+  const context = useContext<void, typeof Actions>();
+  const actions = context.useActions();
 
   actions.useAction(Actions.SignOut, async (context) => {
     context.actions.produce(({ store }) => {
@@ -515,7 +535,7 @@ export function useAuthActions() {
 Toggling boolean UI state &ndash; modals, sidebars, drawers &ndash; is one of the most common patterns. Bind a unicast action to a boolean field on the model with `With.Invert`:
 
 ```tsx
-import { useActions, Action, With } from "march-hare";
+import { useContext, Action, With } from "march-hare";
 
 type Model = {
   paymentDialog: boolean;
@@ -527,7 +547,8 @@ export class Actions {
   static ToggleSidebar = Action("ToggleSidebar");
 }
 
-const [model, actions] = useActions<Model, typeof Actions>({
+const context = useContext<Model, typeof Actions>();
+const actions = context.useActions({
   paymentDialog: false,
   sidebar: false,
 });

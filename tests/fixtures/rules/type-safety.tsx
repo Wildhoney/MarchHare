@@ -10,12 +10,12 @@
 import * as React from "react";
 import {
   Action,
-  useActions,
   Op,
   utils,
   type Pk,
   type Box,
 } from "../../../src/library/index.ts";
+import { useActions } from "../../../src/library/hooks/index.ts";
 
 class TypeSafetyActions {
   static AddTodo = Action<string>("AddTodo");

@@ -49,11 +49,12 @@ If you omit the `store` prop the Store defaults to `{}` &mdash; useful for tests
 ## Reading via dot notation
 
 ```ts
-import { useStore } from "march-hare";
+import { useStore, useContext } from "march-hare";
 
-function useAuthActions() {
+function useActions() {
   const store = useStore();
-  const actions = useActions<void, typeof Actions>();
+  const context = useContext<void, typeof Actions>();
+  const actions = context.useActions();
 
   actions.useAction(Actions.Refresh, async (context) => {
     if (context.store.operating === "signing-out") return;
@@ -169,22 +170,24 @@ Render directly against the Store in JSX without lifting it into the model:
 
 `Lifecycle.Store` does **not** fire when a `produce` call mutates only the model &mdash; the slot reference is checked after each `produce` and the broadcast is emitted only when it changes. See [lifecycle-actions.md](./lifecycle-actions.md#lifecyclestore-global-broadcast) for the full contract.
 
-## Why Store rather than threading via `useActions` data callback
+## Why Store rather than threading via `context.useActions` data callback
 
 Before Store, the canonical pattern for ambient values like the session token was:
 
 ```ts
 const session = useSessionContext();
-const actions = useActions<Model, typeof Actions, { session: Session | null }>(
-  model,
-  () => ({ session }),
-);
+const context = useContext<
+  Model,
+  typeof Actions,
+  { session: Session | null }
+>();
+const actions = context.useActions(model, () => ({ session }));
 ```
 
 Threading via the data callback works but has three downsides Store fixes:
 
 - **Resources can't read it.** Resources are module-scope and have no React context, so the data callback never reaches them. The pre-Store workaround was a holder module (with all the global-mutable concerns that brings) plus a `ky.beforeRequest` hook.
-- **Every hook re-declares the shape.** Each `useActions` call needed `{ session: ... }` in the generics.
+- **Every hook re-declares the shape.** Each `context.useActions` call needed `{ session: ... }` in the generics.
 - **The model literal can't see it.** The `data` callback fires after the model is built.
 
 Store solves all three: the type is declared once globally, the fetcher receives a snapshot for free, and reads compose naturally inside hooks and handlers.
