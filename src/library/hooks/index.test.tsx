@@ -85,6 +85,47 @@ describe("useActions() data callback", () => {
     expect(capturedValues[1]).toBe("updated");
   });
 
+  it("should expose data as the third tuple element for JSX consumption", async () => {
+    let externalValue = "initial";
+
+    const { result, rerender } = renderHook(() => {
+      return useActions<Model, typeof Actions, { external: string }>(
+        model,
+        () => ({ external: externalValue }),
+      );
+    });
+
+    // Third tuple element exposes the current data snapshot synchronously.
+    expect(result.current[2].external).toBe("initial");
+
+    externalValue = "updated";
+    rerender();
+
+    // After rerender the third tuple element reflects the new value
+    // during the same render &mdash; not one render stale.
+    expect(result.current[2].external).toBe("updated");
+  });
+
+  it("should keep the actions API reference stable across rerenders when only data changes", async () => {
+    let externalValue = "initial";
+
+    const { result, rerender } = renderHook(() => {
+      return useActions<Model, typeof Actions, { external: string }>(
+        model,
+        () => ({ external: externalValue }),
+      );
+    });
+
+    const firstActions = result.current[1];
+
+    externalValue = "updated";
+    rerender();
+
+    // Action API identity is preserved &mdash; only data changed.
+    expect(result.current[1]).toBe(firstActions);
+    expect(result.current[2].external).toBe("updated");
+  });
+
   it("should work without data callback (empty data)", async () => {
     let dataReceived = false;
 

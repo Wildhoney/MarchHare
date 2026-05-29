@@ -104,15 +104,16 @@ actions.useAction(Actions.Name, async (context) => {
 
 Notice we're using `annotate` which you can read more about in the [Immertation documentation](https://github.com/Wildhoney/Immertation). Once the request is finished we update the model again with the name fetched from the response and re-render the React component. `Resource` caches the most recent successful payload and exposes typed params &ndash; the full API is covered [further down](#remote-data).
 
-If you need to access external reactive values (like props or `useState` from parent components) that always reflect the latest value even after `await` operations, pass a data callback to `useActions`:
+If you need to access external reactive values (like props or `useState` from parent components) that always reflect the latest value even after `await` operations, pass a data callback to `useActions`. The same snapshot is exposed as the third tuple element so JSX and handlers read from a single named source:
 
 ```tsx
-const actions = useActions<Model, typeof Actions, { query: string }>(
-  model,
-  () => ({
-    query: props.query,
-  }),
-);
+const [model, actions, data] = useActions<
+  Model,
+  typeof Actions,
+  { query: string }
+>(model, () => ({
+  query: props.query,
+}));
 
 actions.useAction(Actions.Search, async (context) => {
   const results = await context.actions.resource(
@@ -121,9 +122,11 @@ actions.useAction(Actions.Search, async (context) => {
   // context.data.query is always the latest value, even after await
   console.log(context.data.query, results);
 });
+
+return <input value={data.query} onChange={…} />;
 ```
 
-For more details, see the [referential equality recipe](./recipes/referential-equality.md).
+`data` is read-only from the view side &ndash; handlers read fresh values via `context.data` (Proxy delegating to a ref kept current across `await`s), JSX reads via the third tuple element (the same Proxy, refreshed synchronously each render). If a handler needs to _react_ to a change in `data`, subscribe to `Lifecycle.Update()` &mdash; it fires whenever `getData`'s result differs from the previous render. For more details, see the [referential equality recipe](./recipes/referential-equality.md) and the [React context in handlers recipe](./recipes/react-context-in-handlers.md).
 
 Both the model and actions type parameters default to `void`, so you can call `useActions()` with no generics at all when neither is needed:
 

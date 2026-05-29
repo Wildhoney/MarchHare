@@ -865,19 +865,29 @@ export type HandlerContext<
  * A tuple containing:
  * 1. The current model state of type M
  * 2. An actions object with dispatch and inspect capabilities
+ * 3. The current data snapshot of type D &mdash; the same React-owned values
+ *    that handlers read via `context.data`, exposed here for JSX consumption
+ *    so the view and the handler share a single named source of truth.
  *
  * @template M - The model type representing the component's state
  * @template AC - The actions class containing action definitions
+ * @template D - The data type for reactive external values
  *
  * @example
  * ```tsx
- * const [model, actions] = useActions<typeof Actions>(initialModel);
+ * const [model, actions, data] = useActions<Model, typeof Actions, Data>(
+ *   initialModel,
+ *   () => ({ user, theme }),
+ * );
  *
  * // Access state
  * model.count;
  *
  * // Dispatch actions
  * actions.dispatch(Actions.Increment, 5);
+ *
+ * // Read React-owned dependencies in JSX (same values as context.data)
+ * data.user.name;
  *
  * // Check pending state
  * actions.inspect.count.pending();
@@ -1076,6 +1086,7 @@ export type UseActions<
       renderer: (value: T, inspect: Inspect<T>) => React.ReactNode,
     ): React.ReactNode;
   },
+  DeepReadonly<D>,
 ] & {
   /**
    * Dispatches an action with an optional payload &mdash; same as

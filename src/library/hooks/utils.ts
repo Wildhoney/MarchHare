@@ -157,8 +157,10 @@ export function useLifecycles({
  * The proxy provides stable access to the object's properties,
  * even as the original object changes across renders.
  *
- * This is an internal utility used by useActions to provide stable
- * access to reactive values in async action handlers via `context.data`.
+ * The ref is updated synchronously during render so the proxy is current
+ * both during the render itself (for JSX reading the third tuple element
+ * returned by {@link useActions}) and afterwards (for handler reads via
+ * `context.data` across `await` boundaries).
  *
  * @template P The type of the object.
  * @param props The object to create a data proxy for.
@@ -166,7 +168,7 @@ export function useLifecycles({
  */
 export function useData<P extends Props>(props: P): P {
   const ref = React.useRef<P>(props);
-  React.useLayoutEffect((): void => void (ref.current = props), [props]);
+  ref.current = props;
   return React.useMemo(() => withGetters<P>(props, ref), [props]);
 }
 

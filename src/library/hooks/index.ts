@@ -64,6 +64,9 @@ import { G } from "@mobily/ts-belt";
  * The hook returns a result containing:
  * 1. The current model state
  * 2. An actions object with `dispatch`, `inspect`, and `useAction`
+ * 3. A read-only snapshot of the data values produced by `getData` &mdash;
+ *    the same values handlers read via `context.data`, exposed here for
+ *    JSX consumption so the view and the handler share one named source.
  *
  * The `inspect` property provides access to Immertation's annotation system,
  * allowing you to check for pending operations on model properties.
@@ -75,21 +78,22 @@ import { G } from "@mobily/ts-belt";
  * @param getData Optional function that returns reactive values as data.
  *   Values returned are accessible via `context.data` in action handlers,
  *   always reflecting the latest values even after await operations.
- * @returns A result `[model, actions]` with pre-typed `useAction` method.
+ * @returns A result `[model, actions, data]` with pre-typed `useAction` method.
  *
  * @example
  * ```typescript
  * // Basic usage
- * const actions = useActions<Model, typeof Actions>(model);
+ * const [model, actions] = useActions<Model, typeof Actions>(model);
  *
  * // Without a model (actions-only)
- * const actions = useActions<void, typeof Actions>();
+ * const [, actions] = useActions<void, typeof Actions>();
  *
- * // With reactive data
- * const actions = useActions<Model, typeof Actions, { query: string }>(
- *   model,
- *   () => ({ query: props.query }),
- * );
+ * // With reactive data &mdash; consumed in JSX and handlers alike.
+ * const [model, actions, data] = useActions<
+ *   Model,
+ *   typeof Actions,
+ *   { query: string }
+ * >(initialModel, () => ({ query: props.query }));
  * ```
  */
 export function useActions<
@@ -483,45 +487,44 @@ export function useActions<
     handlers: registry.current.handlers,
   });
 
-  const result = React.useMemo(
-    () => <UseActions<M, A, D>>(<unknown>[
-        model,
-        {
-          dispatch(
-            action: ActionOrChanneled,
-            payload?: HandlerPayload,
-          ): Promise<void> {
-            const base = getActionSymbol(action);
-            const channel = isChanneledAction(action)
-              ? action.channel
-              : undefined;
+  const actionsApi = React.useMemo(
+    () => ({
+      dispatch(
+        action: ActionOrChanneled,
+        payload?: HandlerPayload,
+      ): Promise<void> {
+        const base = getActionSymbol(action);
+        const channel = isChanneledAction(action) ? action.channel : undefined;
 
-            if (isMulticastAction(action)) {
-              const scoped = getScope(scope, base);
-              if (scoped)
-                return emitAsync(scoped.emitter, base, payload, channel);
-              return Promise.resolve();
-            }
+        if (isMulticastAction(action)) {
+          const scoped = getScope(scope, base);
+          if (scoped) return emitAsync(scoped.emitter, base, payload, channel);
+          return Promise.resolve();
+        }
 
-            const emitter = isBroadcastAction(action) ? broadcast : unicast;
-            return emitAsync(emitter, base, payload, channel);
-          },
-          get inspect() {
-            return state.current.inspect;
-          },
-          stream(
-            action: AnyAction,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            renderer: ConsumerRenderer<any>,
-          ): React.ReactNode {
-            return React.createElement(Partition, {
-              action: <symbol>getActionSymbol(action),
-              renderer,
-            });
-          },
-        },
-      ]),
+        const emitter = isBroadcastAction(action) ? broadcast : unicast;
+        return emitAsync(emitter, base, payload, channel);
+      },
+      get inspect() {
+        return state.current.inspect;
+      },
+      stream(
+        action: AnyAction,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        renderer: ConsumerRenderer<any>,
+      ): React.ReactNode {
+        return React.createElement(Partition, {
+          action: <symbol>getActionSymbol(action),
+          renderer,
+        });
+      },
+    }),
     [model, unicast],
+  );
+
+  const result = React.useMemo(
+    () => <UseActions<M, A, D>>(<unknown>[model, actionsApi, data]),
+    [model, actionsApi, data],
   );
 
   // The public `useAction` signature constrains the action argument to
