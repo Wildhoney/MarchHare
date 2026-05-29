@@ -1,6 +1,6 @@
 import ky from "ky";
 import { Cache, Resource } from "march-hare";
-import type { Cat } from "./types.ts";
+import type { Cat, H } from "./types.ts";
 
 const cache = Cache({
   get: (key) => localStorage.getItem(key),
@@ -17,3 +17,10 @@ export const cat = Resource(async ({ controller }) => {
     .json<Cat[]>();
   return cats[0];
 }, cache);
+
+export const getCat: H["Get"] = async (context) => {
+  const data = await context.actions
+    .resource(cat({ id: 5 }))
+    .exceeds({ minutes: 5 });
+  context.actions.produce(({ model }) => void (model.cat = data));
+};

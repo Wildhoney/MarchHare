@@ -1019,15 +1019,16 @@ export type Handlers<
   M extends Model | void,
   AC extends Actions | void,
   D extends Props = Props,
+  RootAC extends Actions | void = AC,
 > = {
   [K in OwnKeys<AC>]: OwnKeys<AC[K]> extends never
     ? (
-        context: HandlerContext<M, AC, D>,
+        context: HandlerContext<M, RootAC, D>,
         ...args: [Payload<AC[K] & HandlerPayload<unknown>>] extends [never]
           ? []
           : [payload: Payload<AC[K] & HandlerPayload<unknown>>]
       ) => void | Promise<void> | AsyncGenerator | Generator
-    : Handlers<M, AC[K] & Actions, D>;
+    : Handlers<M, AC[K] & Actions, D, RootAC>;
 };
 
 export type UseActions<

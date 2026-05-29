@@ -1,4 +1,4 @@
-import { Action, Lifecycle } from "march-hare";
+import { Action, type Handlers, Lifecycle } from "march-hare";
 import type { Router } from "react-wayfinder";
 
 export type Cat = {
@@ -13,7 +13,7 @@ export class Actions {
 
   static Next = Action("Next");
   static Previous = Action("Previous");
-  static Refresh = Action("Refresh");
+  static Get = Action("Get");
 }
 
 export type Model = {
@@ -23,3 +23,5 @@ export type Model = {
 export type Props = { index: number };
 
 export type Data = Props & { router: Router };
+
+export type H = Handlers<Model, typeof Actions, Data>;

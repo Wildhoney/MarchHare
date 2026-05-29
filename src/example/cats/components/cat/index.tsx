@@ -36,7 +36,7 @@ export function Cat({ index }: Props): React.ReactElement {
 
         <button
           className={styles.button}
-          onClick={() => actions.dispatch(Actions.Refresh)}
+          onClick={() => actions.dispatch(Actions.Get)}
           disabled={!cat}
         >
           &#x21bb; Refresh
