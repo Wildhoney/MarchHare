@@ -31,10 +31,9 @@ export type { Adapter, Encoded } from "./types.ts";
  *   clear: () => localStorage.clear(),
  * });
  *
- * // Wired into a Resource — successful runs write through automatically.
- * export const cat = Resource(
- *   async ({ controller }) => fetchCat(controller.signal),
- *   cache,
+ * // Wired via Resource.Cachable — successful runs write through automatically.
+ * export const cat = Resource.Cachable(cache, async (context) =>
+ *   fetchCat(context.controller.signal),
  * );
  * ```
  */

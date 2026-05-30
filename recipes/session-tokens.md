@@ -28,8 +28,8 @@ export const api = ky.create({
 import { Resource } from "march-hare";
 import { api } from "./api/client";
 
-export const user = Resource(({ controller }) =>
-  api.get("user", { signal: controller.signal }).json<User>(),
+export const user = Resource((context) =>
+  api.get("user", { signal: context.controller.signal }).json<User>(),
 );
 ```
 

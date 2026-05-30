@@ -5,7 +5,7 @@ By default a `Resource`'s cache is in-memory only &ndash; it resets on every pag
 This recipe covers:
 
 - The `Cache(adapter)` factory and its `get`/`set`/`remove`/`clear` API.
-- The `Resource(fetcher, cache)` second argument that wires a Resource to a Cache.
+- `Resource.Cachable(cache, fetcher)` &mdash; the cache-aware variant of `Resource`. The cache comes first.
 - Adapter examples for browser `localStorage`, React Native MMKV, and browser-extension `chrome.storage`.
 - Sign-out purge, schema versioning, and the `unset` sentinel.
 
@@ -55,7 +55,7 @@ cache.clear();
 
 ## Wiring a Cache into a Resource
 
-Pass the `Cache` as the second argument to `Resource(fetcher, cache)`. Every successful fetch writes through to the Cache under a key derived from the call-site params; first reads via `cat(params)` auto-seed from the Cache's adapter. The pattern collapses to:
+Use `Resource.Cachable(cache, fetcher)` &mdash; the cache-aware variant. The cache is the **first** argument; persistence is the headline of this form, the fetcher is the operation. Bare `Resource(fetcher)` does not accept a cache argument; reach for `Cachable` whenever you want persistence. Every successful fetch writes through to the Cache under a key derived from the call-site params; first reads via `cat(params)` auto-seed from the Cache's adapter:
 
 ```ts
 // resources.ts
@@ -70,14 +70,14 @@ const cache = Cache({
   clear: () => localStorage.clear(),
 });
 
-export const cat = Resource(async ({ controller }) => {
+export const cat = Resource.Cachable(cache, async (context) => {
   const cats = await ky
     .get("https://api.thecatapi.com/v1/images/search", {
-      signal: controller.signal,
+      signal: context.controller.signal,
     })
     .json<Cat[]>();
   return cats[0];
-}, cache);
+});
 ```
 
 ```ts
@@ -121,10 +121,14 @@ Cache entries are keyed automatically by `JSON.stringify(params)`. For a paramet
 
 ```ts
 const userCache = Cache(namespacedAdapter("users"));
-export const user = Resource<User, { id: number }>(
-  ({ controller, params }) =>
-    ky.get(`users/${params.id}`, { signal: controller.signal }).json<User>(),
+export const user = Resource.Cachable<User, { id: number }>(
   userCache,
+  (context) =>
+    ky
+      .get(`users/${context.params.id}`, {
+        signal: context.controller.signal,
+      })
+      .json<User>(),
 );
 
 // Each cache slot is independent.

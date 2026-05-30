@@ -9,14 +9,14 @@ const cache = Cache({
   clear: () => localStorage.clear(),
 });
 
-export const cat = Resource(async ({ controller }) => {
+export const cat = Resource.Cachable(cache, async (context) => {
   const cats = await ky
     .get("https://api.thecatapi.com/v1/images/search", {
-      signal: controller.signal,
+      signal: context.controller.signal,
     })
     .json<Cat[]>();
   return cats[0];
-}, cache);
+});
 
 export const getCat: H["Get"] = async (context) => {
   const data = await context.actions

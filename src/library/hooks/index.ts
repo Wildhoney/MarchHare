@@ -228,8 +228,33 @@ export function useActions<
           resource: Object.assign(
             function resourceCall<T>(_value: T | null) {
               const call = consumePending();
+              const dispatchFromResource = (
+                action: unknown,
+                payload?: unknown,
+              ): Promise<void> => {
+                if (controller.signal.aborted) return Promise.resolve();
+                const a = <AnyAction>action;
+                const base = getActionSymbol(a);
+                if (isMulticastAction(a)) {
+                  const scoped = getScope(scope, base);
+                  if (scoped)
+                    return emitAsync(scoped.emitter, base, payload, undefined);
+                  return Promise.resolve();
+                }
+                if (isBroadcastAction(a)) {
+                  return emitAsync(broadcast, base, payload, undefined);
+                }
+                return Promise.resolve();
+              };
               const fetch = (): Promise<T> =>
-                <Promise<T>>call.run(slot.current, controller, call.params);
+                <Promise<T>>(
+                  call.run(
+                    slot.current,
+                    controller,
+                    call.params,
+                    dispatchFromResource,
+                  )
+                );
               const exceeds = (duration: Temporal.DurationLike): Promise<T> => {
                 const { data, at } = call.read(call.params);
                 if (data !== unset && at !== null) {

@@ -417,13 +417,13 @@ function useSignOutActions() {
   return actions;
 }
 
-// 4. Resource fetchers read the Store via the args object.
-export const user = Resource(({ store, signal }) =>
+// 4. Resource fetchers read the Store via the context argument.
+export const user = Resource((context) =>
   ky.get("/api/user", {
-    headers: store.session
-      ? { Authorization: `Bearer ${store.session.accessToken}` }
+    headers: context.store.session
+      ? { Authorization: `Bearer ${context.store.session.accessToken}` }
       : {},
-    signal,
+    signal: context.controller.signal,
   }).json<User>(),
 );
 ```

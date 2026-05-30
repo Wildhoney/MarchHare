@@ -5,7 +5,6 @@ import * as styles from "./styles.ts";
 
 export function Cat({ index }: Props): React.ReactElement {
   const [model, actions] = useActions({ index });
-  const cat = model.cat;
 
   return (
     <main className={styles.layout}>
@@ -18,10 +17,14 @@ export function Cat({ index }: Props): React.ReactElement {
       </header>
 
       <figure className={styles.figure}>
-        {!cat ? (
+        {!model.cat ? (
           <div className={styles.skeleton} />
         ) : (
-          <img src={cat.url} alt={`Cat ${cat.id}`} className={styles.image} />
+          <img
+            src={model.cat.url}
+            alt={`Cat ${model.cat.id}`}
+            className={styles.image}
+          />
         )}
       </figure>
 
@@ -37,7 +40,7 @@ export function Cat({ index }: Props): React.ReactElement {
         <button
           className={styles.button}
           onClick={() => actions.dispatch(Actions.Get)}
-          disabled={!cat}
+          disabled={!model.cat}
         >
           &#x21bb; Refresh
         </button>

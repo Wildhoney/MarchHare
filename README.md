@@ -90,8 +90,8 @@ When you need to do more than just assign the payload &ndash; such as making an 
 // resources.ts
 import { Resource } from "march-hare";
 
-export const user = Resource(({ controller }) =>
-  ky.get(api.user(), { signal: controller.signal }).json<User>(),
+export const user = Resource((context) =>
+  ky.get(api.user(), { signal: context.controller.signal }).json<User>(),
 );
 ```
 
@@ -277,13 +277,16 @@ For remote data, declare a `Resource` at module scope and use it directly. `user
 // resources.ts
 import { Resource } from "march-hare";
 
-export const user = Resource(({ controller }) =>
-  ky.get("/api/user", { signal: controller.signal }).json<User>(),
+export const user = Resource((context) =>
+  ky.get("/api/user", { signal: context.controller.signal }).json<User>(),
 );
 
-export const pay = Resource<Receipt, Body>(({ controller, params }) =>
+export const pay = Resource<Receipt, Body>((context) =>
   ky
-    .post("/api/pay", { json: params, signal: controller.signal })
+    .post("/api/pay", {
+      json: context.params,
+      signal: context.controller.signal,
+    })
     .json<Receipt>(),
 );
 ```
@@ -320,11 +323,11 @@ export function useActions() {
 
 `context.actions.resource(invocation)` returns a thenable. Awaiting it fires the fetch unconditionally; chaining `.exceeds({ minutes: 5 })` short-circuits when the per-params cache age does not yet exceed the supplied freshness window. `.exceeds(duration)` accepts a `Temporal.Duration`, a `DurationLike` object, or an ISO 8601 duration string. `Temporal` is read from the host runtime &ndash; bring a polyfill (e.g. [`@js-temporal/polyfill`](https://github.com/js-temporal/temporal-polyfill)) if your target environment does not yet expose it natively.
 
-`Resource` takes a single fetcher argument. The fetcher receives `{ store, controller, params }` &mdash; destructure whichever you need. There are no callbacks &ndash; no `onSuccess`, no `onError`, no injected `dispatch`. Side-effects after a run (broadcasting, analytics, model writes) live in the `useAction` handler that awaited the call, next to the rest of the flow:
+`Resource` takes a single fetcher argument. The fetcher receives a `context` object &mdash; read fields via `context.store`, `context.controller`, `context.params`. There are no callbacks &ndash; no `onSuccess`, no `onError`. The `context.dispatch` field can fire broadcast or multicast actions from inside the fetcher (unicast is rejected at compile time), but most side-effects (model writes, analytics) belong in the `useAction` handler that awaited the call:
 
 ```ts
-export const user = Resource(({ controller }) =>
-  ky.get("/api/user", { signal: controller.signal }).json<User>(),
+export const user = Resource((context) =>
+  ky.get("/api/user", { signal: context.controller.signal }).json<User>(),
 );
 
 actions.useAction(Actions.Mount, async (context) => {
@@ -339,11 +342,11 @@ actions.useAction(Actions.Mount, async (context) => {
 ```ts
 type Params = { cursor: string | null };
 
-export const feed = Resource<Page<Item>, Params>(({ controller, params }) =>
+export const feed = Resource<Page<Item>, Params>((context) =>
   http
     .get("feed", {
-      searchParams: { cursor: params.cursor ?? "" },
-      signal: controller.signal,
+      searchParams: { cursor: context.params.cursor ?? "" },
+      signal: context.controller.signal,
     })
     .json<Page<Item>>(),
 );
@@ -391,9 +394,8 @@ const cache = Cache({
   clear: () => localStorage.clear(),
 });
 
-export const cat = Resource(
-  async ({ controller }) => fetchCat(controller.signal),
-  cache,
+export const cat = Resource.Cachable(cache, async (context) =>
+  fetchCat(context.controller.signal),
 );
 ```
 

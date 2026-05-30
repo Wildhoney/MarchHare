@@ -1,4 +1,4 @@
-import type { Args, Fetcher } from "./types.ts";
+import type { Args, Dispatch, Fetcher } from "./types.ts";
 import { Cache, defaultCache, key } from "./utils.ts";
 import { present, unset } from "../utils/utils.ts";
 import type { Store } from "../boundary/components/store/index.tsx";
@@ -18,6 +18,7 @@ export type PendingCall = {
     store: Store,
     controller: AbortController,
     params: object,
+    dispatch: Dispatch,
   ) => Promise<unknown>;
   readonly read: (params: object) => {
     data: unknown;
@@ -51,10 +52,11 @@ export function consumePending(): PendingCall {
 }
 
 /**
- * Resource handle returned by `Resource(...)`. Call it with `params` to
- * read the per-params cache slot synchronously and prime the slot
- * consumed by `context.actions.resource(...)` for a follow-up fetch or
- * `context.actions.resource.set(...)` for an out-of-band write.
+ * Resource handle returned by `Resource(...)` or `Resource.Cachable(...)`.
+ * Call it with `params` to read the per-params cache slot synchronously
+ * and prime the slot consumed by `context.actions.resource(...)` for a
+ * follow-up fetch or `context.actions.resource.set(...)` for an
+ * out-of-band write.
  *
  * ```ts
  * // Sync cache read in a model literal.
@@ -73,63 +75,10 @@ export type Resource<T, P extends object = Record<never, never>> = [
   ? (params?: P) => T | null
   : (params: P) => T | null;
 
-/**
- * Defines a remote resource &mdash; declared at module scope and used
- * directly. Calling the returned handle with `params` returns the sync
- * cache value (`T | null`) and primes the slot consumed by
- * `context.actions.resource(...)` / `.set(...)` for fetch and write
- * paths.
- *
- * The fetcher receives a single args object `{ store, controller, params }`:
- *
- * - `store` &ndash; snapshot of the per-`<Boundary>` Store (session,
- *   locale, feature flags, etc.). Reads only; writes go through
- *   `context.actions.produce(({ store }) => ...)` in handlers.
- * - `controller` &ndash; the `AbortController` auto-threaded from the
- *   calling handler's `context.task.controller`. Pass `controller.signal`
- *   to `fetch`/`ky`, or call `controller.abort()` to fail fast.
- * - `params` &ndash; the call-site params object (defaults to `{}`).
- *
- * Resources do **not** carry any callbacks &ndash; side-effects
- * (broadcasting, logging, model updates) belong in the `useAction`
- * handler that awaited `context.actions.resource(...)`.
- *
- * Every successful fetch writes through to the per-fetcher {@link Cache}
- * (in-memory by default, persistent when an adapter is supplied via the
- * second argument).
- *
- * @example
- * ```ts
- * import { Resource, Cache } from "march-hare";
- *
- * export const user = Resource<User, { id: number }>(
- *   ({ store, controller, params }) =>
- *     ky.get(`users/${params.id}`, {
- *       headers: store.session
- *         ? { Authorization: `Bearer ${store.session.accessToken}` }
- *         : {},
- *       signal: controller.signal,
- *     }).json<User>(),
- * );
- *
- * // Sync cache read at module scope or in the model literal.
- * const cached: User | null = user({ id: 5 });
- *
- * // Fetch inside a handler — controller and Store auto-threaded.
- * actions.useAction(Actions.Mount, async (context) => {
- *   const data = await context.actions
- *     .resource(user({ id: 5 }))
- *     .exceeds({ minutes: 5 });
- *   context.actions.produce(({ model }) => void (model.user = data));
- * });
- * ```
- */
-export function Resource<T, P extends object = Record<never, never>>(
-  fetcher: Fetcher<T, P>,
-  cache?: Cache,
+function build<T, P extends object>(
+  ƒ: Fetcher<T, P>,
+  backing: Cache,
 ): Resource<T, P> {
-  const backing = cache ?? defaultCache(fetcher);
-
   const read = (params: P) => {
     const stored = backing.get<T>(key(params));
     if (stored.data === unset || stored.at === null) {
@@ -142,8 +91,9 @@ export function Resource<T, P extends object = Record<never, never>>(
     store: Store,
     controller: AbortController,
     params: P,
+    dispatch: Dispatch,
   ): Promise<T> =>
-    fetcher(<Args<P>>{ store, controller, params }).then((resolved) => {
+    ƒ(<Args<P>>{ store, controller, params, dispatch }).then((resolved) => {
       backing.set(key(params), present(resolved, Temporal.Now.instant()));
       return resolved;
     });
@@ -168,4 +118,76 @@ export function Resource<T, P extends object = Record<never, never>>(
   }
 
   return <Resource<T, P>>call;
+}
+
+/**
+ * Defines a remote resource &mdash; declared at module scope and used
+ * directly. Calling the returned handle with `params` returns the sync
+ * cache value (`T | null`) and primes the slot consumed by
+ * `context.actions.resource(...)` / `.set(...)` for fetch and write
+ * paths.
+ *
+ * The fetcher receives a single `context` argument carrying `store`,
+ * `controller`, `params`, and a broadcast/multicast-only `dispatch`.
+ * Every successful fetch writes through to a per-resource in-memory
+ * cache; pair with {@link Resource.Cachable} to persist across reloads.
+ *
+ * @example
+ * ```ts
+ * import { Resource } from "march-hare";
+ *
+ * export const user = Resource<User, { id: number }>(async (context) =>
+ *   ky
+ *     .get(`users/${context.params.id}`, {
+ *       headers: context.store.session
+ *         ? { Authorization: `Bearer ${context.store.session.accessToken}` }
+ *         : {},
+ *       signal: context.controller.signal,
+ *     })
+ *     .json<User>(),
+ * );
+ * ```
+ */
+export function Resource<T, P extends object = Record<never, never>>(
+  ƒ: Fetcher<T, P>,
+): Resource<T, P> {
+  return build(ƒ, defaultCache(ƒ));
+}
+
+// eslint-disable-next-line @typescript-eslint/no-namespace
+export namespace Resource {
+  /**
+   * Cache-aware variant of {@link Resource}. The supplied {@link Cache}
+   * is the **first** argument &mdash; persistence is the headline of
+   * this form, the fetcher is the operation. Every successful fetch
+   * writes through to the cache; first reads via the call form
+   * auto-seed from the cache's adapter.
+   *
+   * @example
+   * ```ts
+   * import { Cache, Resource } from "march-hare";
+   *
+   * const cache = Cache({
+   *   get: (key) => localStorage.getItem(key),
+   *   set: (key, value) => localStorage.setItem(key, value),
+   *   remove: (key) => localStorage.removeItem(key),
+   *   clear: () => localStorage.clear(),
+   * });
+   *
+   * export const cat = Resource.Cachable(cache, async (context) =>
+   *   ky
+   *     .get("https://api.thecatapi.com/v1/images/search", {
+   *       signal: context.controller.signal,
+   *     })
+   *     .json<Cat[]>()
+   *     .then((cats) => cats[0]),
+   * );
+   * ```
+   */
+  export function Cachable<T, P extends object = Record<never, never>>(
+    cache: Cache,
+    ƒ: Fetcher<T, P>,
+  ): Resource<T, P> {
+    return build(ƒ, cache);
+  }
 }

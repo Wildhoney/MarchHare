@@ -22,21 +22,25 @@ function memoryAdapter(): Adapter & { entries: Map<string, string> } {
 
 const noStore = <Store>{};
 const noController = (): AbortController => new AbortController();
+const noDispatch = <Parameters<ReturnType<typeof consumePending>["run"]>[3]>(
+  (() => Promise.resolve())
+);
 
 describe("Resource() fetcher invocation", () => {
-  it("invokes the fetcher with { store, controller, params }", async () => {
+  it("invokes the fetcher with { store, controller, params, dispatch }", async () => {
     const fetcher = vi.fn(() => Promise.resolve({ name: "Adam" }));
     const user = Resource(fetcher);
     const controller = noController();
 
     user();
     const call = consumePending();
-    await call.run(noStore, controller, call.params);
+    await call.run(noStore, controller, call.params, noDispatch);
 
     expect(fetcher).toHaveBeenCalledWith({
       store: noStore,
       controller,
       params: {},
+      dispatch: noDispatch,
     });
   });
 
@@ -47,7 +51,7 @@ describe("Resource() fetcher invocation", () => {
 
     user();
     const call = consumePending();
-    await call.run(store, noController(), call.params);
+    await call.run(store, noController(), call.params, noDispatch);
 
     expect(fetcher).toHaveBeenCalledWith(expect.objectContaining({ store }));
   });
@@ -62,7 +66,7 @@ describe("Resource() fetcher invocation", () => {
 
     item({ id: 5 });
     const call = consumePending();
-    await call.run(noStore, controller, call.params);
+    await call.run(noStore, controller, call.params, noDispatch);
 
     expect(fetcher).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -78,7 +82,7 @@ describe("Resource() fetcher invocation", () => {
     pay();
     const call = consumePending();
     await expect(
-      call.run(noStore, noController(), call.params),
+      call.run(noStore, noController(), call.params, noDispatch),
     ).rejects.toThrow("declined");
   });
 
@@ -89,7 +93,7 @@ describe("Resource() fetcher invocation", () => {
     const runOnce = async () => {
       user();
       const call = consumePending();
-      await call.run(noStore, noController(), call.params);
+      await call.run(noStore, noController(), call.params, noDispatch);
     };
 
     await Promise.all([runOnce(), runOnce(), runOnce()]);
@@ -110,7 +114,7 @@ describe("Resource(params) sync read", () => {
 
     user();
     const first = consumePending();
-    await first.run(noStore, noController(), first.params);
+    await first.run(noStore, noController(), first.params, noDispatch);
 
     expect(user()).toEqual({ name: "Adam" });
     consumePending();
@@ -125,7 +129,7 @@ describe("Resource(params) sync read", () => {
     user();
     const first = consumePending();
     await expect(
-      first.run(noStore, noController(), first.params),
+      first.run(noStore, noController(), first.params, noDispatch),
     ).rejects.toThrow("boom");
 
     expect(user()).toBeNull();
@@ -137,7 +141,7 @@ describe("Resource(params) sync read", () => {
 
     user();
     const first = consumePending();
-    await first.run(noStore, noController(), first.params);
+    await first.run(noStore, noController(), first.params, noDispatch);
 
     // `user()` returns null for both "not fetched" and "fetched a null".
     expect(user()).toBeNull();
@@ -155,11 +159,11 @@ describe("Resource(params) sync read", () => {
 
     user({ id: 5 });
     const five = consumePending();
-    await five.run(noStore, noController(), five.params);
+    await five.run(noStore, noController(), five.params, noDispatch);
 
     user({ id: 6 });
     const six = consumePending();
-    await six.run(noStore, noController(), six.params);
+    await six.run(noStore, noController(), six.params, noDispatch);
 
     expect(user({ id: 5 })).toEqual({ id: 5, name: "User 5" });
     consumePending();
@@ -174,9 +178,9 @@ describe("AbortController", () => {
   it("aborts the fetch when the controller fires", async () => {
     const controller = new AbortController();
     const user = Resource<{ name: string }>(
-      ({ controller: c }) =>
+      (context) =>
         new Promise<{ name: string }>((_resolve, reject) => {
-          c.signal.addEventListener("abort", () =>
+          context.controller.signal.addEventListener("abort", () =>
             reject(new DOMException("aborted", "AbortError")),
           );
         }),
@@ -184,22 +188,24 @@ describe("AbortController", () => {
 
     user();
     const call = consumePending();
-    const promise = call.run(noStore, controller, call.params);
+    const promise = call.run(noStore, controller, call.params, noDispatch);
     controller.abort();
 
     await expect(promise).rejects.toThrow("aborted");
   });
 });
 
-describe("Resource(fetcher, cache)", () => {
+describe("Resource.Cachable(cache, fetcher)", () => {
   it("writes through to the supplied Cache on every successful fetch", async () => {
     const adapter = memoryAdapter();
     const cache = Cache(adapter);
-    const user = Resource(() => Promise.resolve({ name: "Adam" }), cache);
+    const user = Resource.Cachable(cache, () =>
+      Promise.resolve({ name: "Adam" }),
+    );
 
     user();
     const call = consumePending();
-    await call.run(noStore, noController(), call.params);
+    await call.run(noStore, noController(), call.params, noDispatch);
 
     expect(adapter.entries.has("{}")).toBe(true);
     const stored = cache.get<{ name: string }>("{}");
@@ -208,18 +214,17 @@ describe("Resource(fetcher, cache)", () => {
 
   it("seeds a fresh Resource from a persisted Cache (simulated reload)", async () => {
     const adapter = memoryAdapter();
-    const first = Resource(
-      () => Promise.resolve({ name: "FromFirst" }),
-      Cache(adapter),
+    const first = Resource.Cachable(Cache(adapter), () =>
+      Promise.resolve({ name: "FromFirst" }),
     );
 
     first();
     const a = consumePending();
-    await a.run(noStore, noController(), a.params);
+    await a.run(noStore, noController(), a.params, noDispatch);
     expect(adapter.entries.has("{}")).toBe(true);
 
     const fetcher = vi.fn(() => Promise.resolve({ name: "Network" }));
-    const second = Resource(fetcher, Cache(adapter));
+    const second = Resource.Cachable(Cache(adapter), fetcher);
 
     expect(second()).toEqual({ name: "FromFirst" });
     consumePending();
@@ -233,20 +238,23 @@ describe("Resource(fetcher, cache)", () => {
     const fetcher = vi.fn(({ params: { id } }: { params: Params }) =>
       Promise.resolve({ id }),
     );
-    const item = Resource<{ id: number }, Params>(fetcher, cache);
+    const item = Resource.Cachable<{ id: number }, Params>(cache, fetcher);
 
     item({ id: 5 });
     const five = consumePending();
-    await five.run(noStore, noController(), five.params);
+    await five.run(noStore, noController(), five.params, noDispatch);
 
     item({ id: 6 });
     const six = consumePending();
-    await six.run(noStore, noController(), six.params);
+    await six.run(noStore, noController(), six.params, noDispatch);
 
     expect(adapter.entries.has('{"id":5}')).toBe(true);
     expect(adapter.entries.has('{"id":6}')).toBe(true);
 
-    const reloaded = Resource<{ id: number }, Params>(fetcher, Cache(adapter));
+    const reloaded = Resource.Cachable<{ id: number }, Params>(
+      Cache(adapter),
+      fetcher,
+    );
 
     expect(reloaded({ id: 5 })).toEqual({ id: 5 });
     consumePending();
@@ -254,7 +262,7 @@ describe("Resource(fetcher, cache)", () => {
     consumePending();
   });
 
-  it("falls back to the default in-memory Cache when none is supplied", async () => {
+  it("falls back to an in-memory Cache when using bare Resource()", async () => {
     const user = Resource(() => Promise.resolve({ name: "Adam" }));
 
     expect(user()).toBeNull();
@@ -262,7 +270,7 @@ describe("Resource(fetcher, cache)", () => {
 
     user();
     const call = consumePending();
-    await call.run(noStore, noController(), call.params);
+    await call.run(noStore, noController(), call.params, noDispatch);
 
     expect(user()).toEqual({ name: "Adam" });
     consumePending();

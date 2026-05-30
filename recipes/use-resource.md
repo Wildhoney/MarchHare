@@ -5,23 +5,32 @@
 - **`user(params?)`** &mdash; synchronous read of the cached payload for those params. Returns `T | null`. Safe to call at module scope, in the model literal, anywhere. As a side effect, the call primes the slot that `context.actions.resource(...)` / `.set(...)` consume next.
 - **`context.actions.resource(user(params?))`** &mdash; fires the fetch from an action handler. Auto-threads the `AbortController` from `context.task.controller` and the per-`<Boundary>` Store snapshot. Returns a thenable that's also chainable with `.exceeds({ minutes: 5 })` for cache-aware refresh.
 
-The fetcher itself receives `{ store, controller, params }` &mdash; destructure whichever you need. Pass `controller.signal` to `fetch`/`ky`/`EventSource` for cancellation.
+The fetcher itself receives a single `context` argument carrying `store`, `controller`, `params`, and a broadcast/multicast-only `dispatch`. Access fields directly via `context.controller.signal`, `context.params.id`, etc. &mdash; do not destructure. Pass `context.controller.signal` to `fetch`/`ky`/`EventSource` for cancellation.
 
 ```ts
 // resources.ts
 import { Resource } from "march-hare";
 
-export const user = Resource<User, { id: number }>(({ controller, params }) =>
-  ky.get(`users/${params.id}`, { signal: controller.signal }).json<User>(),
+export const user = Resource<User, { id: number }>((context) =>
+  ky
+    .get(`users/${context.params.id}`, {
+      signal: context.controller.signal,
+    })
+    .json<User>(),
 );
 
-export const pay = Resource<Receipt, Body>(({ controller, params }) =>
-  ky.post("pay", { json: params, signal: controller.signal }).json<Receipt>(),
+export const pay = Resource<Receipt, Body>((context) =>
+  ky
+    .post("pay", {
+      json: context.params,
+      signal: context.controller.signal,
+    })
+    .json<Receipt>(),
 );
 
 // Simple no-store, no-params:
-export const ping = Resource(({ controller }) =>
-  ky.get("ping", { signal: controller.signal }).text(),
+export const ping = Resource((context) =>
+  ky.get("ping", { signal: context.controller.signal }).text(),
 );
 ```
 
@@ -60,7 +69,7 @@ export function useActions() {
 }
 ```
 
-Every successful fetch writes through to the per-fetcher {@link Cache} (in-memory by default, persistent when an adapter is supplied via the second arg to `Resource`).
+Every successful fetch writes through to a per-resource in-memory cache. Reach for `Resource.Cachable(cache, fetcher)` &mdash; the cache-aware variant &mdash; when you want the cache to survive reloads. See the [`Resource.Cachable`](#resourcecachable--persistent-variant) section below.
 
 > **Convention:** keep resources in `resources.ts` and pull them in with named imports (`import { user, pay } from "./resources"`). The grouping signals "remote interactions, declared at module scope" at a glance.
 
@@ -77,21 +86,23 @@ The slot is consumed the moment `.resource(...)` runs, so the natural inline pat
 
 Keep `user(...)` and `.resource(...)` in the same expression. Splitting them across an `await` lets unrelated `cat(...)` calls overwrite the slot in between.
 
-## The fetcher's args object
+## The fetcher's `context` argument
 
 ```ts
-type Args<P> = {
+type Context<P> = {
   store: Store; // per-<Boundary> ambient state snapshot (read-only)
   controller: AbortController;
   params: P;
+  dispatch: Dispatch; // broadcast / multicast only — unicast is rejected at compile time
 };
 ```
 
 - **`store`** &mdash; a snapshot of the per-`<Boundary>` [Store](./store.md) at the moment of fetch. Read session tokens, locale, feature flags, anything cross-cutting. The snapshot is captured at fetcher-start; mid-flight Store changes don't affect this fetch but the next one picks them up.
-- **`controller`** &mdash; the `AbortController` auto-threaded from `context.task.controller`. Pass `controller.signal` to `ky`/`fetch`/`EventSource` to thread cancellation; when the action's task is aborted (component unmount, supersede, manual abort), the in-flight request is cancelled. Call `controller.abort()` if the fetcher needs to fail fast.
+- **`controller`** &mdash; the `AbortController` auto-threaded from `context.task.controller`. Pass `context.controller.signal` to `ky`/`fetch`/`EventSource` to thread cancellation; when the action's task is aborted (component unmount, supersede, manual abort), the in-flight request is cancelled. Call `context.controller.abort()` if the fetcher needs to fail fast.
 - **`params`** &mdash; the call-site params object, typed by the Resource's second generic.
+- **`dispatch`** &mdash; fire a [broadcast](./broadcast-actions.md) or [multicast](./multicast-actions.md) action from inside the fetcher. Unicast actions target the calling component &mdash; a Resource fetcher has no component, so unicast is rejected at compile time. Use for cross-component side-effects that should fire as soon as the fetch enters a particular state, regardless of which component awaited it.
 
-Destructure only what you need. No-store, no-params resources collapse to `({ controller })`.
+Always access fields via `context.x` rather than destructuring &mdash; the signature stays stable as the fetcher grows.
 
 ## Per-params caching
 
@@ -162,19 +173,18 @@ If the most recent successful fetch for those params resolved longer ago than th
 
 ## Reading the Store inside fetchers
 
-Every fetcher receives the per-`<Boundary>` Store on its args object. Use it for ambient values like the session token:
+Every fetcher receives the per-`<Boundary>` Store on its context. Use it for ambient values like the session token:
 
 ```ts
-export const user = Resource<User, { id: number }>(
-  ({ store, controller, params }) =>
-    ky
-      .get(`users/${params.id}`, {
-        headers: store.session
-          ? { Authorization: `Bearer ${store.session.accessToken}` }
-          : {},
-        signal: controller.signal,
-      })
-      .json<User>(),
+export const user = Resource<User, { id: number }>((context) =>
+  ky
+    .get(`users/${context.params.id}`, {
+      headers: context.store.session
+        ? { Authorization: `Bearer ${context.store.session.accessToken}` }
+        : {},
+      signal: context.controller.signal,
+    })
+    .json<User>(),
 );
 ```
 
@@ -182,13 +192,29 @@ See [session-tokens](./session-tokens.md) for the full auth pattern and [store](
 
 ## Fanning out on success or failure
 
-Resources don't dispatch anything themselves. Compose dispatch and other side-effects in the calling handler &mdash; the same place the `await` lives:
+There are two places to fire a broadcast or multicast for a resource:
+
+- **From the fetcher**, via `context.dispatch`. Best for things every interested component should learn as soon as the data arrives, independent of who awaited the run &mdash; freshness pings, analytics, cache invalidation. Unicast is rejected at compile time because a fetcher has no component to deliver to.
+- **From the handler**, via `context.actions.dispatch` after the `await`. Best for events that depend on the awaiter's local state &mdash; "this specific component just finished loading", model-write follow-ups, error narrowing.
 
 ```ts
+// resources.ts — fan-out happens inside the fetcher.
+export const user = Resource<User, { id: number }>(async (context) => {
+  const data = await ky
+    .get(`users/${context.params.id}`, {
+      signal: context.controller.signal,
+    })
+    .json<User>();
+  await context.dispatch(Actions.Broadcast.UserUpdated, data);
+  return data;
+});
+```
+
+```ts
+// actions.ts — handler-side dispatch for awaiter-local concerns.
 actions.useAction(Actions.Mount, async (context) => {
   try {
     const data = await context.actions.resource(user({ id: 5 }));
-    await context.actions.dispatch(Actions.Broadcast.UserUpdated, data);
     context.actions.produce(({ model }) => void (model.user = data));
   } catch (error) {
     if (error instanceof RateLimitedError) {
@@ -202,9 +228,34 @@ actions.useAction(Actions.Mount, async (context) => {
 });
 ```
 
-When several components need to react to a resource update, the pattern is: one component awaits the run and dispatches a broadcast; every other component subscribes to that broadcast via `useAction`. See [broadcast-actions](./broadcast-actions.md) for the receiving side.
+When several components need to react to a resource update, the pattern is: the fetcher (or a single awaiting handler) dispatches a broadcast; every other component subscribes to that broadcast via `useAction`. See [broadcast-actions](./broadcast-actions.md) for the receiving side.
 
 > **Note:** TypeScript cannot type promise rejections, so `await context.actions.resource(...)` rejects with `unknown`. To narrow inline, use `error instanceof YourErrorClass` checks within a `try/catch`.
+
+## `Resource.Cachable` &mdash; persistent variant
+
+`Resource(fetcher)` is in-memory only &mdash; the cache resets on every page load. To keep the most recent successful payload across reloads, use `Resource.Cachable(cache, fetcher)`. The cache is the **first** argument; persistence is the headline of this form, the fetcher is the operation:
+
+```ts
+import { Cache, Resource } from "march-hare";
+
+const cache = Cache({
+  get: (key) => localStorage.getItem(key),
+  set: (key, value) => localStorage.setItem(key, value),
+  remove: (key) => localStorage.removeItem(key),
+  clear: () => localStorage.clear(),
+});
+
+export const user = Resource.Cachable<User, { id: number }>(cache, (context) =>
+  ky
+    .get(`users/${context.params.id}`, {
+      signal: context.controller.signal,
+    })
+    .json<User>(),
+);
+```
+
+Bare `Resource(fetcher)` does not accept a cache argument &mdash; reach for `Cachable` whenever you want persistence. See the [storage recipe](./storage.md) for adapter examples (`localStorage`, MMKV, `chrome.storage`) and sign-out cache purging.
 
 ## Optimistic updates
 
@@ -267,14 +318,13 @@ The `annotate` call drives the loading UI via `actions.inspect.user.pending()` &
 
 ```ts
 // resources.ts
-export const feed = Resource<Page<Item>, { cursor: string | null }>(
-  ({ controller, params }) =>
-    http
-      .get("feed", {
-        searchParams: { cursor: params.cursor ?? "" },
-        signal: controller.signal,
-      })
-      .json<Page<Item>>(),
+export const feed = Resource<Page<Item>, { cursor: string | null }>((context) =>
+  http
+    .get("feed", {
+      searchParams: { cursor: context.params.cursor ?? "" },
+      signal: context.controller.signal,
+    })
+    .json<Page<Item>>(),
 );
 ```
 
@@ -297,7 +347,7 @@ Each cursor gets its own cache slot &mdash; `.exceeds({...})` is per-cursor, so 
 
 ## Limitations
 
-- **No persistence across reloads by default.** Opt in by wiring a `Cache` instance into the Resource: `Resource(fetcher, Cache(adapter))`. The Cache writes through on every successful fetch and auto-seeds from storage on first read. See [storage](./storage.md).
+- **No persistence across reloads by default.** Opt in by reaching for `Resource.Cachable(cache, fetcher)`. The Cache writes through on every successful fetch and auto-seeds from storage on first read. See [storage](./storage.md).
 - **No focus or reconnect revalidation.** Wire a `window` listener and call `context.actions.resource(...)` again if you need this.
 - **No SSR isolation.** The cache is module-global, so server-side rendering would leak across requests. `Resource` is client-only.
 - **No subscription on the awaiter.** `await context.actions.resource(...)` resolves once and does not re-fire when a broadcast goes out. Use `useAction(broadcastAction)` for change notifications.
