@@ -1,5 +1,6 @@
 import type { Adapter, Encoded, Stored } from "./types.ts";
 import { empty, present, unset } from "../utils/utils.ts";
+import { G } from "@mobily/ts-belt";
 
 export type { Adapter, Encoded } from "./types.ts";
 
@@ -31,10 +32,11 @@ export type { Adapter, Encoded } from "./types.ts";
  *   clear: () => localStorage.clear(),
  * });
  *
- * // Wired via Resource.Cachable — successful runs write through automatically.
- * export const cat = Resource.Cachable(cache, async (context) =>
- *   fetchCat(context.controller.signal),
- * );
+ * // Wire it into a Resource — successful runs write through automatically.
+ * export const cat = Resource({
+ *   cache,
+ *   fetch: (context) => fetchCat(context.controller.signal),
+ * });
  * ```
  */
 export type Cache = {
@@ -63,7 +65,7 @@ export function Cache(adapter?: Adapter): Cache {
     get<T>(key: string): Stored<T> {
       try {
         const raw = backing.get(key);
-        if (raw === null) return empty<T>();
+        if (G.isNull(raw)) return empty<T>();
         const parsed = <Encoded<T>>JSON.parse(raw);
         return present(parsed.data, Temporal.Instant.from(parsed.at));
       } catch {
@@ -71,7 +73,7 @@ export function Cache(adapter?: Adapter): Cache {
       }
     },
     set<T>(key: string, value: Stored<T>): boolean {
-      if (value.data === unset || value.at === null) return false;
+      if (value.data === unset || G.isNull(value.at)) return false;
       try {
         backing.set(
           key,

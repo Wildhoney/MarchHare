@@ -442,7 +442,7 @@ test.describe("March Hare Rulebook", () => {
       await expect(user2).toHaveText("Broadcast to All <all@example.com>");
     });
 
-    it("Rule 40: Use context.actions.resolution to resolve broadcast values in handlers - should resolve broadcast value imperatively", async ({
+    it("Rule 40: Use context.actions.final to resolve broadcast values in handlers - should resolve broadcast value imperatively", async ({
       page,
     }) => {
       const consumed = page.getByTestId("rule-40-consumed");
@@ -450,14 +450,14 @@ test.describe("March Hare Rulebook", () => {
       // Publish a broadcast value first
       await page.getByTestId("rule-40-publish").click();
 
-      // Mount the consumer — its Lifecycle.Mount handler calls context.actions.resolution
+      // Mount the consumer — its Lifecycle.Mount handler calls context.actions.final
       await page.getByTestId("rule-40-mount-consumer").click();
 
       // The read value should appear after the handler reads it
       await expect(consumed).toHaveText("Charlie", { timeout: 2000 });
     });
 
-    it("Rule 40: Use context.actions.resolution to resolve broadcast values in handlers - should return null when no value dispatched", async ({
+    it("Rule 40: Use context.actions.final to resolve broadcast values in handlers - should return null when no value dispatched", async ({
       page,
     }) => {
       // Mount the consumer WITHOUT publishing first

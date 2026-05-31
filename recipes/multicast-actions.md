@@ -46,8 +46,8 @@ If you need two isolated scope instances of the same shape (e.g. one per team), 
 Dispatch the multicast action like any other; the scope is read from the action itself:
 
 ```tsx
-function useScoreActions() {
-  const context = useContext<Model, typeof Actions>();
+function useActions() {
+  const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions(model);
 
   actions.useAction(Scope.Update, (context, score) => {
@@ -58,7 +58,7 @@ function useScoreActions() {
 }
 
 function ScoreBoard() {
-  const [model, actions] = useScoreActions();
+  const [model, actions] = useActions();
 
   return (
     <div>
@@ -79,7 +79,7 @@ Use `useAction` to subscribe and store only what you need locally:
 
 ```tsx
 function ScoreDisplay() {
-  const [model, actions] = useScoreActions();
+  const [model, actions] = useActions();
 
   actions.useAction(Scope.Update, (context, score) => {
     context.actions.produce(({ model }) => void (model.latestScore = score));

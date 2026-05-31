@@ -1222,7 +1222,7 @@ describe("useActions() StrictMode resilience", () => {
   });
 });
 
-describe("useActions() context.actions.resolution", () => {
+describe("useActions() context.actions.final", () => {
   class BroadcastReadActions {
     static Name = Action<string>("Name", Distribution.Broadcast);
   }
@@ -1258,9 +1258,7 @@ describe("useActions() context.actions.resolution", () => {
       });
 
       result.useAction(BroadcastReadActions.Name, async (context, _name) => {
-        const value = await context.actions.resolution(
-          BroadcastReadActions.Name,
-        );
+        const value = await context.actions.final(BroadcastReadActions.Name);
         readValue = value;
         context.actions.produce(({ model }) => void (model.result = value));
       });
@@ -1301,9 +1299,7 @@ describe("useActions() context.actions.resolution", () => {
       const result = useActions<Record<string, never>, typeof LocalActions>({});
 
       result.useAction(LocalActions.Trigger, async (context) => {
-        const value = await context.actions.resolution(
-          BroadcastReadActions.Name,
-        );
+        const value = await context.actions.final(BroadcastReadActions.Name);
         readValue = value;
       });
 
@@ -1364,9 +1360,7 @@ describe("useActions() context.actions.resolution", () => {
       >({});
 
       result.useAction(MulticastReadActions.Score, async (context) => {
-        const value = await context.actions.resolution(
-          MulticastReadActions.Score,
-        );
+        const value = await context.actions.final(MulticastReadActions.Score);
         readValue = value;
       });
 
@@ -1463,9 +1457,7 @@ describe("useActions() context.actions.resolution", () => {
 
       // Read should await until the annotations on `name` have settled.
       actions.useAction(LocalActions.Read, async (context) => {
-        const value = await context.actions.resolution(
-          BroadcastReadActions.Name,
-        );
+        const value = await context.actions.final(BroadcastReadActions.Name);
         readValue = value;
       });
 
@@ -2110,7 +2102,7 @@ describe("useActions() mount + broadcast replay deduplication", () => {
         calls.push("broadcast");
       });
 
-      return <div data-testid="late-dedup">Late</div>;
+      return <div data-testid="late-dedupe">Late</div>;
     }
 
     function App() {
@@ -2348,7 +2340,7 @@ describe("useActions() mount + broadcast replay deduplication", () => {
 
       return (
         <button
-          data-testid="dispatch-mc-dedup"
+          data-testid="dispatch-mc-dedupe"
           onClick={() => {
             actions.dispatch(MulticastUser.User, { id: 3 });
             onShowLate();
@@ -2406,7 +2398,7 @@ describe("useActions() mount + broadcast replay deduplication", () => {
     render(<App />);
 
     await act(async () => {
-      screen.getByTestId("dispatch-mc-dedup").click();
+      screen.getByTestId("dispatch-mc-dedupe").click();
     });
 
     await act(async () => {

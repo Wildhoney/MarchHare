@@ -43,6 +43,7 @@ import { useStore, useStoreRef } from "../boundary/components/store/utils.ts";
 import type { Store } from "../boundary/components/store/index.tsx";
 import { produce as produceImmer } from "immer";
 import { consumePending } from "../resource/index.ts";
+import type { Coalesce } from "../resource/types.ts";
 import { unset } from "../utils/utils.ts";
 import {
   isBroadcastAction,
@@ -54,6 +55,58 @@ import { useTasks } from "../boundary/components/tasks/utils.ts";
 import { Partition } from "../boundary/components/consumer/index.tsx";
 import type { ConsumerRenderer } from "../boundary/components/consumer/types.ts";
 import { G } from "@mobily/ts-belt";
+import { useSharing } from "../boundary/components/sharing/index.tsx";
+
+/**
+ * Internal sentinels and tunables for the resource chainable.
+ *
+ * - `defaultToken` &mdash; used when `.coalesce()` is called with no
+ *   token. Every untokened caller for the same `(Resource, params)`
+ *   slot collapses onto this key.
+ *
+ * @internal
+ */
+const config = <const>{
+  defaultToken: Symbol("coalesce:default"),
+};
+
+function coalesceKey(value: Coalesce): string {
+  switch (typeof value) {
+    case "string":
+      return `s:${value}`;
+    case "number":
+      return `n:${value}`;
+    case "bigint":
+      return `i:${value.toString()}`;
+    case "boolean":
+      return `b:${value}`;
+    case "symbol":
+      return `y:${value.description ?? String(value)}`;
+    default:
+      return `o:${JSON.stringify(value)}`;
+  }
+}
+
+function withAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    const onAbort = (): void => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}
 
 /**
  * A hook for managing state with actions.
@@ -123,6 +176,7 @@ export function useActions<
   const tasks = useTasks();
   const store = useStore();
   const slot = useStoreRef();
+  const sharing = useSharing();
   const rerender = useRerender();
   const initialised = React.useRef(false);
   const hydration = React.useRef<Process | null>(null);
@@ -246,27 +300,57 @@ export function useActions<
                 }
                 return Promise.resolve();
               };
-              const fetch = (): Promise<T> =>
-                <Promise<T>>(
+              const options: {
+                exceedsWindow: Temporal.DurationLike | null;
+                coalesceToken: Coalesce | undefined;
+              } = { exceedsWindow: null, coalesceToken: undefined };
+              const fetch = (): Promise<T> => {
+                if (G.isNotNullable(options.exceedsWindow)) {
+                  const { data, at } = call.read(call.params);
+                  if (data !== unset && G.isNotNullable(at)) {
+                    const elapsed = Temporal.Now.instant().since(at);
+                    const window = Temporal.Duration.from(
+                      options.exceedsWindow,
+                    );
+                    if (Temporal.Duration.compare(elapsed, window) <= 0) {
+                      return Promise.resolve(<T>data);
+                    }
+                  }
+                }
+                if (G.isUndefined(options.coalesceToken)) {
+                  return <Promise<T>>(
+                    call.run(
+                      slot.current,
+                      controller,
+                      call.params,
+                      dispatchFromResource,
+                    )
+                  );
+                }
+                let mutable = sharing.get(call.run);
+                if (G.isUndefined(mutable)) {
+                  mutable = new Map<string, Promise<unknown>>();
+                  sharing.set(call.run, mutable);
+                }
+                const bucket = mutable;
+                const key = `${JSON.stringify(call.params)}|${coalesceKey(options.coalesceToken)}`;
+                const existing = <Promise<T> | undefined>bucket.get(key);
+                if (existing) return withAbort(existing, controller.signal);
+                const detached = new AbortController();
+                const shared = (<Promise<T>>(
                   call.run(
                     slot.current,
-                    controller,
+                    detached,
                     call.params,
                     dispatchFromResource,
                   )
-                );
-              const exceeds = (duration: Temporal.DurationLike): Promise<T> => {
-                const { data, at } = call.read(call.params);
-                if (data !== unset && at !== null) {
-                  const elapsed = Temporal.Now.instant().since(at);
-                  const window = Temporal.Duration.from(duration);
-                  if (Temporal.Duration.compare(elapsed, window) <= 0) {
-                    return Promise.resolve(<T>data);
-                  }
-                }
-                return fetch();
+                )).finally(() => {
+                  bucket.delete(key);
+                });
+                bucket.set(key, shared);
+                return withAbort(shared, controller.signal);
               };
-              return {
+              const handle = {
                 then<U = T, V = never>(
                   onFulfilled?:
                     | ((value: T) => U | PromiseLike<U>)
@@ -279,8 +363,16 @@ export function useActions<
                 ): Promise<U | V> {
                   return fetch().then(onFulfilled, onRejected);
                 },
-                exceeds,
+                exceeds(duration: Temporal.DurationLike) {
+                  options.exceedsWindow = duration;
+                  return handle;
+                },
+                coalesce(token?: Coalesce) {
+                  options.coalesceToken = token ?? config.defaultToken;
+                  return handle;
+                },
               };
+              return handle;
             },
             {
               set: <T>(_value: T | null, data: T): void => {
@@ -289,7 +381,7 @@ export function useActions<
               },
             },
           ),
-          async resolution(action: AnyAction) {
+          async final(action: AnyAction) {
             if (controller.signal.aborted) return null;
             const key = getActionSymbol(action);
             const emitter = isMulticastAction(action)
@@ -297,7 +389,7 @@ export function useActions<
               : broadcast;
             if (!emitter) return null;
             const cached = emitter.getCached(key);
-            if (cached === undefined) return null;
+            if (G.isUndefined(cached)) return null;
             const inspector = state.current.inspect;
             if (inspector.pending()) {
               await new Promise<void>((resolve, reject) => {
@@ -366,7 +458,7 @@ export function useActions<
             registry.current.handlers,
             "Error",
           );
-          const handled = errorAction !== null;
+          const handled = G.isNotNullable(errorAction);
           const details = {
             reason: getReason(caught),
             error: getError(caught),

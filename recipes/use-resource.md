@@ -9,9 +9,9 @@ The fetcher itself receives a single `context` argument carrying `store`, `contr
 
 ```ts
 // resources.ts
-import { Resource } from "march-hare";
+import { app } from "./app";
 
-export const user = Resource<User, { id: number }>((context) =>
+export const user = app.Resource<User, { id: number }>((context) =>
   ky
     .get(`users/${context.params.id}`, {
       signal: context.controller.signal,
@@ -19,7 +19,7 @@ export const user = Resource<User, { id: number }>((context) =>
     .json<User>(),
 );
 
-export const pay = Resource<Receipt, Body>((context) =>
+export const pay = app.Resource<Receipt, Body>((context) =>
   ky
     .post("pay", {
       json: context.params,
@@ -29,7 +29,7 @@ export const pay = Resource<Receipt, Body>((context) =>
 );
 
 // Simple no-store, no-params:
-export const ping = Resource((context) =>
+export const ping = app.Resource((context) =>
   ky.get("ping", { signal: context.controller.signal }).text(),
 );
 ```
@@ -69,7 +69,7 @@ export function useActions() {
 }
 ```
 
-Every successful fetch writes through to a per-resource in-memory cache. Reach for `Resource.Cachable(cache, fetcher)` &mdash; the cache-aware variant &mdash; when you want the cache to survive reloads. See the [`Resource.Cachable`](#resourcecachable--persistent-variant) section below.
+Every successful fetch writes through to a per-resource in-memory cache. Reach for `app.Resource.Cachable(cache, fetcher)` to persist across reloads, or chain `.coalesce(token)` on the call site to share an in-flight fetch with other callers &mdash; both are covered below.
 
 > **Convention:** keep resources in `resources.ts` and pull them in with named imports (`import { user, pay } from "./resources"`). The grouping signals "remote interactions, declared at module scope" at a glance.
 
@@ -176,7 +176,7 @@ If the most recent successful fetch for those params resolved longer ago than th
 Every fetcher receives the per-`<Boundary>` Store on its context. Use it for ambient values like the session token:
 
 ```ts
-export const user = Resource<User, { id: number }>((context) =>
+export const user = app.Resource<User, { id: number }>((context) =>
   ky
     .get(`users/${context.params.id}`, {
       headers: context.store.session
@@ -199,7 +199,7 @@ There are two places to fire a broadcast or multicast for a resource:
 
 ```ts
 // resources.ts — fan-out happens inside the fetcher.
-export const user = Resource<User, { id: number }>(async (context) => {
+export const user = app.Resource<User, { id: number }>(async (context) => {
   const data = await ky
     .get(`users/${context.params.id}`, {
       signal: context.controller.signal,
@@ -232,12 +232,13 @@ When several components need to react to a resource update, the pattern is: the 
 
 > **Note:** TypeScript cannot type promise rejections, so `await context.actions.resource(...)` rejects with `unknown`. To narrow inline, use `error instanceof YourErrorClass` checks within a `try/catch`.
 
-## `Resource.Cachable` &mdash; persistent variant
+## Persistent cache &mdash; `app.Resource.Cachable`
 
-`Resource(fetcher)` is in-memory only &mdash; the cache resets on every page load. To keep the most recent successful payload across reloads, use `Resource.Cachable(cache, fetcher)`. The cache is the **first** argument; persistence is the headline of this form, the fetcher is the operation:
+`app.Resource(fetcher)` keeps successful payloads in an in-memory slot only &ndash; the cache resets on every page load. To keep the most recent successful payload across reloads, declare with `app.Resource.Cachable(cache, fetcher)`. The cache is the **first** argument &mdash; persistence is the headline of this form, the fetcher is the operation:
 
 ```ts
-import { Cache, Resource } from "march-hare";
+import { Cache } from "march-hare";
+import { app } from "./app";
 
 const cache = Cache({
   get: (key) => localStorage.getItem(key),
@@ -246,16 +247,46 @@ const cache = Cache({
   clear: () => localStorage.clear(),
 });
 
-export const user = Resource.Cachable<User, { id: number }>(cache, (context) =>
-  ky
-    .get(`users/${context.params.id}`, {
-      signal: context.controller.signal,
-    })
-    .json<User>(),
+export const user = app.Resource.Cachable<User, { id: number }>(
+  cache,
+  (context) =>
+    ky
+      .get(`users/${context.params.id}`, {
+        signal: context.controller.signal,
+      })
+      .json<User>(),
 );
 ```
 
-Bare `Resource(fetcher)` does not accept a cache argument &mdash; reach for `Cachable` whenever you want persistence. See the [storage recipe](./storage.md) for adapter examples (`localStorage`, MMKV, `chrome.storage`) and sign-out cache purging.
+See the [storage recipe](./storage.md) for adapter examples (`localStorage`, MMKV, `chrome.storage`) and sign-out cache purging.
+
+## In-flight coalescing &mdash; `.coalesce(token)`
+
+By default every `await context.actions.resource(...)` fires a fresh network request. Opt in to in-flight sharing per call by chaining `.coalesce(token)` &mdash; while one fetch is in-flight for the same `(Resource, params, token)` triple, every other caller receives the same promise. One network request, multiple awaits, all resolutions with the same payload.
+
+Use an enum for the token so call sites stay typed and greppable:
+
+```ts
+enum Coalesce {
+  Dashboard,
+}
+
+actions.useAction(Actions.Mount, async (context) => {
+  const data = await context.actions
+    .resource(dashboard())
+    .coalesce(Coalesce.Load);
+  context.actions.produce(({ model }) => void (model.dashboard = data));
+});
+
+actions.useAction(Actions.Broadcast.User, async (context, user) => {
+  const data = await context.actions
+    .resource(dashboard({ userId: user.id }))
+    .coalesce(Coalesce.Load);
+  context.actions.produce(({ model }) => void (model.dashboard = data));
+});
+```
+
+See the [mount deduplication recipe](./mount-broadcast-deduplication.md) for the full pattern, including how the `(Resource, params, token)` triple keys the dedupe map.
 
 ## Optimistic updates
 
@@ -286,7 +317,7 @@ Pending state drives the UI via `actions.inspect.user.pending()` &mdash; see [mo
 
 ## Run semantics
 
-Every `await context.actions.resource(...)` fires a fresh network request. There is **no in-flight coalescing** &mdash; calling it three times concurrently produces three requests. Coordination across components happens at the broadcast layer, not at a hidden cache.
+By default every `await context.actions.resource(...)` fires a fresh network request &mdash; coordination across components happens at the broadcast layer, not at a hidden cache:
 
 ```ts
 const a = context.actions.resource(user({ id: 5 }));
@@ -296,6 +327,8 @@ await Promise.all([a, b, c]); // three network requests
 ```
 
 Each successful response writes through to the per-params cache slot; whichever resolves last for a given params hash wins.
+
+Opt in to in-flight sharing per call by chaining `.coalesce(token)`. While one fetch is in-flight for the same `(Resource, params, token)` triple, every other caller receives the same promise &mdash; one network request, multiple awaits, all resolutions with the same payload. See [`.coalesce(token)`](#in-flight-coalescing--coalescetoken) below.
 
 ## Mount-time pattern
 
@@ -318,13 +351,14 @@ The `annotate` call drives the loading UI via `actions.inspect.user.pending()` &
 
 ```ts
 // resources.ts
-export const feed = Resource<Page<Item>, { cursor: string | null }>((context) =>
-  http
-    .get("feed", {
-      searchParams: { cursor: context.params.cursor ?? "" },
-      signal: context.controller.signal,
-    })
-    .json<Page<Item>>(),
+export const feed = app.Resource<Page<Item>, { cursor: string | null }>(
+  (context) =>
+    http
+      .get("feed", {
+        searchParams: { cursor: context.params.cursor ?? "" },
+        signal: context.controller.signal,
+      })
+      .json<Page<Item>>(),
 );
 ```
 
@@ -347,7 +381,7 @@ Each cursor gets its own cache slot &mdash; `.exceeds({...})` is per-cursor, so 
 
 ## Limitations
 
-- **No persistence across reloads by default.** Opt in by reaching for `Resource.Cachable(cache, fetcher)`. The Cache writes through on every successful fetch and auto-seeds from storage on first read. See [storage](./storage.md).
+- **No persistence across reloads by default.** Opt in via `app.Resource.Cachable(cache, fetcher)`. The Cache writes through on every successful fetch and auto-seeds from storage on first read. See [storage](./storage.md).
 - **No focus or reconnect revalidation.** Wire a `window` listener and call `context.actions.resource(...)` again if you need this.
 - **No SSR isolation.** The cache is module-global, so server-side rendering would leak across requests. `Resource` is client-only.
 - **No subscription on the awaiter.** `await context.actions.resource(...)` resolves once and does not re-fire when a broadcast goes out. Use `useAction(broadcastAction)` for change notifications.

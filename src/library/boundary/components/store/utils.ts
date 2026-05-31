@@ -1,5 +1,6 @@
 import * as React from "react";
 import type { RefObject } from "react";
+import { G } from "@mobily/ts-belt";
 import type { Store } from "./index.tsx";
 
 /**
@@ -31,38 +32,10 @@ export const Context = React.createContext<RefObject<Store>>(fallback);
  * &mdash; the same Immer-style recipe used for the model. Mutations do
  * **not** trigger a re-render; drive view state through the model.
  *
- * The Store's shape is declared via module augmentation on the library's
- * {@link Store} interface, so dot reads are fully typed at every call
- * site.
- *
- * @example
- * ```ts
- * declare module "march-hare" {
- *   interface Store {
- *     session: Session | null;
- *     locale: string;
- *   }
- * }
- *
- * function useAuthActions() {
- *   const store = useStore();
- *   const actions = useActions<void, typeof Actions>();
- *
- *   actions.useAction(Actions.SignIn, async (context, credentials) => {
- *     const result = await context.actions.resource(signIn(credentials));
- *     context.actions.produce(({ store }) => {
- *       store.session = result;
- *     });
- *   });
- *
- *   actions.useAction(Actions.Refresh, async (context) => {
- *     if (store.session === null) return;
- *     // ...
- *   });
- *
- *   return actions;
- * }
- * ```
+ * Prefer `app.useStore()` from an {@link App} instance &mdash; the App
+ * factory infers the Store's shape from `app.store` and types every
+ * read/write against it. The bare `useStore()` exists for non-App
+ * call sites and returns the loose {@link Store} record type.
  */
 export function useStore(): Store {
   const ref = React.useContext(Context);
@@ -80,7 +53,7 @@ export function useStore(): Store {
         },
         getOwnPropertyDescriptor(_target, key) {
           const descriptor = Object.getOwnPropertyDescriptor(ref.current, key);
-          if (descriptor === undefined) return undefined;
+          if (G.isUndefined(descriptor)) return undefined;
           return { ...descriptor, configurable: true };
         },
         set() {

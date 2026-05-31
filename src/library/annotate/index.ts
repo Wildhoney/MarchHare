@@ -39,3 +39,6 @@ export function annotate<T>(
 ): T {
   return state.annotate(operation, value);
 }
+
+/** Latin-alphabet alias for {@link annotate}. */
+export const ā = annotate;

@@ -8,6 +8,39 @@ import type {
 } from "../boundary/components/tasks/types.ts";
 import type { Fault } from "../error/types.ts";
 import type { Store } from "../boundary/components/store/index.tsx";
+import type { Coalesce } from "../resource/types.ts";
+
+/**
+ * Chainable handle returned from `context.actions.resource(invocation)`.
+ *
+ * - `.exceeds(duration)` short-circuits the fetch when the per-params
+ *   cache age is within the supplied freshness window.
+ * - `.coalesce(token)` opts the call into in-flight sharing: any other
+ *   caller with the same Resource, same structural params, and equal
+ *   `token` joins the same promise.
+ *
+ * Awaiting the handle (`await context.actions.resource(...)`) triggers
+ * the fetch with whichever options have been set on the chain.
+ */
+export type ResourceCall<T> = PromiseLike<T> & {
+  /**
+   * Skip the fetch when the cached payload is within `duration`.
+   * Accepts a `Temporal.Duration`, a `DurationLike` object
+   * (`{ minutes: 5 }`), or an ISO 8601 string (`"PT5M"`).
+   */
+  readonly exceeds: (duration: Temporal.DurationLike) => ResourceCall<T>;
+  /**
+   * Join an in-flight fetch for the same `(resource, params, token)`
+   * tuple. The shared fetch runs against a detached `AbortController`
+   * so a single caller's abort never cancels work other callers are
+   * waiting on; each caller still sees its own `context.task.controller`
+   * abort as a rejection of its personal await.
+   *
+   * `token` is optional &mdash; omit it to share with every other
+   * untokened caller for the same `(resource, params)` slot.
+   */
+  readonly coalesce: (token?: Coalesce) => ResourceCall<T>;
+};
 import { describe } from "../utils.ts";
 
 export type { ActionId, Box, Task, Tasks };
@@ -455,7 +488,7 @@ export type ChanneledAction<
  * to check whether a cached value exists before performing default fetches.
  *
  * This type extends `HandlerPayload<P, C>` with an additional brand to enforce at compile-time
- * that only broadcast actions can be passed to `context.actions.resolution()`.
+ * that only broadcast actions can be passed to `context.actions.final()`.
  *
  * @template P - The payload type for the action
  * @template C - The channel type for channeled dispatches (defaults to never)
@@ -465,7 +498,7 @@ export type ChanneledAction<
  * const SignedOut = Action<User>("SignedOut", Distribution.Broadcast);
  *
  * // Resolve the latest value inside a handler
- * const user = await context.actions.resolution(SignedOut);
+ * const user = await context.actions.final(SignedOut);
  * ```
  */
 export type BroadcastPayload<
@@ -666,12 +699,10 @@ export type HandlerContext<
     ): Promise<void>;
     annotate<T>(value: T, operation?: Operation): T;
     readonly inspect: Readonly<Inspect<M>>;
-    resource: (<T>(invocation: T | null) => PromiseLike<T> & {
-      readonly exceeds: (duration: Temporal.DurationLike) => Promise<T>;
-    }) & {
+    resource: (<T>(invocation: T | null) => ResourceCall<T>) & {
       set<T>(invocation: T | null, data: T): void;
     };
-    resolution<T>(
+    final<T>(
       action: BroadcastPayload<T> | MulticastPayload<T>,
     ): Promise<T | null>;
     peek<T>(action: BroadcastPayload<T> | MulticastPayload<T>): T | null;

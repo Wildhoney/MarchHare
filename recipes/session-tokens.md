@@ -1,10 +1,10 @@
 # Session tokens
 
-`Resource` fetchers receive an args object with `store`, `controller`, and `params`. The `store` field is a snapshot of the per-`<Boundary>` [Store](./store.md) &mdash; exactly the right place to put a session token: typed, declared once via module augmentation, written from a single sign-in handler, read automatically by every fetcher.
+`Resource` fetchers receive an args object with `store`, `controller`, and `params`. The `store` field is a snapshot of the per-`<app.Boundary>` [Store](./store.md) &mdash; exactly the right place to put a session token: typed, declared once on `App({ store })`, written from a single sign-in handler, read automatically by every fetcher.
 
 This recipe covers:
 
-- Declaring the session in the Store.
+- Declaring the session shape on `App({ store })`.
 - Sign-in and sign-out handlers that write through `context.actions.produce`.
 - Reading the token in every Resource fetcher via the `store` arg.
 - Refresh-on-401 via a `ky` `afterResponse` hook that reads and writes the Store.
@@ -25,12 +25,14 @@ export const api = ky.create({
 });
 
 // resources.ts
-import { Resource } from "march-hare";
+import { app } from "./app";
 import { api } from "./api/client";
 
-export const user = Resource((context) =>
-  api.get("user", { signal: context.controller.signal }).json<User>(),
-);
+export const user = app.Resource<User>({
+  fetch(context) {
+    return api.get("user", { signal: context.controller.signal }).json<User>();
+  },
+});
 ```
 
 Simpler than anything below. Reach for it first.
@@ -39,33 +41,37 @@ Simpler than anything below. Reach for it first.
 
 When cookies aren't viable (React Native, cross-origin APIs without a proxy, browser extensions, anywhere you need to send an `Authorization` header), put the session in the Store.
 
-### Declare the shape
+### Declare the shape on `App`
 
 ```ts
-// auth/types.ts
+// app.ts
+import { App } from "march-hare";
+
 export type Session = { accessToken: string; refreshToken: string };
 
-// app/store.ts
-declare module "march-hare" {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
-  interface Store {
-    session: Session | null;
-  }
-}
+export const app = App({
+  store: {
+    session: null as Session | null,
+  },
+});
 ```
 
-### Wire the initial Store at the Boundary
+Every read/write of `store.session` &mdash; in handlers, fetchers, the `app.useStore()` hook &mdash; is typed against the shape inferred from this object.
+
+### Wire the Boundary
 
 ```tsx
-<Boundary store={{ session: null }}>
-  <App />
-</Boundary>
+import { app } from "./app";
+
+<app.Boundary>
+  <Root />
+</app.Boundary>;
 ```
 
 If the session should survive reloads, hydrate the initial value from persistent storage at app boot:
 
 ```tsx
-import { Cache, utils } from "march-hare";
+import { App, Cache, utils } from "march-hare";
 
 const sessionCache = Cache({
   get: (key) => sessionStorage.getItem(key),
@@ -77,9 +83,9 @@ const sessionCache = Cache({
 const stored = sessionCache.get<Session>("session");
 const initial = stored.data === utils.unset ? null : stored.data;
 
-<Boundary store={{ session: initial }}>
-  <App />
-</Boundary>;
+export const app = App({
+  store: { session: initial },
+});
 ```
 
 Whether to persist access tokens in `sessionStorage` / `localStorage` is a security trade-off (XSS surface vs. UX); pick per app.
@@ -91,31 +97,34 @@ Every fetcher receives the Store on its args object. Read the token with plain d
 ```ts
 // resources.ts
 import ky from "ky";
-import { Resource } from "march-hare";
+import { app } from "./app";
 
-export const user = Resource<User, { id: number }>(
-  ({ store, controller, params }) =>
-    ky
+export const user = app.Resource<User, { id: number }>({
+  fetch({ store, controller, params }) {
+    return ky
       .get(`/api/users/${params.id}`, {
         headers: store.session
           ? { Authorization: `Bearer ${store.session.accessToken}` }
           : {},
         signal: controller.signal,
       })
-      .json<User>(),
-);
+      .json<User>();
+  },
+});
 
-export const pay = Resource<Receipt, Body>(({ store, controller, params }) =>
-  ky
-    .post("/api/pay", {
-      headers: store.session
-        ? { Authorization: `Bearer ${store.session.accessToken}` }
-        : {},
-      json: params,
-      signal: controller.signal,
-    })
-    .json<Receipt>(),
-);
+export const pay = app.Resource<Receipt, Body>({
+  fetch({ store, controller, params }) {
+    return ky
+      .post("/api/pay", {
+        headers: store.session
+          ? { Authorization: `Bearer ${store.session.accessToken}` }
+          : {},
+        json: params,
+        signal: controller.signal,
+      })
+      .json<Receipt>();
+  },
+});
 ```
 
 No module-level mutable, no `getSession()` helper, no `ky.beforeRequest` reading a singleton. The token comes from where every other ambient value lives.
@@ -124,12 +133,12 @@ No module-level mutable, no `getSession()` helper, no `ky.beforeRequest` reading
 
 ```ts
 // auth/actions.ts
-import { useContext } from "march-hare";
+import { app } from "../app";
 import { Actions } from "./types";
 import { signIn, signOut } from "./resources";
 
 export function useActions() {
-  const context = useContext<void, typeof Actions>();
+  const context = app.useContext<void, typeof Actions>();
   const actions = context.useActions();
 
   actions.useAction(Actions.SignIn, async (context, credentials) => {
@@ -164,16 +173,14 @@ When the access token expires, refresh once and retry transparently. This belong
 ```ts
 // api/client.ts
 import ky from "ky";
-import type { Store } from "march-hare";
+import type { Session } from "../app";
 
-type Session = Store["session"];
-
-let readSession: () => Session = () => null;
-let writeSession: (next: Session) => void = () => {};
+let readSession: () => Session | null = () => null;
+let writeSession: (next: Session | null) => void = () => {};
 
 export function bindSession(
-  read: () => Session,
-  write: (next: Session) => void,
+  read: () => Session | null,
+  write: (next: Session | null) => void,
 ): void {
   readSession = read;
   writeSession = write;
@@ -224,12 +231,12 @@ export const api = ky.create({
 A tiny top-level component plugs the live Store reader and an internal dispatch into those binders. It renders `null` &mdash; no provider, no children wrapping, no ref dance:
 
 ```tsx
-import { useStore } from "march-hare";
+import { app } from "./app";
 import { bindSession } from "./api/client";
 
 function AuthBridge(): null {
-  const store = useStore();
-  const [, actions] = useAuthActions();
+  const store = app.useStore();
+  const [, actions] = useActions();
 
   bindSession(
     () => store.session,
@@ -247,7 +254,7 @@ actions.useAction(Actions.RefreshSession, (context, next) => {
 });
 ```
 
-Mount `<AuthBridge />` once inside the `<Boundary>` and Resources go on importing `api` from `./api/client` as if nothing fancy was happening. `bindSession` is called every render but it just rebinds two function references &mdash; no allocations, no lifecycle hooks, no `useRef`.
+Mount `<AuthBridge />` once inside the `<app.Boundary>` and Resources go on importing `api` from `./api/client` as if nothing fancy was happening. `bindSession` is called every render but it just rebinds two function references &mdash; no allocations, no lifecycle hooks, no `useRef`.
 
 Notes:
 
@@ -287,8 +294,8 @@ If a single call needs a different token than the ambient session (impersonation
 ```ts
 type AdminUserParams = { id: number; asToken?: string };
 
-export const adminUser = Resource<User, AdminUserParams>(
-  ({ store, controller, params }) => {
+export const adminUser = app.Resource<User, AdminUserParams>({
+  fetch({ store, controller, params }) {
     const token = params.asToken ?? store.session?.accessToken;
     return ky
       .get(`/api/users/${params.id}`, {
@@ -297,13 +304,13 @@ export const adminUser = Resource<User, AdminUserParams>(
       })
       .json<User>();
   },
-);
+});
 ```
 
 The per-params cache treats `asToken` as part of the key, so impersonation calls don't collide with the ambient session's slot.
 
 ## Limitations
 
-- **Single ambient session per Boundary.** Multi-tenant cases where one screen needs to authenticate against two different backends are handled by either explicit per-call overrides (as above) or by nested Boundaries with distinct Stores.
-- **SSR needs per-request Boundaries.** On the server each request must get its own Boundary with a fresh Store containing that request's session. The module-augmented `Store` type is shared but the _value_ must not be.
+- **Single ambient session per Boundary.** Multi-tenant cases where one screen needs to authenticate against two different backends are handled by either explicit per-call overrides (as above) or by nested `<app.Boundary>` instances backed by distinct `App` calls.
+- **SSR needs per-request Boundaries.** On the server each request must get its own Boundary with a fresh Store containing that request's session. Build a new `App({ store })` per request &mdash; the `App` factory is cheap.
 - **Refresh-during-await isn't free.** If a request fires, the token expires mid-flight, and a parallel refresh races in, the original request's `Authorization` is already on the wire and may 401. The `afterResponse` retry handles this, but the user-visible latency is two round-trips.

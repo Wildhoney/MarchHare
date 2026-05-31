@@ -73,16 +73,14 @@ See the full implementation in the [Visitor example source code](https://github.
 When a Resource is the canonical source of some data (e.g. a user profile fetched on demand) **and** a real-time controller can deliver updates for the same payload (server pushes a "user updated" event), use `context.actions.resource.set(...)` to write the incoming payload into the Resource's per-params cache slot. Subsequent reads via `user({ id })` or refreshes via `.exceeds({...})` see the freshest value with the freshest timestamp &mdash; without a round-trip.
 
 ```ts
-import {
-  useContext,
-  Lifecycle,
-  Action,
-  Distribution,
-  Resource,
-} from "march-hare";
+import { useContext, Lifecycle, Action, Distribution } from "march-hare";
+import { app } from "./app";
 
-export const user = Resource<User, { id: number }>(({ controller, params }) =>
-  ky.get(`/api/users/${params.id}`, { signal: controller.signal }).json<User>(),
+export const user = app.Resource<User, { id: number }>(
+  ({ controller, params }) =>
+    ky
+      .get(`/api/users/${params.id}`, { signal: controller.signal })
+      .json<User>(),
 );
 
 class Actions {

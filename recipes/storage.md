@@ -5,7 +5,7 @@ By default a `Resource`'s cache is in-memory only &ndash; it resets on every pag
 This recipe covers:
 
 - The `Cache(adapter)` factory and its `get`/`set`/`remove`/`clear` API.
-- `Resource.Cachable(cache, fetcher)` &mdash; the cache-aware variant of `Resource`. The cache comes first.
+- `Resource({ fetch, cache })` &mdash; the cache-aware config form of `Resource`. Pass a `Cache` to persist payloads.
 - Adapter examples for browser `localStorage`, React Native MMKV, and browser-extension `chrome.storage`.
 - Sign-out purge, schema versioning, and the `unset` sentinel.
 
@@ -55,12 +55,13 @@ cache.clear();
 
 ## Wiring a Cache into a Resource
 
-Use `Resource.Cachable(cache, fetcher)` &mdash; the cache-aware variant. The cache is the **first** argument; persistence is the headline of this form, the fetcher is the operation. Bare `Resource(fetcher)` does not accept a cache argument; reach for `Cachable` whenever you want persistence. Every successful fetch writes through to the Cache under a key derived from the call-site params; first reads via `cat(params)` auto-seed from the Cache's adapter:
+Use the config form `Resource({ fetch, cache })` to wire a Cache. Bare `Resource(fetcher)` is the fetcher shorthand &mdash; in-memory only, no persistence. Every successful fetch writes through to the Cache under a key derived from the call-site params; first reads via `cat(params)` auto-seed from the Cache's adapter:
 
 ```ts
 // resources.ts
 import ky from "ky";
-import { Cache, Resource } from "march-hare";
+import { Cache } from "march-hare";
+import { app } from "./app";
 import type { Cat } from "./types";
 
 const cache = Cache({
@@ -70,13 +71,16 @@ const cache = Cache({
   clear: () => localStorage.clear(),
 });
 
-export const cat = Resource.Cachable(cache, async (context) => {
-  const cats = await ky
-    .get("https://api.thecatapi.com/v1/images/search", {
-      signal: context.controller.signal,
-    })
-    .json<Cat[]>();
-  return cats[0];
+export const cat = app.Resource({
+  cache,
+  async fetch(context) {
+    const cats = await ky
+      .get("https://api.thecatapi.com/v1/images/search", {
+        signal: context.controller.signal,
+      })
+      .json<Cat[]>();
+    return cats[0];
+  },
 });
 ```
 
@@ -121,15 +125,16 @@ Cache entries are keyed automatically by `JSON.stringify(params)`. For a paramet
 
 ```ts
 const userCache = Cache(namespacedAdapter("users"));
-export const user = Resource.Cachable<User, { id: number }>(
-  userCache,
-  (context) =>
-    ky
+export const user = app.Resource<User, { id: number }>({
+  cache: userCache,
+  fetch(context) {
+    return ky
       .get(`users/${context.params.id}`, {
         signal: context.controller.signal,
       })
-      .json<User>(),
-);
+      .json<User>();
+  },
+});
 
 // Each cache slot is independent.
 await context.actions.resource(user({ id: 5 })); // stored under "{\"id\":5}"

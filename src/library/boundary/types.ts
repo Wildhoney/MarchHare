@@ -3,20 +3,10 @@ import type { Store } from "./components/store/types.ts";
 
 export type Props = {
   /**
-   * Initial value of the per-Boundary {@link Store}. The shape is
-   * derived from module augmentation &mdash; declare the keys your
-   * application needs once via:
-   *
-   * ```ts
-   * declare module "march-hare" {
-   *   interface Store {
-   *     session: Session | null;
-   *     locale: string;
-   *   }
-   * }
-   * ```
-   *
-   * Optional only when the augmented Store has no required keys.
+   * Initial value of the per-Boundary {@link Store}. Prefer `App({ store })`
+   * &mdash; it infers the Store shape and threads it through `app.useContext`,
+   * `app.useStore`, and `app.Resource`. Pass `store` directly here only for
+   * advanced cases where the loose {@link Store} record type is sufficient.
    */
   store?: Store;
   children: React.ReactNode;

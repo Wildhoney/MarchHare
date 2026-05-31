@@ -1,4 +1,5 @@
 import * as React from "react";
+import { G } from "@mobily/ts-belt";
 import type { Props } from "./types.ts";
 import { Context } from "./utils.ts";
 import { useBroadcast } from "../broadcast/index.tsx";
@@ -7,34 +8,18 @@ import { StoreSymbol } from "../../../types/index.ts";
 export { useStore } from "./utils.ts";
 
 /**
- * App-wide store of cross-cutting, mutable state. The interface is
- * declared empty here and **augmented** by consumer code via module
- * augmentation:
+ * Loose runtime shape for the per-`<Boundary>` Store. Each {@link App}
+ * narrows this to its own typed store via `App<S>({ store })`; the
+ * loose type exists so the framework's internal plumbing
+ * (`<Boundary>`, `useStore`, handler `context.store`, Resource
+ * fetcher `context.store`) does not need to be parametric over S.
  *
- * @example
- * ```ts
- * declare module "march-hare" {
- *   interface Store {
- *     session: Session | null;
- *     locale: string;
- *     featureFlags: Record<string, boolean>;
- *   }
- * }
- * ```
- *
- * Every key declared here flows into:
- *
- * - `useStore()` &mdash; the per-`<Boundary>` handle for reads and writes.
- * - `context.store` inside `useActions` handlers.
- * - The `store` field on every `Resource` fetcher's args object.
- *
- * The Store is **not** reactive. Mutating it does not re-render. Drive
- * view state through the model; use the Store for cross-handler
- * coordination, session tokens, locale, feature flags, etc.
+ * Consumers should declare their Store shape inline via `App({ store })`
+ * &mdash; the inferred `S` is what flows through `app.useContext`,
+ * `app.useStore`, and `app.Resource`. Module augmentation of `Store`
+ * is no longer required.
  */
-/* eslint-disable @typescript-eslint/no-empty-object-type, @typescript-eslint/consistent-type-definitions */
-export interface Store {}
-/* eslint-enable @typescript-eslint/no-empty-object-type, @typescript-eslint/consistent-type-definitions */
+export type Store = Record<string, unknown>;
 
 /**
  * Provides a per-Boundary {@link Store} value to every component inside
@@ -50,7 +35,7 @@ export function Store({ initial, children }: Props): React.ReactNode {
   const ref = React.useRef<Store>(initial);
   const broadcast = useBroadcast();
 
-  if (broadcast.getCached(StoreSymbol) === undefined) {
+  if (G.isUndefined(broadcast.getCached(StoreSymbol))) {
     broadcast.setCache(StoreSymbol, ref.current);
   }
 

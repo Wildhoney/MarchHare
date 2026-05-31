@@ -4,7 +4,7 @@
  * Rule 16: Only broadcast actions support reactive subscription
  * Rule 18: Late-mounting components receive cached values
  * Rule 19: Use channeled actions for targeted broadcast delivery
- * Rule 40: Use context.actions.resolution to read broadcast values in handlers
+ * Rule 40: Use context.actions.final to read broadcast values in handlers
  * Rule 41: Use actions.stream to render broadcast values declaratively in JSX
  */
 import * as React from "react";
@@ -305,7 +305,7 @@ function Rule19ChanneledBroadcast() {
 }
 
 // ============================================================================
-// Rule 40: Use context.actions.resolution to read broadcast values in handlers
+// Rule 40: Use context.actions.final to read broadcast values in handlers
 // ============================================================================
 
 class Rule40Actions {
@@ -344,17 +344,13 @@ function useRule40ConsumerActions() {
   });
 
   actions.useAction(Rule40Actions.Mount, async (context) => {
-    const user = await context.actions.resolution(
-      BroadcastActions.UserLoggedIn,
-    );
+    const user = await context.actions.final(BroadcastActions.UserLoggedIn);
     if (!user) return;
     context.actions.produce(({ model }) => void (model.consumed = user.name));
   });
 
   actions.useAction(Rule40Actions.Trigger, async (context) => {
-    const user = await context.actions.resolution(
-      BroadcastActions.UserLoggedIn,
-    );
+    const user = await context.actions.final(BroadcastActions.UserLoggedIn);
     context.actions.produce(
       ({ model }) => void (model.consumed = user ? user.name : "null"),
     );

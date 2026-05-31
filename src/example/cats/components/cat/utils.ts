@@ -18,7 +18,7 @@ export const cat = Resource.Cachable(cache, async (context) => {
   return cats[0];
 });
 
-export const getCat: H["Get"] = async (context) => {
+export const catHandler: H["Get"] = async (context) => {
   const data = await context.actions
     .resource(cat({ id: 5 }))
     .exceeds({ minutes: 5 });

@@ -1,5 +1,6 @@
 import { Cache } from "../cache/index.ts";
 import { unset } from "../utils/index.ts";
+import { G } from "@mobily/ts-belt";
 
 export { Cache } from "../cache/index.ts";
 
@@ -21,7 +22,7 @@ export const defaults = new WeakMap<object, Cache>();
  */
 export function defaultCache(fetcher: object): Cache {
   let cache = defaults.get(fetcher);
-  if (cache === undefined) {
+  if (G.isUndefined(cache)) {
     cache = Cache();
     defaults.set(fetcher, cache);
   }

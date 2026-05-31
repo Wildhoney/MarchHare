@@ -12,12 +12,21 @@ export { useStore } from "./boundary/components/store/index.tsx";
 export type { Store } from "./boundary/components/store/index.tsx";
 
 export { Operation, Op, State } from "immertation";
-export { annotate } from "./annotate/index.ts";
+export { annotate, ā } from "./annotate/index.ts";
 export type { Box } from "immertation";
 
 export { Resource } from "./resource/index.ts";
 export { Cache } from "./cache/index.ts";
 export type { Adapter } from "./cache/index.ts";
+
+export { App } from "./app/index.tsx";
+export type {
+  App as AppHandle,
+  AppArgs,
+  AppContextHandle,
+  AppFetcher,
+  AppResource,
+} from "./app/index.tsx";
 
 export * as utils from "./utils/index.ts";
 

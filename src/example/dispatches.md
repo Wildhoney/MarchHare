@@ -55,7 +55,7 @@ flowchart TB
         CatGet["Actions.Get"]
         CatNext["Actions.Next"]
         CatPrev["Actions.Previous"]
-        CatGetCat["getCat handler\n(reads context.data.index)"]
+        CatGetCat["catHandler\n(reads context.data.index)"]
         CatRouter["context.data.router.navigate(...)"]
         CatModel["model.cat"]
     end
@@ -202,7 +202,7 @@ Multicast scope demo:
 Router-driven Resource fetch:
 
 - Wrapped in a top-level `<Boundary>` and a Wayfinder `<Router>`.
-- `Actions.Mount` and `Actions.Get` both run the `getCat` handler, which reads
+- `Actions.Mount` and `Actions.Get` both run the `catHandler`, which reads
   `context.data.index` and writes the fetched cat to `model.cat`.
 - `Actions.Next` / `Actions.Previous` are pure navigation: they read
   `context.data.router` (passed via the third generic `Data`) and call

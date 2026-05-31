@@ -2,8 +2,9 @@ import type { Args, Dispatch, Fetcher } from "./types.ts";
 import { Cache, defaultCache, key } from "./utils.ts";
 import { present, unset } from "../utils/utils.ts";
 import type { Store } from "../boundary/components/store/index.tsx";
+import { G } from "@mobily/ts-belt";
 
-export type { Fetcher } from "./types.ts";
+export type { Coalesce, Fetcher } from "./types.ts";
 
 /**
  * Snapshot of the most recent resource invocation. `cat(params)` writes
@@ -39,7 +40,7 @@ let pending: PendingCall | null = null;
  * @internal
  */
 export function consumePending(): PendingCall {
-  if (pending === null) {
+  if (G.isNull(pending)) {
     throw new Error(
       "context.actions.resource(...) and context.actions.resource.set(...) " +
         "must be called with a fresh resource invocation, e.g. " +
@@ -81,7 +82,7 @@ function build<T, P extends object>(
 ): Resource<T, P> {
   const read = (params: P) => {
     const stored = backing.get<T>(key(params));
-    if (stored.data === unset || stored.at === null) {
+    if (stored.data === unset || G.isNull(stored.at)) {
       return { data: unset, at: null };
     }
     return { data: <T>stored.data, at: stored.at };
@@ -111,7 +112,8 @@ function build<T, P extends object>(
       params: effective,
     };
     queueMicrotask(() => {
-      if (pending !== null && pending.params === effective) pending = null;
+      if (G.isNotNullable(pending) && pending.params === effective)
+        pending = null;
     });
     const { data } = read(effective);
     return data === unset ? null : <T>data;
@@ -132,11 +134,15 @@ function build<T, P extends object>(
  * Every successful fetch writes through to a per-resource in-memory
  * cache; pair with {@link Resource.Cachable} to persist across reloads.
  *
+ * Concurrent calls fire fresh requests by default. Opt in to in-flight
+ * sharing per call via `.coalesce(key)` on the thenable returned from
+ * `context.actions.resource(...)`.
+ *
  * @example
  * ```ts
  * import { Resource } from "march-hare";
  *
- * export const user = Resource<User, { id: number }>(async (context) =>
+ * export const user = Resource<User, { id: number }>((context) =>
  *   ky
  *     .get(`users/${context.params.id}`, {
  *       headers: context.store.session

@@ -1,4 +1,5 @@
 import type { Store } from "../boundary/components/store/index.tsx";
+import type { Cache } from "../cache/index.ts";
 import type {
   BroadcastPayload,
   MulticastPayload,
@@ -43,10 +44,33 @@ export type Args<P extends object = Record<never, never>> = {
 };
 
 /**
- * Fetcher signature accepted by `Resource` and `Resource.Cachable`.
- * Receives a single `context` argument carrying the Store snapshot, the
- * abort controller, params, and a broadcast/multicast-only `dispatch`.
+ * Fetcher signature accepted by `Resource`. Receives a single `context`
+ * argument carrying the Store snapshot, the abort controller, params,
+ * and a broadcast/multicast-only `dispatch`.
  */
 export type Fetcher<T, P extends object = Record<never, never>> = (
   context: Args<P>,
 ) => Promise<T>;
+
+/**
+ * Per-call coalescing token. Two callers with the same Resource, same
+ * structural params, and equal `Coalesce` value share a single in-flight
+ * promise; different tokens (or different params) fire independent
+ * fetches. Primitives compose naturally via stringification; objects
+ * are serialised with `JSON.stringify`.
+ */
+export type Coalesce = string | number | bigint | boolean | symbol | object;
+
+/**
+ * Config form accepted by `Resource`. The fetcher shorthand
+ * `Resource(fetcher)` is equivalent to `Resource({ fetch: fetcher })`.
+ *
+ * - `fetch` &mdash; the fetcher.
+ * - `cache` &mdash; persist successful payloads via a {@link Cache}
+ *   wired to an `Adapter` (localStorage, MMKV, etc). Omit for an
+ *   in-memory cache scoped to this Resource.
+ */
+export type Config<T, P extends object = Record<never, never>> = {
+  readonly fetch: Fetcher<T, P>;
+  readonly cache?: Cache;
+};

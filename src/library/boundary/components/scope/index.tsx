@@ -20,7 +20,7 @@ export type { ScopeEntry, ScopeContext } from "./types.ts";
  * `actions.dispatch`.
  *
  * Multicast caches the most recent dispatched value per scope so late-mounted
- * components can read it via `context.actions.resolution()`.
+ * components can read it via `context.actions.final()`.
  *
  * @param action - The multicast action that opens this scope.
  * @param Component - The component to wrap.

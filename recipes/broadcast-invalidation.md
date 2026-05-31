@@ -4,40 +4,69 @@ When a domain event occurs (e.g. user signs out, permissions change, locale swit
 
 ## The problem
 
-A component fetches user data on mount and broadcasts it:
+Two features each fetch on mount and broadcast their result. Both flow through `app.Resource`:
 
 ```ts
-async function fetchUser(context: HandlerContext<Model, typeof Actions, Data>) {
-  const user = await api.fetchUser(context.data.userId, {
-    signal: context.task.controller.signal,
-  });
-  context.actions.dispatch(Actions.Broadcast.User, user);
-}
+// resources.ts
+import { app } from "./app";
 
-actions.useAction(Actions.Mount, fetchUser);
+export const user = app.Resource<User, { id: number }>((context) =>
+  ky
+    .get(`/api/users/${context.params.id}`, {
+      signal: context.controller.signal,
+    })
+    .json<User>(),
+);
+
+export const settings = app.Resource<Settings>((context) =>
+  ky
+    .get("/api/settings", { signal: context.controller.signal })
+    .json<Settings>(),
+);
 ```
 
-Another component fetches settings:
+```ts
+// user/actions.ts
+function useActions(props: { userId: number }) {
+  const context = app.useContext<Model, typeof Actions, { userId: number }>();
+  const actions = context.useActions(model, () => ({ userId: props.userId }));
+
+  actions.useAction(Actions.Mount, async (context) => {
+    const data = await context.actions.resource(
+      user({ id: context.data.userId }),
+    );
+    context.actions.dispatch(Actions.Broadcast.User, data);
+  });
+
+  return actions;
+}
+```
 
 ```ts
-async function fetchSettings(context: HandlerContext<Model, typeof Actions>) {
-  const settings = await api.fetchSettings({
-    signal: context.task.controller.signal,
-  });
-  context.actions.dispatch(Actions.Broadcast.Settings, settings);
-}
+// settings/actions.ts
+function useActions() {
+  const context = app.useContext<Model, typeof Actions>();
+  const actions = context.useActions(model);
 
-actions.useAction(Actions.Mount, fetchSettings);
+  actions.useAction(Actions.Mount, async (context) => {
+    const data = await context.actions.resource(settings());
+    context.actions.dispatch(Actions.Broadcast.Settings, data);
+  });
+
+  return actions;
+}
 ```
 
 When the user signs out, both need to re-fetch. But `Actions.Broadcast.User` takes a `userId` and `Actions.Broadcast.Settings` takes no arguments &mdash; you cannot simply "replay" them.
 
 ## Solution: shared reset action
 
-Add a `Reset` action to the shared broadcast class. Each producer subscribes to it and re-fetches using its own logic:
+Add a `Reset` action to the shared broadcast class. Each producer subscribes to it and re-fetches via its own `resource(...)` call:
 
 ```ts
 // shared/types.ts
+import { Action, Distribution } from "march-hare";
+
 export class BroadcastActions {
   static Reset = Action("Reset", Distribution.Broadcast);
   static User = Action<User>("User", Distribution.Broadcast);
@@ -45,42 +74,62 @@ export class BroadcastActions {
 }
 ```
 
-Producers listen for the reset alongside their mount logic:
+Each producer's `useActions` listens for both Mount and Reset and routes through the same `resource()` fetch:
 
 ```ts
 // user/actions.ts
+import { Lifecycle } from "march-hare";
+import { app } from "../app";
+import { user } from "../resources";
+
 export class Actions {
   static Mount = Lifecycle.Mount();
   static Broadcast = BroadcastActions;
 }
 
-async function fetchUser(context: HandlerContext<Model, typeof Actions, Data>) {
-  const user = await api.fetchUser(context.data.userId, {
-    signal: context.task.controller.signal,
-  });
-  context.actions.dispatch(Actions.Broadcast.User, user);
-}
+function useActions(props: { userId: number }) {
+  const context = app.useContext<Model, typeof Actions, { userId: number }>();
+  const actions = context.useActions(model, () => ({ userId: props.userId }));
 
-actions.useAction(Actions.Mount, fetchUser);
-actions.useAction(Actions.Broadcast.Reset, fetchUser);
+  const fetchUser = async (context: HandlerContext) => {
+    const data = await context.actions.resource(
+      user({ id: context.data.userId }),
+    );
+    context.actions.dispatch(Actions.Broadcast.User, data);
+  };
+
+  actions.useAction(Actions.Mount, fetchUser);
+  actions.useAction(Actions.Broadcast.Reset, fetchUser);
+
+  return actions;
+}
 ```
 
 ```ts
 // settings/actions.ts
+import { Lifecycle } from "march-hare";
+import { app } from "../app";
+import { settings } from "../resources";
+
 export class Actions {
   static Mount = Lifecycle.Mount();
   static Broadcast = BroadcastActions;
 }
 
-async function fetchSettings(context: HandlerContext<Model, typeof Actions>) {
-  const settings = await api.fetchSettings({
-    signal: context.task.controller.signal,
-  });
-  context.actions.dispatch(Actions.Broadcast.Settings, settings);
-}
+function useActions() {
+  const context = app.useContext<Model, typeof Actions>();
+  const actions = context.useActions(model);
 
-actions.useAction(Actions.Mount, fetchSettings);
-actions.useAction(Actions.Broadcast.Reset, fetchSettings);
+  const fetchSettings = async (context: HandlerContext) => {
+    const data = await context.actions.resource(settings());
+    context.actions.dispatch(Actions.Broadcast.Settings, data);
+  };
+
+  actions.useAction(Actions.Mount, fetchSettings);
+  actions.useAction(Actions.Broadcast.Reset, fetchSettings);
+
+  return actions;
+}
 ```
 
 Any component can trigger the reset:
@@ -89,7 +138,7 @@ Any component can trigger the reset:
 actions.dispatch(Actions.Broadcast.Reset);
 ```
 
-Each producer re-fetches using its own parameters. The reset action carries no payload &mdash; it is purely a signal.
+Each producer re-fetches via its own `resource(...)` invocation. The reset action carries no payload &mdash; it is purely a signal. Because the fetch goes through `app.Resource`, every cache, abort, and `.exceeds(...)` / `.coalesce(...)` semantics are preserved.
 
 ## Typed reset payloads
 
@@ -104,10 +153,13 @@ export class BroadcastActions {
   static Settings = Action<Settings>("Settings", Distribution.Broadcast);
 }
 
-// Only re-fetch when auth or all resets are triggered
-actions.useAction(Actions.Broadcast.Reset, (context, scope) => {
+// Only re-fetch when auth or all resets are triggered.
+actions.useAction(Actions.Broadcast.Reset, async (context, scope) => {
   if (scope !== "auth" && scope !== "all") return;
-  fetchUser(context);
+  const data = await context.actions.resource(
+    user({ id: context.data.userId }),
+  );
+  context.actions.dispatch(Actions.Broadcast.User, data);
 });
 ```
 
@@ -118,6 +170,6 @@ actions.useAction(Actions.Broadcast.Reset, (context, scope) => {
 | `queryClient.invalidateQueries`  | Dispatch a shared broadcast reset action       |
 | Automatic re-fetch on invalidate | Producer handles re-fetch in its reset handler |
 | Tag-based invalidation           | Typed payload on the reset action              |
-| Global query client              | Scoped to `<Boundary>`                         |
+| Global query client              | Scoped to `<app.Boundary>`                     |
 
-The key difference: React Query owns the fetch function and can re-run it. In March Hare, the producer owns the fetch logic, so invalidation is a signal that tells producers to re-run themselves.
+The key difference: React Query owns the fetch function and can re-run it. In March Hare, the producer owns the fetch logic but routes through `app.Resource`, so invalidation is a signal that tells producers to re-run themselves &mdash; with all the caching, cancellation, and coalescing benefits the Resource layer provides.

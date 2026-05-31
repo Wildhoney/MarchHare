@@ -1,59 +1,59 @@
 # Store
 
-The `Store` is a per-`<Boundary>` typed record of cross-cutting, mutable state. It holds whatever doesn't belong in the model &mdash; session tokens, locale, feature flags, current operational mode &mdash; anything ambient that handlers read on every call and that `Resource` fetchers need without explicit threading.
+The `Store` is a per-`<app.Boundary>` typed record of cross-cutting, mutable state. It holds whatever doesn't belong in the model &mdash; session tokens, locale, feature flags, current operational mode &mdash; anything ambient that handlers read on every call and that `Resource` fetchers need without explicit threading.
 
 Reads are plain dot notation (`store.session`); writes go through `context.actions.produce(({ store }) => { store.x = ... })`, the same Immer-style recipe used for the model. There are no `.get`/`.set`/`.read` methods.
 
 Every Store key flows into three places automatically:
 
-- **`useStore()`** &mdash; the hook-level read-only handle (Proxy; dot reads are always fresh).
+- **`app.useStore()`** &mdash; the hook-level read-only handle (Proxy; dot reads are always fresh).
 - **`context.store`** &mdash; the same handle inside `useActions` handlers.
-- **`store` field** on every `Resource` fetcher's args object &mdash; a snapshot per `.run()` call.
+- **`store` field** on every `app.Resource` fetcher's args object &mdash; a snapshot per `.run()` call.
 
 Store is **not** reactive. Mutating it does not trigger a re-render. Drive view state through the model; reach for the Store when you need cross-handler coordination or auth-style ambient values.
 
 ## Declaring the shape
 
-The Store's shape is declared once via TypeScript module augmentation. The library exports an empty `Store` interface; consumer code adds keys to it:
+The Store's shape is owned by an `App` instance. `App({ store })` infers the shape from the initial-value object, and every hook the App returns is typed against it:
 
 ```ts
-// app/store.ts
+// app.ts
+import { App } from "march-hare";
 import type { Session } from "./auth/types";
 
-declare module "march-hare" {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
-  interface Store {
-    session: Session | null;
-    locale: string;
-    operating: "idle" | "signing-out";
-  }
-}
+export const app = App({
+  store: {
+    session: null as Session | null,
+    locale: "en-GB",
+    operating: "idle" as "idle" | "signing-out",
+  },
+});
 ```
 
-The `interface` form is mandatory &mdash; TypeScript's declaration merging only works with interfaces, not type aliases. If your project enforces `@typescript-eslint/consistent-type-definitions: type`, suppress the rule on the augmentation block (as shown).
+Different `<app.Boundary>` instances in the same tree can be backed by different `App` calls with completely independent shapes &mdash; the `Store` type is no longer process-global.
 
 ## Wiring the initial value
 
-Pass the initial Store to `<Boundary store={...}>`:
+Render the App's Boundary at the root:
 
 ```tsx
-<Boundary store={{ session: null, locale: "en-GB", operating: "idle" }}>
-  <App />
-</Boundary>
+import { app } from "./app";
+
+<app.Boundary>
+  <Root />
+</app.Boundary>;
 ```
 
-The provided object is held by reference inside the Boundary; writes through `context.actions.produce(({ store }) => ...)` replace it with a fresh object via Immer. Nested Boundaries can supply their own Store, scoping it to that subtree.
-
-If you omit the `store` prop the Store defaults to `{}` &mdash; useful for tests or for apps that don't need ambient state.
+The initial value lives on the App; the Boundary delivers it to the subtree. Writes through `context.actions.produce(({ store }) => ...)` replace the slot with a fresh object via Immer.
 
 ## Reading via dot notation
 
 ```ts
-import { useStore, useContext } from "march-hare";
+import { app } from "./app";
 
-function useActions() {
-  const store = useStore();
-  const context = useContext<void, typeof Actions>();
+export function useActions() {
+  const store = app.useStore();
+  const context = app.useContext<void, typeof Actions>();
   const actions = context.useActions();
 
   actions.useAction(Actions.Refresh, async (context) => {
@@ -66,9 +66,9 @@ function useActions() {
 }
 ```
 
-`store.session`, `context.store.locale` &mdash; whatever you declared in the augmented interface. The handle is a `Proxy` that delegates to the live ref, so dot reads always reflect the latest write, even after `await` boundaries.
+`store.session`, `context.store.locale` &mdash; whatever you declared on `App({ store })`. The handle is a `Proxy` that delegates to the live ref, so dot reads always reflect the latest write, even after `await` boundaries.
 
-`context.store` is the same Proxy as `useStore()`, just available inside handlers without re-binding at the hook level.
+`context.store` is the same Proxy as `app.useStore()`, just available inside handlers without re-binding at the hook level.
 
 ## Writing via `context.actions.produce`
 
@@ -118,10 +118,10 @@ Model mutations re-render; Store mutations don't.
 
 ### Writes outside handlers are blocked
 
-`useStore()` returns a read-only Proxy. Direct assignment throws:
+`app.useStore()` returns a read-only Proxy. Direct assignment throws:
 
 ```ts
-const store = useStore();
+const store = app.useStore();
 store.session = result;
 // TypeError: Store is read-only outside `context.actions.produce`.
 ```
@@ -130,29 +130,30 @@ This is a deliberate guard. If you need to set the Store during component setup 
 
 ## Resource fetchers receive the Store
 
-Every fetcher's args object includes a `store` field &mdash; a snapshot of the Store at the moment the fetcher is invoked:
+Every fetcher's args object includes a `store` field &mdash; a snapshot of the Store at the moment the fetcher is invoked, typed against the App's shape:
 
 ```ts
-export const user = Resource<User, { id: number }>(
-  ({ store, controller, params }) =>
-    ky
+export const user = app.Resource<User, { id: number }>({
+  fetch({ store, controller, params }) {
+    return ky
       .get(`users/${params.id}`, {
         headers: store.session
           ? { Authorization: `Bearer ${store.session.accessToken}` }
           : {},
         signal: controller.signal,
       })
-      .json<User>(),
-);
+      .json<User>();
+  },
+});
 ```
 
 The `store` snapshot is read once per fetcher invocation, so a single fetch sees a consistent view. If the Store changes between calls, the next fetch picks up the new value.
 
 ## Reactivity caveats
 
-The Store is **not** a React state primitive. Direct `useStore()` reads do not re-render components when the Store changes &mdash; the hook returns a Proxy that delegates to the live ref. Use the Store for the _handler_ side of your app where dot reads inside handlers and fetchers are always fresh.
+The Store is **not** a React state primitive. Direct `app.useStore()` reads do not re-render components when the Store changes &mdash; the hook returns a Proxy that delegates to the live ref. Use the Store for the _handler_ side of your app where dot reads inside handlers and fetchers are always fresh.
 
-For the view side, subscribe to `Lifecycle.Store` &mdash; a singleton broadcast that fires every time `produce` mutates the Store. It delivers the full latest snapshot to every subscriber in the surrounding `<Boundary>`, and seeds with the initial Store so late mounters see the current value on mount:
+For the view side, subscribe to `Lifecycle.Store` &mdash; a singleton broadcast that fires every time `produce` mutates the Store. It delivers the full latest snapshot to every subscriber in the surrounding `<app.Boundary>`, and seeds with the initial Store so late mounters see the current value on mount:
 
 ```ts
 actions.useAction(Lifecycle.Store, (_context, store) => {
@@ -170,30 +171,21 @@ Render directly against the Store in JSX without lifting it into the model:
 
 `Lifecycle.Store` does **not** fire when a `produce` call mutates only the model &mdash; the slot reference is checked after each `produce` and the broadcast is emitted only when it changes. See [lifecycle-actions.md](./lifecycle-actions.md#lifecyclestore-global-broadcast) for the full contract.
 
-## Why Store rather than threading via `context.useActions` data callback
+## Multiple Stores
 
-Before Store, the canonical pattern for ambient values like the session token was:
+Because the shape is owned by `App({ store })`, an application can host several Boundaries with completely independent shapes:
 
 ```ts
-const session = useSessionContext();
-const context = useContext<
-  Model,
-  typeof Actions,
-  { session: Session | null }
->();
-const actions = context.useActions(model, () => ({ session }));
+// admin.ts
+export const admin = App({ store: { permissions: [] as Permission[] } });
+
+// public.ts
+export const pub = App({ store: { locale: "en-GB" } });
 ```
 
-Threading via the data callback works but has three downsides Store fixes:
-
-- **Resources can't read it.** Resources are module-scope and have no React context, so the data callback never reaches them. The pre-Store workaround was a holder module (with all the global-mutable concerns that brings) plus a `ky.beforeRequest` hook.
-- **Every hook re-declares the shape.** Each `context.useActions` call needed `{ session: ... }` in the generics.
-- **The model literal can't see it.** The `data` callback fires after the model is built.
-
-Store solves all three: the type is declared once globally, the fetcher receives a snapshot for free, and reads compose naturally inside hooks and handlers.
+Each `<admin.Boundary>` / `<pub.Boundary>` subtree gets its own typed handles; there is no shared module-augmented `Store` type.
 
 ## Limitations
 
-- **Module-scope shape.** The augmented `Store` interface is process-global. SSR setups that need per-request data should scope via per-request Boundaries with distinct `store` props rather than relying on a shared module declaration.
 - **Not for view state.** If you mutate the Store and want the UI to update, you've reached for the wrong primitive &mdash; use a model field with a broadcast for cross-component reactions instead.
 - **Snapshots, not subscriptions.** A Resource fetcher reads `store` once at the start of each `.run()`. If the Store changes mid-flight, the in-flight fetch keeps its original snapshot.

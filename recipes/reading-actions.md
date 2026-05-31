@@ -2,16 +2,16 @@
 
 There are two ways to access broadcast values:
 
-1. **In handlers** &ndash; `context.actions.resolution(action)` returns `Promise<T | null>`, waiting for annotations to settle.
+1. **In handlers** &ndash; `context.actions.final(action)` returns `Promise<T | null>`, waiting for annotations to settle.
 2. **In JSX** &ndash; `actions.stream(action, renderer)` returns `React.ReactNode` for declarative rendering in component output.
 
 ## Handler-side resolution
 
-Use `context.actions.resolution` to get the latest broadcast or multicast value inside an action handler, waiting for any pending annotations to settle before resolving.
+Use `context.actions.final` to get the latest broadcast or multicast value inside an action handler, waiting for any pending annotations to settle before resolving.
 
 ```ts
 actions.useAction(Actions.FetchPosts, async (context) => {
-  const user = await context.actions.resolution(Actions.Broadcast.User);
+  const user = await context.actions.final(Actions.Broadcast.User);
   if (!user) return;
   const posts = await fetchPosts(user.id, {
     signal: context.task.controller.signal,
@@ -20,11 +20,11 @@ actions.useAction(Actions.FetchPosts, async (context) => {
 });
 ```
 
-> **Important:** `resolution()` only accepts broadcast or multicast actions. Attempting to pass a unicast action returns `null` as unicast values are not cached.
+> **Important:** `final()` only accepts broadcast or multicast actions. Attempting to pass a unicast action returns `null` as unicast values are not cached.
 
 ## Key details
 
-- **Async** &ndash; returns `Promise<T | null>`. If the corresponding model field has pending Immertation annotations, `resolution` waits for them to settle before resolving.
+- **Async** &ndash; returns `Promise<T | null>`. If the corresponding model field has pending Immertation annotations, `final` waits for them to settle before resolving.
 - **Raw value** &ndash; returns `T`, not a `Box<T>`. Handlers need the data, not the reactive wrapper.
 - **Null when empty** &ndash; returns `null` if no value has been dispatched for that action.
 - **Abort-safe** &ndash; returns `null` if the task's abort signal has fired.
@@ -42,17 +42,17 @@ actions.useAction(Actions.Check, (context) => {
 });
 ```
 
-| Method       | Returns              | Waits for settled | Use case                       |
-| ------------ | -------------------- | ----------------- | ------------------------------ |
-| `resolution` | `Promise<T \| null>` | Yes               | Need the resolved value        |
-| `peek`       | `T \| null`          | No                | Quick guard check or sync read |
+| Method  | Returns              | Waits for settled | Use case                       |
+| ------- | -------------------- | ----------------- | ------------------------------ |
+| `final` | `Promise<T \| null>` | Yes               | Need the resolved value        |
+| `peek`  | `T \| null`          | No                | Quick guard check or sync read |
 
 ## Multicast support
 
-Multicast actions read their scope from the action itself, so `resolution` and `peek` accept them with no extra arguments:
+Multicast actions read their scope from the action itself, so `final` and `peek` accept them with no extra arguments:
 
 ```ts
-const score = await context.actions.resolution(Scope.Score);
+const score = await context.actions.final(Scope.Score);
 ```
 
 ## Cached values for useAction handlers
@@ -95,7 +95,7 @@ Use `actions.stream` to render broadcast values declaratively in JSX. The render
 
 ```tsx
 function Dashboard() {
-  const [model, actions] = useDashboardActions();
+  const [model, actions] = useActions();
 
   return (
     <div>
@@ -117,7 +117,7 @@ function Dashboard() {
 
 ### When to use which
 
-| Scenario                                   | Method                               |
-| ------------------------------------------ | ------------------------------------ |
-| Reading a broadcast value inside a handler | `context.actions.resolution(action)` |
-| Rendering a broadcast value in JSX output  | `actions.stream(action, renderer)`   |
+| Scenario                                   | Method                             |
+| ------------------------------------------ | ---------------------------------- |
+| Reading a broadcast value inside a handler | `context.actions.final(action)`    |
+| Rendering a broadcast value in JSX output  | `actions.stream(action, renderer)` |
