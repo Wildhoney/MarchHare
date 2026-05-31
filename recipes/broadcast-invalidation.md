@@ -27,15 +27,17 @@ export const settings = app.Resource<Settings>((context) =>
 
 ```ts
 // user/actions.ts
+import * as resource from "../resources";
+
 function useActions(props: { userId: number }) {
   const context = app.useContext<Model, typeof Actions, { userId: number }>();
   const actions = context.useActions(model, () => ({ userId: props.userId }));
 
   actions.useAction(Actions.Mount, async (context) => {
-    const data = await context.actions.resource(
-      user({ id: context.data.userId }),
+    const user = await context.actions.resource(
+      resource.user({ id: context.data.userId }),
     );
-    context.actions.dispatch(Actions.Broadcast.User, data);
+    context.actions.dispatch(Actions.Broadcast.User, user);
   });
 
   return actions;
@@ -44,13 +46,15 @@ function useActions(props: { userId: number }) {
 
 ```ts
 // settings/actions.ts
+import * as resource from "../resources";
+
 function useActions() {
   const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions(model);
 
   actions.useAction(Actions.Mount, async (context) => {
-    const data = await context.actions.resource(settings());
-    context.actions.dispatch(Actions.Broadcast.Settings, data);
+    const settings = await context.actions.resource(resource.settings());
+    context.actions.dispatch(Actions.Broadcast.Settings, settings);
   });
 
   return actions;
@@ -80,7 +84,7 @@ Each producer's `useActions` listens for both Mount and Reset and routes through
 // user/actions.ts
 import { Lifecycle } from "march-hare";
 import { app } from "../app";
-import { user } from "../resources";
+import * as resource from "../resources";
 
 export class Actions {
   static Mount = Lifecycle.Mount();
@@ -92,10 +96,10 @@ function useActions(props: { userId: number }) {
   const actions = context.useActions(model, () => ({ userId: props.userId }));
 
   const fetchUser = async (context: HandlerContext) => {
-    const data = await context.actions.resource(
-      user({ id: context.data.userId }),
+    const user = await context.actions.resource(
+      resource.user({ id: context.data.userId }),
     );
-    context.actions.dispatch(Actions.Broadcast.User, data);
+    context.actions.dispatch(Actions.Broadcast.User, user);
   };
 
   actions.useAction(Actions.Mount, fetchUser);
@@ -109,7 +113,7 @@ function useActions(props: { userId: number }) {
 // settings/actions.ts
 import { Lifecycle } from "march-hare";
 import { app } from "../app";
-import { settings } from "../resources";
+import * as resource from "../resources";
 
 export class Actions {
   static Mount = Lifecycle.Mount();
@@ -121,8 +125,8 @@ function useActions() {
   const actions = context.useActions(model);
 
   const fetchSettings = async (context: HandlerContext) => {
-    const data = await context.actions.resource(settings());
-    context.actions.dispatch(Actions.Broadcast.Settings, data);
+    const settings = await context.actions.resource(resource.settings());
+    context.actions.dispatch(Actions.Broadcast.Settings, settings);
   };
 
   actions.useAction(Actions.Mount, fetchSettings);
@@ -156,10 +160,10 @@ export class BroadcastActions {
 // Only re-fetch when auth or all resets are triggered.
 actions.useAction(Actions.Broadcast.Reset, async (context, scope) => {
   if (scope !== "auth" && scope !== "all") return;
-  const data = await context.actions.resource(
-    user({ id: context.data.userId }),
+  const user = await context.actions.resource(
+    resource.user({ id: context.data.userId }),
   );
-  context.actions.dispatch(Actions.Broadcast.User, data);
+  context.actions.dispatch(Actions.Broadcast.User, user);
 });
 ```
 

@@ -10,15 +10,17 @@ The token is optional. If you simply want every caller of this Resource + params
 
 ```ts
 actions.useAction(Actions.Mount, async (context) => {
-  const data = await context.actions.resource(dashboard()).coalesce();
-  context.actions.produce(({ model }) => void (model.dashboard = data));
+  const dashboard = await context.actions
+    .resource(resource.dashboard())
+    .coalesce();
+  context.actions.produce(({ model }) => void (model.dashboard = dashboard));
 });
 
-actions.useAction(Actions.Broadcast.User, async (context, user) => {
-  const data = await context.actions
-    .resource(dashboard({ userId: user.id }))
+actions.useAction(Actions.Broadcast.User, async (context, payload) => {
+  const dashboard = await context.actions
+    .resource(resource.dashboard({ userId: payload.id }))
     .coalesce();
-  context.actions.produce(({ model }) => void (model.dashboard = data));
+  context.actions.produce(({ model }) => void (model.dashboard = dashboard));
 });
 ```
 
@@ -45,7 +47,7 @@ export const dashboard = app.Resource<Dashboard, { userId?: number }>(
 // dashboard/actions.ts
 import { Action, Lifecycle } from "march-hare";
 import { app } from "../app";
-import { dashboard } from "../resources";
+import * as resource from "../resources";
 
 type Model = { dashboard: Dashboard | null };
 
@@ -64,17 +66,17 @@ function useActions() {
   const actions = context.useActions({ dashboard: null });
 
   actions.useAction(Actions.Mount, async (context) => {
-    const data = await context.actions
-      .resource(dashboard())
+    const dashboard = await context.actions
+      .resource(resource.dashboard())
       .coalesce(Coalesce.Dashboard);
-    context.actions.produce(({ model }) => void (model.dashboard = data));
+    context.actions.produce(({ model }) => void (model.dashboard = dashboard));
   });
 
-  actions.useAction(Actions.Broadcast.User, async (context, user) => {
-    const data = await context.actions
-      .resource(dashboard({ userId: user.id }))
+  actions.useAction(Actions.Broadcast.User, async (context, payload) => {
+    const dashboard = await context.actions
+      .resource(resource.dashboard({ userId: payload.id }))
       .coalesce(Coalesce.Dashboard);
-    context.actions.produce(({ model }) => void (model.dashboard = data));
+    context.actions.produce(({ model }) => void (model.dashboard = dashboard));
   });
 
   return actions;
@@ -85,10 +87,10 @@ On mount with a cached `Broadcast.User` value both handlers fire, both call `.re
 
 The dedupe key is the triple `(Resource, params, token)`:
 
-- Two calls to `dashboard({ userId: 7 }).coalesce(Coalesce.Dashboard)` share.
-- `dashboard({ userId: 7 }).coalesce(Coalesce.Dashboard)` and `dashboard({ userId: 8 }).coalesce(Coalesce.Dashboard)` do **not** share &mdash; different params, different fetches.
-- `dashboard({ userId: 7 }).coalesce(Coalesce.Dashboard)` and `dashboard({ userId: 7 }).coalesce(Coalesce.Refresh)` do **not** share &mdash; different tokens, different fetches.
-- `cat().coalesce(Coalesce.Dashboard)` and `dashboard().coalesce(Coalesce.Dashboard)` do **not** share &mdash; same token but different Resources. Identity comes from the fetcher closure, not the token.
+- Two calls to `resource.dashboard({ userId: 7 }).coalesce(Coalesce.Dashboard)` share.
+- `resource.dashboard({ userId: 7 }).coalesce(Coalesce.Dashboard)` and `resource.dashboard({ userId: 8 }).coalesce(Coalesce.Dashboard)` do **not** share &mdash; different params, different fetches.
+- `resource.dashboard({ userId: 7 }).coalesce(Coalesce.Dashboard)` and `resource.dashboard({ userId: 7 }).coalesce(Coalesce.Refresh)` do **not** share &mdash; different tokens, different fetches.
+- `resource.cat().coalesce(Coalesce.Dashboard)` and `resource.dashboard().coalesce(Coalesce.Dashboard)` do **not** share &mdash; same token but different Resources. Identity comes from the fetcher closure, not the token.
 
 The token namespace is scoped to the enclosing `<app.Boundary>`, so `Coalesce.Dashboard` in one App is independent of the same value in a sibling App's tree.
 
@@ -97,10 +99,10 @@ The token namespace is scoped to the enclosing `<app.Boundary>`, so `Coalesce.Da
 Multicast actions work identically &mdash; the dedupe key is unchanged, and the `Scope.X` action carries its own scope so coalescing across handlers in the same multicast region just works:
 
 ```ts
-actions.useAction(Scope.User, async (context, user) => {
-  const data = await context.actions
-    .resource(dashboard({ userId: user.id }))
+actions.useAction(Scope.User, async (context, payload) => {
+  const dashboard = await context.actions
+    .resource(resource.dashboard({ userId: payload.id }))
     .coalesce(Coalesce.Dashboard);
-  context.actions.produce(({ model }) => void (model.dashboard = data));
+  context.actions.produce(({ model }) => void (model.dashboard = dashboard));
 });
 ```

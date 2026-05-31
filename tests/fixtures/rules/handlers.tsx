@@ -14,7 +14,7 @@ import {
   With,
   utils,
 } from "../../../src/library/index.ts";
-import { useActions } from "../../../src/library/hooks/index.ts";
+import { useActions } from "../../../src/library/actions/index.ts";
 
 // Actions for handler signature tests
 class HandlerActions {

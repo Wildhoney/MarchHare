@@ -72,8 +72,11 @@ export default defineConfig([
     files: [
       "src/library/utils/utils.ts",
       "src/library/utils/index.ts",
-      "src/library/hooks/index.ts",
-      "src/library/hooks/utils.ts",
+      "src/library/actions/index.ts",
+      "src/library/actions/utils.ts",
+      "src/library/context/index.ts",
+      "src/library/scope/index.tsx",
+      "src/library/with/index.ts",
       "src/library/resource/index.ts",
       "src/library/resource/utils.ts",
       "src/library/cache/index.ts",

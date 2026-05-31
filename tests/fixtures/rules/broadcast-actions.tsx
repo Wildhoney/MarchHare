@@ -9,7 +9,7 @@
  */
 import * as React from "react";
 import { Action, Distribution, Lifecycle } from "../../../src/library/index.ts";
-import { useActions } from "../../../src/library/hooks/index.ts";
+import { useActions } from "../../../src/library/actions/index.ts";
 
 // Broadcast actions that can be read
 class BroadcastActions {

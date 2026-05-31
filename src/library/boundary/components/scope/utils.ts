@@ -1,29 +1,30 @@
 import type { ScopeContext, ScopeEntry } from "./types.ts";
-import type { ActionId } from "../tasks/types.ts";
 import * as React from "react";
 
 /**
- * React context for the scope chain.
- * Starts as null (no scopes).
+ * React context for the nearest multicast scope. `null` at the root.
+ *
+ * @internal
  */
 export const Context = React.createContext<ScopeContext>(null);
 
 /**
- * Hook to access the scope context from the nearest ancestor.
+ * Hook that returns the nearest multicast scope entry. `null` when
+ * the caller is not rendered inside any `<app.Scope().Boundary>`.
  *
- * @returns The scope context chain, or null if not inside any scope.
+ * @internal
  */
 export function useScope(): ScopeContext {
   return React.useContext(Context);
 }
 
 /**
- * Looks up the scope opened by the given multicast action.
- * O(1) lookup from the flattened scope map.
+ * Pass-through accessor. Kept for the dispatch/subscribe sites that
+ * previously needed an action-keyed lookup; now the scope is a single
+ * entry (or `null`), so this returns it as-is.
+ *
+ * @internal
  */
-export function getScope(
-  context: ScopeContext,
-  action: ActionId,
-): ScopeEntry | null {
-  return context?.get(action) ?? null;
+export function getScope(context: ScopeContext): ScopeEntry | null {
+  return context;
 }

@@ -1,20 +1,20 @@
 import { Pk } from "../types/index.ts";
-import { AbortError } from "../error/types.ts";
+import { Aborted } from "../error/types.ts";
 
 export { unset } from "./utils.ts";
 export type { Stored, Unset } from "./types.ts";
 
 /**
  * Returns a promise that resolves after the specified number of
- * milliseconds, or rejects with an {@link AbortError} when the signal is
- * aborted. Use to inject a cancellable delay into an action handler.
+ * milliseconds, or rejects with an {@link Aborted} when the signal is aborted. Use to inject a cancellable
+ * delay into an action handler.
  *
  * @param ms How long to wait before resolving.
  * @param signal Optional {@link AbortSignal} that cancels the sleep early.
  *               Pass `context.task.controller.signal` to tie the wait to
  *               the lifetime of the current action.
  * @returns A promise that resolves after `ms` milliseconds or rejects with
- *          an {@link AbortError} if `signal` aborts first.
+ *          an {@link Aborted} if `signal` aborts first.
  */
 export function sleep(
   ms: number,
@@ -22,7 +22,7 @@ export function sleep(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(new AbortError());
+      reject(new Aborted());
       return;
     }
 
@@ -32,7 +32,7 @@ export function sleep(
       "abort",
       () => {
         clearTimeout(timer);
-        reject(new AbortError());
+        reject(new Aborted());
       },
       { once: true },
     );
@@ -46,19 +46,20 @@ export function sleep(
  *
  * @param ms Interval in milliseconds between invocations of `fn`.
  * @param signal Optional {@link AbortSignal} that cancels polling early.
- *               Aborts propagate as an {@link AbortError} rejection.
+ *               Aborts propagate as an {@link Aborted} rejection.
  * @param fn Predicate invoked each iteration. Return `true` to stop
  *           polling, `false` to schedule another invocation after `ms`.
  *           May be sync or async.
  * @returns A promise that resolves when `fn` returns `true`, or rejects
- *          with an {@link AbortError} if `signal` aborts first.
+ *          with a `DOMException("aborted", "Aborted")` if `signal`
+ *          aborts first.
  */
 export async function poll(
   ms: number,
   signal: AbortSignal | undefined,
   fn: () => boolean | Promise<boolean>,
 ): Promise<void> {
-  if (signal?.aborted) throw new AbortError();
+  if (signal?.aborted) throw new Aborted();
 
   while (true) {
     const done = await fn();

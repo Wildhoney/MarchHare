@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { annotate } from "./index.ts";
-import { useActions } from "../hooks/index.ts";
+import { useActions } from "../actions/index.ts";
 import { Action } from "../action/index.ts";
 import { Operation } from "immertation";
 

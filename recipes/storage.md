@@ -87,22 +87,22 @@ export const cat = app.Resource({
 ```ts
 // actions.ts
 import { useContext } from "march-hare";
-import { cat } from "./resources";
+import * as resource from "./resources";
 
 export function useActions() {
   const context = useContext<Model, typeof Actions>();
   const actions = context.useActions({
     // First render reads the Cache automatically — no explicit get.
-    cat: cat(),
+    cat: resource.cat(),
   });
 
   actions.useAction(Actions.Mount, async (context) => {
     // Short-circuits when the persisted payload is < 5 minutes old.
     // The Cache writes through automatically — no explicit set.
-    const data = await context.controller
-      .resource(cat())
+    const cat = await context.actions
+      .resource(resource.cat())
       .exceeds({ minutes: 5 });
-    context.actions.produce(({ model }) => void (model.cat = data));
+    context.actions.produce(({ model }) => void (model.cat = cat));
   });
 
   return actions;
@@ -111,17 +111,17 @@ export function useActions() {
 
 What happens on a cold reload:
 
-1. The model literal calls `cat()`.
+1. The model literal calls `resource.cat()`.
 2. The Cache reads from the adapter using the params key (here `"{}"` since `cat` is no-params).
 3. If a previous session persisted a payload, the call returns it.
 4. The component renders the previous session's payload immediately.
-5. `Mount` fires. `context.actions.resource(cat()).exceeds({ minutes: 5 })` checks the persisted `at`. If it's within five minutes, the fetcher _doesn't run_; otherwise it does. On a successful fetch, the Cache writes through.
+5. `Mount` fires. `context.actions.resource(resource.cat()).exceeds({ minutes: 5 })` checks the persisted `at`. If it's within five minutes, the fetcher _doesn't run_; otherwise it does. On a successful fetch, the Cache writes through.
 
 > **One Cache per Resource is the default.** The Cache's whole adapter namespace belongs to the Resource it's wired to &mdash; different Resources should each declare their own Cache (with a distinct prefix in the adapter if sharing one backing store like `localStorage`).
 
 ## Per-params keying
 
-Cache entries are keyed automatically by `JSON.stringify(params)`. For a parameterised resource like `user({ id: 5 })`, the storage key is `"{\"id\":5}"`. Different params produce independent persistent slots:
+Cache entries are keyed automatically by `JSON.stringify(params)`. For a parameterised resource like `resource.user({ id: 5 })`, the storage key is `"{\"id\":5}"`. Different params produce independent persistent slots:
 
 ```ts
 const userCache = Cache(namespacedAdapter("users"));
@@ -137,12 +137,12 @@ export const user = app.Resource<User, { id: number }>({
 });
 
 // Each cache slot is independent.
-await context.actions.resource(user({ id: 5 })); // stored under "{\"id\":5}"
-await context.actions.resource(user({ id: 6 })); // stored under "{\"id\":6}"
+await context.actions.resource(resource.user({ id: 5 })); // stored under "{\"id\":5}"
+await context.actions.resource(resource.user({ id: 6 })); // stored under "{\"id\":6}"
 
 // Sync reads pull from each slot.
-const five: User | null = user({ id: 5 });
-const six: User | null = user({ id: 6 });
+const five: User | null = resource.user({ id: 5 });
+const six: User | null = resource.user({ id: 6 });
 ```
 
 If you want to namespace by resource name when sharing a backing store, prefix in the adapter:
@@ -244,8 +244,10 @@ On the server, reads return empty Stored handles and writes are no-ops.
 Persisted entries survive sign-out by default. Clear them explicitly when the user signs out:
 
 ```ts
+import * as resource from "../resources";
+
 actions.useAction(Actions.SignOut, async (context) => {
-  await context.actions.resource(signOut());
+  await context.actions.resource(resource.signOut());
   context.actions.produce(({ store }) => {
     store.session = null;
   });

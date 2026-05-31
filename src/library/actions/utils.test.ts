@@ -2,12 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import {
   withGetters,
   isGenerator,
-  With,
   isChanneledAction,
   matchesChannel,
 } from "./utils.ts";
+import { With } from "../with/index.ts";
 import { getReason, getError } from "../error/utils.ts";
-import { Reason, AbortError, TimeoutError } from "../error/index.ts";
+import { Reason, Aborted } from "../error/index.ts";
 import { Action } from "../action/index.ts";
 import type { HandlerContext } from "../types/index.ts";
 
@@ -67,14 +67,14 @@ describe("isGenerator()", () => {
 });
 
 describe("getReason()", () => {
-  it("should return Reason.Timedout for TimeoutError", () => {
-    const error = new TimeoutError();
-    expect(getReason(error)).toBe(Reason.Timedout);
+  it("should return Reason.Aborted for Aborted", () => {
+    const error = new Aborted();
+    expect(getReason(error)).toBe(Reason.Aborted);
   });
 
-  it("should return Reason.Supplanted for AbortError", () => {
-    const error = new AbortError();
-    expect(getReason(error)).toBe(Reason.Supplanted);
+  it("should return Reason.Aborted for native AbortError DOMException", () => {
+    const error = new DOMException("aborted", "AbortError");
+    expect(getReason(error)).toBe(Reason.Aborted);
   });
 
   it("should return Reason.Errored for regular Error", () => {
@@ -103,7 +103,7 @@ describe("getError()", () => {
   });
 
   it("should preserve custom error instances", () => {
-    const error = new TimeoutError();
+    const error = new Aborted();
     expect(getError(error)).toBe(error);
   });
 

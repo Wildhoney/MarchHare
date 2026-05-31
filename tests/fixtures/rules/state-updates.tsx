@@ -7,7 +7,7 @@
  */
 import * as React from "react";
 import { Action, Op } from "../../../src/library/index.ts";
-import { useActions } from "../../../src/library/hooks/index.ts";
+import { useActions } from "../../../src/library/actions/index.ts";
 
 class Actions {
   static SetValue = Action<number>("SetValue");

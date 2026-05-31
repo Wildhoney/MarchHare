@@ -24,4 +24,4 @@ export type Props = { index: number };
 
 export type Data = Props & { router: Router };
 
-export type H = Handlers<Model, typeof Actions, Data>;
+export type Handler = Handlers<Model, typeof Actions, Data>;

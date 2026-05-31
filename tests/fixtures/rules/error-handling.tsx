@@ -14,7 +14,7 @@ import {
   Reason,
   utils,
 } from "../../../src/library/index.ts";
-import { useActions } from "../../../src/library/hooks/index.ts";
+import { useActions } from "../../../src/library/actions/index.ts";
 import { O, R } from "@mobily/ts-belt";
 
 class ErrorActions {
@@ -318,7 +318,7 @@ function Rule25ErrorReasons() {
         Reason.Errored
       </button>
 
-      {/* Reason.Supplanted - rapid fire will cause earlier ones to be supplanted */}
+      {/* Reason.Aborted - rapid fire will cause earlier ones to be aborted */}
       <button
         data-testid="rule-25-supplanted"
         onClick={() => {
@@ -329,14 +329,13 @@ function Rule25ErrorReasons() {
           );
         }}
       >
-        Reason.Supplanted
+        Reason.Aborted
       </button>
 
       {/* Reference info */}
       <div data-testid="rule-25-info">
         <small>
-          Reasons: Timedout={Reason.Timedout}, Supplanted={Reason.Supplanted},
-          Errored={Reason.Errored}
+          Reasons: Aborted={Reason.Aborted}, Errored={Reason.Errored}
         </small>
       </div>
     </section>

@@ -9,6 +9,6 @@ export type Model = {
   selected: Mood | null;
 };
 
-export class Scope {
+export class MulticastActions {
   static Mood = Action<Mood>("Mood", Distribution.Multicast);
 }

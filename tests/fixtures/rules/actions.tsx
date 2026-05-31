@@ -8,7 +8,7 @@
  */
 import * as React from "react";
 import { Action, Distribution, Lifecycle } from "../../../src/library/index.ts";
-import { useActions } from "../../../src/library/hooks/index.ts";
+import { useActions } from "../../../src/library/actions/index.ts";
 
 // Rule 1: Actions defined as static class members
 class LocalActions {

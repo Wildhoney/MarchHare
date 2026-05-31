@@ -573,8 +573,11 @@ docs: update the README file
 ### Library Core
 
 - `src/library/index.ts` - Main exports
-- `src/library/hooks/index.ts` - useActions hook implementation
-- `src/library/hooks/utils.ts` - With helper, useData, useLifecycles
+- `src/library/actions/index.ts` - useActions hook implementation
+- `src/library/actions/utils.ts` - useData, useLifecycles, channel helpers
+- `src/library/context/index.ts` - useContext (consumed via `app.useContext`)
+- `src/library/with/index.ts` - With.Update / With.Invert helpers
+- `src/library/coalesce/index.ts` - coalesceKey, withAbort, default token
 - `src/library/action/index.ts` - Action factory function
 - `src/library/types/index.ts` - All TypeScript types and interfaces
 - `src/library/utils/index.ts` - sleep, pk utilities

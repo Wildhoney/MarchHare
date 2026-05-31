@@ -15,7 +15,7 @@ import {
   type Pk,
   type Box,
 } from "../../../src/library/index.ts";
-import { useActions } from "../../../src/library/hooks/index.ts";
+import { useActions } from "../../../src/library/actions/index.ts";
 
 class TypeSafetyActions {
   static AddTodo = Action<string>("AddTodo");

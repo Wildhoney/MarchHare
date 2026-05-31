@@ -129,7 +129,7 @@ export const user = app.Resource<User>((context) =>
 ```tsx
 import { Action, Op } from "march-hare";
 import { app } from "./app";
-import { user } from "./resources";
+import * as resource from "./resources";
 
 type Model = { name: string | null };
 const model: Model = { name: null };
@@ -149,9 +149,9 @@ function useActions() {
     );
 
     // Auto-threads context.task.controller and the Store snapshot.
-    const data = await context.actions.resource(user());
+    const user = await context.actions.resource(resource.user());
 
-    context.actions.produce(({ model }) => void (model.name = data.name));
+    context.actions.produce(({ model }) => void (model.name = user.name));
   });
 
   return actions;
@@ -172,25 +172,27 @@ If you need to access external reactive values (props or `useState` from parent 
 ```tsx
 import { Action } from "march-hare";
 import { app } from "./app";
-import { search } from "./resources";
+import * as resource from "./resources";
 
 type Model = { results: Result[] };
 const model: Model = { results: [] };
+
+type Props = { query: string };
 
 export class Actions {
   static Search = Action<string>("Search");
 }
 
-function useActions(props: { query: string }) {
-  const context = app.useContext<Model, typeof Actions, { query: string }>();
+function useActions(props: Props) {
+  const context = app.useContext<Model, typeof Actions, Props>();
   const actions = context.useActions(model, () => ({ query: props.query }));
 
   actions.useAction(Actions.Search, async (context) => {
-    const results = await context.actions.resource(
-      search({ query: context.data.query }),
+    const search = await context.actions.resource(
+      resource.search({ query: context.data.query }),
     );
     // context.data.query is always the latest value, even after await.
-    context.actions.produce(({ model }) => void (model.results = results));
+    context.actions.produce(({ model }) => void (model.results = search));
   });
 
   return actions;
@@ -210,7 +212,46 @@ export default function Search(props: { query: string }): React.ReactElement {
 
 `data` is read-only from the view side &ndash; handlers read fresh values via `context.data` (Proxy delegating to a ref kept current across `await`s); JSX reads via the third tuple element (the same Proxy, refreshed synchronously each render). If a handler needs to _react_ to a change in `data`, subscribe to `Lifecycle.Update()` &mdash; it fires whenever `getData`'s result differs from the previous render. See the [referential equality recipe](./recipes/referential-equality.md) and the [React context in handlers recipe](./recipes/react-context-in-handlers.md) for more.
 
-When an external library needs the dispatch callback at construction time (form libraries, animation engines) _and_ its return value must flow back into `context.useActions` via the data callback, there's a chicken-and-egg &mdash; each side wants the other to exist first. `app.useContext` resolves this by returning a stable handle up-front: `context.actions.dispatch` is callable from the first line, the external library closes over it, and `context.useActions(initialModel, getData?)` completes the binding once the external value is in scope. See the [`useContext` recipe](./recipes/use-context.md) for the full pattern.
+When an external library needs the dispatch callback at construction time (form libraries, animation engines) _and_ its return value must flow back into `context.useActions` via the data callback, there's a chicken-and-egg &mdash; each side wants the other to exist first. `app.useContext` resolves this by returning a stable handle up-front: `context.actions.dispatch` is callable from the first line, the external library closes over it, and `context.useActions(initialModel, getData?)` completes the binding once the external value is in scope:
+
+```tsx
+import { Action } from "march-hare";
+import { app } from "./app";
+import * as resource from "./resources";
+import { useForm } from "some-form-library";
+
+type Model = { saving: boolean };
+
+export class Actions {
+  static Submit = Action("Submit");
+}
+
+function useActions() {
+  // 1. The handle is ready immediately — `context.actions.dispatch` is callable
+  //    before `context.useActions(...)` runs.
+  const context = app.useContext<Model, typeof Actions, { form: FormApi }>();
+
+  // 2. The external library closes over `context.actions.dispatch` at
+  //    construction time. The form's `onSubmit` fires a Submit action.
+  const form = useForm({
+    onSubmit: () => void context.actions.dispatch(Actions.Submit),
+  });
+
+  // 3. The form value (`form`) flows back into the data callback so handlers
+  //    read it via `context.data.form`.
+  const actions = context.useActions({ saving: false }, () => ({ form }));
+
+  actions.useAction(Actions.Submit, async (context) => {
+    context.actions.produce(({ model }) => void (model.saving = true));
+    await context.actions.resource(resource.save(context.data.form.values));
+    context.actions.produce(({ model }) => void (model.saving = false));
+  });
+
+  return actions;
+}
+```
+
+See the [`useContext` recipe](./recipes/use-context.md) for the full pattern.
 
 The model defaults to `void`, so a component that only coordinates via events &mdash; forwarding broadcasts, triggering side-effects, bridging external systems &mdash; can call `context.useActions()` with no initial model:
 
@@ -268,11 +309,11 @@ actions.useAction(Actions.Profile, async (context) => {
       void (model.name = context.actions.annotate(model.name, Op.Update)),
   );
 
-  const data = await context.actions.resource(user());
+  const user = await context.actions.resource(resource.user());
 
-  context.actions.produce(({ model }) => void (model.name = data.name));
+  context.actions.produce(({ model }) => void (model.name = user.name));
 
-  context.actions.dispatch(Actions.Broadcast.Name, data.name);
+  context.actions.dispatch(Actions.Broadcast.Name, user.name);
 });
 ```
 
@@ -280,8 +321,8 @@ Any component whose `useActions` subscribes to the broadcast receives it:
 
 ```ts
 actions.useAction(Actions.Broadcast.Name, async (context, name) => {
-  const data = await context.actions.resource(friends({ name }));
-  context.actions.produce(({ model }) => void (model.friends = data));
+  const friends = await context.actions.resource(resource.friends({ name }));
+  context.actions.produce(({ model }) => void (model.friends = friends));
 });
 ```
 
@@ -291,8 +332,8 @@ actions.useAction(Actions.Broadcast.Name, async (context, name) => {
 actions.useAction(Actions.FetchFriends, async (context) => {
   const name = await context.actions.final(Actions.Broadcast.Name);
   if (!name) return;
-  const data = await context.actions.resource(friends({ name }));
-  context.actions.produce(({ model }) => void (model.friends = data));
+  const friends = await context.actions.resource(resource.friends({ name }));
+  context.actions.produce(({ model }) => void (model.friends = friends));
 });
 
 actions.useAction(Actions.Check, (context) => {
@@ -351,7 +392,7 @@ Components that mount after a broadcast has already been dispatched automaticall
 
 ## Remote data with `Resource`
 
-For remote data, declare an `app.Resource` at module scope. `user(params)` is the unified call form &mdash; it returns the sync cache read (`User | null`) and primes a slot that `context.actions.resource(user(params))` consumes for the fetch path (with auto-threaded abort controller and Store snapshot). Every successful fetch caches the response in a module-level slot keyed by the fetcher and the stringified params, so different param-sets are independent. Keep all resources in `resources.ts` and pull them in with named imports:
+For remote data, declare an `app.Resource` at module scope. `resource.user(params)` is the unified call form &mdash; it returns the sync cache read (`User | null`) and primes a slot that `context.actions.resource(resource.user(params))` consumes for the fetch path (with auto-threaded abort controller and Store snapshot). Every successful fetch caches the response in a module-level slot keyed by the fetcher and the stringified params, so different param-sets are independent. Keep all resources in `resources.ts` and pull the whole module in as a namespace (`import * as resource from "./resources"`):
 
 ```ts
 // resources.ts
@@ -373,11 +414,11 @@ export const pay = app.Resource<Receipt, Body>((context) =>
 
 ```tsx
 // profile/actions.ts
-import { Action, Lifecycle } from "march-hare";
+import { Action, Lifecycle, type Maybe } from "march-hare";
 import { app } from "../app";
-import { user, pay } from "../resources";
+import * as resource from "../resources";
 
-type Model = { user: User | null; receipt: Receipt | null };
+type Model = { user: Maybe<User>; receipt: Maybe<Receipt> };
 
 export class Actions {
   static Mount = Lifecycle.Mount();
@@ -388,18 +429,20 @@ function useActions() {
   const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions({
     // Sync cache read at the model literal — returns null when nothing is cached.
-    user: user(),
+    user: resource.user(),
     receipt: null,
   });
 
   actions.useAction(Actions.Mount, async (context) => {
-    const data = await context.actions.resource(user()).exceeds({ minutes: 5 });
-    context.actions.produce(({ model }) => void (model.user = data));
+    const user = await context.actions
+      .resource(resource.user())
+      .exceeds({ minutes: 5 });
+    context.actions.produce(({ model }) => void (model.user = user));
   });
 
   actions.useAction(Actions.Submit, async (context, body) => {
-    const receipt = await context.actions.resource(pay(body));
-    context.actions.produce(({ model }) => void (model.receipt = receipt));
+    const pay = await context.actions.resource(resource.pay(body));
+    context.actions.produce(({ model }) => void (model.receipt = pay));
   });
 
   return actions;
@@ -414,27 +457,22 @@ export default function Profile(): React.ReactElement {
 `context.actions.resource(invocation)` returns a chainable thenable:
 
 - `.exceeds({ minutes: 5 })` &mdash; short-circuits when the per-params cache age is within the freshness window. Accepts a `Temporal.Duration`, a `DurationLike` object, or an ISO 8601 duration string. `Temporal` is read from the host runtime &ndash; bring a polyfill (e.g. [`@js-temporal/polyfill`](https://github.com/js-temporal/temporal-polyfill)) if your target doesn't expose it natively.
-- `.coalesce(token)` &mdash; opts the call into in-flight sharing. Any other caller with the same Resource, same structural params, and equal `token` receives the same promise. The shared fetch uses a detached `AbortController` so a single caller's abort never cancels work other callers are waiting on; each caller still sees its own `context.task.controller` abort as a rejection of its personal await.
+- `.coalesce()` &mdash; opts the call into in-flight sharing. Any other caller with the same Resource and same structural params receives the same promise. The shared fetch uses a detached `AbortController` so a single caller's abort never cancels work other callers are waiting on; each caller still sees its own `context.task.controller` abort as a rejection of its personal await.
 
 ```ts
-// Use a numeric enum for the coalesce token — typed and greppable at call sites.
-enum Coalesce {
-  User,
-}
-
 // Mount and a broadcast handler both fire on mount — only one network request.
 actions.useAction(Actions.Mount, async (context) => {
-  const data = await context.actions.resource(user()).coalesce(Coalesce.User);
-  context.actions.produce(({ model }) => void (model.user = data));
+  const user = await context.actions.resource(resource.user()).coalesce();
+  context.actions.produce(({ model }) => void (model.user = user));
 });
 
 actions.useAction(Actions.Broadcast.UserId, async (context, id) => {
-  const data = await context.actions
-    .resource(user({ id }))
-    .coalesce(Coalesce.User);
-  context.actions.produce(({ model }) => void (model.user = data));
+  const user = await context.actions.resource(resource.user({ id })).coalesce();
+  context.actions.produce(({ model }) => void (model.user = user));
 });
 ```
+
+For finer-grained control &mdash; separating concurrent fetches into distinct coalesce groups via a token argument &mdash; see the [coalesce tokens recipe](./recipes/coalesce-tokens.md).
 
 The fetcher receives a `context` object &mdash; read fields via `context.store`, `context.controller`, `context.params`. There are no callbacks &ndash; no `onSuccess`, no `onError`. The `context.dispatch` field can fire broadcast or multicast actions from inside the fetcher (unicast is rejected at compile time), but most side-effects (model writes, analytics) belong in the `useAction` handler that awaited the call:
 
@@ -467,8 +505,8 @@ export const feed = app.Resource<Page<Item>, Params>((context) =>
 ```ts
 // Inside useActions:
 actions.useAction(Actions.LoadMore, async (context) => {
-  const page = await context.actions.resource(
-    feed({ cursor: context.model.cursor }),
+  const feed = await context.actions.resource(
+    resource.feed({ cursor: context.model.cursor }),
   );
   // ...
 });
@@ -481,8 +519,8 @@ For typed failure routing, wrap the call in `try/catch` and use `instanceof` &nd
 ```ts
 actions.useAction(Actions.Mount, async (context) => {
   try {
-    const data = await context.actions.resource(user());
-    context.actions.produce(({ model }) => void (model.user = data));
+    const user = await context.actions.resource(resource.user());
+    context.actions.produce(({ model }) => void (model.user = user));
   } catch (error) {
     if (error instanceof RateLimitedError) {
       await context.actions.dispatch(
@@ -518,11 +556,11 @@ export const cat = app.Resource.Cachable(cache, (context) =>
 
 ```tsx
 // cats/actions.ts
-import { Lifecycle } from "march-hare";
+import { Lifecycle, type Maybe } from "march-hare";
 import { app } from "../app";
-import { cat } from "../resources";
+import * as resource from "../resources";
 
-type Model = { cat: Cat | null };
+type Model = { cat: Maybe<Cat> };
 
 export class Actions {
   static Mount = Lifecycle.Mount();
@@ -532,14 +570,16 @@ function useActions() {
   const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions({
     // First render reads the Cache automatically.
-    cat: cat(),
+    cat: resource.cat(),
   });
 
   actions.useAction(Actions.Mount, async (context) => {
     // Short-circuits when the persisted payload is < 5 minutes old.
     // The Cache writes through automatically on success.
-    const fresh = await context.actions.resource(cat()).exceeds({ minutes: 5 });
-    context.actions.produce(({ model }) => void (model.cat = fresh));
+    const cat = await context.actions
+      .resource(resource.cat())
+      .exceeds({ minutes: 5 });
+    context.actions.produce(({ model }) => void (model.cat = cat));
   });
 
   return actions;
@@ -594,49 +634,73 @@ Channel values support non-nullable primitives: `string`, `number`, `boolean`, o
 
 ## Multicast actions
 
-For scoped communication between component groups, use multicast actions with the `withScope` HOC. Each multicast action defines its own scope &ndash; pass the same action to `withScope` and to `dispatch`, no separate scope name required:
+For scoped communication between component groups, declare a multicast action class and open a scope via `app.Scope<typeof MulticastActions>()`. The generic carries the multicast surface at the type level &mdash; `scope.useContext().actions.dispatch` widens to include those actions on top of the local `Actions` class, the same way `Actions.Broadcast = BroadcastActions` widens for broadcasts. Render `<scope.Boundary>` once at the root of the subtree the scope governs:
 
-```tsx
-import { Action, Distribution, withScope } from "march-hare";
-import { app } from "./app";
+```ts
+// scope/types.ts — multicast action class, kept separate from the local Actions.
+import { Action, Distribution } from "march-hare";
 
-// Group multicast actions on a class named `Scope`.
-class Scope {
+export class MulticastActions {
   static Update = Action<number>("Update", Distribution.Multicast);
 }
+```
 
+```tsx
+// scope/index.tsx — open the scope once.
+import { app } from "../app";
+import type { MulticastActions } from "./types";
+import ScoreBoard from "./components/score-board";
+import PlayerList from "./components/player-list";
+
+export const scope = app.Scope<typeof MulticastActions>();
+
+export default function ScoreArea(): React.ReactElement {
+  return (
+    <scope.Boundary>
+      <ScoreBoard />
+      <PlayerList />
+    </scope.Boundary>
+  );
+}
+```
+
+```tsx
+// scope/components/score-board/actions.ts — subscribe and dispatch from inside.
+import { Action } from "march-hare";
+import { scope } from "../../index";
+import { MulticastActions } from "../../types";
+
+type Model = { score: number };
+
+// Like `Broadcast`, you also list the multicast surface on the local
+// Actions class so the bound dispatch sees it on `Actions.Multicast.*`.
 export class Actions {
+  static Multicast = MulticastActions;
   static Increment = Action("Increment");
 }
 
-function useActions() {
-  const context = app.useContext<Model, typeof Actions>();
-  const actions = context.useActions(model);
+export function useActions() {
+  const context = scope.useContext<Model, typeof Actions>();
+  const actions = context.useActions({ score: 0 });
 
-  actions.useAction(Scope.Update, (context, score) => {
+  actions.useAction(MulticastActions.Update, (context, score) => {
     context.actions.produce(({ model }) => void (model.score = score));
+  });
+
+  actions.useAction(Actions.Increment, (context) => {
+    context.actions.dispatch(MulticastActions.Update, context.model.score + 1);
   });
 
   return actions;
 }
-
-function ScoreArea(): React.ReactElement {
-  return (
-    <>
-      <ScoreBoard />
-      <PlayerList />
-    </>
-  );
-}
-
-// Wrap the subtree where the scope applies.
-export default withScope(Scope.Update, ScoreArea);
-
-// Dispatch to every component inside the scope.
-actions.dispatch(Scope.Update, 42);
 ```
 
-Unlike broadcast which reaches all mounted components, multicast is confined to the wrapped subtree &ndash; perfect for isolated widget groups, form sections, or distinct UI regions. Like broadcast, multicast caches dispatched values per scope &ndash; components that mount later automatically receive the cached value. See the [mount deduplication recipe](./recipes/mount-broadcast-deduplication.md) if you also fetch data in `Lifecycle.Mount()`.
+A few rules worth knowing:
+
+- **Scope is confined to the subtree.** Multicast dispatches inside `<scope.Boundary>` reach every subscriber inside the same boundary, and only those subscribers. Sibling boundaries don't see each other; nothing outside any boundary sees them either.
+- **Nesting shadows.** `<scope.Boundary>` is a React context provider, so an inner boundary fully shadows an outer one for its subtree. If you need a single scope to dispatch actions from multiple multicast classes, declare them as a union at the call site &mdash; e.g. `app.Scope<typeof PaymentMulticast | typeof RoomMulticast>()`.
+- **No `scope.Scope()`.** The handle deliberately omits a nested factory. Open another scope by calling `app.Scope<...>()` again and rendering its `<Boundary>` &mdash; that way the multicast surface stays declared at the call site.
+- **Replay on late-mount is per-scope.** Like broadcast, multicast caches its most recent payload per action symbol; components that mount later inside the same boundary pick up the cached value through their `useAction` handler. See the [mount deduplication recipe](./recipes/mount-broadcast-deduplication.md) if you also fetch in `Lifecycle.Mount()`.
 
 See the [multicast recipe](./recipes/multicast-actions.md) for more details.
 
@@ -646,11 +710,11 @@ For coordinating between async handlers and threading ambient values (session to
 
 ```ts
 // app.ts
-import { App } from "march-hare";
+import { App, type Maybe } from "march-hare";
 
 export const app = App({
   store: {
-    session: null as Session | null,
+    session: null as Maybe<Session>,
     operating: "idle" as "idle" | "signing-out",
   },
 });
@@ -689,6 +753,38 @@ function useActions() {
   return actions;
 }
 ```
+
+For the view side, render against `Lifecycle.Store` with `actions.stream` &mdash; the renderer receives the latest Store snapshot and re-runs whenever a `produce(({ store }) => ...)` mutation lands:
+
+```tsx
+import { Lifecycle } from "march-hare";
+import { app } from "./app";
+
+export class Actions {}
+
+function useActions() {
+  const context = app.useContext<void, typeof Actions>();
+  return context.useActions();
+}
+
+export default function Header(): React.ReactElement {
+  const [, actions] = useActions();
+
+  return (
+    <header>
+      {actions.stream(Lifecycle.Store, (store) =>
+        store.session ? (
+          <span>Hi, {store.session.user.name}</span>
+        ) : (
+          <span>Signed out</span>
+        ),
+      )}
+    </header>
+  );
+}
+```
+
+`Lifecycle.Store` seeds with the initial Store on mount, so late-mounting components paint the current value immediately instead of flashing through a null state. Pair `actions.stream` with `actions.useAction(Lifecycle.Store, ...)` when a handler-side reaction is also required.
 
 Multiple `App` instances can coexist in the same tree &mdash; each `<app.Boundary>` owns its own Store with its own type.
 

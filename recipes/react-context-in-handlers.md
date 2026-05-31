@@ -1,12 +1,14 @@
 # React context in handlers
 
-React hooks like `use()` cannot be called inside action handlers &ndash; they run outside React's render cycle when actions are dispatched. Instead, March Hare provides `context.data` to access external values inside handlers and a third tuple element on `context.useActions` to expose the same snapshot to JSX.
+React hooks like [`use()`](https://react.dev/reference/react/use) (imported from `react`) cannot be called inside action handlers &ndash; they run outside React's render cycle when actions are dispatched. Instead, March Hare provides `context.data` to access external values inside handlers and a third tuple element on `context.useActions` to expose the same snapshot to JSX.
 
 ## The problem
 
 Action handlers are event callbacks, not React components. Calling hooks inside them violates the Rules of Hooks:
 
 ```tsx
+import { use } from "react";
+
 // This will NOT work
 actions.useAction(Actions.Submit, (context) => {
   const theme = use(ThemeContext); // Rules of Hooks violation
@@ -18,29 +20,26 @@ actions.useAction(Actions.Submit, (context) => {
 Pass a data function as the second argument to `context.useActions`. This function runs during render (where hooks are valid) and captures values for use in handlers:
 
 ```tsx
-import { useContext } from "march-hare";
+import { use } from "react";
+import { app } from "./app";
 
 type Data = { theme: Theme; user: User };
 
 export function useActions() {
-  const context = useContext<Model, typeof Actions, Data>();
+  const context = app.useContext<Model, typeof Actions, Data>();
   const actions = context.useActions(model, () => ({
     theme: use(ThemeContext),
     user: use(UserContext),
   }));
 
   actions.useAction(Actions.Submit, async (context) => {
-    // Access context values via context.data in handlers.
-    const { theme, user } = context.data;
-
-    await submitForm(context.model, user);
-
-    // context.data always reflects the latest value, even after await.
+    // Read context values via context.data — dot notation at the access
+    // site so every read returns the latest value, even after await.
+    await submitForm(context.model, context.data.user);
     console.log(context.data.theme);
   });
 
-  // The same snapshot is exposed for JSX consumption.
-  return [model, actions, data] as const;
+  return actions;
 }
 ```
 

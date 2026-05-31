@@ -1,91 +1,21 @@
 import * as React from "react";
 import { Boundary as BaseBoundary } from "../boundary/index.tsx";
-import { useContext as baseUseContext } from "../hooks/index.ts";
+import { useContext as baseUseContext } from "../context/index.ts";
 import { useStore as baseUseStore } from "../boundary/components/store/utils.ts";
 import type { Store } from "../boundary/components/store/index.tsx";
-import {
-  Resource as BaseResource,
-  type Resource as ResourceHandle,
-} from "../resource/index.ts";
-import type { Args, Fetcher } from "../resource/types.ts";
+import { Resource as BaseResource } from "../resource/index.ts";
+import type { Fetcher, ResourceHandle } from "../resource/types.ts";
 import type { Cache } from "../cache/index.ts";
-import type {
-  Actions,
-  Context,
-  Model,
-  Props,
-  UseActions,
-} from "../types/index.ts";
-import type { Data } from "../hooks/types.ts";
+import type { Actions, Model, Props } from "../types/index.ts";
+import { createScope, type Scope } from "../scope/index.tsx";
+import type { AppContextHandle, AppFetcher, AppResource } from "./types.ts";
 
-/**
- * Args object passed to an `app.Resource` fetcher. Same shape as the
- * base `Resource` fetcher's args but with `store` typed as `S`.
- */
-export type AppArgs<S, P extends object = Record<never, never>> = Omit<
-  Args<P>,
-  "store"
-> & {
-  readonly store: Readonly<S>;
-};
-
-/**
- * Fetcher signature for an `app.Resource` declaration. The fetcher's
- * `context.store` is typed against the App's inferred Store shape `S`.
- */
-export type AppFetcher<S, T, P extends object = Record<never, never>> = (
-  context: AppArgs<S, P>,
-) => Promise<T>;
-
-/**
- * `app.Resource(fetcher)` &mdash; in-memory cache, no persistence.
- * `app.Resource.Cachable(cache, fetcher)` &mdash; persistent cache wired
- * to the supplied `Cache` adapter. Both forms type `context.store` as
- * the App's Store shape.
- */
-export type AppResource<S> = {
-  <T, P extends object = Record<never, never>>(
-    fetcher: AppFetcher<S, T, P>,
-  ): ResourceHandle<T, P>;
-  readonly Cachable: <T, P extends object = Record<never, never>>(
-    cache: Cache,
-    fetcher: AppFetcher<S, T, P>,
-  ) => ResourceHandle<T, P>;
-};
-
-// Phantom marker so consumers of the App's hooks see `store: S` typing
-// at the type-system level; at runtime the value is the same proxy as
-// the loose `Store` type.
-type StoreView<S> = { readonly __appStore?: S };
-
-type AppActionsResult<M, AC, D, S> = UseActions<
-  M extends Model | void ? M : void,
-  AC extends Actions | void ? AC : void,
-  D extends Props ? D : Props
-> &
-  StoreView<S>;
-
-type AppUseActions<M, AC, D, S> = M extends void
-  ? (getData?: Data<D & Props>) => AppActionsResult<M, AC, D, S>
-  : (
-      initialModel: M,
-      getData?: Data<D & Props>,
-    ) => AppActionsResult<M, AC, D, S>;
-
-/**
- * `Context` handle returned by `app.useContext()`. Mirrors the base
- * {@link Context} but with the Store-typed slots overridden to `S`.
- */
-export type AppContextHandle<M, AC, D, S> = {
-  readonly actions: {
-    dispatch: Context<
-      M extends Model | void ? M : void,
-      AC extends Actions | void ? AC : void,
-      D extends Props ? D : Props
-    >["actions"]["dispatch"];
-  };
-  readonly useActions: AppUseActions<M, AC, D, S>;
-};
+export type {
+  AppArgs,
+  AppContextHandle,
+  AppFetcher,
+  AppResource,
+} from "./types.ts";
 
 /**
  * Returned from {@link App}. Bundles the Boundary, hooks, and Resource
@@ -121,6 +51,23 @@ export type App<S extends object> = {
    * `app.Resource.Cachable(cache, fetcher)` for persistence.
    */
   readonly Resource: AppResource<S>;
+  /**
+   * Opens a typed multicast scope. The generic `MulticastActions` declares
+   * the `Distribution.Multicast` action class (or union of classes)
+   * whose dispatches are routed through this scope &mdash; the
+   * returned handle mirrors the App surface but widens
+   * `useContext().actions.dispatch` to accept actions from `MulticastActions`
+   * on top of the local `AC` class.
+   *
+   * Render `<scope.Boundary>` to open the scope at runtime; nesting
+   * multiple boundaries from different `app.Scope()` calls is fine,
+   * each runs as an independent emitter shadowed for its subtree.
+   *
+   * The Scope handle deliberately does NOT expose a further `Scope`
+   * method &mdash; the multicast surface must be declared at the
+   * `app.Scope<MulticastActions>()` call site so the type union is explicit.
+   */
+  readonly Scope: <MulticastActions>() => Scope<S, MulticastActions>;
 };
 
 /**
@@ -222,5 +169,8 @@ export function App<S extends object = Store>(config?: { store: S }): App<S> {
     useContext: useTypedContext,
     useStore: useTypedStore,
     Resource,
+    Scope<MulticastActions>() {
+      return createScope<S, MulticastActions>();
+    },
   };
 }

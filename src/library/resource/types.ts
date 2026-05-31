@@ -74,3 +74,52 @@ export type Config<T, P extends object = Record<never, never>> = {
   readonly fetch: Fetcher<T, P>;
   readonly cache?: Cache;
 };
+
+/**
+ * Snapshot of the most recent resource invocation. `resource.cat(params)`
+ * writes one of these into a module-scope slot; the next
+ * `context.actions.resource(...)` / `.set(...)` call consumes it via
+ * `consumePending` and then clears the slot.
+ *
+ * @internal
+ */
+export type PendingCall = {
+  readonly run: (
+    store: Store,
+    controller: AbortController,
+    params: object,
+    dispatch: Dispatch,
+  ) => Promise<unknown>;
+  readonly read: (params: object) => {
+    data: unknown;
+    at: Temporal.Instant | null;
+  };
+  readonly seed: (params: object, data: unknown, at: Temporal.Instant) => void;
+  readonly params: object;
+};
+
+/**
+ * Resource handle returned by `Resource(...)` or `Resource.Cachable(...)`.
+ * Call it with `params` to read the per-params cache slot synchronously
+ * and prime the slot consumed by `context.actions.resource(...)` for a
+ * follow-up fetch or `context.actions.resource.set(...)` for an
+ * out-of-band write.
+ *
+ * ```ts
+ * // Sync cache read in a model literal.
+ * { cat: resource.cat({ id: 5 }) }
+ *
+ * // Fetch with `.exceeds(...)` for cache-aware refresh.
+ * await context.actions
+ *   .resource(resource.cat({ id: 5 }))
+ *   .exceeds({ minutes: 5 });
+ *
+ * // Write through to the per-params cache slot.
+ * context.actions.resource.set(resource.cat({ id: 5 }), data);
+ * ```
+ */
+export type ResourceHandle<T, P extends object = Record<never, never>> = [
+  keyof P,
+] extends [never]
+  ? (params?: P) => T | null
+  : (params: P) => T | null;

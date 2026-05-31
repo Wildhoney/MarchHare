@@ -1,11 +1,12 @@
-import { Operation, useContext } from "march-hare";
+import { Operation } from "march-hare";
+import { app } from "../app.ts";
 import { Actions, type Model } from "./types.ts";
-import { transactions } from "./resources.ts";
+import * as resource from "./resources.ts";
 
 const initialModel: Model = { items: [], cursor: null, hasMore: true };
 
 export function useActions() {
-  const context = useContext<Model, typeof Actions>();
+  const context = app.useContext<Model, typeof Actions>();
 
   const actions = context.useActions(initialModel);
 
@@ -18,16 +19,18 @@ export function useActions() {
         )),
     );
 
-    const page = await context.actions.resource(transactions({ cursor: null }));
+    const transactions = await context.actions.resource(
+      resource.transactions({ cursor: null }),
+    );
     await context.actions.dispatch(
       Actions.Broadcast.TransactionsLoaded,
-      page.items,
+      transactions.items,
     );
 
     context.actions.produce(({ model }) => {
-      model.items = page.items;
-      model.cursor = page.nextCursor;
-      model.hasMore = page.nextCursor !== null;
+      model.items = transactions.items;
+      model.cursor = transactions.nextCursor;
+      model.hasMore = transactions.nextCursor !== null;
     });
   });
 
@@ -44,16 +47,18 @@ export function useActions() {
         )),
     );
 
-    const page = await context.actions.resource(transactions({ cursor }));
+    const transactions = await context.actions.resource(
+      resource.transactions({ cursor }),
+    );
     await context.actions.dispatch(
       Actions.Broadcast.TransactionsLoaded,
-      page.items,
+      transactions.items,
     );
 
     context.actions.produce(({ model }) => {
-      model.items.push(...page.items);
-      model.cursor = page.nextCursor;
-      model.hasMore = page.nextCursor !== null;
+      model.items.push(...transactions.items);
+      model.cursor = transactions.nextCursor;
+      model.hasMore = transactions.nextCursor !== null;
     });
   });
 
@@ -66,16 +71,18 @@ export function useActions() {
         )),
     );
 
-    const page = await context.actions.resource(transactions({ cursor: null }));
+    const transactions = await context.actions.resource(
+      resource.transactions({ cursor: null }),
+    );
     await context.actions.dispatch(
       Actions.Broadcast.TransactionsLoaded,
-      page.items,
+      transactions.items,
     );
 
     context.actions.produce(({ model }) => {
-      model.items = page.items;
-      model.cursor = page.nextCursor;
-      model.hasMore = page.nextCursor !== null;
+      model.items = transactions.items;
+      model.cursor = transactions.nextCursor;
+      model.hasMore = transactions.nextCursor !== null;
     });
   });
 

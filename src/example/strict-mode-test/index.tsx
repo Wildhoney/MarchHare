@@ -1,5 +1,6 @@
 import * as React from "react";
-import { useContext, Action, Lifecycle, annotate, Operation } from "march-hare";
+import { Action, Lifecycle, annotate, Operation } from "march-hare";
+import { app } from "../app.ts";
 
 type Model = {
   name: string | null;
@@ -22,7 +23,7 @@ function StrictModeFixture(): React.ReactElement {
   const handlerCountRef = React.useRef(0);
   const [, forceRender] = React.useState(0);
 
-  const context = useContext<Model, typeof Actions>();
+  const context = app.useContext<Model, typeof Actions>();
   const result = context.useActions(model);
 
   result.useAction(Actions.Mount, () => {

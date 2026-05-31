@@ -12,7 +12,6 @@ import {
   emitAsync,
   replay,
 } from "./utils.ts";
-export { With } from "./utils.ts";
 import { useRerender } from "../utils/utils.ts";
 import type { Data, Handler, Scope } from "./types.ts";
 import {
@@ -32,7 +31,6 @@ import {
   AnyAction,
   FaultSymbol,
   StoreSymbol,
-  Context as ContextHandle,
 } from "../types/index.ts";
 
 import { getReason, getError } from "../error/utils.ts";
@@ -44,6 +42,11 @@ import type { Store } from "../boundary/components/store/index.tsx";
 import { produce as produceImmer } from "immer";
 import { consumePending } from "../resource/index.ts";
 import type { Coalesce } from "../resource/types.ts";
+import {
+  coalesceKey,
+  withAbort,
+  token as defaultCoalesceToken,
+} from "../coalesce/index.ts";
 import { unset } from "../utils/utils.ts";
 import {
   isBroadcastAction,
@@ -56,57 +59,6 @@ import { Partition } from "../boundary/components/consumer/index.tsx";
 import type { ConsumerRenderer } from "../boundary/components/consumer/types.ts";
 import { G } from "@mobily/ts-belt";
 import { useSharing } from "../boundary/components/sharing/index.tsx";
-
-/**
- * Internal sentinels and tunables for the resource chainable.
- *
- * - `defaultToken` &mdash; used when `.coalesce()` is called with no
- *   token. Every untokened caller for the same `(Resource, params)`
- *   slot collapses onto this key.
- *
- * @internal
- */
-const config = <const>{
-  defaultToken: Symbol("coalesce:default"),
-};
-
-function coalesceKey(value: Coalesce): string {
-  switch (typeof value) {
-    case "string":
-      return `s:${value}`;
-    case "number":
-      return `n:${value}`;
-    case "bigint":
-      return `i:${value.toString()}`;
-    case "boolean":
-      return `b:${value}`;
-    case "symbol":
-      return `y:${value.description ?? String(value)}`;
-    default:
-      return `o:${JSON.stringify(value)}`;
-  }
-}
-
-function withAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    if (signal.aborted) {
-      reject(signal.reason);
-      return;
-    }
-    const onAbort = (): void => reject(signal.reason);
-    signal.addEventListener("abort", onAbort, { once: true });
-    promise.then(
-      (value) => {
-        signal.removeEventListener("abort", onAbort);
-        resolve(value);
-      },
-      (error: unknown) => {
-        signal.removeEventListener("abort", onAbort);
-        reject(error);
-      },
-    );
-  });
-}
 
 /**
  * A hook for managing state with actions.
@@ -151,10 +103,10 @@ function withAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
  * ```
  */
 export function useActions<
-  _M extends void = void,
+  M extends void = void,
   A extends Actions | void = void,
   D extends Props = Props,
->(getData?: Data<D>): UseActions<void, A, D>;
+>(getData?: Data<D>): UseActions<M, A, D>;
 export function useActions<
   M extends Model,
   A extends Actions | void = void,
@@ -264,7 +216,7 @@ export function useActions<
               : undefined;
 
             if (isMulticastAction(action)) {
-              const scoped = getScope(scope, base);
+              const scoped = getScope(scope);
               if (scoped)
                 return emitAsync(scoped.emitter, base, payload, channel);
               return Promise.resolve();
@@ -290,7 +242,7 @@ export function useActions<
                 const a = <AnyAction>action;
                 const base = getActionSymbol(a);
                 if (isMulticastAction(a)) {
-                  const scoped = getScope(scope, base);
+                  const scoped = getScope(scope);
                   if (scoped)
                     return emitAsync(scoped.emitter, base, payload, undefined);
                   return Promise.resolve();
@@ -368,7 +320,7 @@ export function useActions<
                   return handle;
                 },
                 coalesce(token?: Coalesce) {
-                  options.coalesceToken = token ?? config.defaultToken;
+                  options.coalesceToken = token ?? defaultCoalesceToken;
                   return handle;
                 },
               };
@@ -385,7 +337,7 @@ export function useActions<
             if (controller.signal.aborted) return null;
             const key = getActionSymbol(action);
             const emitter = isMulticastAction(action)
-              ? (getScope(scope, key)?.emitter ?? null)
+              ? (getScope(scope)?.emitter ?? null)
               : broadcast;
             if (!emitter) return null;
             const cached = emitter.getCached(key);
@@ -411,7 +363,7 @@ export function useActions<
             if (controller.signal.aborted) return null;
             const key = getActionSymbol(action);
             const emitter = isMulticastAction(action)
-              ? (getScope(scope, key)?.emitter ?? null)
+              ? (getScope(scope)?.emitter ?? null)
               : broadcast;
             if (!emitter) return null;
             return emitter.getCached(key) ?? null;
@@ -516,11 +468,9 @@ export function useActions<
 
         if (isMulticastAction(action)) {
           if (scope) {
-            for (const scoped of scope.values()) {
-              const emitter = scoped.emitter;
-              emitter.on(action, handler);
-              cleanups.add(() => emitter.off(action, handler));
-            }
+            const emitter = scope.emitter;
+            emitter.on(action, handler);
+            cleanups.add(() => emitter.off(action, handler));
           }
           unicast.on(action, handler);
           dispatchers.multicast.add(action);
@@ -590,7 +540,7 @@ export function useActions<
         const channel = isChanneledAction(action) ? action.channel : undefined;
 
         if (isMulticastAction(action)) {
-          const scoped = getScope(scope, base);
+          const scoped = getScope(scope);
           if (scoped) return emitAsync(scoped.emitter, base, payload, channel);
           return Promise.resolve();
         }
@@ -639,77 +589,4 @@ export function useActions<
   );
 
   return <UseActions<M, A, D>>result;
-}
-
-type DispatchTarget = (action: unknown, payload?: unknown) => Promise<void>;
-
-/**
- * Returns a stable, typed controller handle up-front &mdash; before a
- * model is declared via `context.useActions(...)`. Use this when an
- * external imperative library (form, animation, third-party SDK) needs a
- * dispatch callback at construction time, while the value that library
- * returns must flow back into the controller's data callback.
- *
- * The handle exposes `dispatch(action, payload?)` and a `useView(...)`
- * method that materialises the component-local model and reactive data
- * &mdash; the M and D pair of `useContext<M, AC, D>` &mdash; and
- * returns the `[model, actions, data]` tuple with `useAction`, `dispatch`,
- * `inspect`, and `stream` attached. The first invocation of
- * `context.actions.dispatch(...)` must come from an event handler &mdash; not
- * synchronously during render &mdash; because the underlying dispatch
- * target is wired up when `context.useActions(...)` runs in the same
- * render pass.
- *
- * @template M The model type representing the component's state.
- * @template AC The actions class containing action definitions.
- * @template D The data type for reactive external values.
- *
- * @example
- * ```ts
- * const context = useContext<Model, typeof Actions, Data>();
- *
- * const form = useForm({
- *   onSubmit: () => void context.actions.dispatch(Actions.Submit),
- * });
- *
- * const actions = context.useActions(
- *   { user: user() },
- *   () => ({ form }),
- * );
- * ```
- */
-export function useContext<
-  M extends Model | void = void,
-  AC extends Actions | void = void,
-  D extends Props = Props,
->(): ContextHandle<M, AC, D> {
-  const ref = React.useRef<DispatchTarget | null>(null);
-
-  return React.useMemo(() => {
-    function dispatch(action: unknown, payload?: unknown): Promise<void> {
-      const target = ref.current;
-      if (!target) {
-        throw new Error(
-          "march-hare: useContext handle dispatched before its paired " +
-            "context.useActions(...) ran. Call context.actions.dispatch from " +
-            "event handlers, not synchronously during render.",
-        );
-      }
-      return target(action, payload);
-    }
-
-    function useActionsMethod(...args: unknown[]): unknown {
-      const invoke = <(...passed: unknown[]) => UseActions<M, AC, D>>(
-        (<unknown>useActions)
-      );
-      const result = invoke(...args);
-      ref.current = <DispatchTarget>(<unknown>result.dispatch);
-      return result;
-    }
-
-    return <ContextHandle<M, AC, D>>(<unknown>{
-      actions: { dispatch },
-      useActions: useActionsMethod,
-    });
-  }, []);
 }

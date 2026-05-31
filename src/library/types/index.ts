@@ -335,21 +335,29 @@ export class Lifecycle {
  * - **Broadcast** &ndash; Action is distributed to all mounted components that have
  *   defined a handler for it. Values are cached for late-mounting components.
  * - **Multicast** &ndash; Action defines its own scope. Components reach it by
- *   wrapping a subtree in `withScope(<theMulticastAction>, Component)`.
+ *   rendering inside a `<scope.Boundary>` produced by `app.Scope<MulticastActions>()`.
  *
  * @example
  * ```ts
- * export class Scope {
- *   // The action itself acts as the scope identifier.
+ * export class MulticastActions {
  *   static Mood = Action<Mood>("Mood", Distribution.Multicast);
  * }
  *
+ * export const scope = app.Scope<typeof MulticastActions>();
+ *
  * // Wrap the subtree where the scope applies.
- * export default withScope(Scope.Mood, Component);
+ * export default function Mood() {
+ *   return (
+ *     <scope.Boundary>
+ *       <Happy />
+ *       <Sad />
+ *     </scope.Boundary>
+ *   );
+ * }
  *
  * // Dispatch / subscribe — no extra options.
- * actions.dispatch(Scope.Mood, mood);
- * actions.useAction(Scope.Mood, (context, mood) => { ... });
+ * actions.dispatch(MulticastActions.Mood, mood);
+ * actions.useAction(MulticastActions.Mood, (context, mood) => { ... });
  * ```
  */
 export enum Distribution {
@@ -357,7 +365,7 @@ export enum Distribution {
   Unicast = "unicast",
   /** Action is broadcast to all mounted components and can be consumed. */
   Broadcast = "broadcast",
-  /** Action is multicast to every component inside its `withScope` boundary. */
+  /** Action is multicast to every component inside its `<scope.Boundary>`. */
   Multicast = "multicast",
 }
 
@@ -397,14 +405,14 @@ export enum Phase {
 export type Pk<T> = undefined | symbol | T;
 
 /**
- * Reactive field type &mdash; a value that may be a concrete `T`, or
- * `null` / `undefined` while loading, awaiting a fetch, or before
+ * Maybe-present field type &mdash; a value that may be a concrete `T`,
+ * or `null` / `undefined` while loading, awaiting a fetch, or before
  * upstream data has arrived. Use this for model fields whose presence
  * is determined by async or external state.
  *
  * @template T - The concrete value type
  */
-export type Reactive<T> = T | null | undefined;
+export type Maybe<T> = T | null | undefined;
 
 /**
  * Base constraint type for model state objects.

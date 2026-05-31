@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { renderHook, act, render, screen } from "@testing-library/react";
-import { useActions, With } from "./index.ts";
+import { useActions } from "./index.ts";
+import { With } from "../with/index.ts";
 import { Action } from "../action/index.ts";
 import { Lifecycle, Distribution, Phase } from "../types/index.ts";
 import { Broadcaster } from "../boundary/components/broadcast/index.tsx";
-import { withScope } from "../boundary/components/scope/index.tsx";
+import { Context as ScopeReactContext } from "../boundary/components/scope/utils.ts";
+import { BroadcastEmitter } from "../boundary/components/broadcast/utils.ts";
 import { annotate } from "../annotate/index.ts";
 import { Operation } from "immertation";
 import * as React from "react";
@@ -1376,12 +1378,17 @@ describe("useActions() context.actions.final", () => {
       );
     }
 
-    const ScopedScoreArea = withScope(MulticastReadActions.Score, ScoreArea);
+    const scopeEntry = {
+      id: Symbol("scope-test"),
+      emitter: new BroadcastEmitter(),
+    };
 
     function App() {
       return (
         <Broadcaster>
-          <ScopedScoreArea />
+          <ScopeReactContext.Provider value={scopeEntry}>
+            <ScoreArea />
+          </ScopeReactContext.Provider>
         </Broadcaster>
       );
     }
@@ -2383,14 +2390,19 @@ describe("useActions() mount + broadcast replay deduplication", () => {
       );
     }
 
-    const ScopedMulticastArea = withScope(MulticastUser.User, MulticastArea);
+    const scopeEntry = {
+      id: Symbol("multicast-dedupe-scope"),
+      emitter: new BroadcastEmitter(),
+    };
 
     function App() {
       const [show, setShow] = React.useState(false);
 
       return (
         <Broadcaster>
-          <ScopedMulticastArea show={show} onShowLate={() => setShow(true)} />
+          <ScopeReactContext.Provider value={scopeEntry}>
+            <MulticastArea show={show} onShowLate={() => setShow(true)} />
+          </ScopeReactContext.Provider>
         </Broadcaster>
       );
     }
@@ -2682,5 +2694,79 @@ describe("useActions() Lifecycle.Fault broadcast", () => {
     expect(captured).toHaveLength(1);
     expect(captured[0].action).toBe("Boom");
     expect(captured[0].message).toBe("kaboom");
+  });
+});
+
+/**
+ * Type-level tests for `dispatch` and `useAction` argument constraints.
+ *
+ * These tests never run code at the assertion sites — they exist only to
+ * trigger TypeScript at compile time. Each `@ts-expect-error` line will fail
+ * the build if the corresponding type constraint is ever weakened.
+ */
+describe("useActions() typing", () => {
+  class DispatchActions {
+    static Mount = Lifecycle.Mount();
+    static Plain = Action("Plain");
+    static WithPayload = Action<string>("WithPayload");
+  }
+
+  class Foreign {
+    static NotOnAC = Action("NotOnAC");
+  }
+
+  describe("dispatch", () => {
+    it("rejects a missing payload when the action declares one", () => {
+      function useUnderTest() {
+        const actions = useActions<void, typeof DispatchActions>();
+        actions.useAction(DispatchActions.Mount, (context) => {
+          // OK — no payload required.
+          context.actions.dispatch(DispatchActions.Plain);
+
+          // OK — payload supplied.
+          context.actions.dispatch(DispatchActions.WithPayload, "hello");
+
+          // @ts-expect-error — DispatchActions.WithPayload requires a string payload.
+          context.actions.dispatch(DispatchActions.WithPayload);
+
+          // @ts-expect-error — Foreign.NotOnAC is not on the local Actions class.
+          context.actions.dispatch(Foreign.NotOnAC);
+        });
+        return actions;
+      }
+      void useUnderTest;
+    });
+
+    it("applies the same constraint to the view-level dispatch tuple", () => {
+      function useUnderTest() {
+        const actions = useActions<void, typeof DispatchActions>();
+        // OK — no payload required.
+        actions[1].dispatch(DispatchActions.Plain);
+        // OK — payload supplied.
+        actions[1].dispatch(DispatchActions.WithPayload, "hello");
+        // @ts-expect-error — payload missing.
+        actions[1].dispatch(DispatchActions.WithPayload);
+        // @ts-expect-error — foreign action.
+        actions[1].dispatch(Foreign.NotOnAC);
+        return actions;
+      }
+      void useUnderTest;
+    });
+  });
+
+  describe("useAction", () => {
+    it("rejects subscribing to actions outside AC (except Lifecycle.Fault)", () => {
+      function useUnderTest() {
+        const actions = useActions<void, typeof DispatchActions>();
+        // OK — Lifecycle.Fault is the documented escape hatch.
+        actions.useAction(Lifecycle.Fault, () => {});
+        // OK — on AC.
+        actions.useAction(DispatchActions.Plain, () => {});
+        // @ts-expect-error — foreign action.
+        actions.useAction(Foreign.NotOnAC, () => {});
+        return actions;
+      }
+      void useUnderTest;
+    });
   });
 });

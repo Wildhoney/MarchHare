@@ -3,19 +3,17 @@
 March Hare publishes every action failure as `Lifecycle.Fault`, a singleton broadcast action delivered through the surrounding `<Boundary>`. Subscribe to it like any other action to handle errors centrally:
 
 ```tsx
-import { useContext, Lifecycle, Reason } from "march-hare";
+import { Lifecycle, Reason } from "march-hare";
+import { app } from "./app";
 
 function App() {
-  const context = useContext();
+  const context = app.useContext();
   const actions = context.useActions();
 
   actions.useAction(Lifecycle.Fault, (_context, { reason, error, action }) => {
     switch (reason) {
-      case Reason.Timedout:
-        console.warn(`Action "${action}" timed out:`, error.message);
-        break;
-      case Reason.Supplanted:
-        console.info(`Action "${action}" was supplanted`);
+      case Reason.Aborted:
+        console.info(`Action "${action}" was aborted`);
         break;
       case Reason.Errored:
         console.error(`Action "${action}" failed:`, error.message);
@@ -29,7 +27,7 @@ function App() {
 
 The `Fault` payload contains:
 
-- **`reason`** &ndash; One of `Reason.Timedout`, `Reason.Supplanted`, or `Reason.Errored`.
+- **`reason`** &ndash; Either `Reason.Aborted` or `Reason.Errored`.
 - **`error`** &ndash; The `Error` object that was thrown.
 - **`action`** &ndash; The name of the action that caused the error.
 - **`handled`** &ndash; Whether the failing component has a `Lifecycle.Error()` handler registered.
@@ -37,11 +35,10 @@ The `Fault` payload contains:
 
 ## Error reasons
 
-| Reason              | Description                                                                     |
-| ------------------- | ------------------------------------------------------------------------------- |
-| `Reason.Timedout`   | Action exceeded the configured timeout duration                                 |
-| `Reason.Supplanted` | Action was cancelled because a newer instance of the same action was dispatched |
-| `Reason.Errored`    | Action threw an uncaught error                                                  |
+| Reason           | Description                                                                                                                                 |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Reason.Aborted` | Action was cancelled &mdash; superseded by a newer dispatch, the component unmounted, or `context.task.controller.abort()` (or fetch) fired |
+| `Reason.Errored` | Action threw an uncaught error                                                                                                              |
 
 ## Local vs global error handling
 

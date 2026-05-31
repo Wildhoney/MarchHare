@@ -135,25 +135,25 @@ No module-level mutable, no `getSession()` helper, no `ky.beforeRequest` reading
 // auth/actions.ts
 import { app } from "../app";
 import { Actions } from "./types";
-import { signIn, signOut } from "./resources";
+import * as resource from "./resources";
 
 export function useActions() {
   const context = app.useContext<void, typeof Actions>();
   const actions = context.useActions();
 
   actions.useAction(Actions.SignIn, async (context, credentials) => {
-    const result = await context.actions.resource(signIn(credentials));
+    const signIn = await context.actions.resource(resource.signIn(credentials));
     context.actions.produce(({ store }) => {
       store.session = {
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
+        accessToken: signIn.accessToken,
+        refreshToken: signIn.refreshToken,
       };
     });
-    await context.actions.dispatch(Actions.Broadcast.SignedIn, result);
+    await context.actions.dispatch(Actions.Broadcast.SignedIn, signIn);
   });
 
   actions.useAction(Actions.SignOut, async (context) => {
-    await context.actions.resource(signOut());
+    await context.actions.resource(resource.signOut());
     context.actions.produce(({ store }) => {
       store.session = null;
     });
@@ -268,9 +268,10 @@ If your Resources are wired to persistent `Cache`s, the previous user's cached p
 
 ```ts
 import { userCache, ordersCache, settingsCache } from "../caches";
+import * as resource from "../resources";
 
 actions.useAction(Actions.SignOut, async (context) => {
-  await context.actions.resource(signOut);
+  await context.actions.resource(resource.signOut());
 
   context.actions.produce(({ store }) => {
     store.session = null;

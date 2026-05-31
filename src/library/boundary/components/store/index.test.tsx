@@ -4,7 +4,7 @@ import { renderHook, act, render, screen } from "@testing-library/react";
 import { Store, useStore } from "./index.tsx";
 import { Boundary } from "../../index.tsx";
 import { Resource } from "../../../resource/index.ts";
-import { useActions } from "../../../hooks/index.ts";
+import { useActions } from "../../../actions/index.ts";
 import { Action, Lifecycle } from "../../../index.ts";
 
 // Module augmentation requires `interface` (interface merging is the only

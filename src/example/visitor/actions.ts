@@ -1,5 +1,5 @@
 import { A } from "@mobily/ts-belt";
-import { useContext } from "march-hare";
+import { app } from "../app.ts";
 import { Model, Actions, Country } from "./types.ts";
 
 const model: Model = {
@@ -10,7 +10,7 @@ const model: Model = {
 };
 
 export function useActions() {
-  const context = useContext<Model, typeof Actions>();
+  const context = app.useContext<Model, typeof Actions>();
 
   const actions = context.useActions(model);
 

@@ -29,7 +29,7 @@ flowchart TB
     subgraph CounterFeat["📊 Counter — User refresher (counter/)"]
         CounterMount["Lifecycle.Mount()"]
         CounterUser["Actions.User"]
-        CounterResource["context.actions.resource(user())"]
+        CounterResource["context.actions.resource(resource.user())"]
         CounterBtn["↻ Refresh button"]
         CounterModel["model.user"]
     end
@@ -64,7 +64,7 @@ flowchart TB
         TxMount["Lifecycle.Mount()"]
         TxLoadMore["Actions.LoadMore\n(IntersectionObserver)"]
         TxRefresh["Actions.Refresh"]
-        TxResource["context.actions.resource(transactions({cursor}))"]
+        TxResource["context.actions.resource(resource.transactions({cursor}))"]
         TxModel["model.items + model.cursor + model.hasMore\n(annotate Op.Update while pending)"]
     end
 
@@ -159,8 +159,8 @@ flowchart TB
 ### `/` — `App` (`app/index.tsx`)
 
 Mounts `Visitor`, `Counter`, and `Mood`. The only handler it registers itself is
-`Lifecycle.Fault`, which converts `Reason.Timedout` / `Reason.Supplanted` /
-`Reason.Errored` faults into Ant Design toasts. Any unhandled fault in the
+`Lifecycle.Fault`, which converts `Reason.Aborted` / `Reason.Errored`
+faults into Ant Design toasts. Any unhandled fault in the
 sub-trees bubbles up through the singleton broadcast.
 
 ### `/` — `Counter` (`counter/`)
@@ -168,7 +168,7 @@ sub-trees bubbles up through the singleton broadcast.
 Despite the historical name, this component refreshes the current **User**:
 
 1. `Lifecycle.Mount()` dispatches `Actions.User`.
-2. `Actions.User` calls `context.actions.resource(user())` to fetch via the
+2. `Actions.User` calls `context.actions.resource(resource.user())` to fetch via the
    `Resource` primitive (see `recipes/use-resource.md`) and writes the result to
    `model.user` with `produce()`.
 3. The refresh button re-dispatches `Actions.User`.

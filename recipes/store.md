@@ -75,10 +75,12 @@ export function useActions() {
 Writes happen inside an action handler through the same `produce` mechanism the model uses:
 
 ```ts
+import * as resource from "../resources";
+
 actions.useAction(Actions.SignIn, async (context, credentials) => {
-  const result = await context.actions.resource(signIn(credentials));
+  const signIn = await context.actions.resource(resource.signIn(credentials));
   context.actions.produce(({ store }) => {
-    store.session = result;
+    store.session = signIn;
     store.operating = "idle";
   });
 });
@@ -87,7 +89,7 @@ actions.useAction(Actions.SignOut, async (context) => {
   context.actions.produce(({ store }) => {
     store.operating = "signing-out";
   });
-  await context.actions.resource(signOut());
+  await context.actions.resource(resource.signOut());
   context.actions.produce(({ store }) => {
     store.session = null;
     store.operating = "idle";

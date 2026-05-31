@@ -1,2 +1,2 @@
-export { Reason, AbortError, TimeoutError } from "./types";
+export { Reason, Aborted } from "./types";
 export type { Fault } from "./types";

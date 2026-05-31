@@ -1,17 +1,19 @@
 import * as React from "react";
-import { withScope } from "march-hare";
+import { app } from "../app.ts";
 import Happy from "./components/happy/index.tsx";
 import Sad from "./components/sad/index.tsx";
-import { Scope } from "./types.ts";
+import type { MulticastActions } from "./types.ts";
 import * as styles from "./styles.ts";
 
-function Mood(): React.ReactElement {
+export const scope = app.Scope<typeof MulticastActions>();
+
+export default function Mood(): React.ReactElement {
   return (
-    <section className={styles.container}>
-      <Happy />
-      <Sad />
-    </section>
+    <scope.Boundary>
+      <section className={styles.container}>
+        <Happy />
+        <Sad />
+      </section>
+    </scope.Boundary>
   );
 }
-
-export default withScope(Scope.Mood, Mood);

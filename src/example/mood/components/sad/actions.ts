@@ -1,5 +1,5 @@
-import { useContext } from "march-hare";
-import { Model, Scope } from "../../types.ts";
+import { app } from "../../../app.ts";
+import { Model, MulticastActions } from "../../types.ts";
 import { Actions } from "./types.ts";
 
 const model: Model = {
@@ -7,15 +7,15 @@ const model: Model = {
 };
 
 export function useActions() {
-  const context = useContext<Model, typeof Actions>();
+  const context = app.useContext<Model, typeof Actions>();
 
   const actions = context.useActions(model);
 
   actions.useAction(Actions.Select, (context, mood) => {
-    context.actions.dispatch(Scope.Mood, mood);
+    context.actions.dispatch(MulticastActions.Mood, mood);
   });
 
-  actions.useAction(Scope.Mood, (context, mood) => {
+  actions.useAction(MulticastActions.Mood, (context, mood) => {
     context.actions.produce((draft) => void (draft.model.selected = mood));
   });
 

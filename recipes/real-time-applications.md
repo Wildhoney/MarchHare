@@ -70,10 +70,10 @@ See the full implementation in the [Visitor example source code](https://github.
 
 ## Pattern 2: cache-driven (SSE pushes into a Resource)
 
-When a Resource is the canonical source of some data (e.g. a user profile fetched on demand) **and** a real-time controller can deliver updates for the same payload (server pushes a "user updated" event), use `context.actions.resource.set(...)` to write the incoming payload into the Resource's per-params cache slot. Subsequent reads via `user({ id })` or refreshes via `.exceeds({...})` see the freshest value with the freshest timestamp &mdash; without a round-trip.
+When a Resource is the canonical source of some data (e.g. a user profile fetched on demand) **and** a real-time controller can deliver updates for the same payload (server pushes a "user updated" event), use `context.actions.resource.set(...)` to write the incoming payload into the Resource's per-params cache slot. Subsequent reads via `resource.user({ id })` or refreshes via `.exceeds({...})` see the freshest value with the freshest timestamp &mdash; without a round-trip.
 
 ```ts
-import { useContext, Lifecycle, Action, Distribution } from "march-hare";
+// resources.ts
 import { app } from "./app";
 
 export const user = app.Resource<User, { id: number }>(
@@ -82,6 +82,12 @@ export const user = app.Resource<User, { id: number }>(
       .get(`/api/users/${params.id}`, { signal: controller.signal })
       .json<User>(),
 );
+```
+
+```ts
+// stream/actions.ts
+import { useContext, Lifecycle, Action, Distribution } from "march-hare";
+import * as resource from "./resources";
 
 class Actions {
   static Mount = Lifecycle.Mount();
@@ -111,10 +117,10 @@ export function useActions() {
 
   actions.useAction(Actions.Broadcast.UserUpdated, (context, payload) => {
     // Push the SSE payload into the Resource's cache slot for these params.
-    // - `user({ id: payload.id })` now returns `payload`.
-    // - `context.actions.resource(user({ id: payload.id })).exceeds({ minutes: 5 })`
+    // - `resource.user({ id: payload.id })` now returns `payload`.
+    // - `context.actions.resource(resource.user({ id: payload.id })).exceeds({ minutes: 5 })`
     //   short-circuits against the just-written timestamp.
-    context.actions.resource.set(user({ id: payload.id }), payload);
+    context.actions.resource.set(resource.user({ id: payload.id }), payload);
   });
 
   actions.useAction(Actions.Unmount, (context) => {
@@ -134,7 +140,7 @@ Why route through a broadcast action rather than calling `resource.set(...)` dir
 For resources without params, call the resource with no args:
 
 ```ts
-context.actions.resource.set(banner(), payload);
+context.actions.resource.set(resource.banner(), payload);
 ```
 
 For overwriting a payload that's already cached, the write replaces it &mdash; `at` always advances to `Temporal.Now.instant()` so freshness windows reset.
@@ -153,8 +159,8 @@ socket.addEventListener("message", (event) => {
 
 actions.useAction(Actions.Rename, async (context, name) => {
   // Optimistic write into the cache.
-  const previous = user({ id: context.data.userId });
-  context.actions.resource.set(user({ id: context.data.userId }), {
+  const previous = resource.user({ id: context.data.userId });
+  context.actions.resource.set(resource.user({ id: context.data.userId }), {
     ...previous!,
     name,
   });
@@ -162,12 +168,15 @@ actions.useAction(Actions.Rename, async (context, name) => {
   try {
     // Server confirms; the WS event will arrive and rewrite the cache anyway.
     await context.actions.resource(
-      updateUser({ id: context.data.userId, name }),
+      resource.updateUser({ id: context.data.userId, name }),
     );
   } catch (error) {
     // Roll back.
     if (previous) {
-      context.actions.resource.set(user({ id: context.data.userId }), previous);
+      context.actions.resource.set(
+        resource.user({ id: context.data.userId }),
+        previous,
+      );
     }
     throw error;
   }
@@ -176,6 +185,6 @@ actions.useAction(Actions.Rename, async (context, name) => {
 
 ## Limitations
 
-- **Cache-driven writes don't notify subscribers.** `resource.set(...)` updates the slot but does **not** fire any action. If components need to react, dispatch a broadcast as in the SSE pattern above. (`user({ id })` is not reactive on its own &mdash; it's a snapshot, not a signal.)
+- **Cache-driven writes don't notify subscribers.** `resource.set(...)` updates the slot but does **not** fire any action. If components need to react, dispatch a broadcast as in the SSE pattern above. (`resource.user({ id })` is not reactive on its own &mdash; it's a snapshot, not a signal.)
 - **SSE / WebSocket connections are component-scoped by default.** If multiple components want the same stream, hoist the connection to a Boundary-level component and broadcast events to subscribers via `Distribution.Broadcast`. Keep one EventSource per origin.
 - **Reconnection logic is yours.** `EventSource` retries on its own; raw `WebSocket` doesn't. For WebSocket, wrap the listener in a reconnect loop driven by `Lifecycle.Unmount` cleanup signals.

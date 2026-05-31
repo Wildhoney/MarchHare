@@ -1,41 +1,29 @@
-import type { Args, Dispatch, Fetcher } from "./types.ts";
+import type {
+  Args,
+  Dispatch,
+  Fetcher,
+  PendingCall,
+  ResourceHandle,
+} from "./types.ts";
 import { Cache, defaultCache, key } from "./utils.ts";
 import { present, unset } from "../utils/utils.ts";
 import type { Store } from "../boundary/components/store/index.tsx";
 import { G } from "@mobily/ts-belt";
 
-export type { Coalesce, Fetcher } from "./types.ts";
-
-/**
- * Snapshot of the most recent resource invocation. `cat(params)` writes
- * one of these into a module-scope slot; the next
- * `context.actions.resource(...)` / `.set(...)` call consumes it via
- * {@link consumePending}.
- *
- * @internal
- */
-export type PendingCall = {
-  readonly run: (
-    store: Store,
-    controller: AbortController,
-    params: object,
-    dispatch: Dispatch,
-  ) => Promise<unknown>;
-  readonly read: (params: object) => {
-    data: unknown;
-    at: Temporal.Instant | null;
-  };
-  readonly seed: (params: object, data: unknown, at: Temporal.Instant) => void;
-  readonly params: object;
-};
+export type {
+  Coalesce,
+  Fetcher,
+  PendingCall,
+  ResourceHandle,
+} from "./types.ts";
 
 let pending: PendingCall | null = null;
 
 /**
  * Reads and clears the slot populated by the most recent resource
  * invocation. Throws when the slot is empty &mdash; the public
- * `.resource(...)` shape requires a fresh `cat(params)` call as its
- * argument.
+ * `.resource(...)` shape requires a fresh `resource.cat(params)` call
+ * as its argument.
  *
  * @internal
  */
@@ -44,7 +32,7 @@ export function consumePending(): PendingCall {
     throw new Error(
       "context.actions.resource(...) and context.actions.resource.set(...) " +
         "must be called with a fresh resource invocation, e.g. " +
-        "context.actions.resource(cat({ id: 5 })).",
+        "context.actions.resource(resource.cat({ id: 5 })).",
     );
   }
   const call = pending;
@@ -52,34 +40,10 @@ export function consumePending(): PendingCall {
   return call;
 }
 
-/**
- * Resource handle returned by `Resource(...)` or `Resource.Cachable(...)`.
- * Call it with `params` to read the per-params cache slot synchronously
- * and prime the slot consumed by `context.actions.resource(...)` for a
- * follow-up fetch or `context.actions.resource.set(...)` for an
- * out-of-band write.
- *
- * ```ts
- * // Sync cache read in a model literal.
- * { cat: cat({ id: 5 }) }
- *
- * // Fetch with `.exceeds(...)` for cache-aware refresh.
- * await context.actions.resource(cat({ id: 5 })).exceeds({ minutes: 5 });
- *
- * // Write through to the per-params cache slot.
- * context.actions.resource.set(cat({ id: 5 }), data);
- * ```
- */
-export type Resource<T, P extends object = Record<never, never>> = [
-  keyof P,
-] extends [never]
-  ? (params?: P) => T | null
-  : (params: P) => T | null;
-
 function build<T, P extends object>(
   ƒ: Fetcher<T, P>,
   backing: Cache,
-): Resource<T, P> {
+): ResourceHandle<T, P> {
   const read = (params: P) => {
     const stored = backing.get<T>(key(params));
     if (stored.data === unset || G.isNull(stored.at)) {
@@ -119,7 +83,7 @@ function build<T, P extends object>(
     return data === unset ? null : <T>data;
   }
 
-  return <Resource<T, P>>call;
+  return <ResourceHandle<T, P>>call;
 }
 
 /**
@@ -156,7 +120,7 @@ function build<T, P extends object>(
  */
 export function Resource<T, P extends object = Record<never, never>>(
   ƒ: Fetcher<T, P>,
-): Resource<T, P> {
+): ResourceHandle<T, P> {
   return build(ƒ, defaultCache(ƒ));
 }
 
@@ -193,7 +157,7 @@ export namespace Resource {
   export function Cachable<T, P extends object = Record<never, never>>(
     cache: Cache,
     ƒ: Fetcher<T, P>,
-  ): Resource<T, P> {
+  ): ResourceHandle<T, P> {
     return build(ƒ, cache);
   }
 }

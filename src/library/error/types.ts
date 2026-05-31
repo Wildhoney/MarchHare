@@ -4,10 +4,9 @@ import type { Task } from "../boundary/components/tasks/types.ts";
  * Reasons why an action error occurred.
  */
 export enum Reason {
-  /** Action exceeded its timeout limit. */
-  Timedout,
-  /** Action was cancelled by a newer dispatch. */
-  Supplanted,
+  /** Action was aborted &mdash; superseded by a newer dispatch, the
+   *  component unmounted, or `task.controller.abort()` was called. */
+  Aborted,
   /** A generic error thrown in the user's action handler. */
   Errored,
 }
@@ -17,30 +16,17 @@ export enum Reason {
  * or when a newer dispatch cancels a previous run. Works across all platforms
  * including React Native where `DOMException` is unavailable.
  *
- * @example
- * ```ts
- * throw new AbortError("User cancelled the request");
- * ```
- */
-export class AbortError extends Error {
-  override name = "AbortError";
-  constructor(message = "Aborted") {
-    super(message);
-  }
-}
-
-/**
- * Error thrown when an action exceeds its timeout limit.
- * Works across all platforms including React Native where `DOMException` is unavailable.
+ * The instance's `name` field stays as `"AbortError"` so it can be
+ * pattern-matched alongside native `DOMException`s and ky/fetch aborts.
  *
  * @example
  * ```ts
- * throw new TimeoutError("Request took too long");
+ * throw new Aborted("User cancelled the request");
  * ```
  */
-export class TimeoutError extends Error {
-  override name = "TimeoutError";
-  constructor(message = "Timeout") {
+export class Aborted extends Error {
+  override name = "AbortError";
+  constructor(message = "Aborted") {
     super(message);
   }
 }

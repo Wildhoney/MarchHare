@@ -13,7 +13,7 @@ import {
   utils,
   type Pk,
 } from "../../../src/library/index.ts";
-import { useActions } from "../../../src/library/hooks/index.ts";
+import { useActions } from "../../../src/library/actions/index.ts";
 
 class UtilityActions {
   static SleepTest = Action<number>("SleepTest");

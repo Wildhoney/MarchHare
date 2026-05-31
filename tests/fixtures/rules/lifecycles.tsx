@@ -12,7 +12,7 @@ import {
   Lifecycle,
   Fault,
 } from "../../../src/library/index.ts";
-import { useActions } from "../../../src/library/hooks/index.ts";
+import { useActions } from "../../../src/library/actions/index.ts";
 
 class LifecycleActions {
   static Mount = Lifecycle.Mount();
