@@ -7,7 +7,7 @@ import type {
 } from "./types.ts";
 import { Cache, defaultCache, key } from "./utils.ts";
 import { present, unset } from "../utils/utils.ts";
-import type { Store } from "../boundary/components/store/index.tsx";
+import type { Env } from "../boundary/components/env/index.tsx";
 import { G } from "@mobily/ts-belt";
 
 export type {
@@ -53,12 +53,12 @@ function build<T, P extends object>(
   };
 
   const run = (
-    store: Store,
+    env: Env,
     controller: AbortController,
     params: P,
     dispatch: Dispatch,
   ): Promise<T> =>
-    ƒ(<Args<P>>{ store, controller, params, dispatch }).then((resolved) => {
+    ƒ(<Args<P>>{ env, controller, params, dispatch }).then((resolved) => {
       backing.set(key(params), present(resolved, Temporal.Now.instant()));
       return resolved;
     });
@@ -93,7 +93,7 @@ function build<T, P extends object>(
  * `context.actions.resource(...)` / `.set(...)` for fetch and write
  * paths.
  *
- * The fetcher receives a single `context` argument carrying `store`,
+ * The fetcher receives a single `context` argument carrying `env`,
  * `controller`, `params`, and a broadcast/multicast-only `dispatch`.
  * Every successful fetch writes through to a per-resource in-memory
  * cache; pair with {@link Resource.Cachable} to persist across reloads.
@@ -109,8 +109,8 @@ function build<T, P extends object>(
  * export const user = Resource<User, { id: number }>((context) =>
  *   ky
  *     .get(`users/${context.params.id}`, {
- *       headers: context.store.session
- *         ? { Authorization: `Bearer ${context.store.session.accessToken}` }
+ *       headers: context.env.session
+ *         ? { Authorization: `Bearer ${context.env.session.accessToken}` }
  *         : {},
  *       signal: context.controller.signal,
  *     })

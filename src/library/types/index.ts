@@ -7,7 +7,7 @@ import type {
   Tasks,
 } from "../boundary/components/tasks/types.ts";
 import type { Fault } from "../error/types.ts";
-import type { Store } from "../boundary/components/store/index.tsx";
+import type { Env } from "../boundary/components/env/index.tsx";
 import type { Coalesce } from "../resource/types.ts";
 
 /**
@@ -74,7 +74,7 @@ export type BrandedObject = { readonly [x: symbol]: unknown };
 
 /**
  * Recursive readonly. Locks every nested property so that read-only
- * projections on `context` (model, data, store) reject direct assignment
+ * projections on `context` (model, data, env) reject direct assignment
  * &mdash; mutation must go through `context.actions.produce(...)`.
  *
  * Function types pass through untouched so method calls (e.g.
@@ -176,14 +176,14 @@ export const FaultSymbol: unique symbol = <typeof FaultSymbol>(
 );
 
 /**
- * Internal symbol for the global `Lifecycle.Store` broadcast. The store
+ * Internal symbol for the global `Lifecycle.Env` broadcast. The env
  * mutation path in `useActions` fires this symbol whenever a
- * `produce({ store })` call changes the slot reference.
+ * `produce({ env })` call changes the slot reference.
  *
  * @internal
  */
-export const StoreSymbol: unique symbol = <typeof StoreSymbol>(
-  Symbol(describe.broadcast("Store"))
+export const EnvSymbol: unique symbol = <typeof EnvSymbol>(
+  Symbol(describe.broadcast("Env"))
 );
 
 /**
@@ -205,10 +205,10 @@ export const StoreSymbol: unique symbol = <typeof StoreSymbol>(
  * }
  * ```
  *
- * `Lifecycle.Fault` and `Lifecycle.Store` are singleton broadcasts (not
+ * `Lifecycle.Fault` and `Lifecycle.Env` are singleton broadcasts (not
  * factories). All components subscribe to the same shared symbol &mdash;
- * `Fault` delivers global fault notifications, `Store` delivers per-`Boundary`
- * store-change notifications.
+ * `Fault` delivers global fault notifications, `Env` delivers per-`Boundary`
+ * env-change notifications.
  */
 export class Lifecycle {
   /** Creates a Mount lifecycle action. Triggered once on component mount (`useLayoutEffect`). */
@@ -278,34 +278,34 @@ export class Lifecycle {
   })();
 
   /**
-   * Global store-change broadcast. Receives the latest {@link Store}
-   * snapshot whenever a `context.actions.produce(({ store }) => ...)` call
+   * Global env-change broadcast. Receives the latest {@link Env}
+   * snapshot whenever a `context.actions.produce(({ env }) => ...)` call
    * mutates the slot. Subscribe via
-   * `actions.useAction(Lifecycle.Store, handler)` &mdash; or render against
-   * it directly with `actions.stream(Lifecycle.Store, (store) => ...)`.
+   * `actions.useAction(Lifecycle.Env, handler)` &mdash; or render against
+   * it directly with `actions.stream(Lifecycle.Env, (env) => ...)`.
    *
    * Like `Lifecycle.Fault`, this is a singleton broadcast (not a factory):
    * every subscriber points at the same shared symbol. The latest value is
    * cached on the broadcast emitter so that late-mounting handlers and
-   * streams receive the current store on mount.
+   * streams receive the current env on mount.
    *
    * @example
    * ```tsx
-   * actions.useAction(Lifecycle.Store, (context, store) => {
-   *   console.log("store changed", store);
+   * actions.useAction(Lifecycle.Env, (context, env) => {
+   *   console.log("env changed", env);
    * });
    *
    * // In JSX:
-   * {actions.stream(Lifecycle.Store, (store) => (
-   *   <span>{store.locale}</span>
+   * {actions.stream(Lifecycle.Env, (env) => (
+   *   <span>{env.locale}</span>
    * ))}
    * ```
    */
-  static Store: BroadcastPayload<Store, never, "Store"> = (() => {
+  static Env: BroadcastPayload<Env, never, "Env"> = (() => {
     const action: Record<symbol, unknown> = {};
     // eslint-disable-next-line fp/no-mutating-methods
     Object.defineProperty(action, Brand.Action, {
-      value: StoreSymbol,
+      value: EnvSymbol,
       enumerable: false,
     });
     // eslint-disable-next-line fp/no-mutating-methods
@@ -320,10 +320,10 @@ export class Lifecycle {
     });
     // eslint-disable-next-line fp/no-mutating-methods
     Object.defineProperty(action, Brand.Name, {
-      value: "Store",
+      value: "Env",
       enumerable: false,
     });
-    return <BroadcastPayload<Store, never, "Store">>(<unknown>action);
+    return <BroadcastPayload<Env, never, "Env">>(<unknown>action);
   })();
 }
 
@@ -689,12 +689,12 @@ export type HandlerContext<
   readonly task: Task;
   readonly data: DeepReadonly<D>;
   readonly tasks: ReadonlySet<Task>;
-  readonly store: DeepReadonly<Store>;
+  readonly env: DeepReadonly<Env>;
   readonly actions: {
     produce<
       F extends (draft: {
         model: M;
-        store: Store;
+        env: Env;
         readonly inspect: Readonly<Inspect<M>>;
       }) => void,
     >(
@@ -791,7 +791,7 @@ type OwnKeys<AC> = Exclude<keyof AC & string, "prototype">;
  *
  * Used to constrain `dispatch` and `useAction` so that only actions owned by
  * the component's `AC` (plus the global `Lifecycle.Fault` /
- * `Lifecycle.Store`) can be referenced.
+ * `Lifecycle.Env`) can be referenced.
  */
 export type LeafActions<AC> = AC extends void
   ? never
@@ -822,13 +822,13 @@ export type Dispatchable<AC> = LeafActions<AC> | ChanneledOf<LeafActions<AC>>;
 
 /**
  * Everything `useAction` will subscribe to for a given `AC`: same as
- * `Dispatchable<AC>` plus the shared `Lifecycle.Fault` and `Lifecycle.Store`
+ * `Dispatchable<AC>` plus the shared `Lifecycle.Fault` and `Lifecycle.Env`
  * broadcasts which live outside `AC` but are subscribable by any component.
  */
 export type Subscribable<AC> =
   | Dispatchable<AC>
   | typeof Lifecycle.Fault
-  | typeof Lifecycle.Store;
+  | typeof Lifecycle.Env;
 
 /**
  * Subset of a union of actions whose payload type is `never`. Used to split

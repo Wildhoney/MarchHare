@@ -1,6 +1,6 @@
 # Persisting resources across reloads
 
-By default a `Resource`'s cache is in-memory only &ndash; it resets on every page load. To keep the most recent successful payload around between sessions, wire a `Cache` instance to the `Resource` definition. The Cache writes through to its adapter on every successful fetch and seeds the per-params slot from storage on first read, so call sites stay free of explicit `store.set` / `store.get` ceremony.
+By default a `Resource`'s cache is in-memory only &ndash; it resets on every page load. To keep the most recent successful payload around between sessions, wire a `Cache` instance to the `Resource` definition. The Cache writes through to its adapter on every successful fetch and seeds the per-params slot from storage on first read, so call sites stay free of explicit `cache.set` / `cache.get` ceremony.
 
 This recipe covers:
 
@@ -248,8 +248,8 @@ import * as resource from "../resources";
 
 actions.useAction(Actions.SignOut, async (context) => {
   await context.actions.resource(resource.signOut());
-  context.actions.produce(({ store }) => {
-    store.session = null;
+  context.actions.produce(({ env }) => {
+    env.session = null;
   });
   catCache.clear();
   userCache.clear();

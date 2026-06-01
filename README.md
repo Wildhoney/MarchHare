@@ -46,12 +46,12 @@ For advanced topics, see the [recipes directory](./recipes/).
 - Granular async state tracking per model field.
 - Declarative lifecycle hooks without `useEffect`.
 - Centralised error handling via the global `Lifecycle.Fault` broadcast.
-- View-side reactivity for the per-`<app.Boundary>` Store via the global `Lifecycle.Store` broadcast.
+- View-side reactivity for the per-`<app.Boundary>` Env via the global `Lifecycle.Env` broadcast.
 - React Native compatible &ndash; uses [eventemitter3](https://github.com/primus/eventemitter3) for cross-platform pub/sub.
 
 ## Getting started
 
-Declare your app once via `App()` &ndash; the returned handle is the entrypoint for every typed primitive: `app.Boundary`, `app.useContext`, `app.useStore`, `app.Resource`. Render `<app.Boundary>` once at the root and import `app` wherever you need it. Pass `{ store }` only when your app needs ambient state ([see Global data below](#global-data)):
+Declare your app once via `App()` &ndash; the returned handle is the entrypoint for every typed primitive: `app.Boundary`, `app.useContext`, `app.useEnv`, `app.Resource`. Render `<app.Boundary>` once at the root and import `app` wherever you need it. Pass `{ env }` only when your app needs ambient state ([see Global data below](#global-data)):
 
 ```ts
 // app.ts
@@ -148,7 +148,7 @@ function useActions() {
         void (model.name = context.actions.annotate(model.name, Op.Update)),
     );
 
-    // Auto-threads context.task.controller and the Store snapshot.
+    // Auto-threads context.task.controller and the Env snapshot.
     const user = await context.actions.resource(resource.user());
 
     context.actions.produce(({ model }) => void (model.name = user.name));
@@ -392,7 +392,7 @@ Components that mount after a broadcast has already been dispatched automaticall
 
 ## Remote data with `Resource`
 
-For remote data, declare an `app.Resource` at module scope. `resource.user(params)` is the unified call form &mdash; it returns the sync cache read (`User | null`) and primes a slot that `context.actions.resource(resource.user(params))` consumes for the fetch path (with auto-threaded abort controller and Store snapshot). Every successful fetch caches the response in a module-level slot keyed by the fetcher and the stringified params, so different param-sets are independent. Keep all resources in `resources.ts` and pull the whole module in as a namespace (`import * as resource from "./resources"`):
+For remote data, declare an `app.Resource` at module scope. `resource.user(params)` is the unified call form &mdash; it returns the sync cache read (`User | null`) and primes a slot that `context.actions.resource(resource.user(params))` consumes for the fetch path (with auto-threaded abort controller and Env snapshot). Every successful fetch caches the response in a module-level slot keyed by the fetcher and the stringified params, so different param-sets are independent. Keep all resources in `resources.ts` and pull the whole module in as a namespace (`import * as resource from "./resources"`):
 
 ```ts
 // resources.ts
@@ -474,7 +474,7 @@ actions.useAction(Actions.Broadcast.UserId, async (context, id) => {
 
 For finer-grained control &mdash; separating concurrent fetches into distinct coalesce groups via a token argument &mdash; see the [coalesce tokens recipe](./recipes/coalesce-tokens.md).
 
-The fetcher receives a `context` object &mdash; read fields via `context.store`, `context.controller`, `context.params`. There are no callbacks &ndash; no `onSuccess`, no `onError`. The `context.dispatch` field can fire broadcast or multicast actions from inside the fetcher (unicast is rejected at compile time), but most side-effects (model writes, analytics) belong in the `useAction` handler that awaited the call:
+The fetcher receives a `context` object &mdash; read fields via `context.env`, `context.controller`, `context.params`. There are no callbacks &ndash; no `onSuccess`, no `onError`. The `context.dispatch` field can fire broadcast or multicast actions from inside the fetcher (unicast is rejected at compile time), but most side-effects (model writes, analytics) belong in the `useAction` handler that awaited the call:
 
 ```ts
 // resources.ts
@@ -706,14 +706,14 @@ See the [multicast recipe](./recipes/multicast-actions.md) for more details.
 
 ## Global data
 
-For coordinating between async handlers and threading ambient values (session tokens, locale, feature flags, current operational mode) without re-rendering the JSX tree on every dot read, use the per-`<app.Boundary>` `Store`. Declare your store shape inline on `App({ store })`, read via dot notation (`store.session`, `context.store.locale`), and write via `context.actions.produce(({ store }) => { ... })` &mdash; the same Immer-style recipe used for the model. Every `app.Resource` fetcher also receives a snapshot of the Store on its args object. When the view side needs to react to Store changes, subscribe to the global `Lifecycle.Store` broadcast &mdash; `actions.useAction(Lifecycle.Store, handler)` for handler-level work and `actions.stream(Lifecycle.Store, (store) => ...)` for JSX. Both seed from the initial Store on mount.
+For coordinating between async handlers and threading ambient values (session tokens, locale, feature flags, current operational mode) without re-rendering the JSX tree on every dot read, use the per-`<app.Boundary>` `Env`. Declare your env shape inline on `App({ env })`, read via dot notation (`env.session`, `context.env.locale`), and write via `context.actions.produce(({ env }) => { ... })` &mdash; the same Immer-style recipe used for the model. Every `app.Resource` fetcher also receives a snapshot of the Env on its args object. When the view side needs to react to Env changes, subscribe to the global `Lifecycle.Env` broadcast &mdash; `actions.useAction(Lifecycle.Env, handler)` for handler-level work and `actions.stream(Lifecycle.Env, (env) => ...)` for JSX. Both seed from the initial Env on mount.
 
 ```ts
 // app.ts
 import { App, type Maybe } from "march-hare";
 
 export const app = App({
-  store: {
+  env: {
     session: null as Maybe<Session>,
     operating: "idle" as "idle" | "signing-out",
   },
@@ -721,7 +721,7 @@ export const app = App({
 ```
 
 ```ts
-// auth/actions.ts — every read/write is typed against the App's store shape.
+// auth/actions.ts — every read/write is typed against the App's env shape.
 import { Action } from "march-hare";
 import { app } from "../app";
 
@@ -735,18 +735,18 @@ function useActions() {
   const actions = context.useActions();
 
   actions.useAction(Actions.SignOut, async (context) => {
-    context.actions.produce(({ store }) => {
-      store.operating = "signing-out";
+    context.actions.produce(({ env }) => {
+      env.operating = "signing-out";
     });
     await api.signOut();
-    context.actions.produce(({ store }) => {
-      store.session = null;
-      store.operating = "idle";
+    context.actions.produce(({ env }) => {
+      env.session = null;
+      env.operating = "idle";
     });
   });
 
   actions.useAction(Actions.Refresh, async (context) => {
-    if (context.store.operating === "signing-out") return;
+    if (context.env.operating === "signing-out") return;
     // ...
   });
 
@@ -754,7 +754,7 @@ function useActions() {
 }
 ```
 
-For the view side, render against `Lifecycle.Store` with `actions.stream` &mdash; the renderer receives the latest Store snapshot and re-runs whenever a `produce(({ store }) => ...)` mutation lands:
+For the view side, render against `Lifecycle.Env` with `actions.stream` &mdash; the renderer receives the latest Env snapshot and re-runs whenever a `produce(({ env }) => ...)` mutation lands:
 
 ```tsx
 import { Lifecycle } from "march-hare";
@@ -772,9 +772,9 @@ export default function Header(): React.ReactElement {
 
   return (
     <header>
-      {actions.stream(Lifecycle.Store, (store) =>
-        store.session ? (
-          <span>Hi, {store.session.user.name}</span>
+      {actions.stream(Lifecycle.Env, (env) =>
+        env.session ? (
+          <span>Hi, {env.session.user.name}</span>
         ) : (
           <span>Signed out</span>
         ),
@@ -784,9 +784,9 @@ export default function Header(): React.ReactElement {
 }
 ```
 
-`Lifecycle.Store` seeds with the initial Store on mount, so late-mounting components paint the current value immediately instead of flashing through a null state. Pair `actions.stream` with `actions.useAction(Lifecycle.Store, ...)` when a handler-side reaction is also required.
+`Lifecycle.Env` seeds with the initial Env on mount, so late-mounting components paint the current value immediately instead of flashing through a null state. Pair `actions.stream` with `actions.useAction(Lifecycle.Env, ...)` when a handler-side reaction is also required.
 
-Multiple `App` instances can coexist in the same tree &mdash; each `<app.Boundary>` owns its own Store with its own type.
+Multiple `App` instances can coexist in the same tree &mdash; each `<app.Boundary>` owns its own Env with its own type.
 
 ## Toggling boolean state
 

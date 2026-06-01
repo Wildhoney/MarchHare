@@ -1,8 +1,8 @@
 import * as React from "react";
 import { Boundary as BaseBoundary } from "../boundary/index.tsx";
 import { useContext as baseUseContext } from "../context/index.ts";
-import { useStore as baseUseStore } from "../boundary/components/store/utils.ts";
-import type { Store } from "../boundary/components/store/index.tsx";
+import { useEnv as baseUseEnv } from "../boundary/components/env/utils.ts";
+import type { Env } from "../boundary/components/env/index.tsx";
 import { Resource as BaseResource } from "../resource/index.ts";
 import type { Fetcher, ResourceHandle } from "../resource/types.ts";
 import type { Cache } from "../cache/index.ts";
@@ -19,19 +19,19 @@ export type {
 
 /**
  * Returned from {@link App}. Bundles the Boundary, hooks, and Resource
- * factory bound to a single typed Store shape `S`.
+ * factory bound to a single typed Env shape `S`.
  */
 export type App<S extends object> = {
   /**
    * Boundary component for this App. Wraps the subtree with the initial
-   * `store` value passed to {@link App}.
+   * `env` value passed to {@link App}.
    */
   readonly Boundary: React.FC<{ children: React.ReactNode }>;
   /**
    * Hook returning a stable `Context` handle. The handle's
    * `context.useActions(initialModel?, getData?)` materialises the
    * component's `[model, actions, data]` tuple. Every handler's
-   * `context.store` is typed as `S`.
+   * `context.env` is typed as `S`.
    */
   readonly useContext: <
     M extends Model | void = void,
@@ -39,14 +39,14 @@ export type App<S extends object> = {
     D extends Props = Props,
   >() => AppContextHandle<M, AC, D, S>;
   /**
-   * Read-only Proxy over the per-Boundary Store, typed as `S`. Reads use
-   * dot notation (`store.session`) and always reflect the latest value
+   * Read-only Proxy over the per-Boundary Env, typed as `S`. Reads use
+   * dot notation (`env.session`) and always reflect the latest value
    * across `await` boundaries. Writes flow through
-   * `context.actions.produce(({ store }) => { ... })`.
+   * `context.actions.produce(({ env }) => { ... })`.
    */
-  readonly useStore: () => Readonly<S>;
+  readonly useEnv: () => Readonly<S>;
   /**
-   * `Resource` factory bound to this App's Store. Same shape as the
+   * `Resource` factory bound to this App's Env. Same shape as the
    * top-level `Resource`: call directly for an in-memory cache, or use
    * `app.Resource.Cachable(cache, fetcher)` for persistence.
    */
@@ -71,11 +71,11 @@ export type App<S extends object> = {
 };
 
 /**
- * Creates an `App` &mdash; the entrypoint for a typed Store shape `S`,
- * inferred from `config.store`. `App<S>` exposes `Boundary`, hooks, and
+ * Creates an `App` &mdash; the entrypoint for a typed Env shape `S`,
+ * inferred from `config.env`. `App<S>` exposes `Boundary`, hooks, and
  * a `Resource` factory all wired against the same shape.
  *
- * Each `<app.Boundary>` instance owns its own Store, so different `App`s
+ * Each `<app.Boundary>` instance owns its own Env, so different `App`s
  * can coexist in the same tree with completely independent shapes.
  *
  * @example
@@ -85,7 +85,7 @@ export type App<S extends object> = {
  * type Session = { accessToken: string };
  *
  * export const app = App({
- *   store: {
+ *   env: {
  *     session: null as Session | null,
  *     operating: "idle" as "idle" | "signing-out",
  *   },
@@ -102,8 +102,8 @@ export type App<S extends object> = {
  *   const actions = context.useActions();
  *
  *   actions.useAction(Actions.SignOut, async (context) => {
- *     context.actions.produce(({ store }) => {
- *       store.session = null;
+ *     context.actions.produce(({ env }) => {
+ *       env.session = null;
  *     });
  *   });
  *
@@ -114,8 +114,8 @@ export type App<S extends object> = {
  * export const user = app.Resource<User>((context) =>
  *   ky
  *     .get("/api/user", {
- *       headers: context.store.session
- *         ? { Authorization: `Bearer ${context.store.session.accessToken}` }
+ *       headers: context.env.session
+ *         ? { Authorization: `Bearer ${context.env.session.accessToken}` }
  *         : {},
  *       signal: context.controller.signal,
  *     })
@@ -123,14 +123,14 @@ export type App<S extends object> = {
  * );
  * ```
  */
-export function App<S extends object = Store>(config?: { store: S }): App<S> {
+export function App<S extends object = Env>(config?: { env: S }): App<S> {
   function Boundary({
     children,
   }: {
     children: React.ReactNode;
   }): React.ReactElement {
     return (
-      <BaseBoundary store={config?.store as unknown as never}>
+      <BaseBoundary env={config?.env as unknown as never}>
         {children}
       </BaseBoundary>
     );
@@ -144,8 +144,8 @@ export function App<S extends object = Store>(config?: { store: S }): App<S> {
     return baseUseContext() as unknown as AppContextHandle<M, AC, D, S>;
   }
 
-  function useTypedStore(): Readonly<S> {
-    return baseUseStore() as unknown as Readonly<S>;
+  function useTypedEnv(): Readonly<S> {
+    return baseUseEnv() as unknown as Readonly<S>;
   }
 
   const Resource = Object.assign(
@@ -167,7 +167,7 @@ export function App<S extends object = Store>(config?: { store: S }): App<S> {
   return {
     Boundary,
     useContext: useTypedContext,
-    useStore: useTypedStore,
+    useEnv: useTypedEnv,
     Resource,
     Scope<MulticastActions>() {
       return createScope<S, MulticastActions>();

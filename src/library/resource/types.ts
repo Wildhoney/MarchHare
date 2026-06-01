@@ -1,4 +1,4 @@
-import type { Store } from "../boundary/components/store/index.tsx";
+import type { Env } from "../boundary/components/env/index.tsx";
 import type { Cache } from "../cache/index.ts";
 import type {
   BroadcastPayload,
@@ -24,7 +24,7 @@ export type Dispatch = {
 /**
  * `context` object passed to every {@link Fetcher}.
  *
- * - `store` &mdash; snapshot of the per-`<Boundary>` Store at the
+ * - `env` &mdash; snapshot of the per-`<Boundary>` Env at the
  *   moment the fetcher is invoked.
  * - `controller` &mdash; the `AbortController` auto-threaded from the
  *   calling handler's `context.task.controller`. Pass
@@ -37,7 +37,7 @@ export type Dispatch = {
  * @internal
  */
 export type Args<P extends object = Record<never, never>> = {
-  readonly store: Store;
+  readonly env: Env;
   readonly controller: AbortController;
   readonly params: P;
   readonly dispatch: Dispatch;
@@ -45,7 +45,7 @@ export type Args<P extends object = Record<never, never>> = {
 
 /**
  * Fetcher signature accepted by `Resource`. Receives a single `context`
- * argument carrying the Store snapshot, the abort controller, params,
+ * argument carrying the Env snapshot, the abort controller, params,
  * and a broadcast/multicast-only `dispatch`.
  */
 export type Fetcher<T, P extends object = Record<never, never>> = (
@@ -85,7 +85,7 @@ export type Config<T, P extends object = Record<never, never>> = {
  */
 export type PendingCall = {
   readonly run: (
-    store: Store,
+    env: Env,
     controller: AbortController,
     params: object,
     dispatch: Dispatch,

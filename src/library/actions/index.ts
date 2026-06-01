@@ -30,15 +30,15 @@ import {
   ActionOrChanneled,
   AnyAction,
   FaultSymbol,
-  StoreSymbol,
+  EnvSymbol,
 } from "../types/index.ts";
 
 import { getReason, getError } from "../error/utils.ts";
 import EventEmitter from "eventemitter3";
 import { useBroadcast } from "../boundary/components/broadcast/index.tsx";
 import { useScope, getScope } from "../boundary/components/scope/index.tsx";
-import { useStore, useStoreRef } from "../boundary/components/store/utils.ts";
-import type { Store } from "../boundary/components/store/index.tsx";
+import { useEnv, useEnvRef } from "../boundary/components/env/utils.ts";
+import type { Env } from "../boundary/components/env/index.tsx";
 import { produce as produceImmer } from "immer";
 import { consumePending } from "../resource/index.ts";
 import type { Coalesce } from "../resource/types.ts";
@@ -126,8 +126,8 @@ export function useActions<
   const broadcast = useBroadcast();
   const scope = useScope();
   const tasks = useTasks();
-  const store = useStore();
-  const slot = useStoreRef();
+  const env = useEnv();
+  const slot = useEnvRef();
   const sharing = useSharing();
   const rerender = useRerender();
   const initialised = React.useRef(false);
@@ -173,31 +173,31 @@ export function useActions<
         task,
         data,
         tasks,
-        store,
+        env,
         actions: {
           produce(
             f: (draft: {
               model: M;
               readonly inspect: Readonly<Inspect<M>>;
-              store: Store;
+              env: Env;
             }) => void,
           ) {
             if (controller.signal.aborted) return;
             const slotBefore = slot.current;
             const process = state.current.produce((draft) => {
-              slot.current = produceImmer(slot.current, (storeDraft) => {
+              slot.current = produceImmer(slot.current, (envDraft) => {
                 f({
                   model: <M>(<unknown>draft),
                   inspect: <Readonly<Inspect<M>>>(
                     (<unknown>state.current.inspect)
                   ),
-                  store: <Store>storeDraft,
+                  env: <Env>envDraft,
                 });
               });
             });
             setModel(<M>(<unknown>state.current.model));
             if (slot.current !== slotBefore) {
-              broadcast.emit(StoreSymbol, slot.current);
+              broadcast.emit(EnvSymbol, slot.current);
             }
             result.processes.add(process);
             if (hydration.current) {

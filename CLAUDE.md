@@ -13,7 +13,7 @@ import {
   With,
   utils,
   withScope,
-  useStore,
+  useEnv,
   Cache,
   Boundary,
   Error,
@@ -26,7 +26,7 @@ import type {
   Fault,
   Handler,
   Handlers,
-  Store,
+  Env,
   Pk,
   Task,
   Tasks,
@@ -365,32 +365,32 @@ actions.useAction(Actions.Search, async (context, query) => {
 });
 ```
 
-## Store (Per-Boundary Ambient State)
+## Env (Per-Boundary Ambient State)
 
 A typed record of cross-cutting, mutable state shared across every component inside a `<Boundary>`. Holds whatever doesn't belong in the model: session tokens, locale, feature flags, current operational mode, etc.
 
-Declare the shape once via module augmentation; supply the initial value via the `<Boundary store={...}>` prop. **Reads** are plain dot notation (`store.session`); **writes** go through `context.actions.produce(({ store }) => { store.x = ... })`, the same Immer-style recipe used for the model. No `.get`/`.set`/`.read` methods on the handle.
+Declare the shape once via module augmentation; supply the initial value via the `<Boundary env={...}>` prop. **Reads** are plain dot notation (`env.session`); **writes** go through `context.actions.produce(({ env }) => { env.x = ... })`, the same Immer-style recipe used for the model. No `.get`/`.set`/`.read` methods on the handle.
 
-- `useStore()` &mdash; read-only Proxy. Dot reads always reflect the latest value (delegates to the live ref).
-- `context.store` &mdash; same Proxy inside `useActions` handlers.
-- The `store` field on every `Resource` fetcher's args object &mdash; a snapshot per fetcher call.
+- `useEnv()` &mdash; read-only Proxy. Dot reads always reflect the latest value (delegates to the live ref).
+- `context.env` &mdash; same Proxy inside `useActions` handlers.
+- The `env` field on every `Resource` fetcher's args object &mdash; a snapshot per fetcher call.
 
-Direct `useStore()` reads are **not** reactive &mdash; mutating the Store does not re-render components that called `useStore()`. When the view side needs to react to Store changes, subscribe to the global `Lifecycle.Store` broadcast via `actions.useAction(Lifecycle.Store, ...)` or render against it with `actions.stream(Lifecycle.Store, (store) => ...)`. Use plain dot reads for the _handler_ side; reach for `Lifecycle.Store` for the _view_ side.
+Direct `useEnv()` reads are **not** reactive &mdash; mutating the Env does not re-render components that called `useEnv()`. When the view side needs to react to Env changes, subscribe to the global `Lifecycle.Env` broadcast via `actions.useAction(Lifecycle.Env, ...)` or render against it with `actions.stream(Lifecycle.Env, (env) => ...)`. Use plain dot reads for the _handler_ side; reach for `Lifecycle.Env` for the _view_ side.
 
 ```ts
 import { useActions, Boundary, Action, Resource } from "march-hare";
 
-// 1. Declare the Store's shape via module augmentation.
+// 1. Declare the Env's shape via module augmentation.
 declare module "march-hare" {
   // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
-  interface Store {
+  interface Env {
     session: Session | null;
     operating: "idle" | "signing-out";
   }
 }
 
-// 2. Supply the initial Store at the Boundary.
-<Boundary store={{ session: null, operating: "idle" }}>
+// 2. Supply the initial Env at the Boundary.
+<Boundary env={{ session: null, operating: "idle" }}>
   <App />
 </Boundary>;
 
@@ -399,29 +399,29 @@ function useSignOutActions() {
   const actions = useActions<void, typeof Actions>();
 
   actions.useAction(Actions.SignOut, async (context) => {
-    context.actions.produce(({ store }) => {
-      store.operating = "signing-out";
+    context.actions.produce(({ env }) => {
+      env.operating = "signing-out";
     });
     await api.signOut();
-    context.actions.produce(({ store }) => {
-      store.session = null;
-      store.operating = "idle";
+    context.actions.produce(({ env }) => {
+      env.session = null;
+      env.operating = "idle";
     });
   });
 
   actions.useAction(Actions.Refresh, async (context) => {
-    if (context.store.operating === "signing-out") return;
+    if (context.env.operating === "signing-out") return;
     // ...
   });
 
   return actions;
 }
 
-// 4. Resource fetchers read the Store via the context argument.
+// 4. Resource fetchers read the Env via the context argument.
 export const user = Resource((context) =>
   ky.get("/api/user", {
-    headers: context.store.session
-      ? { Authorization: `Bearer ${context.store.session.accessToken}` }
+    headers: context.env.session
+      ? { Authorization: `Bearer ${context.env.session.accessToken}` }
       : {},
     signal: context.controller.signal,
   }).json<User>(),
@@ -437,7 +437,7 @@ Dot reads stay fresh across `await` boundaries because the handle is a Proxy tha
 ```tsx
 import { Boundary } from "march-hare";
 
-// Wraps app with Broadcaster, Store, and Tasks providers
+// Wraps app with Broadcaster, Env, and Tasks providers
 <Boundary>
   <App />
 </Boundary>;
@@ -590,7 +590,7 @@ docs: update the README file
 - `src/library/boundary/components/broadcast/` - Broadcast system
 - `src/library/boundary/components/consumer/` - Consumer store (internal)
 - `src/library/boundary/components/tasks/` - Task tracking context
-- `src/library/boundary/components/store/` - Per-Boundary Store: typed cross-cutting state primitive
+- `src/library/boundary/components/env/` - Per-Boundary Env: typed cross-cutting state primitive
 
 ### Documentation
 
@@ -603,14 +603,14 @@ docs: update the README file
   - `error-handling.md` - Error component and fault handling
   - `ky-http-client.md` - Integration with ky HTTP client
   - `lifecycle-actions.md` - Mount, Unmount, Error, Update
-  - `store.md` - Per-Boundary Store: typed ambient state (session, locale, feature flags); auto-threaded to Resource fetchers and `context.store`
+  - `env.md` - Per-Boundary Env: typed ambient state (session, locale, feature flags); auto-threaded to Resource fetchers and `context.env`
   - `mount-broadcast-deduplication.md` - Avoiding duplicate fetches on mount with broadcast/multicast
   - `model-annotations.md` - Async state tracking with Immertation
   - `multicast-actions.md` - Scoped component communication
   - `react-context-in-handlers.md` - Using context.data
   - `real-time-applications.md` - SSE/WebSocket patterns
   - `referential-equality.md` - Avoiding stale closures
-  - `session-tokens.md` - Session tokens in the Store; HttpOnly cookies vs. Bearer in Store; refresh-on-401 via ky `afterResponse` hook
+  - `session-tokens.md` - Session tokens in the Env; HttpOnly cookies vs. Bearer in Env; refresh-on-401 via ky `afterResponse` hook
   - `stateful-props.md` - Box<T> type for stateful props
   - `storage.md` - Cache class for cross-reload persistence; adapters for localStorage / MMKV / chrome.storage
   - `use-resource.md` - Resource: declare at module scope, sync read via `.get(params)`, fetch via `context.actions.resource(...).exceeds(...)`

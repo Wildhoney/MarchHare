@@ -12,18 +12,18 @@ import type { Data } from "../actions/types.ts";
 
 /**
  * Args object passed to an `app.Resource` fetcher. Same shape as the
- * base `Resource` fetcher's args but with `store` typed as `S`.
+ * base `Resource` fetcher's args but with `env` typed as `S`.
  */
 export type AppArgs<S, P extends object = Record<never, never>> = Omit<
   Args<P>,
-  "store"
+  "env"
 > & {
-  readonly store: Readonly<S>;
+  readonly env: Readonly<S>;
 };
 
 /**
  * Fetcher signature for an `app.Resource` declaration. The fetcher's
- * `context.store` is typed against the App's inferred Store shape `S`.
+ * `context.env` is typed against the App's inferred Env shape `S`.
  */
 export type AppFetcher<S, T, P extends object = Record<never, never>> = (
   context: AppArgs<S, P>,
@@ -32,8 +32,8 @@ export type AppFetcher<S, T, P extends object = Record<never, never>> = (
 /**
  * `app.Resource(fetcher)` &mdash; in-memory cache, no persistence.
  * `app.Resource.Cachable(cache, fetcher)` &mdash; persistent cache wired
- * to the supplied `Cache` adapter. Both forms type `context.store` as
- * the App's Store shape.
+ * to the supplied `Cache` adapter. Both forms type `context.env` as
+ * the App's Env shape.
  */
 export type AppResource<S> = {
   <T, P extends object = Record<never, never>>(
@@ -46,20 +46,20 @@ export type AppResource<S> = {
 };
 
 /**
- * Phantom marker so consumers of the App's hooks see `store: S` typing
+ * Phantom marker so consumers of the App's hooks see `env: S` typing
  * at the type-system level; at runtime the value is the same proxy as
- * the loose `Store` type.
+ * the loose `Env` type.
  *
  * @internal
  */
-type StoreView<S> = { readonly __appStore?: S };
+type EnvView<S> = { readonly __appEnv?: S };
 
 type AppActionsResult<M, AC, D, S> = UseActions<
   M extends Model | void ? M : void,
   AC extends Actions | void ? AC : void,
   D extends Props ? D : Props
 > &
-  StoreView<S>;
+  EnvView<S>;
 
 type AppUseActions<M, AC, D, S> = M extends void
   ? (getData?: Data<D & Props>) => AppActionsResult<M, AC, D, S>
@@ -70,7 +70,7 @@ type AppUseActions<M, AC, D, S> = M extends void
 
 /**
  * `Context` handle returned by `app.useContext()`. Mirrors the base
- * {@link Context} but with the Store-typed slots overridden to `S`.
+ * {@link Context} but with the Env-typed slots overridden to `S`.
  */
 export type AppContextHandle<M, AC, D, S> = {
   readonly actions: {

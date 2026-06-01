@@ -1,19 +1,19 @@
 # Session tokens
 
-`Resource` fetchers receive an args object with `store`, `controller`, and `params`. The `store` field is a snapshot of the per-`<app.Boundary>` [Store](./store.md) &mdash; exactly the right place to put a session token: typed, declared once on `App({ store })`, written from a single sign-in handler, read automatically by every fetcher.
+`Resource` fetchers receive an args object with `env`, `controller`, and `params`. The `env` field is a snapshot of the per-`<app.Boundary>` [Env](./env.md) &mdash; exactly the right place to put a session token: typed, declared once on `App({ env })`, written from a single sign-in handler, read automatically by every fetcher.
 
 This recipe covers:
 
-- Declaring the session shape on `App({ store })`.
+- Declaring the session shape on `App({ env })`.
 - Sign-in and sign-out handlers that write through `context.actions.produce`.
-- Reading the token in every Resource fetcher via the `store` arg.
-- Refresh-on-401 via a `ky` `afterResponse` hook that reads and writes the Store.
+- Reading the token in every Resource fetcher via the `env` arg.
+- Refresh-on-401 via a `ky` `afterResponse` hook that reads and writes the Env.
 - Clearing Resource Caches on sign-out so cached payloads don't bleed across users.
 - When to prefer HttpOnly cookies instead.
 
 ## Option 1: HttpOnly cookies (when available)
 
-If the backend sets a session cookie on sign-in and the API is same-origin (or CORS-configured with `credentials: "include"`), the browser auto-attaches it on every request. JS never sees the token; there's nothing to put in the Store. Sign-in / sign-out are just Resources that hit `/api/auth/*` and let the backend's `Set-Cookie` headers do the work:
+If the backend sets a session cookie on sign-in and the API is same-origin (or CORS-configured with `credentials: "include"`), the browser auto-attaches it on every request. JS never sees the token; there's nothing to put in the Env. Sign-in / sign-out are just Resources that hit `/api/auth/*` and let the backend's `Set-Cookie` headers do the work:
 
 ```ts
 // api/client.ts
@@ -37,9 +37,9 @@ export const user = app.Resource<User>({
 
 Simpler than anything below. Reach for it first.
 
-## Option 2: Bearer token in the Store
+## Option 2: Bearer token in the Env
 
-When cookies aren't viable (React Native, cross-origin APIs without a proxy, browser extensions, anywhere you need to send an `Authorization` header), put the session in the Store.
+When cookies aren't viable (React Native, cross-origin APIs without a proxy, browser extensions, anywhere you need to send an `Authorization` header), put the session in the Env.
 
 ### Declare the shape on `App`
 
@@ -50,13 +50,13 @@ import { App } from "march-hare";
 export type Session = { accessToken: string; refreshToken: string };
 
 export const app = App({
-  store: {
+  env: {
     session: null as Session | null,
   },
 });
 ```
 
-Every read/write of `store.session` &mdash; in handlers, fetchers, the `app.useStore()` hook &mdash; is typed against the shape inferred from this object.
+Every read/write of `env.session` &mdash; in handlers, fetchers, the `app.useEnv()` hook &mdash; is typed against the shape inferred from this object.
 
 ### Wire the Boundary
 
@@ -84,7 +84,7 @@ const stored = sessionCache.get<Session>("session");
 const initial = stored.data === utils.unset ? null : stored.data;
 
 export const app = App({
-  store: { session: initial },
+  env: { session: initial },
 });
 ```
 
@@ -92,7 +92,7 @@ Whether to persist access tokens in `sessionStorage` / `localStorage` is a secur
 
 ### Resources read the token via dot notation
 
-Every fetcher receives the Store on its args object. Read the token with plain dot notation; the rest of the Resource stays one-line:
+Every fetcher receives the Env on its args object. Read the token with plain dot notation; the rest of the Resource stays one-line:
 
 ```ts
 // resources.ts
@@ -100,11 +100,11 @@ import ky from "ky";
 import { app } from "./app";
 
 export const user = app.Resource<User, { id: number }>({
-  fetch({ store, controller, params }) {
+  fetch({ env, controller, params }) {
     return ky
       .get(`/api/users/${params.id}`, {
-        headers: store.session
-          ? { Authorization: `Bearer ${store.session.accessToken}` }
+        headers: env.session
+          ? { Authorization: `Bearer ${env.session.accessToken}` }
           : {},
         signal: controller.signal,
       })
@@ -113,11 +113,11 @@ export const user = app.Resource<User, { id: number }>({
 });
 
 export const pay = app.Resource<Receipt, Body>({
-  fetch({ store, controller, params }) {
+  fetch({ env, controller, params }) {
     return ky
       .post("/api/pay", {
-        headers: store.session
-          ? { Authorization: `Bearer ${store.session.accessToken}` }
+        headers: env.session
+          ? { Authorization: `Bearer ${env.session.accessToken}` }
           : {},
         json: params,
         signal: controller.signal,
@@ -143,8 +143,8 @@ export function useActions() {
 
   actions.useAction(Actions.SignIn, async (context, credentials) => {
     const signIn = await context.actions.resource(resource.signIn(credentials));
-    context.actions.produce(({ store }) => {
-      store.session = {
+    context.actions.produce(({ env }) => {
+      env.session = {
         accessToken: signIn.accessToken,
         refreshToken: signIn.refreshToken,
       };
@@ -154,8 +154,8 @@ export function useActions() {
 
   actions.useAction(Actions.SignOut, async (context) => {
     await context.actions.resource(resource.signOut());
-    context.actions.produce(({ store }) => {
-      store.session = null;
+    context.actions.produce(({ env }) => {
+      env.session = null;
     });
     await context.actions.dispatch(Actions.Broadcast.SignedOut);
   });
@@ -164,7 +164,7 @@ export function useActions() {
 }
 ```
 
-Components that need to react to sign-in/sign-out subscribe to the broadcast actions as usual. The Store carries the ambient value; broadcasts carry the _event_.
+Components that need to react to sign-in/sign-out subscribe to the broadcast actions as usual. The Env carries the ambient value; broadcasts carry the _event_.
 
 ## Refresh on 401
 
@@ -228,28 +228,28 @@ export const api = ky.create({
 });
 ```
 
-A tiny top-level component plugs the live Store reader and an internal dispatch into those binders. It renders `null` &mdash; no provider, no children wrapping, no ref dance:
+A tiny top-level component plugs the live Env reader and an internal dispatch into those binders. It renders `null` &mdash; no provider, no children wrapping, no ref dance:
 
 ```tsx
 import { app } from "./app";
 import { bindSession } from "./api/client";
 
 function AuthBridge(): null {
-  const store = app.useStore();
+  const env = app.useEnv();
   const [, actions] = useActions();
 
   bindSession(
-    () => store.session,
+    () => env.session,
     (next) => void actions.dispatch(Actions.RefreshSession, next),
   );
 
   return null;
 }
 
-// Internal action that writes the refresh result back to the Store.
+// Internal action that writes the refresh result back to the Env.
 actions.useAction(Actions.RefreshSession, (context, next) => {
-  context.actions.produce(({ store }) => {
-    store.session = next;
+  context.actions.produce(({ env }) => {
+    env.session = next;
   });
 });
 ```
@@ -264,7 +264,7 @@ Notes:
 
 ## Clear Resource Caches on sign-out
 
-If your Resources are wired to persistent `Cache`s, the previous user's cached payloads survive sign-out and bleed into the next session. Clear them alongside the Store reset:
+If your Resources are wired to persistent `Cache`s, the previous user's cached payloads survive sign-out and bleed into the next session. Clear them alongside the Env reset:
 
 ```ts
 import { userCache, ordersCache, settingsCache } from "../caches";
@@ -273,8 +273,8 @@ import * as resource from "../resources";
 actions.useAction(Actions.SignOut, async (context) => {
   await context.actions.resource(resource.signOut());
 
-  context.actions.produce(({ store }) => {
-    store.session = null;
+  context.actions.produce(({ env }) => {
+    env.session = null;
   });
 
   // Wipe everything the signed-in user might have cached.
@@ -286,7 +286,7 @@ actions.useAction(Actions.SignOut, async (context) => {
 });
 ```
 
-The Store reset and Cache clears are independent concerns (token vs. cached data); both belong in the sign-out handler.
+The Env reset and Cache clears are independent concerns (token vs. cached data); both belong in the sign-out handler.
 
 ## Targeted authorisation (per-component, per-call)
 
@@ -296,8 +296,8 @@ If a single call needs a different token than the ambient session (impersonation
 type AdminUserParams = { id: number; asToken?: string };
 
 export const adminUser = app.Resource<User, AdminUserParams>({
-  fetch({ store, controller, params }) {
-    const token = params.asToken ?? store.session?.accessToken;
+  fetch({ env, controller, params }) {
+    const token = params.asToken ?? env.session?.accessToken;
     return ky
       .get(`/api/users/${params.id}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -313,5 +313,5 @@ The per-params cache treats `asToken` as part of the key, so impersonation calls
 ## Limitations
 
 - **Single ambient session per Boundary.** Multi-tenant cases where one screen needs to authenticate against two different backends are handled by either explicit per-call overrides (as above) or by nested `<app.Boundary>` instances backed by distinct `App` calls.
-- **SSR needs per-request Boundaries.** On the server each request must get its own Boundary with a fresh Store containing that request's session. Build a new `App({ store })` per request &mdash; the `App` factory is cheap.
+- **SSR needs per-request Boundaries.** On the server each request must get its own Boundary with a fresh Env containing that request's session. Build a new `App({ env })` per request &mdash; the `App` factory is cheap.
 - **Refresh-during-await isn't free.** If a request fires, the token expires mid-flight, and a parallel refresh races in, the original request's `Authorization` is already on the wire and may 401. The `afterResponse` retry handles this, but the user-visible latency is two round-trips.

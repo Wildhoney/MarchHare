@@ -3,9 +3,9 @@
 `Resource(fetcher)` declares a remote interaction at module scope. There's no `useResource` hook &mdash; consume Resources directly:
 
 - **`resource.user(params?)`** &mdash; synchronous read of the cached payload for those params. Returns `T | null`. Safe to call at module scope, in the model literal, anywhere. As a side effect, the call primes the slot that `context.actions.resource(...)` / `.set(...)` consume next.
-- **`context.actions.resource(resource.user(params?))`** &mdash; fires the fetch from an action handler. Auto-threads the `AbortController` from `context.task.controller` and the per-`<Boundary>` Store snapshot. Returns a thenable that's also chainable with `.exceeds({ minutes: 5 })` for cache-aware refresh.
+- **`context.actions.resource(resource.user(params?))`** &mdash; fires the fetch from an action handler. Auto-threads the `AbortController` from `context.task.controller` and the per-`<Boundary>` Env snapshot. Returns a thenable that's also chainable with `.exceeds({ minutes: 5 })` for cache-aware refresh.
 
-The fetcher itself receives a single `context` argument carrying `store`, `controller`, `params`, and a broadcast/multicast-only `dispatch`. Access fields directly via `context.controller.signal`, `context.params.id`, etc. &mdash; do not destructure. Pass `context.controller.signal` to `fetch`/`ky`/`EventSource` for cancellation.
+The fetcher itself receives a single `context` argument carrying `env`, `controller`, `params`, and a broadcast/multicast-only `dispatch`. Access fields directly via `context.controller.signal`, `context.params.id`, etc. &mdash; do not destructure. Pass `context.controller.signal` to `fetch`/`ky`/`EventSource` for cancellation.
 
 ```ts
 // resources.ts
@@ -28,7 +28,7 @@ export const pay = app.Resource<Receipt, Body>((context) =>
     .json<Receipt>(),
 );
 
-// Simple no-store, no-params:
+// Simple no-env, no-params:
 export const ping = app.Resource((context) =>
   ky.get("ping", { signal: context.controller.signal }).text(),
 );
@@ -90,14 +90,14 @@ Keep `resource.user(...)` and `.resource(...)` in the same expression. Splitting
 
 ```ts
 type Context<P> = {
-  store: Store; // per-<Boundary> ambient state snapshot (read-only)
+  env: Env; // per-<Boundary> ambient state snapshot (read-only)
   controller: AbortController;
   params: P;
   dispatch: Dispatch; // broadcast / multicast only — unicast is rejected at compile time
 };
 ```
 
-- **`store`** &mdash; a snapshot of the per-`<Boundary>` [Store](./store.md) at the moment of fetch. Read session tokens, locale, feature flags, anything cross-cutting. The snapshot is captured at fetcher-start; mid-flight Store changes don't affect this fetch but the next one picks them up.
+- **`env`** &mdash; a snapshot of the per-`<Boundary>` [Env](./env.md) at the moment of fetch. Read session tokens, locale, feature flags, anything cross-cutting. The snapshot is captured at fetcher-start; mid-flight Env changes don't affect this fetch but the next one picks them up.
 - **`controller`** &mdash; the `AbortController` auto-threaded from `context.task.controller`. Pass `context.controller.signal` to `ky`/`fetch`/`EventSource` to thread cancellation; when the action's task is aborted (component unmount, supersede, manual abort), the in-flight request is cancelled. Call `context.controller.abort()` if the fetcher needs to fail fast.
 - **`params`** &mdash; the call-site params object, typed by the Resource's second generic.
 - **`dispatch`** &mdash; fire a [broadcast](./broadcast-actions.md) or [multicast](./multicast-actions.md) action from inside the fetcher. Unicast actions target the calling component &mdash; a Resource fetcher has no component, so unicast is rejected at compile time. Use for cross-component side-effects that should fire as soon as the fetch enters a particular state, regardless of which component awaited it.
@@ -175,16 +175,16 @@ If the most recent successful fetch for those params resolved longer ago than th
 
 `.exceeds` is also a duplicate-submit guard for writes &mdash; `await context.actions.resource(resource.pay(body)).exceeds({ seconds: 5 })` only fires if no `resource.pay(body)` has succeeded in the last five seconds.
 
-## Reading the Store inside fetchers
+## Reading the Env inside fetchers
 
-Every fetcher receives the per-`<Boundary>` Store on its context. Use it for ambient values like the session token:
+Every fetcher receives the per-`<Boundary>` Env on its context. Use it for ambient values like the session token:
 
 ```ts
 export const user = app.Resource<User, { id: number }>((context) =>
   ky
     .get(`users/${context.params.id}`, {
-      headers: context.store.session
-        ? { Authorization: `Bearer ${context.store.session.accessToken}` }
+      headers: context.env.session
+        ? { Authorization: `Bearer ${context.env.session.accessToken}` }
         : {},
       signal: context.controller.signal,
     })
@@ -192,7 +192,7 @@ export const user = app.Resource<User, { id: number }>((context) =>
 );
 ```
 
-See [session-tokens](./session-tokens.md) for the full auth pattern and [store](./store.md) for the underlying primitive.
+See [session-tokens](./session-tokens.md) for the full auth pattern and [env](./env.md) for the underlying primitive.
 
 ## Fanning out on success or failure
 

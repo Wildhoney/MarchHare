@@ -3,7 +3,7 @@ import { BroadcastEmitter } from "../boundary/components/broadcast/utils.ts";
 import { Context as ScopeReactContext } from "../boundary/components/scope/utils.ts";
 import type { ScopeEntry } from "../boundary/components/scope/types.ts";
 import { useContext as baseUseContext } from "../context/index.ts";
-import { useStore as baseUseStore } from "../boundary/components/store/utils.ts";
+import { useEnv as baseUseEnv } from "../boundary/components/env/utils.ts";
 import { Resource as BaseResource } from "../resource/index.ts";
 import type { Fetcher, ResourceHandle } from "../resource/types.ts";
 import type { Cache } from "../cache/index.ts";
@@ -16,9 +16,9 @@ import type { Actions, Model, Props } from "../types/index.ts";
 
 /**
  * Handle returned by `app.Scope<MulticastActions>()`. Mirrors the {@link App}
- * surface (`Boundary`, `useContext`, `useStore`, `Resource`) but typed
+ * surface (`Boundary`, `useContext`, `useEnv`, `Resource`) but typed
  * against a specific multicast action surface `MulticastActions` and the
- * enclosing App's Store shape `S`.
+ * enclosing App's Env shape `S`.
  *
  * Notably absent: a nested `Scope` method. Nesting scopes is supported
  * at the React-tree level &mdash; just render two `<scope.Boundary>`s
@@ -26,7 +26,7 @@ import type { Actions, Model, Props } from "../types/index.ts";
  * `app.Scope<MulticastActions>()` call so that its multicast surface is
  * declared up-front.
  *
- * @template S The enclosing App's Store shape.
+ * @template S The enclosing App's Env shape.
  * @template MulticastActions The multicast Actions class (or union of
  *  classes) this scope's `useContext().actions.dispatch` is allowed
  *  to fire.
@@ -65,13 +65,13 @@ export type Scope<S extends object, MulticastActions> = {
     S
   >;
   /**
-   * Read-only Proxy over the enclosing App's Store. Identical to
-   * `app.useStore` &mdash; the Scope does not introduce its own Store;
+   * Read-only Proxy over the enclosing App's Env. Identical to
+   * `app.useEnv` &mdash; the Scope does not introduce its own Env;
    * scopes are about multicast routing, not ambient state.
    */
-  readonly useStore: () => Readonly<S>;
+  readonly useEnv: () => Readonly<S>;
   /**
-   * Resource factory bound to the enclosing App's Store. Identical to
+   * Resource factory bound to the enclosing App's Env. Identical to
    * `app.Resource`; provided on the scope handle for convenience so a
    * scoped feature can keep all its primitives in one place.
    */
@@ -80,7 +80,7 @@ export type Scope<S extends object, MulticastActions> = {
 
 /**
  * Internal constructor for a {@link Scope} handle. Called from inside
- * `App<S>()` so the enclosing Store shape `S` is captured at the type
+ * `App<S>()` so the enclosing Env shape `S` is captured at the type
  * level.
  *
  * @internal
@@ -134,8 +134,8 @@ export function createScope<S extends object, MulticastActions>(): Scope<
     >;
   }
 
-  function useTypedStore(): Readonly<S> {
-    return baseUseStore() as unknown as Readonly<S>;
+  function useTypedEnv(): Readonly<S> {
+    return baseUseEnv() as unknown as Readonly<S>;
   }
 
   const Resource = Object.assign(
@@ -160,7 +160,7 @@ export function createScope<S extends object, MulticastActions>(): Scope<
   return {
     Boundary,
     useContext: useTypedContext,
-    useStore: useTypedStore,
+    useEnv: useTypedEnv,
     Resource,
   };
 }
