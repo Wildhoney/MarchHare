@@ -103,7 +103,7 @@ describe("Env mutations via context.actions.produce", () => {
   });
 });
 
-describe("Resource fetchers receive the Env snapshot", () => {
+describe("Resource fetchers receive a live Env handle", () => {
   it("passes the surrounding Boundary's Env to the fetcher's args", async () => {
     const fetcher = vi.fn(() => Promise.resolve({ ok: true }));
     const resource = Resource(fetcher);
@@ -185,6 +185,73 @@ describe("Resource fetchers receive the Env snapshot", () => {
     });
 
     expect(captured).toEqual(["first", "second"]);
+  });
+
+  it("dot reads inside the fetcher reflect mid-flight Env writes", async () => {
+    const gate: {
+      resolve: (value: { ok: true }) => void;
+      promise: Promise<{ ok: true }>;
+    } = (() => {
+      let resolve: (value: { ok: true }) => void = () => undefined;
+      const promise = new Promise<{ ok: true }>((r) => {
+        resolve = r;
+      });
+      return { resolve, promise };
+    })();
+    const captured: Array<string | null> = [];
+    const resource = Resource(
+      async ({ env }: { env: { token: string | null } }) => {
+        captured.push(env.token);
+        const result = await gate.promise;
+        captured.push(env.token);
+        return result;
+      },
+    );
+
+    class Actions {
+      static Fetch = Action("Fetch");
+      static SetToken = Action<string>("SetToken");
+    }
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <Boundary env={{ counter: 0, label: null, token: "before" }}>
+        {children}
+      </Boundary>
+    );
+
+    const { result } = renderHook(
+      () => {
+        const actions = useActions<void, typeof Actions>();
+        actions.useAction(Actions.Fetch, async (context) => {
+          await context.actions.resource(resource());
+        });
+        actions.useAction(Actions.SetToken, (context, value) => {
+          context.actions.produce(({ env }) => {
+            env.token = value;
+          });
+        });
+        return actions;
+      },
+      { wrapper },
+    );
+
+    const fetching = act(async () => {
+      await result.current[1].dispatch(Actions.Fetch);
+    });
+
+    await vi.waitFor(() => expect(captured).toEqual(["before"]));
+
+    await act(async () => {
+      await result.current[1].dispatch(Actions.SetToken, "after");
+    });
+
+    await act(async () => {
+      gate.resolve({ ok: true });
+    });
+
+    await fetching;
+
+    expect(captured).toEqual(["before", "after"]);
   });
 });
 

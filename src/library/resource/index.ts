@@ -95,8 +95,11 @@ function build<T, P extends object>(
  *
  * The fetcher receives a single `context` argument carrying `env`,
  * `controller`, `params`, and a broadcast/multicast-only `dispatch`.
- * Every successful fetch writes through to a per-resource in-memory
- * cache; pair with {@link Resource.Cachable} to persist across reloads.
+ * `env` is a live handle &mdash; dot reads inside the fetcher
+ * always see the latest per-`<Boundary>` Env, even after `await`
+ * boundaries. Every successful fetch writes through to a per-resource
+ * in-memory cache; pair with {@link Resource.Cachable} to persist
+ * across reloads.
  *
  * Concurrent calls fire fresh requests by default. Opt in to in-flight
  * sharing per call via `.coalesce(key)` on the thenable returned from

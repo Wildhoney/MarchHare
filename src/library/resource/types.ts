@@ -24,8 +24,11 @@ export type Dispatch = {
 /**
  * `context` object passed to every {@link Fetcher}.
  *
- * - `env` &mdash; snapshot of the per-`<Boundary>` Env at the
- *   moment the fetcher is invoked.
+ * - `env` &mdash; live read-only handle to the per-`<Boundary>` Env.
+ *   Dot reads always reflect the latest value, even across `await`
+ *   boundaries inside the fetcher &mdash; the handle is a `Proxy`
+ *   that delegates property access to the live ref, identical to
+ *   the `context.env` exposed to action handlers.
  * - `controller` &mdash; the `AbortController` auto-threaded from the
  *   calling handler's `context.task.controller`. Pass
  *   `controller.signal` to `fetch`/`ky`/`EventSource`, or call
@@ -45,7 +48,7 @@ export type Args<P extends object = Record<never, never>> = {
 
 /**
  * Fetcher signature accepted by `Resource`. Receives a single `context`
- * argument carrying the Env snapshot, the abort controller, params,
+ * argument carrying a live Env handle, the abort controller, params,
  * and a broadcast/multicast-only `dispatch`.
  */
 export type Fetcher<T, P extends object = Record<never, never>> = (

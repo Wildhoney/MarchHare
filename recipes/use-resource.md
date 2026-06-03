@@ -3,7 +3,7 @@
 `Resource(fetcher)` declares a remote interaction at module scope. There's no `useResource` hook &mdash; consume Resources directly:
 
 - **`resource.user(params?)`** &mdash; synchronous read of the cached payload for those params. Returns `T | null`. Safe to call at module scope, in the model literal, anywhere. As a side effect, the call primes the slot that `context.actions.resource(...)` / `.set(...)` consume next.
-- **`context.actions.resource(resource.user(params?))`** &mdash; fires the fetch from an action handler. Auto-threads the `AbortController` from `context.task.controller` and the per-`<Boundary>` Env snapshot. Returns a thenable that's also chainable with `.exceeds({ minutes: 5 })` for cache-aware refresh.
+- **`context.actions.resource(resource.user(params?))`** &mdash; fires the fetch from an action handler. Auto-threads the `AbortController` from `context.task.controller` and a live handle to the per-`<Boundary>` Env. Returns a thenable that's also chainable with `.exceeds({ minutes: 5 })` for cache-aware refresh.
 
 The fetcher itself receives a single `context` argument carrying `env`, `controller`, `params`, and a broadcast/multicast-only `dispatch`. Access fields directly via `context.controller.signal`, `context.params.id`, etc. &mdash; do not destructure. Pass `context.controller.signal` to `fetch`/`ky`/`EventSource` for cancellation.
 
@@ -90,14 +90,14 @@ Keep `resource.user(...)` and `.resource(...)` in the same expression. Splitting
 
 ```ts
 type Context<P> = {
-  env: Env; // per-<Boundary> ambient state snapshot (read-only)
+  env: Env; // live read-only handle to the per-<Boundary> Env
   controller: AbortController;
   params: P;
   dispatch: Dispatch; // broadcast / multicast only — unicast is rejected at compile time
 };
 ```
 
-- **`env`** &mdash; a snapshot of the per-`<Boundary>` [Env](./env.md) at the moment of fetch. Read session tokens, locale, feature flags, anything cross-cutting. The snapshot is captured at fetcher-start; mid-flight Env changes don't affect this fetch but the next one picks them up.
+- **`env`** &mdash; a live read-only handle to the per-`<Boundary>` [Env](./env.md). Read session tokens, locale, feature flags, anything cross-cutting. The handle is the same `Proxy` exposed to handlers via `context.env`, so dot reads inside the fetcher always reflect the latest value &mdash; even across `await` boundaries when another handler mutates the Env mid-flight. Copy into a local at the top of the fetcher if you need a stable snapshot.
 - **`controller`** &mdash; the `AbortController` auto-threaded from `context.task.controller`. Pass `context.controller.signal` to `ky`/`fetch`/`EventSource` to thread cancellation; when the action's task is aborted (component unmount, supersede, manual abort), the in-flight request is cancelled. Call `context.controller.abort()` if the fetcher needs to fail fast.
 - **`params`** &mdash; the call-site params object, typed by the Resource's second generic.
 - **`dispatch`** &mdash; fire a [broadcast](./broadcast-actions.md) or [multicast](./multicast-actions.md) action from inside the fetcher. Unicast actions target the calling component &mdash; a Resource fetcher has no component, so unicast is rejected at compile time. Use for cross-component side-effects that should fire as soon as the fetch enters a particular state, regardless of which component awaited it.
@@ -300,18 +300,19 @@ The canonical pattern for a write that updates the model: annotate the field as 
 import { Op } from "march-hare";
 
 actions.useAction(Actions.Rename, async (context, name) => {
-  const previous = context.model.user;
+  const user = context.model.user;
+  if (!user) return;
   context.actions.produce(({ model }) => {
-    model.user = context.actions.annotate({ ...model.user!, name }, Op.Update);
+    model.user = context.actions.annotate({ ...user, name }, Op.Update);
   });
 
   try {
     const updateUser = await context.actions.resource(
-      resource.updateUser({ id: previous!.id, name }),
+      resource.updateUser({ id: user.id, name }),
     );
     context.actions.produce(({ model }) => void (model.user = updateUser));
   } catch (error) {
-    context.actions.produce(({ model }) => void (model.user = previous));
+    context.actions.produce(({ model }) => void (model.user = user));
     throw error;
   }
 });

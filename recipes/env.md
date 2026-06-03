@@ -8,7 +8,7 @@ Every Env key flows into three places automatically:
 
 - **`app.useEnv()`** &mdash; the hook-level read-only handle (Proxy; dot reads are always fresh).
 - **`context.env`** &mdash; the same handle inside `useActions` handlers.
-- **`env` field** on every `app.Resource` fetcher's args object &mdash; a snapshot per `.run()` call.
+- **`env` field** on every `app.Resource` fetcher's args object &mdash; the same live Proxy as `context.env`, so dot reads stay fresh across `await` boundaries inside the fetcher.
 
 Env is **not** reactive. Mutating it does not trigger a re-render. Drive view state through the model; reach for the Env when you need cross-handler coordination or auth-style ambient values.
 
@@ -114,7 +114,7 @@ Both model and env live in the same produce callback, so you can mutate them ato
 
 ```ts
 context.actions.produce(({ model, env }) => {
-  model.user = { ...model.user!, name: "Adam" };
+  if (model.user) model.user.name = "Adam";
   env.operating = "idle";
 });
 ```
@@ -135,7 +135,7 @@ This is a deliberate guard. If you need to set the Env during component setup or
 
 ## Resource fetchers receive the Env
 
-Every fetcher's args object includes an `env` field &mdash; a snapshot of the Env at the moment the fetcher is invoked, typed against the App's shape:
+Every fetcher's args object includes an `env` field &mdash; a live read-only handle to the per-`<app.Boundary>` Env, typed against the App's shape:
 
 ```ts
 export const user = app.Resource<User, { id: number }>({
@@ -152,7 +152,7 @@ export const user = app.Resource<User, { id: number }>({
 });
 ```
 
-The `env` snapshot is read once per fetcher invocation, so a single fetch sees a consistent view. If the Env changes between calls, the next fetch picks up the new value.
+`env` is the same `Proxy` the App exposes to handlers via `context.env`, so dot reads inside the fetcher always reflect the latest value &mdash; including mid-flight, after an `await`. The handle delegates to the live per-`<app.Boundary>` ref at every access. If you need a stable snapshot inside a fetcher (e.g. to compare before/after a retry), copy the value into a local at the top: `const token = env.session?.accessToken`.
 
 ## Reactivity caveats
 
@@ -161,7 +161,7 @@ The Env is **not** a React state primitive. Direct `app.useEnv()` reads do not r
 For the view side, subscribe to `Lifecycle.Env` &mdash; a singleton broadcast that fires every time `produce` mutates the Env. It delivers the full latest snapshot to every subscriber in the surrounding `<app.Boundary>`, and seeds with the initial Env so late mounters see the current value on mount:
 
 ```ts
-actions.useAction(Lifecycle.Env, (_context, env) => {
+actions.useAction(Lifecycle.Env, (context, env) => {
   // runs every time produce({ env }) changes the slot
 });
 ```
@@ -193,4 +193,3 @@ Each `<admin.Boundary>` / `<pub.Boundary>` subtree gets its own typed handles; t
 ## Limitations
 
 - **Not for view state.** If you mutate the Env and want the UI to update, you've reached for the wrong primitive &mdash; use a model field with a broadcast for cross-component reactions instead.
-- **Snapshots, not subscriptions.** A Resource fetcher reads `env` once at the start of each `.run()`. If the Env changes mid-flight, the in-flight fetch keeps its original snapshot.

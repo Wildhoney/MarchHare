@@ -159,11 +159,13 @@ socket.addEventListener("message", (event) => {
 
 actions.useAction(Actions.Rename, async (context, name) => {
   // Optimistic write into the cache.
-  const previous = resource.user({ id: context.data.userId });
-  context.actions.resource.set(resource.user({ id: context.data.userId }), {
-    ...previous!,
-    name,
-  });
+  const user = resource.user({ id: context.data.userId });
+  if (user) {
+    context.actions.resource.set(resource.user({ id: context.data.userId }), {
+      ...user,
+      name,
+    });
+  }
 
   try {
     // Server confirms; the WS event will arrive and rewrite the cache anyway.
@@ -172,10 +174,10 @@ actions.useAction(Actions.Rename, async (context, name) => {
     );
   } catch (error) {
     // Roll back.
-    if (previous) {
+    if (user) {
       context.actions.resource.set(
         resource.user({ id: context.data.userId }),
-        previous,
+        user,
       );
     }
     throw error;

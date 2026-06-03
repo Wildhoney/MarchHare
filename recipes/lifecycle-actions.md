@@ -64,7 +64,7 @@ It does not need to be assigned as a static action property &ndash; reference it
 `Lifecycle.Env` is a **singleton broadcast** &ndash; same shape as `Lifecycle.Fault`. It fires whenever a `context.actions.produce(({ env }) => ...)` call mutates the Env, delivering the full latest snapshot to every subscriber in the surrounding `<Boundary>`. The initial Env passed to `<Boundary env={...}>` seeds the broadcast cache, so late-mounting subscribers and `stream(...)` consumers see the current value on mount.
 
 ```ts
-actions.useAction(Lifecycle.Env, (_context, env) => {
+actions.useAction(Lifecycle.Env, (context, env) => {
   console.log("env changed", env);
 });
 ```

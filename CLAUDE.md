@@ -373,7 +373,7 @@ Declare the shape once via module augmentation; supply the initial value via the
 
 - `useEnv()` &mdash; read-only Proxy. Dot reads always reflect the latest value (delegates to the live ref).
 - `context.env` &mdash; same Proxy inside `useActions` handlers.
-- The `env` field on every `Resource` fetcher's args object &mdash; a snapshot per fetcher call.
+- The `env` field on every `Resource` fetcher's args object &mdash; the same live Proxy as `context.env`. Dot reads inside the fetcher always reflect the latest Env, even across `await` boundaries.
 
 Direct `useEnv()` reads are **not** reactive &mdash; mutating the Env does not re-render components that called `useEnv()`. When the view side needs to react to Env changes, subscribe to the global `Lifecycle.Env` broadcast via `actions.useAction(Lifecycle.Env, ...)` or render against it with `actions.stream(Lifecycle.Env, (env) => ...)`. Use plain dot reads for the _handler_ side; reach for `Lifecycle.Env` for the _view_ side.
 

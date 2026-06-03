@@ -1,4 +1,5 @@
 import type { Actions, HandlerContext, Model, Props } from "../types/index.ts";
+import type { Env } from "../boundary/components/env/index.tsx";
 
 /**
  * Handler factories that wire an action directly to a model field.
@@ -38,8 +39,9 @@ export const With = {
     A extends Actions | void,
     D extends Props,
     P extends K extends keyof M ? M[K] : never,
+    S extends Env = Env,
   >(
-    context: HandlerContext<M, A, D>,
+    context: HandlerContext<M, A, D, S>,
     payload: P,
   ) => void {
     return (context, payload) => {
@@ -60,8 +62,9 @@ export const With = {
     M extends Model & Record<K, boolean>,
     A extends Actions | void,
     D extends Props,
+    S extends Env = Env,
   >(
-    context: HandlerContext<M, A, D>,
+    context: HandlerContext<M, A, D, S>,
   ) => void {
     return (context) => {
       context.actions.produce((draft) => {

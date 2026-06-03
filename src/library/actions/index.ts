@@ -80,7 +80,7 @@ import { useSharing } from "../boundary/components/sharing/index.tsx";
  * @template M The model type representing the component's state.
  * @template AC The actions class containing action definitions.
  * @template D The data type for reactive external values.
- * @param initialModel The initial model state.
+ * @param model The initial model state.
  * @param getData Optional function that returns reactive values as data.
  *   Values returned are accessible via `context.data` in action handlers,
  *   always reflecting the latest values even after await operations.
@@ -99,7 +99,7 @@ import { useSharing } from "../boundary/components/sharing/index.tsx";
  *   Model,
  *   typeof Actions,
  *   { query: string }
- * >(initialModel, () => ({ query: props.query }));
+ * >(model, () => ({ query: props.query }));
  * ```
  */
 export function useActions<
@@ -111,7 +111,7 @@ export function useActions<
   M extends Model,
   A extends Actions | void = void,
   D extends Props = Props,
->(initialModel: M, getData?: Data<D>): UseActions<M, A, D>;
+>(model: M, getData?: Data<D>): UseActions<M, A, D>;
 export function useActions<
   M extends Model | void,
   A extends Actions | void,
@@ -271,12 +271,7 @@ export function useActions<
                 }
                 if (G.isUndefined(options.coalesceToken)) {
                   return <Promise<T>>(
-                    call.run(
-                      slot.current,
-                      controller,
-                      call.params,
-                      dispatchFromResource,
-                    )
+                    call.run(env, controller, call.params, dispatchFromResource)
                   );
                 }
                 let mutable = sharing.get(call.run);
@@ -290,12 +285,7 @@ export function useActions<
                 if (existing) return withAbort(existing, controller.signal);
                 const detached = new AbortController();
                 const shared = (<Promise<T>>(
-                  call.run(
-                    slot.current,
-                    detached,
-                    call.params,
-                    dispatchFromResource,
-                  )
+                  call.run(env, detached, call.params, dispatchFromResource)
                 )).finally(() => {
                   bucket.delete(key);
                 });

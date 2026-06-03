@@ -642,22 +642,21 @@ export type ActionOrChanneled<A extends HandlerPayload = HandlerPayload> =
   | ChanneledAction;
 
 /**
- * Checks if a function type returns a Promise.
+ * Type guard that produces a compile-time error if an async function is
+ * passed. Used to enforce synchronous callbacks in `produce()`.
+ *
+ * The `[F]` tuple wrapping prevents distribution over function unions, and
+ * checking the actual signature (`(...args: never[]) => Promise<unknown>`)
+ * sidesteps TypeScript's lenient `Promise<void>`→`void` assignability that
+ * would otherwise let an async recipe satisfy a `(draft) => void`
+ * constraint. Async F collapses the argument type to `never`, which no
+ * function value can satisfy.
+ *
  * @internal
  */
-type IsAsync<F> = F extends (...args: unknown[]) => Promise<unknown>
-  ? true
-  : false;
-
-/**
- * Type guard that produces a compile-time error if an async function is passed.
- * Used to enforce synchronous callbacks in `produce()`.
- * @internal
- */
-type AssertSync<F> =
-  IsAsync<F> extends true
-    ? "Error: async functions are not allowed in produce"
-    : F;
+type AssertSync<F> = [F] extends [(...args: never[]) => Promise<unknown>]
+  ? never
+  : F;
 
 /**
  * Base type for data props passed to useActions.
@@ -683,18 +682,19 @@ export type HandlerContext<
   M extends Model | void,
   AC extends Actions | void,
   D extends Props = Props,
+  S extends Env = Env,
 > = {
   readonly model: DeepReadonly<M>;
   readonly phase: Phase;
   readonly task: Task;
   readonly data: DeepReadonly<D>;
   readonly tasks: ReadonlySet<Task>;
-  readonly env: DeepReadonly<Env>;
+  readonly env: Readonly<S>;
   readonly actions: {
     produce<
       F extends (draft: {
         model: M;
-        env: Env;
+        env: S;
         readonly inspect: Readonly<Inspect<M>>;
       }) => void,
     >(
@@ -734,7 +734,7 @@ export type HandlerContext<
  * @example
  * ```tsx
  * const [model, actions, data] = useActions<Model, typeof Actions, Data>(
- *   initialModel,
+ *   model,
  *   () => ({ user, theme }),
  * );
  *
@@ -767,8 +767,9 @@ export type Handler<
   AC extends Actions | void,
   K extends keyof AC & string,
   D extends Props = Props,
+  S extends Env = Env,
 > = (
-  context: HandlerContext<M, AC, D>,
+  context: HandlerContext<M, AC, D, S>,
   ...args: [Payload<AC[K] & HandlerPayload<unknown>>] extends [never]
     ? []
     : [payload: Payload<AC[K] & HandlerPayload<unknown>>]
@@ -888,21 +889,23 @@ export type Handlers<
   AC extends Actions | void,
   D extends Props = Props,
   RootAC extends Actions | void = AC,
+  S extends Env = Env,
 > = {
   [K in OwnKeys<AC>]: OwnKeys<AC[K]> extends never
     ? (
-        context: HandlerContext<M, RootAC, D>,
+        context: HandlerContext<M, RootAC, D, S>,
         ...args: [Payload<AC[K] & HandlerPayload<unknown>>] extends [never]
           ? []
           : [payload: Payload<AC[K] & HandlerPayload<unknown>>]
       ) => void | Promise<void> | AsyncGenerator | Generator
-    : Handlers<M, AC[K] & Actions, D, RootAC>;
+    : Handlers<M, AC[K] & Actions, D, RootAC, S>;
 };
 
 export type UseActions<
   M extends Model | void,
   AC extends Actions | void,
   D extends Props = Props,
+  S extends Env = Env,
 > = [
   Readonly<M>,
   {
@@ -939,6 +942,10 @@ export type UseActions<
      * );
      * ```
      */
+    stream(
+      action: typeof Lifecycle.Env,
+      renderer: (value: Readonly<S>, inspect: Inspect<S>) => React.ReactNode,
+    ): React.ReactNode;
     stream<T extends object>(
       action: BroadcastPayload<T>,
       renderer: (value: T, inspect: Inspect<T>) => React.ReactNode,
@@ -989,13 +996,20 @@ export type UseActions<
   useAction(
     action: NoPayloadActions<Subscribable<AC>>,
     handler: (
-      context: HandlerContext<M, AC, D>,
+      context: HandlerContext<M, AC, D, S>,
+    ) => void | Promise<void> | AsyncGenerator | Generator,
+  ): void;
+  useAction(
+    action: typeof Lifecycle.Env,
+    handler: (
+      context: HandlerContext<M, AC, D, S>,
+      env: Readonly<S>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void;
   useAction<A extends WithPayloadActions<Subscribable<AC>>>(
     action: A,
     handler: (
-      context: HandlerContext<M, AC, D>,
+      context: HandlerContext<M, AC, D, S>,
       payload: Payload<A>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void;
@@ -1030,11 +1044,12 @@ export type Context<
   M extends Model | void,
   AC extends Actions | void,
   D extends Props = Props,
+  S extends Env = Env,
 > = {
   readonly actions: { dispatch: Dispatch<AC> };
-  useActions(getData?: () => D): UseActions<M, AC, D>;
+  useActions(getData?: () => D): UseActions<M, AC, D, S>;
   useActions(
-    initialModel: M extends void ? never : M,
+    model: M extends void ? never : M,
     getData?: () => D,
-  ): UseActions<M, AC, D>;
+  ): UseActions<M, AC, D, S>;
 };

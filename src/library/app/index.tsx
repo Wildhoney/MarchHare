@@ -29,7 +29,7 @@ export type App<S extends object> = {
   readonly Boundary: React.FC<{ children: React.ReactNode }>;
   /**
    * Hook returning a stable `Context` handle. The handle's
-   * `context.useActions(initialModel?, getData?)` materialises the
+   * `context.useActions(model?, getData?)` materialises the
    * component's `[model, actions, data]` tuple. Every handler's
    * `context.env` is typed as `S`.
    */

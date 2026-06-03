@@ -44,7 +44,7 @@ describe("Resource() fetcher invocation", () => {
     });
   });
 
-  it("forwards a non-empty env snapshot to the fetcher", async () => {
+  it("forwards the env handle to the fetcher", async () => {
     const fetcher = vi.fn(() => Promise.resolve({ ok: true }));
     const user = Resource(fetcher);
     const env = <Env>{ token: "abc-123" };

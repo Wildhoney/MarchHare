@@ -4,26 +4,24 @@ All notable changes to this project will be documented in this file. See [commit
 
 ## [0.9.0](https://github.com/Wildhoney/MarchHare/compare/v0.7.5...v0.9.0) (2026-06-01)
 
-
 ### ⚠ BREAKING CHANGES
 
-* rename Store primitive to Env (App({env}), useEnv, context.env, Lifecycle.Env)
-* app.Scope<MulticastActions>() replaces withScope; rename Reactive→Maybe, AbortError→Aborted
-* **app:** add App factory for typed Store binding with per-Boundary coalesce sharing
-* **resource:** split Resource and Resource.Cachable, add broadcast/multicast dispatch on fetcher context
-* rename core API to useContext returning Context with context.actions.dispatch
-* rename core API to useContext/Context with renamed action surface
+- rename Store primitive to Env (App({env}), useEnv, context.env, Lifecycle.Env)
+- app.Scope<MulticastActions>() replaces withScope; rename Reactive→Maybe, AbortError→Aborted
+- **app:** add App factory for typed Store binding with per-Boundary coalesce sharing
+- **resource:** split Resource and Resource.Cachable, add broadcast/multicast dispatch on fetcher context
+- rename core API to useContext returning Context with context.actions.dispatch
+- rename core API to useContext/Context with renamed action surface
 
-* app.Scope<MulticastActions>() replaces withScope; rename Reactive→Maybe, AbortError→Aborted ([aaaa099](https://github.com/Wildhoney/MarchHare/commit/aaaa099de52cf7be557e6367fd85fc9b5dab88b2))
-* rename Store primitive to Env (App({env}), useEnv, context.env, Lifecycle.Env) ([54f4b81](https://github.com/Wildhoney/MarchHare/commit/54f4b81c39b70b74b04722a30af450a079e5ce2c))
-
+- app.Scope<MulticastActions>() replaces withScope; rename Reactive→Maybe, AbortError→Aborted ([aaaa099](https://github.com/Wildhoney/MarchHare/commit/aaaa099de52cf7be557e6367fd85fc9b5dab88b2))
+- rename Store primitive to Env (App({env}), useEnv, context.env, Lifecycle.Env) ([54f4b81](https://github.com/Wildhoney/MarchHare/commit/54f4b81c39b70b74b04722a30af450a079e5ce2c))
 
 ### Features
 
-* **app:** add App factory for typed Store binding with per-Boundary coalesce sharing ([abdedb5](https://github.com/Wildhoney/MarchHare/commit/abdedb53b80065a3964af6fe38e426fa3fd8b95c))
-* rename core API to useContext returning Context with context.actions.dispatch ([1854d65](https://github.com/Wildhoney/MarchHare/commit/1854d65ee24aee593fdd993193b2043681ff448d))
-* rename core API to useContext/Context with renamed action surface ([1676b70](https://github.com/Wildhoney/MarchHare/commit/1676b702f6db0685509e55d98698c26ae0a48f20))
-* **resource:** split Resource and Resource.Cachable, add broadcast/multicast dispatch on fetcher context ([15bc4b0](https://github.com/Wildhoney/MarchHare/commit/15bc4b0ea6b2d8b0b62137d06b203522f7cc6678))
+- **app:** add App factory for typed Store binding with per-Boundary coalesce sharing ([abdedb5](https://github.com/Wildhoney/MarchHare/commit/abdedb53b80065a3964af6fe38e426fa3fd8b95c))
+- rename core API to useContext returning Context with context.actions.dispatch ([1854d65](https://github.com/Wildhoney/MarchHare/commit/1854d65ee24aee593fdd993193b2043681ff448d))
+- rename core API to useContext/Context with renamed action surface ([1676b70](https://github.com/Wildhoney/MarchHare/commit/1676b702f6db0685509e55d98698c26ae0a48f20))
+- **resource:** split Resource and Resource.Cachable, add broadcast/multicast dispatch on fetcher context ([15bc4b0](https://github.com/Wildhoney/MarchHare/commit/15bc4b0ea6b2d8b0b62137d06b203522f7cc6678))
 
 ## [0.8.0](https://github.com/Wildhoney/MarchHare/compare/v0.7.5...v0.8.0) (2026-05-29)
 

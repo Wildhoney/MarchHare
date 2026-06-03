@@ -60,8 +60,8 @@ export default function App(): React.ReactElement {
             <Link to="/cats" className={`${styles.button} secondary`}>
               Cats demo
             </Link>
-            <Link to="/transactions" className={`${styles.button} secondary`}>
-              Transactions demo
+            <Link to="/portal" className={`${styles.button} secondary`}>
+              Portal demo
             </Link>
           </div>
 

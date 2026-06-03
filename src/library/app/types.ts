@@ -9,6 +9,7 @@ import type {
   UseActions,
 } from "../types/index.ts";
 import type { Data } from "../actions/types.ts";
+import type { Env } from "../boundary/components/env/index.tsx";
 
 /**
  * Args object passed to an `app.Resource` fetcher. Same shape as the
@@ -45,32 +46,21 @@ export type AppResource<S> = {
   ) => ResourceHandle<T, P>;
 };
 
-/**
- * Phantom marker so consumers of the App's hooks see `env: S` typing
- * at the type-system level; at runtime the value is the same proxy as
- * the loose `Env` type.
- *
- * @internal
- */
-type EnvView<S> = { readonly __appEnv?: S };
-
 type AppActionsResult<M, AC, D, S> = UseActions<
   M extends Model | void ? M : void,
   AC extends Actions | void ? AC : void,
-  D extends Props ? D : Props
-> &
-  EnvView<S>;
+  D extends Props ? D : Props,
+  S extends Env ? S : Env
+>;
 
 type AppUseActions<M, AC, D, S> = M extends void
   ? (getData?: Data<D & Props>) => AppActionsResult<M, AC, D, S>
-  : (
-      initialModel: M,
-      getData?: Data<D & Props>,
-    ) => AppActionsResult<M, AC, D, S>;
+  : (model: M, getData?: Data<D & Props>) => AppActionsResult<M, AC, D, S>;
 
 /**
  * `Context` handle returned by `app.useContext()`. Mirrors the base
- * {@link Context} but with the Env-typed slots overridden to `S`.
+ * {@link Context} but threads `S` through every handler's
+ * `context.env` and `produce` draft.
  */
 export type AppContextHandle<M, AC, D, S> = {
   readonly actions: {

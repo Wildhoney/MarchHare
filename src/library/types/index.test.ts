@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { Lifecycle, Pk, HandlerPayload, Brand } from ".";
-import type { Payload, Handlers, UseActions } from ".";
-import { Action, Distribution } from "..";
+import type { HandlerContext, Maybe, Payload, Handlers, UseActions } from ".";
+import { Action, Distribution, App } from "..";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 describe("Lifecycle", () => {
@@ -96,6 +96,113 @@ describe("Payload", () => {
     type PayloadParam = Parameters<Handler>[1];
 
     expectTypeOf<PayloadParam>().toEqualTypeOf<{ amount: number }>();
+  });
+});
+
+describe("Env shape threading", () => {
+  enum Status {
+    Guest,
+    Authenticated,
+  }
+  type Env = { status: Status };
+
+  it("types HandlerContext.env as Readonly<S>", () => {
+    type Ctx = HandlerContext<void, object, object, Env>;
+    expectTypeOf<Ctx["env"]>().toEqualTypeOf<Readonly<Env>>();
+    expectTypeOf<Ctx["env"]["status"]>().toEqualTypeOf<Status>();
+  });
+
+  it("types the produce draft's env as S", () => {
+    type Ctx = HandlerContext<void, object, object, Env>;
+    type Produce = Ctx["actions"]["produce"];
+    type Draft = Parameters<Parameters<Produce>[0]>[0];
+    expectTypeOf<Draft["env"]>().toEqualTypeOf<Env>();
+  });
+
+  it("threads S from App({ env }) through app.useContext into the handler", () => {
+    class Actions {
+      static SignIn = Action("SignIn");
+    }
+
+    // Pure type-level test — function is never invoked so React hooks
+    // are not executed. TypeScript still checks the body, which
+    // exercises the inference chain App → useContext → useActions →
+    // useAction's handler context type.
+
+    function _typeCheck() {
+      const app = App({ env: { status: Status.Guest } });
+      const context = app.useContext<void, typeof Actions>();
+      const actions = context.useActions();
+
+      actions.useAction(Actions.SignIn, (handlerContext) => {
+        expectTypeOf(handlerContext.env).toEqualTypeOf<Readonly<Env>>();
+        expectTypeOf(handlerContext.env.status).toEqualTypeOf<Status>();
+        handlerContext.actions.produce((draft) => {
+          expectTypeOf(draft.env).toEqualTypeOf<Env>();
+          expectTypeOf(draft.env.status).toEqualTypeOf<Status>();
+        });
+      });
+    }
+  });
+
+  it("types the Lifecycle.Env stream renderer's env as Readonly<S>", () => {
+    class Actions {
+      static SignIn = Action("SignIn");
+    }
+
+    function _typeCheck() {
+      const app = App({ env: { status: Status.Guest } });
+      const context = app.useContext<void, typeof Actions>();
+      const actions = context.useActions();
+
+      actions.stream(Lifecycle.Env, (env) => {
+        expectTypeOf(env).toEqualTypeOf<Readonly<Env>>();
+        expectTypeOf(env.status).toEqualTypeOf<Status>();
+        return null;
+      });
+    }
+  });
+
+  it("types the Lifecycle.Env useAction handler's env payload as Readonly<S>", () => {
+    class Actions {
+      static SignIn = Action("SignIn");
+    }
+
+    function _typeCheck() {
+      const app = App({ env: { status: Status.Guest } });
+      const context = app.useContext<void, typeof Actions>();
+      const actions = context.useActions();
+
+      actions.useAction(Lifecycle.Env, (_context, env) => {
+        expectTypeOf(env).toEqualTypeOf<Readonly<Env>>();
+        expectTypeOf(env.status).toEqualTypeOf<Status>();
+      });
+    }
+  });
+
+  it("rejects async recipes passed to context.actions.produce", () => {
+    class Actions {
+      static SignIn = Action("SignIn");
+    }
+    type Model = { user: Maybe<string> };
+
+    function _typeCheck() {
+      const app = App({ env: { status: Status.Guest } });
+      const context = app.useContext<Model, typeof Actions>();
+      const actions = context.useActions({ user: null });
+
+      actions.useAction(Actions.SignIn, (handlerContext) => {
+        // Sync recipes compile.
+        handlerContext.actions.produce((draft) => {
+          draft.model.user = "ok";
+        });
+
+        // @ts-expect-error — async recipes must be rejected by AssertSync.
+        handlerContext.actions.produce(async (draft) => {
+          draft.model.user = "nope";
+        });
+      });
+    }
   });
 });
 

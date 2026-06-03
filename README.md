@@ -148,7 +148,7 @@ function useActions() {
         void (model.name = context.actions.annotate(model.name, Op.Update)),
     );
 
-    // Auto-threads context.task.controller and the Env snapshot.
+    // Auto-threads context.task.controller and the live Env handle.
     const user = await context.actions.resource(resource.user());
 
     context.actions.produce(({ model }) => void (model.name = user.name));
@@ -392,7 +392,7 @@ Components that mount after a broadcast has already been dispatched automaticall
 
 ## Remote data with `Resource`
 
-For remote data, declare an `app.Resource` at module scope. `resource.user(params)` is the unified call form &mdash; it returns the sync cache read (`User | null`) and primes a slot that `context.actions.resource(resource.user(params))` consumes for the fetch path (with auto-threaded abort controller and Env snapshot). Every successful fetch caches the response in a module-level slot keyed by the fetcher and the stringified params, so different param-sets are independent. Keep all resources in `resources.ts` and pull the whole module in as a namespace (`import * as resource from "./resources"`):
+For remote data, declare an `app.Resource` at module scope. `resource.user(params)` is the unified call form &mdash; it returns the sync cache read (`User | null`) and primes a slot that `context.actions.resource(resource.user(params))` consumes for the fetch path (with auto-threaded abort controller and a live handle to the per-`<Boundary>` Env). Every successful fetch caches the response in a module-level slot keyed by the fetcher and the stringified params, so different param-sets are independent. Keep all resources in `resources.ts` and pull the whole module in as a namespace (`import * as resource from "./resources"`):
 
 ```ts
 // resources.ts
@@ -706,7 +706,7 @@ See the [multicast recipe](./recipes/multicast-actions.md) for more details.
 
 ## Global data
 
-For coordinating between async handlers and threading ambient values (session tokens, locale, feature flags, current operational mode) without re-rendering the JSX tree on every dot read, use the per-`<app.Boundary>` `Env`. Declare your env shape inline on `App({ env })`, read via dot notation (`env.session`, `context.env.locale`), and write via `context.actions.produce(({ env }) => { ... })` &mdash; the same Immer-style recipe used for the model. Every `app.Resource` fetcher also receives a snapshot of the Env on its args object. When the view side needs to react to Env changes, subscribe to the global `Lifecycle.Env` broadcast &mdash; `actions.useAction(Lifecycle.Env, handler)` for handler-level work and `actions.stream(Lifecycle.Env, (env) => ...)` for JSX. Both seed from the initial Env on mount.
+For coordinating between async handlers and threading ambient values (session tokens, locale, feature flags, current operational mode) without re-rendering the JSX tree on every dot read, use the per-`<app.Boundary>` `Env`. Declare your env shape inline on `App({ env })`, read via dot notation (`env.session`, `context.env.locale`), and write via `context.actions.produce(({ env }) => { ... })` &mdash; the same Immer-style recipe used for the model. Every `app.Resource` fetcher also receives a live read-only handle to the Env on its args object &mdash; the same `Proxy` as `context.env`, so dot reads stay fresh across `await` boundaries inside the fetcher. When the view side needs to react to Env changes, subscribe to the global `Lifecycle.Env` broadcast &mdash; `actions.useAction(Lifecycle.Env, handler)` for handler-level work and `actions.stream(Lifecycle.Env, (env) => ...)` for JSX. Both seed from the initial Env on mount.
 
 ```ts
 // app.ts
