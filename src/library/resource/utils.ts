@@ -32,7 +32,7 @@ export function defaultCache(fetcher: object): Cache {
 /**
  * Stable string key derived from the call-site `params`. Two calls with
  * the same logical params (same key order, same primitive values) hit
- * the same slot. JSON.stringify is sufficient for the Chizu params
+ * the same slot. JSON.stringify is sufficient for the March Hare params
  * convention (primitive-leaf objects); callers who need order-stable
  * keying should normalise the object before passing it in.
  *

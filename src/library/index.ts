@@ -27,3 +27,11 @@ export type {
   Handler,
   Handlers,
 } from "./types/index.ts";
+export type {
+  Tap,
+  Tapped,
+  Invocation,
+  Failure,
+  Mutations,
+  Snapshot,
+} from "./boundary/components/tap/types.ts";

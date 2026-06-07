@@ -81,6 +81,7 @@ export default defineConfig([
       "src/library/resource/utils.ts",
       "src/library/cache/index.ts",
       "src/library/boundary/components/consumer/components/partition/index.tsx",
+      "src/library/boundary/components/tap/index.tsx",
     ],
     rules: {
       "fp/no-mutation": "off",

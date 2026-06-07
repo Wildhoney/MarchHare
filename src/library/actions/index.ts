@@ -59,6 +59,7 @@ import { Partition } from "../boundary/components/consumer/index.tsx";
 import type { ConsumerRenderer } from "../boundary/components/consumer/types.ts";
 import { G } from "@mobily/ts-belt";
 import { useSharing } from "../boundary/components/sharing/index.tsx";
+import { useTap } from "../boundary/components/tap/utils.ts";
 
 /**
  * A hook for managing state with actions.
@@ -129,6 +130,7 @@ export function useActions<
   const env = useEnv();
   const slot = useEnvRef();
   const sharing = useSharing();
+  const tap = useTap();
   const rerender = useRerender();
   const initialised = React.useRef(false);
   const hydration = React.useRef<Process | null>(null);
@@ -394,22 +396,63 @@ export function useActions<
         const result = <Result>{ processes: new Set<Process>() };
         const completion = Promise.withResolvers<void>();
         const context = getContext(action, payload, result);
+        const actionName = getName(action);
+        const startedAt = performance.now();
+        const modelBefore = <unknown>state.current.model;
+        const envBefore = <unknown>slot.current;
+        let errored = false;
+
+        function mutations() {
+          const modelAfter = <unknown>state.current.model;
+          const envAfter = <unknown>slot.current;
+          return {
+            model:
+              modelBefore === modelAfter
+                ? null
+                : { before: modelBefore, after: modelAfter },
+            env:
+              envBefore === envAfter
+                ? null
+                : { before: envBefore, after: envAfter },
+          };
+        }
+
+        tap({
+          stage: "start",
+          action: { name: actionName, payload },
+          details: { task: context.task },
+        });
 
         function onError(caught: unknown) {
+          errored = true;
           const errorAction = findLifecycleAction(
             registry.current.handlers,
             "Error",
           );
           const handled = G.isNotNullable(errorAction);
+          const reason = getReason(caught);
+          const error = getError(caught);
           const details = {
-            reason: getReason(caught),
-            error: getError(caught),
-            action: getName(action),
+            reason,
+            error,
+            action: actionName,
             handled,
             tasks,
           };
           broadcast.fire(FaultSymbol, details);
           if (handled && errorAction) unicast.emit(errorAction, details);
+          tap({
+            stage: "end",
+            result: "error",
+            action: { name: actionName, payload },
+            details: {
+              task: context.task,
+              elapsed: performance.now() - startedAt,
+              mutations: mutations(),
+              error,
+              reason,
+            },
+          });
         }
 
         function onSettled() {
@@ -422,6 +465,18 @@ export function useActions<
           }
           result.processes.forEach((process) => state.current.prune(process));
           if (result.processes.size > 0) rerender();
+          if (!errored) {
+            tap({
+              stage: "end",
+              result: "success",
+              action: { name: actionName, payload },
+              details: {
+                task: context.task,
+                elapsed: performance.now() - startedAt,
+                mutations: mutations(),
+              },
+            });
+          }
           completion.resolve();
         }
 
@@ -435,7 +490,6 @@ export function useActions<
         }
 
         if (isGenerator(returnValue)) {
-          // Generator handlers run in the background and do not block dispatch.
           (async () => {
             for await (const _ of returnValue) void 0;
           })()
@@ -444,7 +498,6 @@ export function useActions<
           return;
         }
 
-        // Regular (sync/async) handlers block dispatch until completion.
         Promise.resolve(returnValue).catch(onError).finally(onSettled);
         return completion.promise;
       };

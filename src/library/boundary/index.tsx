@@ -3,6 +3,7 @@ import { Broadcaster } from "./components/broadcast/index.tsx";
 import { Tasks } from "./components/tasks/index.tsx";
 import { Env } from "./components/env/index.tsx";
 import { SharingProvider } from "./components/sharing/index.tsx";
+import { Tappable } from "./components/tap/index.tsx";
 import type { Props } from "./types.ts";
 
 /**
@@ -23,12 +24,14 @@ import type { Props } from "./types.ts";
  * </Boundary>
  * ```
  */
-export function Boundary({ env, children }: Props): React.ReactNode {
+export function Boundary({ env, tap, children }: Props): React.ReactNode {
   return (
     <Broadcaster>
       <Env initial={env ?? ({} as Env)}>
         <Tasks>
-          <SharingProvider>{children}</SharingProvider>
+          <Tappable tap={tap}>
+            <SharingProvider>{children}</SharingProvider>
+          </Tappable>
         </Tasks>
       </Env>
     </Broadcaster>

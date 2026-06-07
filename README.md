@@ -47,6 +47,7 @@ For advanced topics, see the [recipes directory](./recipes/).
 - Declarative lifecycle hooks without `useEffect`.
 - Centralised error handling via the global `Lifecycle.Fault` broadcast.
 - View-side reactivity for the per-`<app.Boundary>` Env via the global `Lifecycle.Env` broadcast.
+- Observability hook via `<app.Boundary tap={...}>` &ndash; fires for every handler dispatch and its terminal (`success` or `error`). See the [tap recipe](./recipes/tap.md).
 - React Native compatible &ndash; uses [eventemitter3](https://github.com/primus/eventemitter3) for cross-platform pub/sub.
 
 ## Getting started

@@ -30,6 +30,8 @@ import type {
   Pk,
   Task,
   Tasks,
+  Tap,
+  Tapped,
 } from "march-hare";
 ```
 
@@ -443,6 +445,22 @@ import { Boundary } from "march-hare";
 </Boundary>;
 ```
 
+`<Boundary>` also accepts an optional `tap` prop &mdash; a synchronous observer invoked for every action handler dispatch and its terminal (`success` or `error`) inside the boundary. Use it for analytics, audit logging, Sentry breadcrumbs, or replay traces. See [recipes/tap.md](./recipes/tap.md).
+
+```tsx
+import { Boundary, type Tapped } from "march-hare";
+
+function tap(event: Tapped) {
+  if (event.stage === "end" && event.result === "error") {
+    console.error(event.action.name, event.details.error);
+  }
+}
+
+<Boundary tap={tap}>
+  <App />
+</Boundary>;
+```
+
 ### Multicast scope boundaries
 
 ```tsx
@@ -607,12 +625,14 @@ docs: update the README file
   - `mount-broadcast-deduplication.md` - Avoiding duplicate fetches on mount with broadcast/multicast
   - `model-annotations.md` - Async state tracking with Immertation
   - `multicast-actions.md` - Scoped component communication
+  - `optimistic-updates.md` - End-to-end optimistic create/update/delete with `utils.pk()`, annotations, and rollback via `Lifecycle.Error`
   - `react-context-in-handlers.md` - Using context.data
   - `real-time-applications.md` - SSE/WebSocket patterns
   - `referential-equality.md` - Avoiding stale closures
   - `session-tokens.md` - Session tokens in the Env; HttpOnly cookies vs. Bearer in Env; refresh-on-401 via ky `afterResponse` hook
   - `stateful-props.md` - Box<T> type for stateful props
   - `storage.md` - Cache class for cross-reload persistence; adapters for localStorage / MMKV / chrome.storage
+  - `tap.md` - `<Boundary tap={...}>` observer fired on every handler dispatch and its terminal (`success` / `error`); analytics, audit log, Sentry breadcrumbs
   - `use-resource.md` - Resource: declare at module scope, sync read via `.get(params)`, fetch via `context.actions.resource(...).exceeds(...)`
   - `utility-functions.md` - sleep, pk utilities
   - `utility-types.md` - Handler, Handlers types
