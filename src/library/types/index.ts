@@ -9,6 +9,7 @@ import type {
 import type { Fault } from "../error/types.ts";
 import type { Env } from "../boundary/components/env/index.tsx";
 import type { Coalesce } from "../resource/types.ts";
+import type { WithHandle } from "../with/index.ts";
 
 /**
  * Chainable handle returned from `context.actions.resource(invocation)`.
@@ -1047,6 +1048,12 @@ export type Context<
   S extends Env = Env,
 > = {
   readonly actions: { dispatch: Dispatch<AC> };
+  /**
+   * Typed bag of handler factories bound to `M`. Methods accept lodash-style
+   * dotted paths with array indices (e.g. `"a.b.c"`, `"items.0.id"`) and
+   * autocomplete from the model. See {@link WithHandle}.
+   */
+  readonly with: WithHandle<M>;
   useActions(getData?: () => D): UseActions<M, AC, D, S>;
   useActions(
     model: M extends void ? never : M,

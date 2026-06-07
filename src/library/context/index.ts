@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useActions } from "../actions/index.ts";
+import { bindWith } from "../with/index.ts";
 import type {
   Actions,
   Context as ContextHandle,
@@ -16,15 +17,17 @@ import type { DispatchTarget } from "./types.ts";
  * dispatch callback at construction time, while the value that library
  * returns must flow back into the controller's data callback.
  *
- * The handle exposes `dispatch(action, payload?)` and a `useActions(...)`
+ * The handle exposes `dispatch(action, payload?)`, a `useActions(...)`
  * method that materialises the component-local model and reactive data
  * &mdash; the M and D pair of `useContext<M, AC, D>` &mdash; and
  * returns the `[model, actions, data]` tuple with `useAction`, `dispatch`,
- * `inspect`, and `stream` attached. The first invocation of
- * `context.actions.dispatch(...)` must come from an event handler &mdash; not
- * synchronously during render &mdash; because the underlying dispatch
- * target is wired up when `context.useActions(...)` runs in the same
- * render pass.
+ * `inspect`, and `stream` attached, plus `with` &mdash; a bag of handler
+ * factories (`update`/`invert`/`always`) typed against the declared model
+ * and accepting lodash-style dotted paths and array indices. The first
+ * invocation of `context.actions.dispatch(...)` must come from an event
+ * handler &mdash; not synchronously during render &mdash; because the
+ * underlying dispatch target is wired up when `context.useActions(...)`
+ * runs in the same render pass.
  *
  * @template M The model type representing the component's state.
  * @template AC The actions class containing action definitions.
@@ -78,6 +81,7 @@ export function useContext<
     return <ContextHandle<M, AC, D>>(<unknown>{
       actions: { dispatch },
       useActions: useActionsMethod,
+      with: bindWith<M>(),
     });
   }, []);
 }

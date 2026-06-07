@@ -9,6 +9,7 @@ import type { Cache } from "../cache/index.ts";
 import type { Actions, Model, Props } from "../types/index.ts";
 import { createScope, type Scope } from "../scope/index.tsx";
 import type { AppContextHandle, AppFetcher, AppResource } from "./types.ts";
+import type { Tap } from "../boundary/components/tap/types.ts";
 
 export type {
   AppArgs,
@@ -23,10 +24,17 @@ export type {
  */
 export type App<S extends object> = {
   /**
-   * Boundary component for this App. Wraps the subtree with the initial
-   * `env` value passed to {@link App}.
+   * Boundary component for this App. By default, wraps the subtree with
+   * the `env` and `tap` passed to {@link App}; either can be overridden
+   * at the call site via the corresponding prop, which is useful when a
+   * single `App` definition is rendered against different envs in tests
+   * or storybooks.
    */
-  readonly Boundary: React.FC<{ children: React.ReactNode }>;
+  readonly Boundary: React.FC<{
+    env?: S;
+    tap?: Tap;
+    children: React.ReactNode;
+  }>;
   /**
    * Hook returning a stable `Context` handle. The handle's
    * `context.useActions(model?, getData?)` materialises the
@@ -78,17 +86,30 @@ export type App<S extends object> = {
  * Each `<app.Boundary>` instance owns its own Env, so different `App`s
  * can coexist in the same tree with completely independent shapes.
  *
+ * Pass `tap` to subscribe to every action handler's dispatch / settle /
+ * error inside the boundary &mdash; useful for analytics, audit logging,
+ * Sentry breadcrumbs. See `recipes/tap.md`. Both `env` and `tap` can
+ * also be supplied as props on `<app.Boundary>`, where they override the
+ * defaults set at `App()` time (handy for test renders and storybooks).
+ *
  * @example
  * ```tsx
- * import { App } from "march-hare";
+ * import { App, type Tapped } from "march-hare";
  *
  * type Session = { accessToken: string };
+ *
+ * function tap(event: Tapped) {
+ *   if (event.type === "error") {
+ *     Sentry.captureException(event.error, { tags: { action: event.action } });
+ *   }
+ * }
  *
  * export const app = App({
  *   env: {
  *     session: null as Session | null,
  *     operating: "idle" as "idle" | "signing-out",
  *   },
+ *   tap,
  * });
  *
  * // Root render.
@@ -123,14 +144,21 @@ export type App<S extends object> = {
  * );
  * ```
  */
-export function App<S extends object = Env>(config?: { env: S }): App<S> {
+export function App<S extends object = Env>(config?: {
+  env?: S;
+  tap?: Tap;
+}): App<S> {
   function Boundary({
+    env,
+    tap,
     children,
   }: {
+    env?: S;
+    tap?: Tap;
     children: React.ReactNode;
   }): React.ReactElement {
     return (
-      <BaseBoundary env={config?.env as unknown as never}>
+      <BaseBoundary env={(env ?? config?.env) as Env} tap={tap ?? config?.tap}>
         {children}
       </BaseBoundary>
     );

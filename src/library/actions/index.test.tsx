@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderHook, act, render, screen } from "@testing-library/react";
 import { useActions } from "./index.ts";
+import { useContext } from "../context/index.ts";
 import { With } from "../with/index.ts";
 import { Action } from "../action/index.ts";
 import { Lifecycle, Distribution, Phase } from "../types/index.ts";
@@ -2468,6 +2469,177 @@ describe("useActions() With.Invert", () => {
 
     expect(result.current[0].sidebar).toBe(false);
     expect(result.current[0].modal).toBe(true);
+  });
+});
+
+describe("With path support", () => {
+  it("should update a nested model field via dotted path", async () => {
+    type NestedModel = { nested: { name: string } };
+
+    class NestedActions {
+      static SetName = Action<string>("SetName");
+    }
+
+    const { result } = renderHook(() => {
+      const actions = useActions<NestedModel, typeof NestedActions>({
+        nested: { name: "initial" },
+      });
+      actions.useAction(NestedActions.SetName, With.Update("nested.name"));
+      return actions;
+    });
+
+    await act(async () => {
+      result.current[1].dispatch(NestedActions.SetName, "updated");
+    });
+
+    expect(result.current[0].nested.name).toBe("updated");
+  });
+
+  it("should update an array element via numeric index path", async () => {
+    type ArrayModel = { items: { id: number }[] };
+
+    class ArrayActions {
+      static SetFirstId = Action<number>("SetFirstId");
+    }
+
+    const { result } = renderHook(() => {
+      const actions = useActions<ArrayModel, typeof ArrayActions>({
+        items: [{ id: 1 }, { id: 2 }],
+      });
+      actions.useAction(ArrayActions.SetFirstId, With.Update("items.0.id"));
+      return actions;
+    });
+
+    await act(async () => {
+      result.current[1].dispatch(ArrayActions.SetFirstId, 99);
+    });
+
+    expect(result.current[0].items[0].id).toBe(99);
+    expect(result.current[0].items[1].id).toBe(2);
+  });
+
+  it("should invert a nested boolean field via dotted path", async () => {
+    type NestedToggleModel = { panel: { open: boolean } };
+
+    class NestedToggleActions {
+      static Toggle = Action("Toggle");
+    }
+
+    const { result } = renderHook(() => {
+      const actions = useActions<NestedToggleModel, typeof NestedToggleActions>(
+        { panel: { open: false } },
+      );
+      actions.useAction(NestedToggleActions.Toggle, With.Invert("panel.open"));
+      return actions;
+    });
+
+    await act(async () => {
+      result.current[1].dispatch(NestedToggleActions.Toggle);
+    });
+
+    expect(result.current[0].panel.open).toBe(true);
+  });
+
+  it("should assign a fixed value via With.Always regardless of payload", async () => {
+    type StateModel = { phase: "idle" | "ready" | "done" };
+
+    class PhaseActions {
+      static Ready = Action("Ready");
+      static Done = Action("Done");
+    }
+
+    const { result } = renderHook(() => {
+      const actions = useActions<StateModel, typeof PhaseActions>({
+        phase: "idle",
+      });
+      actions.useAction(PhaseActions.Ready, With.Always("phase", "ready"));
+      actions.useAction(PhaseActions.Done, With.Always("phase", "done"));
+      return actions;
+    });
+
+    await act(async () => {
+      result.current[1].dispatch(PhaseActions.Ready);
+    });
+    expect(result.current[0].phase).toBe("ready");
+
+    await act(async () => {
+      result.current[1].dispatch(PhaseActions.Done);
+    });
+    expect(result.current[0].phase).toBe("done");
+  });
+});
+
+describe("context.with helper bag", () => {
+  it("should update via context.with.update with a dotted path", async () => {
+    type NestedModel = { profile: { name: string } };
+
+    class ProfileActions {
+      static SetName = Action<string>("SetName");
+    }
+
+    const { result } = renderHook(() => {
+      const context = useContext<NestedModel, typeof ProfileActions>();
+      const actions = context.useActions({ profile: { name: "initial" } });
+      actions.useAction(
+        ProfileActions.SetName,
+        context.with.update("profile.name"),
+      );
+      return actions;
+    });
+
+    await act(async () => {
+      result.current[1].dispatch(ProfileActions.SetName, "updated");
+    });
+
+    expect(result.current[0].profile.name).toBe("updated");
+  });
+
+  it("should invert via context.with.invert with a dotted path", async () => {
+    type DrawerModel = { drawer: { open: boolean } };
+
+    class DrawerActions {
+      static Toggle = Action("Toggle");
+    }
+
+    const { result } = renderHook(() => {
+      const context = useContext<DrawerModel, typeof DrawerActions>();
+      const actions = context.useActions({ drawer: { open: false } });
+      actions.useAction(
+        DrawerActions.Toggle,
+        context.with.invert("drawer.open"),
+      );
+      return actions;
+    });
+
+    await act(async () => {
+      result.current[1].dispatch(DrawerActions.Toggle);
+    });
+
+    expect(result.current[0].drawer.open).toBe(true);
+  });
+
+  it("should always assign a fixed value via context.with.always", async () => {
+    type FlagModel = { status: "idle" | "ready" };
+
+    class FlagActions {
+      static Ready = Action("Ready");
+    }
+
+    const { result } = renderHook(() => {
+      const context = useContext<FlagModel, typeof FlagActions>();
+      const actions = context.useActions({ status: "idle" });
+      actions.useAction(
+        FlagActions.Ready,
+        context.with.always("status", "ready"),
+      );
+      return actions;
+    });
+
+    await act(async () => {
+      result.current[1].dispatch(FlagActions.Ready);
+    });
+
+    expect(result.current[0].status).toBe("ready");
   });
 });
 

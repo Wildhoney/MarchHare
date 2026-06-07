@@ -791,10 +791,10 @@ Multiple `App` instances can coexist in the same tree &mdash; each `<app.Boundar
 
 ## Toggling boolean state
 
-Toggling boolean UI state &ndash; modals, sidebars, drawers &ndash; is one of the most common patterns. Bind a unicast action to a boolean field on the model with `With.Invert`:
+Toggling boolean UI state &ndash; modals, sidebars, drawers &ndash; is one of the most common patterns. Bind a unicast action to a boolean field on the model with `context.with.invert`:
 
 ```tsx
-import { Action, With } from "march-hare";
+import { Action } from "march-hare";
 import { app } from "./app";
 
 type Model = {
@@ -816,8 +816,11 @@ function useActions() {
   const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions(model);
 
-  actions.useAction(Actions.TogglePaymentDialog, With.Invert("paymentDialog"));
-  actions.useAction(Actions.ToggleSidebar, With.Invert("sidebar"));
+  actions.useAction(
+    Actions.TogglePaymentDialog,
+    context.with.invert("paymentDialog"),
+  );
+  actions.useAction(Actions.ToggleSidebar, context.with.invert("sidebar"));
 
   return actions;
 }
@@ -836,4 +839,9 @@ export default function Shell(): React.ReactElement {
 }
 ```
 
-`With.Invert` only compiles when the named property is a boolean on the model. `With.Update("name")` works the same way for arbitrary fields, and the payload type must match `model[name]`.
+`context.with.invert` only compiles when the leaf at the path is a boolean on the model; sibling helpers cover other common shapes:
+
+- `context.with.update(key)` &mdash; binds the dispatched payload to a model leaf; the payload type must match `Get<Model, key>`.
+- `context.with.always(key, value)` &mdash; pins the leaf to a fixed value, ignoring any dispatched payload. Handy for Open/Close, Show/Hide pairs where each action pins the same field to a known value.
+
+All three accept lodash-style dotted paths (`"a.b.c"`) and array indices (`"items.0.name"`); keys autocomplete from the model declared on `useContext<Model, …>()`. The top-level `With.Update` / `With.Invert` / `With.Always` import is kept for call sites that don't have a typed `context` in scope.

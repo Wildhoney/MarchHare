@@ -292,33 +292,48 @@ utils.κ(); // Greek alias
 
 ## Helper Functions
 
-### `With.Update(property)` &mdash; Bind payload to a model field
+All three helpers below accept lodash-style dotted paths (`"a.b.c"`) and array indices (`"items.0.name"`). Prefer `context.with.{update,invert,always}` from `app.useContext<Model>()` &mdash; the methods autocomplete keys from the model. The top-level `With.*` form is kept for call sites without a typed context in scope.
+
+### `context.with.update(key)` / `With.Update(key)` &mdash; Bind payload to a model field
 
 ```ts
-// Bind action payload directly to model property
-actions.useAction(Actions.SetName, With.Update("name"));
+const context = app.useContext<Model, typeof Actions>();
+const actions = context.useActions(model);
 
-// Equivalent to:
+// Bind action payload directly to model property
+actions.useAction(Actions.SetName, context.with.update("name"));
+
+// Nested path:
+actions.useAction(Actions.SetCity, context.with.update("address.city"));
+
+// Equivalent hand-written form:
 actions.useAction(Actions.SetName, (context, name) => {
   context.actions.produce(({ model }) => void (model.name = name));
 });
 ```
 
-The helper type-checks at the call site: the payload type must be assignable to `model[key]`.
+The helper type-checks at the call site: the payload type must match the leaf type at the path, and the path must exist on the model.
 
-### `With.Invert(property)` &mdash; Flip a boolean field
+### `context.with.invert(key)` / `With.Invert(key)` &mdash; Flip a boolean field
 
 ```ts
 // Toggle a boolean model property (payload is ignored)
-actions.useAction(Actions.ToggleSidebar, With.Invert("sidebar"));
-
-// Equivalent to:
-actions.useAction(Actions.ToggleSidebar, (context) => {
-  context.actions.produce(({ model }) => void (model.sidebar = !model.sidebar));
-});
+actions.useAction(Actions.ToggleSidebar, context.with.invert("sidebar"));
+actions.useAction(Actions.TogglePanel, context.with.invert("panel.open"));
 ```
 
-`With.Invert` only compiles when the named property is a boolean on the model. Use it for modals, drawers, panels, and similar binary UI state &mdash; the field lives directly on the model with no special wrapper.
+Only compiles when the leaf at the path is a boolean. Use it for modals, drawers, panels, and similar binary UI state.
+
+### `context.with.always(key, value)` / `With.Always(key, value)` &mdash; Assign a fixed value
+
+```ts
+// Assigns a constant regardless of any dispatched payload
+actions.useAction(Actions.Open, context.with.always("panel.open", true));
+actions.useAction(Actions.Close, context.with.always("panel.open", false));
+actions.useAction(Actions.Ready, context.with.always("phase", "ready"));
+```
+
+Useful for pair-of-actions UI patterns (Open/Close, Show/Hide, Start/Stop) where each end of the pair pins the model to a specific value. Type-checks that `value` is assignable to the leaf at `key`.
 
 ## Error Handling
 
@@ -557,6 +572,7 @@ feature/
 - Group multicast actions on a class named `Scope`; reference each action directly (e.g. `Scope.Update`) at the dispatch and `withScope` call sites.
 - Use `context.actions.produce` for all state mutations.
 - Pass abort signals to async operations: `signal: context.task.controller.signal`.
+- Never use `as never` or `as unknown as never` casts. They erase every type guard and hide the fact that the value's real type doesn't fit the slot. If a single-step cast (`value as X`) won't compile, prefer restructuring the function signature, widening the target type, or adding a typed adapter &mdash; reach for `as unknown as X` only when bridging genuinely unrelated branded types, and document the reason inline.
 
 ## Development Workflow
 
