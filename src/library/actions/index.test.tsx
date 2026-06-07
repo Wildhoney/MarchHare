@@ -2539,7 +2539,7 @@ describe("useActions() awaitable dispatch", () => {
     expect(screen.getByTestId("loading")).toHaveTextContent("done");
   });
 
-  it("should not await generator handlers (they run in background)", async () => {
+  it("should await broadcast generator handlers like async handlers", async () => {
     let dispatchSettled = false;
     let generatorComplete = false;
 
@@ -2554,8 +2554,8 @@ describe("useActions() awaitable dispatch", () => {
       actions.useAction(StreamActions.Start, async (context) => {
         await context.actions.dispatch(StreamActions.Stream);
         dispatchSettled = true;
-        // Generator should still be running at this point.
-        expect(generatorComplete).toBe(false);
+        // Generator must have completed before the dispatch promise resolves.
+        expect(generatorComplete).toBe(true);
       });
 
       return (
@@ -2573,7 +2573,7 @@ describe("useActions() awaitable dispatch", () => {
 
       actions.useAction(StreamActions.Stream, function* (_context) {
         yield;
-        yield new Promise((r) => setTimeout(r, 100));
+        yield new Promise((r) => setTimeout(r, 50));
         generatorComplete = true;
       });
 
@@ -2593,17 +2593,143 @@ describe("useActions() awaitable dispatch", () => {
 
     await act(async () => {
       screen.getByTestId("start").click();
-    });
-
-    expect(dispatchSettled).toBe(true);
-    expect(generatorComplete).toBe(false);
-
-    // Let the generator finish.
-    await act(async () => {
       await new Promise((r) => setTimeout(r, 200));
     });
 
+    expect(dispatchSettled).toBe(true);
     expect(generatorComplete).toBe(true);
+  });
+
+  it("should wait for a chained unicast dispatch awaited inside a handler", async () => {
+    const order: string[] = [];
+
+    class ChainActions {
+      static Outer = Action("Outer");
+      static Inner = Action("Inner");
+    }
+
+    const { result } = renderHook(() => {
+      const actions = useActions<void, typeof ChainActions>();
+
+      actions.useAction(ChainActions.Outer, async (context) => {
+        order.push("outer:start");
+        await context.actions.dispatch(ChainActions.Inner);
+        order.push("outer:end");
+      });
+
+      actions.useAction(ChainActions.Inner, async () => {
+        order.push("inner:start");
+        await new Promise((r) => setTimeout(r, 50));
+        order.push("inner:end");
+      });
+
+      return actions;
+    });
+
+    const before = Date.now();
+    await act(async () => {
+      await result.current[1].dispatch(ChainActions.Outer);
+    });
+    const elapsed = Date.now() - before;
+
+    expect(order).toEqual([
+      "outer:start",
+      "inner:start",
+      "inner:end",
+      "outer:end",
+    ]);
+    expect(elapsed).toBeGreaterThanOrEqual(50);
+  });
+
+  it("should wait for a chained generator dispatch (generators are awaitable)", async () => {
+    const order: string[] = [];
+    let generatorDone = false;
+
+    class ChainActions {
+      static Outer = Action("Outer");
+      static Inner = Action("Inner", Distribution.Broadcast);
+    }
+
+    function Outer() {
+      const actions = useActions<void, typeof ChainActions>();
+
+      actions.useAction(ChainActions.Outer, async (context) => {
+        order.push("outer:start");
+        await context.actions.dispatch(ChainActions.Inner);
+        order.push("outer:end");
+      });
+
+      return (
+        <button
+          data-testid="outer"
+          onClick={() => actions[1].dispatch(ChainActions.Outer)}
+        >
+          Outer
+        </button>
+      );
+    }
+
+    function Inner() {
+      const actions = useActions<void, typeof ChainActions>();
+
+      actions.useAction(ChainActions.Inner, function* () {
+        order.push("inner:start");
+        yield new Promise((r) => setTimeout(r, 50));
+        order.push("inner:end");
+        generatorDone = true;
+      });
+
+      return null;
+    }
+
+    render(
+      <Broadcaster>
+        <Inner />
+        <Outer />
+      </Broadcaster>,
+    );
+
+    await act(async () => {
+      screen.getByTestId("outer").click();
+      await new Promise((r) => setTimeout(r, 200));
+    });
+
+    expect(generatorDone).toBe(true);
+    expect(order).toEqual([
+      "outer:start",
+      "inner:start",
+      "inner:end",
+      "outer:end",
+    ]);
+  });
+
+  it("should resolve dispatch only after an async generator finishes its last yield", async () => {
+    let dispatchResolvedAt = 0;
+    let generatorFinishedAt = 0;
+
+    class GeneratorActions {
+      static Run = Action("Run");
+    }
+
+    const { result } = renderHook(() => {
+      const actions = useActions<void, typeof GeneratorActions>();
+
+      actions.useAction(GeneratorActions.Run, async function* () {
+        yield new Promise((r) => setTimeout(r, 30));
+        yield new Promise((r) => setTimeout(r, 30));
+        generatorFinishedAt = Date.now();
+      });
+
+      return actions;
+    });
+
+    await act(async () => {
+      await result.current[1].dispatch(GeneratorActions.Run);
+      dispatchResolvedAt = Date.now();
+    });
+
+    expect(generatorFinishedAt).toBeGreaterThan(0);
+    expect(dispatchResolvedAt).toBeGreaterThanOrEqual(generatorFinishedAt);
   });
 });
 

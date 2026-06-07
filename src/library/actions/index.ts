@@ -486,7 +486,7 @@ export function useActions<
         } catch (caught) {
           onError(caught);
           onSettled();
-          return;
+          return completion.promise;
         }
 
         if (isGenerator(returnValue)) {
@@ -495,7 +495,7 @@ export function useActions<
           })()
             .catch(onError)
             .finally(onSettled);
-          return;
+          return completion.promise;
         }
 
         Promise.resolve(returnValue).catch(onError).finally(onSettled);
