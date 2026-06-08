@@ -1,3 +1,4 @@
+import { Aborted } from "march-hare";
 import { app } from "../../../app.ts";
 import * as resource from "./resources.ts";
 import { Actions, Model } from "./types.ts";
@@ -14,7 +15,15 @@ export function useActions() {
     });
 
     try {
-      await context.actions.resource(resource.promoteUser());
+      await Promise.race([
+        context.actions.resource(resource.promoteUser()),
+        new Promise<void>((_, reject) =>
+          setTimeout(
+            () => reject(new Aborted("Action timed out after 30s")),
+            30_000,
+          ),
+        ),
+      ]);
     } finally {
       context.actions.produce(({ model }) => {
         model.busy = false;

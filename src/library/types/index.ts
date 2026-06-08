@@ -677,7 +677,6 @@ export type Actions = object;
  */
 export type Result = {
   processes: Set<Process>;
-  annotated: boolean;
 };
 
 export type HandlerContext<

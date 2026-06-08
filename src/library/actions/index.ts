@@ -12,6 +12,7 @@ import {
   emitAsync,
   replay,
 } from "./utils.ts";
+import { useRerender } from "../utils/utils.ts";
 import type { Data, Handler, Scope } from "./types.ts";
 import {
   HandlerContext,
@@ -48,7 +49,6 @@ import {
   token as defaultCoalesceToken,
 } from "../coalesce/index.ts";
 import { unset } from "../utils/utils.ts";
-import { useRerender } from "../utils/utils.ts";
 import {
   isBroadcastAction,
   isMulticastAction,
@@ -61,8 +61,6 @@ import type { ConsumerRenderer } from "../boundary/components/consumer/types.ts"
 import { G } from "@mobily/ts-belt";
 import { useSharing } from "../boundary/components/sharing/index.tsx";
 import { useTap } from "../boundary/components/tap/utils.ts";
-
-let activeController: AbortController | null = null;
 
 /**
  * A hook for managing state with actions.
@@ -166,18 +164,6 @@ export function useActions<
   const getContext = React.useCallback(
     (action: ActionId, payload: unknown, result: Result) => {
       const controller = new AbortController();
-      if (activeController) {
-        const parent = activeController;
-        if (parent.signal.aborted) {
-          controller.abort(parent.signal.reason ?? new Aborted());
-        } else {
-          parent.signal.addEventListener(
-            "abort",
-            () => controller.abort(parent.signal.reason ?? new Aborted()),
-            { once: true },
-          );
-        }
-      }
       const task: Task = { controller, action, payload };
       tasks.add(task);
       localTasks.current.add(task);
@@ -219,7 +205,6 @@ export function useActions<
             result.processes.add(process);
             if (hydration.current) {
               result.processes.add(hydration.current);
-              result.annotated = true;
               hydration.current = null;
             }
           },
@@ -244,7 +229,6 @@ export function useActions<
             return emitAsync(emitter, base, payload, channel);
           },
           annotate<T>(value: T, operation: Operation = Operation.Update): T {
-            result.annotated = true;
             return state.current.annotate(operation, value);
           },
           get inspect() {
@@ -410,10 +394,7 @@ export function useActions<
           if (!matchesChannel(dispatchChannel, registeredChannel)) return;
         }
 
-        const result = <Result>{
-          processes: new Set<Process>(),
-          annotated: false,
-        };
+        const result = <Result>{ processes: new Set<Process>() };
         const completion = Promise.withResolvers<void>();
         const context = getContext(action, payload, result);
         const actionName = getName(action);
@@ -484,7 +465,7 @@ export function useActions<
             }
           }
           result.processes.forEach((process) => state.current.prune(process));
-          if (result.annotated) rerender();
+          if (result.processes.size > 0) rerender();
           if (!errored) {
             tap({
               stage: "end",
@@ -501,17 +482,13 @@ export function useActions<
         }
 
         let returnValue: ReturnType<Handler<M, A, D>>;
-        const previousActive = activeController;
-        activeController = context.task.controller;
         try {
           returnValue = actionHandler(context, payload);
         } catch (caught) {
-          activeController = previousActive;
           onError(caught);
           onSettled();
           return completion.promise;
         }
-        activeController = previousActive;
 
         if (isGenerator(returnValue)) {
           (async () => {
