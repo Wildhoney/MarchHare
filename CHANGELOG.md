@@ -4,18 +4,17 @@ All notable changes to this project will be documented in this file. See [commit
 
 ## [0.10.0](https://github.com/Wildhoney/MarchHare/compare/v0.9.0...v0.10.0) (2026-06-07)
 
-
 ### ⚠ BREAKING CHANGES
 
-* await async generator handlers; race long dispatches in AsyncButton
-* thread App env shape into handler context, produce draft, and Lifecycle.Env subscriptions
+- await async generator handlers; race long dispatches in AsyncButton
+- thread App env shape into handler context, produce draft, and Lifecycle.Env subscriptions
 
 ### Features
 
-* add Boundary tap observer ([ab3c73e](https://github.com/Wildhoney/MarchHare/commit/ab3c73ec5fb6f8262030aadedfeebcb79d3329e0))
-* await async generator handlers; race long dispatches in AsyncButton ([c1aa66c](https://github.com/Wildhoney/MarchHare/commit/c1aa66c9c3293fd1f4e745ec099029f0035fb01f))
-* thread App env shape into handler context, produce draft, and Lifecycle.Env subscriptions ([d9e9341](https://github.com/Wildhoney/MarchHare/commit/d9e934108d9261220036667be09e13b6dc83fc15))
-* typed context.with helpers with lodash-style paths and Always ([68dc40f](https://github.com/Wildhoney/MarchHare/commit/68dc40feda42e7a9a0367a2a816c8c413bcf75ff))
+- add Boundary tap observer ([ab3c73e](https://github.com/Wildhoney/MarchHare/commit/ab3c73ec5fb6f8262030aadedfeebcb79d3329e0))
+- await async generator handlers; race long dispatches in AsyncButton ([c1aa66c](https://github.com/Wildhoney/MarchHare/commit/c1aa66c9c3293fd1f4e745ec099029f0035fb01f))
+- thread App env shape into handler context, produce draft, and Lifecycle.Env subscriptions ([d9e9341](https://github.com/Wildhoney/MarchHare/commit/d9e934108d9261220036667be09e13b6dc83fc15))
+- typed context.with helpers with lodash-style paths and Always ([68dc40f](https://github.com/Wildhoney/MarchHare/commit/68dc40feda42e7a9a0367a2a816c8c413bcf75ff))
 
 ## [0.9.0](https://github.com/Wildhoney/MarchHare/compare/v0.7.5...v0.9.0) (2026-06-01)
 

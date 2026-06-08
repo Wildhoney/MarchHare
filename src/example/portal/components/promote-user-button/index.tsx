@@ -2,24 +2,17 @@ import * as React from "react";
 import { Button } from "antd";
 import { useActions } from "./actions.ts";
 import { Actions } from "./types.ts";
-import type { Props } from "./types.ts";
 
-export function AsyncButton({
-  onClick,
-  children,
-  disabled,
-  ...rest
-}: Props): React.ReactElement {
-  const [model, actions] = useActions({ onClick });
+export function PromoteUserButton(): React.ReactElement {
+  const [model, actions] = useActions();
 
   return (
     <Button
-      {...rest}
+      type="primary"
       loading={model.busy}
-      disabled={disabled || model.busy}
       onClick={() => actions.dispatch(Actions.Click)}
     >
-      {children}
+      Promote user
     </Button>
   );
 }

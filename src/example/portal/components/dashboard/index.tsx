@@ -1,7 +1,7 @@
 import * as React from "react";
-import { Flex, Typography } from "antd";
+import { Button, Flex, Typography } from "antd";
 import { Lifecycle } from "march-hare";
-import { AsyncButton } from "../async-button/index.tsx";
+import { PromoteUserButton } from "../promote-user-button/index.tsx";
 import { useActions } from "./actions.ts";
 import { Actions } from "./types.ts";
 import { Status } from "../../types.ts";
@@ -17,12 +17,13 @@ export function Dashboard(): React.ReactElement {
         Lifecycle.Env,
         (env) =>
           env.status === Status.Guest && (
-            <AsyncButton
+            <Button
               type="primary"
+              loading={actions.inspect.user.pending()}
               onClick={() => actions.dispatch(Actions.SignIn)}
             >
-              Sign in
-            </AsyncButton>
+              {actions.inspect.user.pending() ? "Signing in…" : "Sign in"}
+            </Button>
           ),
       )}
 
@@ -31,25 +32,20 @@ export function Dashboard(): React.ReactElement {
         (env) =>
           env.status === Status.Authenticated && (
             <Flex gap="small">
-              <AsyncButton onClick={() => actions.dispatch(Actions.SignOut)}>
+              <Button onClick={() => actions.dispatch(Actions.SignOut)}>
                 Sign out
-              </AsyncButton>
+              </Button>
 
-              <AsyncButton
-                type="primary"
-                onClick={() => actions.dispatch(Actions.AddUser)}
-              >
-                Promote user
-              </AsyncButton>
+              <PromoteUserButton />
 
-              <AsyncButton
+              <Button
                 color="danger"
                 variant="text"
                 disabled={model.deleteUser}
                 onClick={() => actions.dispatch(Actions.DeleteUser)}
               >
                 {model.deleteUser ? "Not found" : "Delete user"}
-              </AsyncButton>
+              </Button>
             </Flex>
           ),
       )}

@@ -1,9 +1,9 @@
 import ky from "ky";
 import { app } from "../../../app.ts";
 
-export const deleteUser = app.Resource<void>((context) =>
+export const promoteUser = app.Resource<void>((context) =>
   ky
-    .get("https://httpbin.org/status/404", {
+    .get("https://httpbin.org/status/500", {
       signal: context.controller.signal,
     })
     .json<void>(),

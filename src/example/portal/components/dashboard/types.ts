@@ -15,6 +15,5 @@ export type Data = {
 export class Actions {
   static SignIn = Action();
   static SignOut = Action();
-  static AddUser = Action();
   static DeleteUser = Action();
 }

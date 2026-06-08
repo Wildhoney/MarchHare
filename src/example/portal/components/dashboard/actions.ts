@@ -48,10 +48,6 @@ export function useActions() {
     });
   });
 
-  actions.useAction(Actions.AddUser, async (context) => {
-    await context.actions.resource(resource.promoteUser());
-  });
-
   actions.useAction(Actions.DeleteUser, async (context) => {
     try {
       await context.actions.resource(resource.deleteUser());
