@@ -5,6 +5,7 @@ export const promoteUser = app.Resource<void>((context) =>
   ky
     .get("https://httpbin.org/status/500", {
       signal: context.controller.signal,
+      timeout: 30_000,
     })
     .json<void>(),
 );
