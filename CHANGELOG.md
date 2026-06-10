@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.11.0](https://github.com/Wildhoney/MarchHare/compare/v0.10.0...v0.11.0) (2026-06-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* **app:** drop env/tap overrides on app.Boundary; fix them at App() time
+* drop nested-dispatch task cascade; keep typed Aborted reasons and 30s race
+* cascade aborts through nested dispatches and propagate Aborted reason
+
+### revert
+
+* drop nested-dispatch task cascade; keep typed Aborted reasons and 30s race ([698a119](https://github.com/Wildhoney/MarchHare/commit/698a119f27cb227733737945fd28a40e64026fa8))
+
+
+### Features
+
+* **app:** drop env/tap overrides on app.Boundary; fix them at App() time ([f666cc2](https://github.com/Wildhoney/MarchHare/commit/f666cc2da2d8d7ea51726fd1093733db0897e41b))
+* cascade aborts through nested dispatches and propagate Aborted reason ([4e8c3c6](https://github.com/Wildhoney/MarchHare/commit/4e8c3c6ec26163602ea15fb6238afa4b511cc866))
+
+
+### Bug Fixes
+
+* **example:** cancel promote-user fetch on timeout via ky timeout option ([ec2bb4b](https://github.com/Wildhoney/MarchHare/commit/ec2bb4b7cce4bc874ee0fe35c227e14ca49fa4fe))
+
 ## [0.10.0](https://github.com/Wildhoney/MarchHare/compare/v0.9.0...v0.10.0) (2026-06-07)
 
 ### ⚠ BREAKING CHANGES
