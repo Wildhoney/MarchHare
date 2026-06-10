@@ -22,11 +22,11 @@
 1. [Async resources](#async-resources)
 1. [Reactive data](#reactive-data)
 1. [Broadcast actions](#broadcast-actions)
-1. [Remote data with `Resource`](#remote-data-with-resource)
+1. [Resource handling](#resource-handling)
 1. [Channeled actions](#channeled-actions)
 1. [Multicast actions](#multicast-actions)
 1. [Global data](#global-data)
-1. [Toggling boolean state](#toggling-boolean-state)
+1. [Reusable components](#reusable-components)
 
 For advanced topics, see the [recipes directory](./recipes/).
 
@@ -164,7 +164,7 @@ export default function Profile(): React.ReactElement {
 }
 ```
 
-`annotate` is covered in the [Immertation documentation](https://github.com/Wildhoney/Immertation). Once the request resolves we update the model again with the fetched name. `app.Resource` caches the most recent successful payload and exposes typed params &ndash; the full API is covered [further down](#remote-data-with-resource).
+`annotate` is covered in the [Immertation documentation](https://github.com/Wildhoney/Immertation). Once the request resolves we update the model again with the fetched name. `app.Resource` caches the most recent successful payload and exposes typed params &ndash; the full API is covered [further down](#resource-handling).
 
 ## Reactive data
 
@@ -391,7 +391,7 @@ export default function Dashboard(): React.ReactElement {
 
 Components that mount after a broadcast has already been dispatched automatically receive the cached value via their `useAction` handler. If you also fetch data in `Lifecycle.Mount()`, see the [mount deduplication recipe](./recipes/mount-broadcast-deduplication.md) to avoid duplicate requests.
 
-## Remote data with `Resource`
+## Resource handling
 
 For remote data, declare an `app.Resource` at module scope. `resource.user(params)` is the unified call form &mdash; it returns the sync cache read (`User | null`) and primes a slot that `context.actions.resource(resource.user(params))` consumes for the fetch path (with auto-threaded abort controller and a live handle to the per-`<Boundary>` Env). Every successful fetch caches the response in a module-level slot keyed by the fetcher and the stringified params, so different param-sets are independent. Keep all resources in `resources.ts` and pull the whole module in as a namespace (`import * as resource from "./resources"`):
 
@@ -789,59 +789,78 @@ export default function Header(): React.ReactElement {
 
 Multiple `App` instances can coexist in the same tree &mdash; each `<app.Boundary>` owns its own Env with its own type.
 
-## Toggling boolean state
+`App()` can also be called with no arguments &mdash; `env` is optional. Reach for it when the app coordinates entirely through models and broadcast actions and doesn't need any ambient state:
 
-Toggling boolean UI state &ndash; modals, sidebars, drawers &ndash; is one of the most common patterns. Bind a unicast action to a boolean field on the model with `context.with.invert`:
+```ts
+// app.ts
+import { App } from "march-hare";
+
+export const app = App();
+```
+
+## Reusable components
+
+Importing `app` from a single location is fine inside a feature, but it breaks when a component needs to run under **more than one** `App` &mdash; a shared `<Profile />` used by both a web app and a mobile shell, for example. `useApp<S>()` returns a typed handle to the **nearest `<app.Boundary>`** at runtime: same `useContext` / `useEnv` surface as an App-bound handle, with the Env shape (or union of shapes) declared at the call site.
 
 ```tsx
-import { Action } from "march-hare";
-import { app } from "./app";
+import { useApp, Action } from "march-hare";
 
-type Model = {
-  paymentDialog: boolean;
-  sidebar: boolean;
-};
+type Model = { name: string | null };
+const model: Model = { name: null };
 
-const model: Model = {
-  paymentDialog: false,
-  sidebar: false,
-};
-
-export class Actions {
-  static TogglePaymentDialog = Action("TogglePaymentDialog");
-  static ToggleSidebar = Action("ToggleSidebar");
+class Actions {
+  static Sign = Action<string>("Sign");
 }
 
-function useActions() {
+function useProfileActions() {
+  const app = useApp<{ session: Session | null }>();
   const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions(model);
 
-  actions.useAction(
-    Actions.TogglePaymentDialog,
-    context.with.invert("paymentDialog"),
+  actions.useAction(Actions.Sign, (context, name) =>
+    context.actions.produce(({ model }) => void (model.name = name)),
   );
-  actions.useAction(Actions.ToggleSidebar, context.with.invert("sidebar"));
 
   return actions;
 }
 
-export default function Shell(): React.ReactElement {
-  const [model, actions] = useActions();
+export default function Profile(): React.ReactElement {
+  const [model, actions] = useProfileActions();
 
   return (
-    <>
-      <button onClick={() => actions.dispatch(Actions.TogglePaymentDialog)}>
-        Pay
-      </button>
-      {model.paymentDialog && <PaymentDialog />}
-    </>
+    <button onClick={() => actions.dispatch(Actions.Sign, "Adam")}>
+      Hey {model.name}
+    </button>
   );
 }
 ```
 
-`context.with.invert` only compiles when the leaf at the path is a boolean on the model; sibling helpers cover other common shapes:
+Drop `<Profile />` inside `<web.Boundary>` and it reads the web app's env; drop it inside `<mobile.Boundary>` and it reads the mobile app's env. The component never references either `App()` handle.
 
-- `context.with.update(key)` &mdash; binds the dispatched payload to a model leaf; the payload type must match `Get<Model, key>`.
-- `context.with.always(key, value)` &mdash; pins the leaf to a fixed value, ignoring any dispatched payload. Handy for Open/Close, Show/Hide pairs where each action pins the same field to a known value.
+When more than one `App` lives in your repo, declare a union of every Env once and parameterise every reusable component against it. TypeScript narrows `app.useEnv()` to the union &mdash; keys present on every member resolve directly, keys on a subset need an `in` / `typeof` guard:
 
-All three accept lodash-style dotted paths (`"a.b.c"`) and array indices (`"items.0.name"`); keys autocomplete from the model declared on `useContext<Model, …>()`. The top-level `With.Update` / `With.Invert` / `With.Always` import is kept for call sites that don't have a typed `context` in scope.
+```ts
+// shared/apps.ts
+export type WebEnv = { session: Session | null; locale: string };
+export type MobileEnv = {
+  session: Session | null;
+  platform: "ios" | "android";
+};
+export type Apps = WebEnv | MobileEnv;
+```
+
+```tsx
+function Where(): React.ReactElement {
+  const app = useApp<Apps>();
+  const env = app.useEnv();
+
+  const signedIn = env.session !== null;
+  const where = "locale" in env ? env.locale : env.platform;
+
+  return <span>{signedIn ? where : "signed out"}</span>;
+}
+```
+
+The handle exposes `useContext` and `useEnv` &mdash; the same surface as `App<S>` minus `Boundary` (rendered once at the App declaration site) and `Scope` / `Resource` (module-scope, not per-render). See the [reusable components recipe](./recipes/reusable-components.md) for the full pattern including discriminator-keyed switches and the `App()`-with-no-env case.
+
+For one-line handler binding &mdash; flipping a boolean, assigning a payload to a leaf, pinning a field to a fixed value &mdash; reach for `context.with.{update,invert,always}`. See the [`With` helpers recipe](./recipes/with-helpers.md) for the full surface.

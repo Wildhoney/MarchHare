@@ -8,7 +8,12 @@ import type { Fetcher, ResourceHandle } from "../resource/types.ts";
 import type { Cache } from "../cache/index.ts";
 import type { Actions, Model, Props } from "../types/index.ts";
 import { createScope, type Scope } from "../scope/index.tsx";
-import type { AppContextHandle, AppFetcher, AppResource } from "./types.ts";
+import type {
+  AppContextHandle,
+  AppFetcher,
+  AppResource,
+  UseAppHandle,
+} from "./types.ts";
 import type { Tap } from "../boundary/components/tap/types.ts";
 
 export type {
@@ -16,6 +21,7 @@ export type {
   AppContextHandle,
   AppFetcher,
   AppResource,
+  UseAppHandle,
 } from "./types.ts";
 
 /**
@@ -95,11 +101,11 @@ export type App<S extends object> = {
  *
  * @example
  * ```tsx
- * import { App, type Tapped } from "march-hare";
+ * import { App, type Taps } from "march-hare";
  *
  * type Session = { accessToken: string };
  *
- * function tap(event: Tapped) {
+ * function tap(event: Taps) {
  *   if (event.type === "error") {
  *     Sentry.captureException(event.error, { tags: { action: event.action } });
  *   }
@@ -198,4 +204,73 @@ export function App<S extends object = Env>(config?: {
       return createScope<S, MulticastActions>();
     },
   };
+}
+
+/**
+ * Returns a typed handle to the nearest `<app.Boundary>`, for use
+ * inside reusable components that aren't tied to a single `App` import.
+ * The generic `S` declares the Env shape (or union of shapes) the
+ * component expects &mdash; `useApp<WebEnv | MobileEnv>()` lets the
+ * component run under either App and read keys common to both. For
+ * fields that only exist on a subset, narrow with an `in` check on
+ * the value returned from `app.useEnv()`.
+ *
+ * The returned handle exposes `useContext` and `useEnv` &mdash; the
+ * same surface as `App<S>` minus `Boundary` (rendered once at the App
+ * declaration site) and `Scope` (declared at module scope so its
+ * multicast surface stays explicit).
+ *
+ * Recommended monorepo pattern: declare a `type Apps = WebEnv |
+ * MobileEnv | AdminEnv` union of every Env shape your reusable
+ * components might run under, and have shared components reach for
+ * `useApp<Apps>()`. Library code can then read keys present on every
+ * member directly, with type-guards bridging the rest.
+ *
+ * @example
+ * ```tsx
+ * import { useApp, Action } from "march-hare";
+ *
+ * type WebEnv = { session: Session | null; locale: string };
+ * type MobileEnv = { session: Session | null; platform: "ios" | "android" };
+ * type Apps = WebEnv | MobileEnv;
+ *
+ * type Model = { name: string | null };
+ * const model: Model = { name: null };
+ *
+ * class Actions {
+ *   static Sign = Action<string>("Sign");
+ * }
+ *
+ * export default function Profile() {
+ *   const app = useApp<Apps>();
+ *   const env = app.useEnv();
+ *   const context = app.useContext<Model, typeof Actions>();
+ *   const [view, actions] = context.useActions(model);
+ *
+ *   const where = "locale" in env ? env.locale : env.platform;
+ *
+ *   return (
+ *     <button onClick={() => actions.dispatch(Actions.Sign, "Adam")}>
+ *       Hey {view.name} ({where})
+ *     </button>
+ *   );
+ * }
+ * ```
+ */
+export function useApp<S extends object = Env>(): UseAppHandle<S> {
+  return React.useMemo<UseAppHandle<S>>(
+    () => ({
+      useContext<
+        M extends Model | void = void,
+        AC extends Actions | void = void,
+        D extends Props = Props,
+      >(): AppContextHandle<M, AC, D, S> {
+        return baseUseContext() as unknown as AppContextHandle<M, AC, D, S>;
+      },
+      useEnv(): Readonly<S> {
+        return baseUseEnv() as unknown as Readonly<S>;
+      },
+    }),
+    [],
+  );
 }

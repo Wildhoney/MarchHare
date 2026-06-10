@@ -5,7 +5,7 @@ import type { Props, Tap } from "./types.ts";
 export { useTap } from "./utils.ts";
 export type {
   Tap,
-  Tapped,
+  Taps,
   Invocation,
   Failure,
   Mutations,
@@ -41,7 +41,7 @@ export type {
  * @returns Children rendered inside the tap context provider.
  *
  * @see {@link Tap} &mdash; the observer signature.
- * @see {@link Tapped} &mdash; the discriminated union of event shapes.
+ * @see {@link Taps} &mdash; the discriminated union of event shapes.
  */
 export function Tappable({ tap, children }: Props): React.ReactNode {
   const ref = React.useRef<Tap | undefined>(tap);

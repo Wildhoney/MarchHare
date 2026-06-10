@@ -70,6 +70,36 @@ type AppUseActions<M, AC, D, S> = M extends void
   : (model: M, getData?: Data<D & Props>) => AppActionsResult<M, AC, D, S>;
 
 /**
+ * Handle returned by {@link useApp}. Same surface as {@link App} minus
+ * `Boundary` (which can only be rendered from the App declaration site)
+ * and `Scope` (which is module-level, not per-render). Use this inside
+ * reusable components that need to run under more than one App.
+ *
+ * The generic `S` is the Env shape (or union of shapes) the component
+ * expects. Pass a union of every App's Env type in your monorepo and
+ * read keys that exist on every member directly; reach for `in` /
+ * `typeof` type-guards when accessing keys that only exist on a subset.
+ *
+ * @template S The Env shape (or union) the caller expects to be in scope.
+ */
+export type UseAppHandle<S extends object> = {
+  /**
+   * Same as `app.useContext` &mdash; reads the nearest `<app.Boundary>`'s
+   * dispatch surface, with `context.env` typed against `S`.
+   */
+  readonly useContext: <
+    M extends Model | void = void,
+    AC extends Actions | void = void,
+    D extends Props = Props,
+  >() => AppContextHandle<M, AC, D, S>;
+  /**
+   * Same as `app.useEnv` &mdash; read-only Proxy over the nearest
+   * `<app.Boundary>`'s Env, typed as `S`.
+   */
+  readonly useEnv: () => Readonly<S>;
+};
+
+/**
  * `Context` handle returned by `app.useContext()`. Mirrors the base
  * {@link Context} but threads the App's Env shape `S` through every
  * handler's `context.env` and produce draft.

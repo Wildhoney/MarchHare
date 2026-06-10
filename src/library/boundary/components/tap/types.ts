@@ -4,7 +4,7 @@ import type { Task } from "../tasks/types.ts";
 
 /**
  * Identity of a handler invocation: the action being handled and the
- * payload supplied at dispatch. Appears on every {@link Tapped} event
+ * payload supplied at dispatch. Appears on every {@link Taps} event
  * as `event.action`, alongside the `stage` / `result` discriminators.
  */
 export type Invocation = {
@@ -16,7 +16,7 @@ export type Invocation = {
 
 /**
  * Failure fields layered onto the `details` sub-object of the
- * `end:error` variant of {@link Tapped}. Groups the thrown error with
+ * `end:error` variant of {@link Taps}. Groups the thrown error with
  * the {@link Reason} the dispatch pipeline classified it as &mdash;
  * consumers branching on `Aborted` vs. `Errored` read both off the
  * same place. The error variant's `details` is `Failure` merged with
@@ -99,7 +99,7 @@ export type Mutations = {
  * `elapsed` is measured in milliseconds against `performance.now()`,
  * captured the moment the `end` event fires.
  */
-export type Tapped = {
+export type Taps = {
   /** Action being handled: `{ name, payload }`. */
   readonly action: Invocation;
 } & (
@@ -135,7 +135,7 @@ export type Tapped = {
  * replay traces for bug reports. Use {@link Lifecycle.Fault} for
  * in-band error recovery; the two are independent.
  */
-export type Tap = (event: Tapped) => void;
+export type Tap = (event: Taps) => void;
 
 /**
  * Props accepted by the internal {@link Tappable} provider. The provider

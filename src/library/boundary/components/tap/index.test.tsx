@@ -6,7 +6,7 @@ import { useActions } from "../../../actions/index.ts";
 import { Action } from "../../../action/index.ts";
 import { Lifecycle } from "../../../types/index.ts";
 import { Reason } from "../../../error/types.ts";
-import type { Tapped } from "./types.ts";
+import type { Taps } from "./types.ts";
 
 type Model = { value: number };
 type ActionsApi = ReturnType<typeof useActions<Model, typeof Actions>>;
@@ -47,13 +47,13 @@ function Probe({ onActions }: { onActions: (actions: ActionsApi) => void }) {
   return null;
 }
 
-function signature(event: Tapped): string {
+function signature(event: Taps): string {
   return event.stage === "start" ? "start" : `end:${event.result}`;
 }
 
 describe("Boundary tap", () => {
   it("fires start then end:success for a successful handler", async () => {
-    const events: Tapped[] = [];
+    const events: Taps[] = [];
     const handle: { actions: ActionsApi | null } = { actions: null };
 
     render(
@@ -90,7 +90,7 @@ describe("Boundary tap", () => {
   });
 
   it("fires start then end:error for a throwing handler, no success", async () => {
-    const events: Tapped[] = [];
+    const events: Taps[] = [];
     const handle: { actions: ActionsApi | null } = { actions: null };
 
     render(
@@ -138,7 +138,7 @@ describe("Boundary tap", () => {
     const second = vi.fn();
     const handle: { actions: ActionsApi | null } = { actions: null };
 
-    function Wrapper({ tap }: { tap: (event: Tapped) => void }) {
+    function Wrapper({ tap }: { tap: (event: Taps) => void }) {
       return (
         <Boundary tap={tap}>
           <Probe onActions={(actions) => (handle.actions = actions)} />
@@ -161,7 +161,7 @@ describe("Boundary tap", () => {
     expect(first).toHaveBeenCalled();
     expect(second).toHaveBeenCalled();
     const secondCalls = second.mock.calls
-      .map(([event]) => event as Tapped)
+      .map(([event]) => event as Taps)
       .filter((event) => event.action.name === "Bump");
     expect(secondCalls.map(signature)).toEqual(["start", "end:success"]);
   });

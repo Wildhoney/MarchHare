@@ -1,4 +1,4 @@
-export { App } from "./app/index.tsx";
+export { App, useApp } from "./app/index.tsx";
 
 export { Action } from "./action/index.ts";
 export { Distribution, Lifecycle } from "./types/index.ts";
@@ -19,19 +19,5 @@ export * as utils from "./utils/index.ts";
 export type { Fault } from "./error/index.ts";
 export type { Adapter } from "./cache/index.ts";
 export type { Box } from "immertation";
-export type {
-  Pk,
-  Task,
-  Tasks,
-  Maybe,
-  Handler,
-  Handlers,
-} from "./types/index.ts";
-export type {
-  Tap,
-  Tapped,
-  Invocation,
-  Failure,
-  Mutations,
-  Snapshot,
-} from "./boundary/components/tap/types.ts";
+export type { Pk, Maybe, Handler, Handlers } from "./types/index.ts";
+export type { Tap, Taps } from "./boundary/components/tap/types.ts";

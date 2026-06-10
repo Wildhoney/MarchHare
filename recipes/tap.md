@@ -10,9 +10,9 @@ Pass `tap` to `App()` next to `env` &mdash; this is where bootstrap-time configu
 
 ```ts
 // app.ts
-import { App, type Tapped } from "march-hare";
+import { App, type Taps } from "march-hare";
 
-function tap(event: Tapped) {
+function tap(event: Taps) {
   if (event.stage === "start") {
     console.debug(`[${event.action.name}] started`, event.action.payload);
     return;
@@ -81,10 +81,10 @@ Subscribe to both. Faults handle the consequences of failure; the tap records th
 A common use is feeding action timings into an analytics or APM pipeline:
 
 ```ts
-import { Boundary, type Tapped } from "march-hare";
+import { Boundary, type Taps } from "march-hare";
 import { metrics } from "./instrumentation";
 
-function tap(event: Tapped) {
+function tap(event: Taps) {
   if (event.stage !== "end") return;
   metrics.histogram("action.duration_ms", event.details.elapsed, {
     action: event.action.name,
@@ -104,12 +104,12 @@ Branching on `stage === "end"` narrows the event to either result variant, expos
 For a flight-recorder style trace that surfaces in bug reports, keep a ring buffer of recent events:
 
 ```ts
-import { Boundary, type Tapped } from "march-hare";
+import { Boundary, type Taps } from "march-hare";
 
-const trace: Tapped[] = [];
+const trace: Taps[] = [];
 const limit = 200;
 
-function tap(event: Tapped) {
+function tap(event: Taps) {
   // eslint-disable-next-line fp/no-mutating-methods
   trace.push(event);
   if (trace.length > limit) {
@@ -132,9 +132,9 @@ A 200-event window is roughly the last few seconds of dispatch activity for a bu
 
 ```ts
 import * as Sentry from "@sentry/react";
-import { Boundary, type Tapped } from "march-hare";
+import { Boundary, type Taps } from "march-hare";
 
-function tap(event: Tapped) {
+function tap(event: Taps) {
   if (event.stage === "start") {
     Sentry.addBreadcrumb({
       category: "march-hare",
@@ -177,9 +177,9 @@ Subscribing to `start` events (for breadcrumbs) and `result === "error"` (for ca
 The tap is synchronous &mdash; the handler invocation is blocked until the callback returns. If the receiver is slow (writing to disk, calling a network API), push to an in-memory queue and drain it elsewhere:
 
 ```ts
-const queue: Tapped[] = [];
+const queue: Taps[] = [];
 
-function tap(event: Tapped) {
+function tap(event: Taps) {
   // eslint-disable-next-line fp/no-mutating-methods
   queue.push(event);
   scheduleFlush();

@@ -6,6 +6,8 @@ Strongly typed React framework using generators and efficiently updated views al
 
 ```ts
 import {
+  App,
+  useApp,
   Action,
   Distribution,
   Lifecycle,
@@ -21,18 +23,7 @@ import {
   Op,
   Operation,
 } from "march-hare";
-import type {
-  Box,
-  Fault,
-  Handler,
-  Handlers,
-  Env,
-  Pk,
-  Task,
-  Tasks,
-  Tap,
-  Tapped,
-} from "march-hare";
+import type { Box, Fault, Handler, Handlers, Pk, Tap, Taps } from "march-hare";
 ```
 
 ## Core Concepts
@@ -464,9 +455,9 @@ import { Boundary } from "march-hare";
 `<Boundary>` also accepts an optional `tap` prop &mdash; a synchronous observer invoked for every action handler dispatch and its terminal (`success` or `error`) inside the boundary. Use it for analytics, audit logging, Sentry breadcrumbs, or replay traces. See [recipes/tap.md](./recipes/tap.md).
 
 ```tsx
-import { Boundary, type Tapped } from "march-hare";
+import { Boundary, type Taps } from "march-hare";
 
-function tap(event: Tapped) {
+function tap(event: Taps) {
   if (event.stage === "end" && event.result === "error") {
     console.error(event.action.name, event.details.error);
   }
