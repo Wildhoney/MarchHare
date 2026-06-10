@@ -24,15 +24,14 @@ export type {
  */
 export type App<S extends object> = {
   /**
-   * Boundary component for this App. By default, wraps the subtree with
-   * the `env` and `tap` passed to {@link App}; either can be overridden
-   * at the call site via the corresponding prop, which is useful when a
-   * single `App` definition is rendered against different envs in tests
-   * or storybooks.
+   * Boundary component for this App. Wraps the subtree with the `env`
+   * and `tap` declared on {@link App} &mdash; both are fixed at App
+   * construction time and cannot be overridden at the render site.
+   * Runtime mutations to the Env flow through
+   * `context.actions.produce(({ env }) => { ... })`; if a test or
+   * storybook needs a different initial Env, declare a separate `App`.
    */
   readonly Boundary: React.FC<{
-    env?: S;
-    tap?: Tap;
     children: React.ReactNode;
   }>;
   /**
@@ -88,9 +87,11 @@ export type App<S extends object> = {
  *
  * Pass `tap` to subscribe to every action handler's dispatch / settle /
  * error inside the boundary &mdash; useful for analytics, audit logging,
- * Sentry breadcrumbs. See `recipes/tap.md`. Both `env` and `tap` can
- * also be supplied as props on `<app.Boundary>`, where they override the
- * defaults set at `App()` time (handy for test renders and storybooks).
+ * Sentry breadcrumbs. See `recipes/tap.md`. Both `env` and `tap` are
+ * fixed at `App()` time; `<app.Boundary>` does not accept overrides.
+ * Mutate the live Env through `context.actions.produce(({ env }) => …)`,
+ * and declare a separate `App` when a test or storybook needs a
+ * different initial value.
  *
  * @example
  * ```tsx
@@ -149,16 +150,12 @@ export function App<S extends object = Env>(config?: {
   tap?: Tap;
 }): App<S> {
   function Boundary({
-    env,
-    tap,
     children,
   }: {
-    env?: S;
-    tap?: Tap;
     children: React.ReactNode;
   }): React.ReactElement {
     return (
-      <BaseBoundary env={(env ?? config?.env) as Env} tap={tap ?? config?.tap}>
+      <BaseBoundary env={config?.env as Env} tap={config?.tap}>
         {children}
       </BaseBoundary>
     );

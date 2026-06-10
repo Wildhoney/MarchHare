@@ -2993,6 +2993,59 @@ describe("useActions() Lifecycle.Fault broadcast", () => {
     expect(captured[0].action).toBe("Boom");
     expect(captured[0].message).toBe("kaboom");
   });
+
+  it("should expose retry() on the Fault that re-dispatches with the same payload", async () => {
+    const attempts: string[] = [];
+    let succeedOnRetry = false;
+
+    class FlakyActions {
+      static Save = Action<string>("Save");
+    }
+
+    function Flaky({ trigger }: { trigger: { current: () => void } }) {
+      const actions = useActions<void, typeof FlakyActions>();
+      actions.useAction(FlakyActions.Save, (_context, label) => {
+        attempts.push(label);
+        if (!succeedOnRetry) {
+          succeedOnRetry = true;
+          throw new Error("transient");
+        }
+      });
+      trigger.current = () => actions[1].dispatch(FlakyActions.Save, "draft-1");
+      return null;
+    }
+
+    const retries: (() => Promise<void>)[] = [];
+    function Listener() {
+      const actions = useActions();
+      actions.useAction(Lifecycle.Fault, (_context, fault) => {
+        retries.push(fault.retry);
+      });
+      return null;
+    }
+
+    const trigger = { current: () => {} };
+    render(
+      <Broadcaster>
+        <Listener />
+        <Flaky trigger={trigger} />
+      </Broadcaster>,
+    );
+
+    await act(async () => {
+      await trigger.current();
+    });
+
+    expect(attempts).toEqual(["draft-1"]);
+    expect(retries).toHaveLength(1);
+
+    await act(async () => {
+      await retries[0]();
+    });
+
+    expect(attempts).toEqual(["draft-1", "draft-1"]);
+    expect(retries).toHaveLength(1);
+  });
 });
 
 /**

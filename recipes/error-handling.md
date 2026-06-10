@@ -32,6 +32,7 @@ The `Fault` payload contains:
 - **`action`** &ndash; The name of the action that caused the error.
 - **`handled`** &ndash; Whether the failing component has a `Lifecycle.Error()` handler registered.
 - **`tasks`** &ndash; All currently running tasks across the application, enabling programmatic abort during error recovery.
+- **`retry`** &ndash; A `() => Promise<void>` that re-dispatches the failed action with the original payload and channel, routed through the same emitter as the original dispatch. Suitable for binding directly to a "Retry" button in a UI.
 
 ## Error reasons
 
@@ -59,6 +60,20 @@ actions.useAction(Actions.Error, (context, fault) => {
 The `handled` field on the global fault payload tells you whether the failing component had a local `Lifecycle.Error()` handler registered, so app-level reporters can avoid double-handling errors that have already been recovered locally.
 
 > **Note:** Actions should ideally be self-contained and handle expected errors internally using patterns like [Option](https://mobily.github.io/ts-belt/api/option) or [Result](https://mobily.github.io/ts-belt/api/result) types to update the model accordingly. Fault handlers are intended for timeouts, aborts, and uncaught catastrophic errors &ndash; not routine error handling.
+
+## Retrying a failed action
+
+Every `Fault` carries a `retry` callback that re-dispatches the failing action with the original payload and channel. It uses the same routing as a fresh dispatch &mdash; broadcast/multicast/unicast selection is preserved &mdash; and runs against a fresh `AbortController`, so it works even when the original failure was `Reason.Aborted`.
+
+```ts
+actions.useAction(Lifecycle.Fault, (_context, fault) => {
+  if (fault.reason === Reason.Errored && isTransient(fault.error)) {
+    void fault.retry();
+  }
+});
+```
+
+`retry` is just a function reference, so it can also be surfaced to the view layer &ndash; e.g. stashed on the model and bound directly to a "Retry" button in the UI.
 
 ## Aborting tasks during error recovery
 

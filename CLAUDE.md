@@ -140,7 +140,8 @@ actions.useAction(Actions.Unmount, (context) => {
 
 actions.useAction(Actions.Error, (context, fault) => {
   // Handle errors from other actions locally
-  // fault: { reason, error, action, handled, tasks }
+  // fault: { reason, error, action, handled, tasks, retry }
+  // fault.retry() re-dispatches the failed action with the same payload
 });
 
 actions.useAction(Actions.Update, (context, changes) => {

@@ -66,4 +66,25 @@ export type Fault<E extends Error = never> = {
    * ```
    */
   tasks: ReadonlySet<Task>;
+  /**
+   * Re-dispatches the failed action with the original payload and channel,
+   * routed through the same emitter (broadcast, multicast, or unicast) as the
+   * original dispatch. Resolves when every triggered handler has settled.
+   *
+   * `retry` is independent of the failed task's `AbortController`: even when
+   * the failure was an `Aborted` reason, calling `retry()` fires a fresh
+   * dispatch with a new task. The closure stays callable after the fault
+   * handler returns, which makes it safe to surface from a UI &mdash; e.g. a
+   * "Retry" button bound to `fault.retry`.
+   *
+   * @example
+   * ```ts
+   * actions.useAction(Lifecycle.Fault, (_context, fault) => {
+   *   if (fault.reason === Reason.Errored && isTransient(fault.error)) {
+   *     void fault.retry();
+   *   }
+   * });
+   * ```
+   */
+  retry: () => Promise<void>;
 };

@@ -35,7 +35,7 @@ export const app = App({
 });
 ```
 
-`<app.Boundary>` then renders with no extra props at the root, the same as before:
+`<app.Boundary>` then renders with no extra props at the root:
 
 ```tsx
 <app.Boundary>
@@ -43,15 +43,7 @@ export const app = App({
 </app.Boundary>
 ```
 
-For test renders and storybooks, either prop can be overridden at the call site &mdash; useful when a single `app` definition needs to run against different envs or with a spy tap:
-
-```tsx
-<app.Boundary env={testEnv} tap={vi.fn()}>
-  <FeatureUnderTest />
-</app.Boundary>
-```
-
-The override stays within the same `S` shape inferred at `App()` time; you can replace the env value, not the env type. If the app needs a _different_ env shape, create a separate `App()`.
+Both `env` and `tap` are fixed at `App()` time; `<app.Boundary>` deliberately does not accept overrides. If a test render or storybook needs a different initial Env or a spy tap, declare a separate `App` with that configuration and render its boundary instead.
 
 For low-level scenarios where you have not adopted `App()`, the bare `<Boundary tap={...}>` accepts the same callback &mdash; `App()` is just the typed wrapper around it.
 

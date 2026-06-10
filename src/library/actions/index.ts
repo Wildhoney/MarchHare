@@ -424,6 +424,18 @@ export function useActions<
           details: { task: context.task },
         });
 
+        function retry(): Promise<void> {
+          const channel: Filter | undefined =
+            dispatchChannel === replay ? undefined : dispatchChannel;
+          if (isMulticastAction(action)) {
+            const scoped = getScope(scope);
+            if (!scoped) return Promise.resolve();
+            return emitAsync(scoped.emitter, action, payload, channel);
+          }
+          const emitter = isBroadcastAction(action) ? broadcast : unicast;
+          return emitAsync(emitter, action, payload, channel);
+        }
+
         function onError(caught: unknown) {
           errored = true;
           const errorAction = findLifecycleAction(
@@ -439,6 +451,7 @@ export function useActions<
             action: actionName,
             handled,
             tasks,
+            retry,
           };
           broadcast.fire(FaultSymbol, details);
           if (handled && errorAction) unicast.emit(errorAction, details);

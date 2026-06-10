@@ -1,7 +1,13 @@
-import type { Actions, HandlerContext, Model, Props } from "../types/index.ts";
+import type {
+  Actions,
+  HandlerContext,
+  Maybe,
+  Model,
+  Props,
+} from "../types/index.ts";
 import type { Env } from "../boundary/components/env/index.tsx";
 
-type Primitive = string | number | bigint | boolean | symbol | null | undefined;
+type Primitive = Maybe<string | number | bigint | boolean | symbol>;
 
 type Depth = [never, 0, 1, 2, 3, 4, 5];
 
