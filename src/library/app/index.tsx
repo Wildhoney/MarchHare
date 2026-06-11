@@ -4,16 +4,11 @@ import { useContext as baseUseContext } from "../context/index.ts";
 import { useEnv as baseUseEnv } from "../boundary/components/env/utils.ts";
 import type { Env } from "../boundary/components/env/index.tsx";
 import { Resource as BaseResource } from "../resource/index.ts";
-import type { Fetcher, ResourceHandle } from "../resource/types.ts";
+import type { ResourceHandle } from "../resource/types.ts";
 import type { Cache } from "../cache/index.ts";
 import type { Actions, Model, Props } from "../types/index.ts";
 import { createScope, type Scope } from "../scope/index.tsx";
-import type {
-  AppContextHandle,
-  AppFetcher,
-  AppResource,
-  UseAppHandle,
-} from "./types.ts";
+import type { AppContextHandle, AppFetcher, AppResource } from "./types.ts";
 import type { Tap } from "../boundary/components/tap/types.ts";
 
 export type {
@@ -21,7 +16,6 @@ export type {
   AppContextHandle,
   AppFetcher,
   AppResource,
-  UseAppHandle,
 } from "./types.ts";
 
 /**
@@ -183,14 +177,14 @@ export function App<S extends object = Env>(config?: {
     function TypedResource<T, P extends object = Record<never, never>>(
       fetcher: AppFetcher<S, T, P>,
     ): ResourceHandle<T, P> {
-      return BaseResource<T, P>(fetcher as Fetcher<T, P>);
+      return BaseResource<S, T, P>(fetcher);
     },
     {
       Cachable<T, P extends object = Record<never, never>>(
         cache: Cache,
         fetcher: AppFetcher<S, T, P>,
       ): ResourceHandle<T, P> {
-        return BaseResource.Cachable<T, P>(cache, fetcher as Fetcher<T, P>);
+        return BaseResource.Cachable<S, T, P>(cache, fetcher);
       },
     },
   ) as AppResource<S>;
@@ -207,32 +201,34 @@ export function App<S extends object = Env>(config?: {
 }
 
 /**
- * Returns a typed handle to the nearest `<app.Boundary>`, for use
- * inside reusable components that aren't tied to a single `App` import.
- * The generic `S` declares the Env shape (or union of shapes) the
- * component expects &mdash; `useApp<WebEnv | MobileEnv>()` lets the
- * component run under either App and read keys common to both. For
- * fields that only exist on a subset, narrow with an `in` check on
- * the value returned from `app.useEnv()`.
+ * Standalone counterpart to `app.useContext`, exported as
+ * `shared.useContext` &mdash; same call shape, but takes the **Env
+ * shape `E` as a mandatory first generic** so the caller can be a
+ * reusable component that isn't tied to a single `App` import.
  *
- * The returned handle exposes `useContext` and `useEnv` &mdash; the
- * same surface as `App<S>` minus `Boundary` (rendered once at the App
- * declaration site) and `Scope` (declared at module scope so its
- * multicast surface stays explicit).
+ * `E` is the Env type your component expects to see &mdash; usually
+ * a union of every App's Env shape it might run under. Inside the
+ * handler, `context.env` is typed as `E`; reach for `in` / `typeof`
+ * narrowing for keys present on only a subset.
  *
- * Recommended monorepo pattern: declare a `type Apps = WebEnv |
- * MobileEnv | AdminEnv` union of every Env shape your reusable
- * components might run under, and have shared components reach for
- * `useApp<Apps>()`. Library code can then read keys present on every
- * member directly, with type-guards bridging the rest.
+ * Pass `app` directly if you only need to talk to one App &mdash;
+ * `app.useContext<Model, typeof Actions>()` is shorter and infers the
+ * Env from the value. Reach for the standalone form only when a
+ * component must support more than one App.
+ *
+ * @template E The Env shape (or union) the component supports.
+ * @template M The model type, or `void`.
+ * @template AC The Actions class, or `void`.
+ * @template D The reactive data type returned from the `useActions`
+ *   data callback.
  *
  * @example
  * ```tsx
- * import { useApp, Action } from "march-hare";
+ * import { Action, shared } from "march-hare";
  *
  * type WebEnv = { session: Session | null; locale: string };
  * type MobileEnv = { session: Session | null; platform: "ios" | "android" };
- * type Apps = WebEnv | MobileEnv;
+ * type Envs = WebEnv | MobileEnv;
  *
  * type Model = { name: string | null };
  * const model: Model = { name: null };
@@ -241,36 +237,49 @@ export function App<S extends object = Env>(config?: {
  *   static Sign = Action<string>("Sign");
  * }
  *
- * export default function Profile() {
- *   const app = useApp<Apps>();
- *   const env = app.useEnv();
- *   const context = app.useContext<Model, typeof Actions>();
- *   const [view, actions] = context.useActions(model);
+ * function useProfileActions() {
+ *   const context = shared.useContext<Envs, Model, typeof Actions>();
+ *   const actions = context.useActions(model);
  *
- *   const where = "locale" in env ? env.locale : env.platform;
- *
- *   return (
- *     <button onClick={() => actions.dispatch(Actions.Sign, "Adam")}>
- *       Hey {view.name} ({where})
- *     </button>
+ *   actions.useAction(Actions.Sign, (context, name) =>
+ *     context.actions.produce(({ model }) => void (model.name = name)),
  *   );
+ *
+ *   return actions;
  * }
  * ```
  */
-export function useApp<S extends object = Env>(): UseAppHandle<S> {
-  return React.useMemo<UseAppHandle<S>>(
-    () => ({
-      useContext<
-        M extends Model | void = void,
-        AC extends Actions | void = void,
-        D extends Props = Props,
-      >(): AppContextHandle<M, AC, D, S> {
-        return baseUseContext() as unknown as AppContextHandle<M, AC, D, S>;
-      },
-      useEnv(): Readonly<S> {
-        return baseUseEnv() as unknown as Readonly<S>;
-      },
-    }),
-    [],
-  );
+export function useContext<
+  E extends object,
+  M extends Model | void = void,
+  A extends Actions | void = void,
+  D extends Props = Props,
+>(): AppContextHandle<M, A, D, E> {
+  return baseUseContext() as unknown as AppContextHandle<M, A, D, E>;
+}
+
+/**
+ * Standalone counterpart to `app.useEnv`, exported as `shared.useEnv`
+ * &mdash; reads the nearest `<app.Boundary>`'s Env, typed against the
+ * Env shape `E` supplied at the call site. For reusable components
+ * that need an Env read outside any action handler (e.g. to hand a
+ * closure to an external library at module bridge time).
+ *
+ * @template E The Env shape (or union) the component supports.
+ *
+ * @example
+ * ```tsx
+ * import { shared } from "march-hare";
+ *
+ * type WebEnv = { session: Session | null };
+ * type MobileEnv = { session: Session | null };
+ *
+ * function SessionBadge() {
+ *   const env = shared.useEnv<WebEnv | MobileEnv>();
+ *   return <span>{env.session ? env.session.user.name : "Signed out"}</span>;
+ * }
+ * ```
+ */
+export function useEnv<E extends object>(): Readonly<E> {
+  return baseUseEnv() as unknown as Readonly<E>;
 }

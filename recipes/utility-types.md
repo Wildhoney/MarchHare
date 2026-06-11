@@ -7,7 +7,8 @@ March Hare exports `Handler` for typing action handlers when you need to define 
 Use `Handler` to type extracted handlers:
 
 ```tsx
-import { useContext, Action, Handler } from "march-hare";
+import { Action, type Handler } from "march-hare";
+import { app } from "./app";
 
 type Model = { name: string | null; age: number | null };
 const model: Model = { name: null, age: null };
@@ -34,7 +35,7 @@ export const handleSetAge: Handler<Model, typeof Actions, "SetAge"> = (
 
 // Use in component
 export default function useActions() {
-  const context = useContext<Model, typeof Actions>();
+  const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions(model);
   actions.useAction(Actions.SetName, handleSetName);
   actions.useAction(Actions.SetAge, handleSetAge);
@@ -57,7 +58,7 @@ For most cases, inline handlers with full type inference are simpler:
 
 ```tsx
 export default function useActions() {
-  const context = useContext<Model, typeof Actions>();
+  const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions(model);
 
   // Types are fully inferred - no explicit typing needed

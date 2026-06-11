@@ -7,7 +7,8 @@
 Here's a simple example that fetches user data:
 
 ```ts
-import { useContext, Lifecycle, Action, Operation } from "march-hare";
+import { Action, Lifecycle, Operation } from "march-hare";
+import { app } from "./app";
 import ky from "ky";
 
 type User = { id: number; name: string; email: string };
@@ -25,7 +26,7 @@ const model: Model = {
 };
 
 export function useActions() {
-  const context = useContext<Model, typeof Actions>();
+  const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions(model);
 
   actions.useAction(Actions.FetchUser, async (context, userId) => {
@@ -75,7 +76,8 @@ actions.useAction(Actions.FetchUser, async (context, userId) => {
 For applications with shared configuration (base URL, headers, auth), create a ky instance and access it via `context.data`:
 
 ```ts
-import { useContext, Lifecycle, Action } from "march-hare";
+import { Action, Lifecycle } from "march-hare";
+import { app } from "./app";
 import ky, { type KyInstance } from "ky";
 
 type User = { id: number; name: string; email: string };
@@ -110,7 +112,7 @@ export function useActions(authToken: string) {
     timeout: 30_000,
   });
 
-  const context = useContext<Model, typeof Actions, Data>();
+  const context = app.useContext<Model, typeof Actions, Data>();
   const actions = context.useActions(model, () => ({
     api,
   }));

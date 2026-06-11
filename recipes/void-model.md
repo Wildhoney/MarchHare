@@ -3,13 +3,14 @@
 The model type parameter defaults to `void`, so you can omit it when no local state is needed:
 
 ```ts
-import { useContext, Lifecycle } from "march-hare";
+import { Lifecycle } from "march-hare";
+import { app } from "./app";
 
 class Actions {
   static Mount = Lifecycle.Mount();
 }
 
-const context = useContext<void, typeof Actions>();
+const context = app.useContext<void, typeof Actions>();
 const actions = context.useActions();
 
 actions.useAction(Actions.Mount, () => {
@@ -20,13 +21,14 @@ actions.useAction(Actions.Mount, () => {
 When a component needs to dispatch or listen to actions but doesn't manage any local state, call `context.useActions()` with no arguments:
 
 ```ts
-import { useContext, Action } from "march-hare";
+import { Action } from "march-hare";
+import { app } from "./app";
 
 class Actions {
   static Ping = Action("Ping");
 }
 
-const context = useContext<void, typeof Actions>();
+const context = app.useContext<void, typeof Actions>();
 const actions = context.useActions();
 
 actions.useAction(Actions.Ping, () => {
@@ -37,7 +39,7 @@ actions.useAction(Actions.Ping, () => {
 If you want a model but no typed actions class, declare the controller with only the model generic:
 
 ```ts
-const context = useContext<Model>();
+const context = app.useContext<Model>();
 const actions = context.useActions(initialModel);
 ```
 
@@ -59,7 +61,7 @@ class Actions {
   static Ping = Action("Ping");
 }
 
-const context = useContext<void, typeof Actions>();
+const context = app.useContext<void, typeof Actions>();
 const actions = context.useActions();
 
 actions.useAction(Actions.Mount, () => {
@@ -77,7 +79,7 @@ If you need access to props or other external values, pass a data callback as th
 
 ```ts
 function useActions(props: { userId: string }) {
-  const context = useContext<{ userId: string }, typeof Actions>();
+  const context = app.useContext<{ userId: string }, typeof Actions>();
   const actions = context.useActions(() => ({
     userId: props.userId,
   }));
@@ -95,7 +97,8 @@ function useActions(props: { userId: string }) {
 Void-model components can participate in broadcast and multicast communication. This is particularly useful for "listener-only" components:
 
 ```ts
-import { useContext, Action, Distribution } from "march-hare";
+import { Action, Distribution } from "march-hare";
+import { app } from "./app";
 
 class BroadcastActions {
   static UserLoggedIn = Action<string>("UserLoggedIn", Distribution.Broadcast);
@@ -106,7 +109,7 @@ class Actions {
 }
 
 export default function useActions() {
-  const context = useContext<void, typeof Actions>();
+  const context = app.useContext<void, typeof Actions>();
   const actions = context.useActions();
 
   actions.useAction(Actions.Broadcast.UserLoggedIn, (_context, username) => {

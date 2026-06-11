@@ -4,10 +4,9 @@ All notable changes to this project will be documented in this file. See [commit
 
 ## [0.11.1](https://github.com/Wildhoney/MarchHare/compare/v0.11.0...v0.11.1) (2026-06-10)
 
-
 ### Features
 
-* added useApp hook for reusable components ([a3dcfcb](https://github.com/Wildhoney/MarchHare/commit/a3dcfcbde79693e1db3b2743cc4cca9fbdce2d8b))
+- added useApp hook for reusable components ([a3dcfcb](https://github.com/Wildhoney/MarchHare/commit/a3dcfcbde79693e1db3b2743cc4cca9fbdce2d8b))
 
 ## [0.11.0](https://github.com/Wildhoney/MarchHare/compare/v0.10.0...v0.11.0) (2026-06-10)
 

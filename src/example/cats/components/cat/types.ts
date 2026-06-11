@@ -1,12 +1,19 @@
-import { Action, type Handlers, Lifecycle } from "march-hare";
+import { Action, type Handlers, Lifecycle, type Maybe } from "march-hare";
 import type { Router } from "react-wayfinder";
+import type { Status } from "../../../portal/types.ts";
 
-export type Cat = {
-  id: string;
-  url: string;
-  width: number;
-  height: number;
-};
+export namespace Cat {
+  export type Response = {
+    id: string;
+    url: string;
+    width: number;
+    height: number;
+  };
+
+  export type Payload = { id: number };
+}
+
+export type Env = { status: Status };
 
 export class Actions {
   static Mount = Lifecycle.Mount();
@@ -17,7 +24,7 @@ export class Actions {
 }
 
 export type Model = {
-  cat: Cat | null;
+  cat: Maybe<Cat.Response>;
 };
 
 export type Props = { index: number };

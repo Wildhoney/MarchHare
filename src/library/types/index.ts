@@ -864,11 +864,14 @@ export type WithPayloadActions<U> = Exclude<
  *
  * @example
  * ```ts
- * import { Action, Distribution, Handlers } from "march-hare";
+ * import { Action, Distribution, type Handlers } from "march-hare";
  *
  * class BroadcastActions {
  *   static PaymentSent = Action("PaymentSent", Distribution.Broadcast);
- *   static PaymentLink = Action<PaymentLinkData>("PaymentLink", Distribution.Broadcast);
+ *   static PaymentLink = Action<PaymentLinkData>(
+ *     "PaymentLink",
+ *     Distribution.Broadcast,
+ *   );
  * }
  *
  * class Actions {

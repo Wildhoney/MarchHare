@@ -13,7 +13,8 @@ This recipe ties them together. For the individual primitives see [utility-funct
 The pattern: push the new row into the model with a `utils.pk()` symbol, fire the request, then swap the symbol for the server-assigned identifier when it lands.
 
 ```ts
-import { Action, Lifecycle, Op, utils, useActions, type Pk } from "march-hare";
+import { Action, Lifecycle, Op, Reason, utils, type Pk } from "march-hare";
+import { app } from "./app";
 
 type Todo = {
   id: Pk<number>;
@@ -30,7 +31,8 @@ export class Actions {
 }
 
 export function useTodoActions() {
-  const actions = useActions<Model, typeof Actions>({ todos: [] });
+  const context = app.useContext<Model, typeof Actions>();
+  const actions = context.useActions({ todos: [] });
 
   actions.useAction(Actions.Create, async (context, text) => {
     const id = utils.pk();
@@ -106,7 +108,7 @@ The `throw` keeps the failure visible to `Lifecycle.Fault` / `Lifecycle.Error` s
 **Strategy 2: roll back from `Lifecycle.Error`.** Useful when several actions share the same recovery, or when the optimistic write happens in one action and the rollback should fire for any action against the same row. The placeholder needs to be reachable from the error handler; the simplest shape is to put it on the model:
 
 ```ts
-import { Reason } from "march-hare";
+// Reason is imported above
 
 type Model = {
   todos: Todo[];

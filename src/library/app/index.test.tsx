@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { render, screen, act } from "@testing-library/react";
 import * as React from "react";
-import { App, useApp } from "./index.tsx";
+import { App, useContext, useEnv } from "./index.tsx";
 import { Action } from "../action/index.ts";
 
-describe("useApp()", () => {
+describe("standalone useContext<E, ...> / useEnv<E>", () => {
   it("lets a reusable component run under different Apps", async () => {
     type WebEnv = { kind: "web"; locale: string };
     type MobileEnv = { kind: "mobile"; platform: "ios" | "android" };
-    type Apps = WebEnv | MobileEnv;
+    type Envs = WebEnv | MobileEnv;
 
     const web = App<WebEnv>({ env: { kind: "web", locale: "en-GB" } });
     const mobile = App<MobileEnv>({
@@ -23,9 +23,8 @@ describe("useApp()", () => {
     }
 
     function Profile({ testid }: { testid: string }) {
-      const app = useApp<Apps>();
-      const env = app.useEnv();
-      const context = app.useContext<Model, typeof Actions>();
+      const env = useEnv<Envs>();
+      const context = useContext<Envs, Model, typeof Actions>();
       const [view, actions] = context.useActions(model);
 
       const where = env.kind === "web" ? env.locale : env.platform;
@@ -55,17 +54,16 @@ describe("useApp()", () => {
     expect(screen.getByTestId("mobile").textContent).toBe("anon/ios");
   });
 
-  it("returns a handle whose useEnv reads the nearest Boundary's env", () => {
+  it("useEnv<E>() reads the nearest Boundary's env", () => {
     type WebEnv = { tag: "web" };
     type MobileEnv = { tag: "mobile" };
-    type Apps = WebEnv | MobileEnv;
+    type Envs = WebEnv | MobileEnv;
 
     const web = App<WebEnv>({ env: { tag: "web" } });
     const mobile = App<MobileEnv>({ env: { tag: "mobile" } });
 
     function Probe({ testid }: { testid: string }) {
-      const app = useApp<Apps>();
-      const env = app.useEnv();
+      const env = useEnv<Envs>();
       return <span data-testid={testid}>{env.tag}</span>;
     }
 
@@ -97,8 +95,7 @@ describe("useApp()", () => {
     }
 
     function useCounterActions() {
-      const app = useApp<Env>();
-      const context = app.useContext<Model, typeof Actions>();
+      const context = useContext<Env, Model, typeof Actions>();
       const actions = context.useActions(model);
 
       actions.useAction(Actions.Tick, (context) =>

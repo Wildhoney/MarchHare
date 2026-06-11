@@ -5,12 +5,12 @@ March Hare uses a ref-based pattern internally, so action handlers in `actions.u
 However, in async actions where you `await` I/O operations, there's a rare edge case: if a closure reference changes while the await is in progress, you may access a stale value after the await. For these situations, pass a data callback to `context.useActions`:
 
 ```ts
-import { useContext } from "march-hare";
+import { app } from "./app";
 
 type Data = { filters: string[] };
 
 function useActions(props: Props) {
-  const context = useContext<Model, typeof Actions, Data>();
+  const context = app.useContext<Model, typeof Actions, Data>();
   const actions = context.useActions(model, () => ({
     filters: props.filters,
   }));

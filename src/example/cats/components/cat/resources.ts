@@ -1,6 +1,6 @@
 import ky from "ky";
-import { Cache, Resource } from "march-hare";
-import type { Cat } from "./types.ts";
+import { Cache, shared } from "march-hare";
+import { Cat, type Env } from "./types.ts";
 
 const cache = Cache({
   get: (key) => localStorage.getItem(key),
@@ -9,11 +9,14 @@ const cache = Cache({
   clear: () => localStorage.clear(),
 });
 
-export const cat = Resource.Cachable(cache, async (context) => {
-  const cats = await ky
-    .get("https://api.thecatapi.com/v1/images/search", {
-      signal: context.controller.signal,
-    })
-    .json<Cat[]>();
-  return cats[0];
-});
+export const cat = shared.Resource.Cachable<Env, Cat.Response, Cat.Payload>(
+  cache,
+  async (context) => {
+    const cats = await ky
+      .get("https://api.thecatapi.com/v1/images/search", {
+        signal: context.controller.signal,
+      })
+      .json<Cat.Response[]>();
+    return cats[0];
+  },
+);

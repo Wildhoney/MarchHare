@@ -1,4 +1,4 @@
-# `useContext` &mdash; dispatch before the model
+# `app.useContext` &mdash; dispatch before the model
 
 Some external libraries take a dispatch callback at construction time &mdash; form libraries (`useForm({ onSubmit })`), animation engines, third-party SDKs, IntersectionObserver wrappers. When the value those libraries return _also_ needs to flow back into `context.useActions` via the data callback, the ordering creates a chicken-and-egg:
 
@@ -6,12 +6,12 @@ Some external libraries take a dispatch callback at construction time &mdash; fo
 - `context.useActions(initial, () => ({ form, ... }))` needs `form` to expose it as `data.form`.
 - Each depends on the other existing first.
 
-`useContext<Model, typeof Actions, Data>()` resolves this by returning a stable, typed handle up-front. The handle exposes `context.actions.dispatch` (callable immediately) and `context.useActions(initialModel, getData?)` (registers the model and wires the controller's dispatch to the underlying emitter when it runs in the same render pass).
+`app.useContext<Model, typeof Actions, Data>()` resolves this by returning a stable, typed handle up-front. The handle exposes `context.actions.dispatch` (callable immediately) and `context.useActions(initialModel, getData?)` (registers the model and wires the controller's dispatch to the underlying emitter when it runs in the same render pass).
 
 ## The minimal shape
 
 ```tsx
-import { useContext } from "march-hare";
+import { app } from "./app";
 import { useForm } from "formikate";
 import { Model, Actions } from "./types.ts";
 
@@ -20,7 +20,7 @@ type Data = {
 };
 
 export function useActions() {
-  const context = useContext<Model, typeof Actions, Data>();
+  const context = app.useContext<Model, typeof Actions, Data>();
 
   const form = useForm<BillingSchema>({
     fields: billingFields,
@@ -42,7 +42,7 @@ export function useActions() {
 
 Reading order maps directly to declaration order:
 
-1. `useContext<Model, typeof Actions, Data>()` &mdash; returns a stable, typed handle with `dispatch` and `useActions`.
+1. `app.useContext<Model, typeof Actions, Data>()` &mdash; returns a stable, typed handle with `dispatch` and `useActions`.
 2. `useForm({ onSubmit })` &mdash; closes over `context.actions.dispatch`. The handle's reference never changes, so the closure is safe across renders.
 3. `context.useActions(initial, () => ({ form }))` &mdash; registers the model and wires the controller to the underlying emitter. `form` is now available as `data.form` to handlers and to JSX via the third tuple element.
 
@@ -52,7 +52,7 @@ Below is a payment form integrating `formikate` (synchronous form library), a Wo
 
 ```ts
 import { useState } from "react";
-import { useContext } from "march-hare";
+import { app } from "./app";
 import { useForm } from "formikate";
 import { useNavigate } from "react-router-dom";
 import { Destination, useClient, useParams } from "@hive/data.shared/providers";
@@ -87,7 +87,7 @@ export function useActions() {
   const [, setCheckoutSession] = useState<string | null>(null);
   const checkout = useCheckoutCard(null, publicKey);
 
-  const context = useContext<Model, typeof Actions, Data>();
+  const context = app.useContext<Model, typeof Actions, Data>();
 
   const form = useForm<BillingSchema>({
     fields: billingFields,
@@ -228,7 +228,7 @@ Reach for the up-front `context.actions.dispatch` capture when JSX or multiple h
 
 ## What the handle is
 
-The result of `useContext<AC>()` is a plain object with two members:
+The result of `app.useContext<AC>()` is a plain object with two members:
 
 - `context.actions.dispatch(action, payload?)` &mdash; same signature as `actions.dispatch` returned by `context.useActions`. Typed against `AC`, with channeled-action overloads.
 - `context.useActions(initialModel?, getData?)` &mdash; returns the `[model, actions, data]` tuple with `useAction`, `dispatch`, `inspect`, and `stream` attached.
@@ -241,10 +241,10 @@ When a component's `actions.ts` uses this pattern, the wrapper hook can simply b
 
 ```ts
 // actions.ts
-import { useContext } from "march-hare";
+import { app } from "./app";
 
 export function useActions() {
-  const context = useContext<Model, typeof Actions>();
+  const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions({
     /* ... */
   });
@@ -263,4 +263,4 @@ export default function Component() {
 }
 ```
 
-No name conflict with the library: `useContext` is the only top-level import, and the method on the controller handle is accessed as `context.useActions(...)`, not as a bare identifier.
+No name conflict with the library: `app.useContext` is the only entrypoint used, and the method on the controller handle is accessed as `context.useActions(...)`, not as a bare identifier.

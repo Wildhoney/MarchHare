@@ -12,7 +12,8 @@ This recipe covers two patterns:
 Tracks website visitors in real-time using SSE:
 
 ```ts
-import { useContext, Lifecycle, Action } from "march-hare";
+import { Action, Lifecycle } from "march-hare";
+import { app } from "./app";
 
 type Country = { name: string; flag: string; timestamp: number };
 
@@ -31,7 +32,7 @@ export class Actions {
 const initial: Model = { visitor: null, history: [], source: null };
 
 export function useActions() {
-  const context = useContext<Model, typeof Actions>();
+  const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions(initial);
 
   actions.useAction(Actions.Mount, (context) => {
@@ -86,7 +87,8 @@ export const user = app.Resource<User, { id: number }>(
 
 ```ts
 // stream/actions.ts
-import { useContext, Lifecycle, Action, Distribution } from "march-hare";
+import { Action, Distribution, Lifecycle } from "march-hare";
+import { app } from "./app";
 import * as resource from "./resources";
 
 class Actions {
@@ -103,7 +105,7 @@ type Model = {
 };
 
 export function useActions() {
-  const context = useContext<Model, typeof Actions>();
+  const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions({ source: null });
 
   actions.useAction(Actions.Mount, (context) => {

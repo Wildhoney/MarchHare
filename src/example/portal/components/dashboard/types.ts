@@ -1,6 +1,6 @@
 import type { MessageInstance } from "antd/es/message/interface";
 import type * as React from "react";
-import { Action, Maybe } from "march-hare";
+import { Action, type Maybe } from "march-hare";
 
 export type Model = {
   user: Maybe<string>;

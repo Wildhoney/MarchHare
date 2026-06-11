@@ -37,6 +37,7 @@ export default defineConfig([
       ],
       "@typescript-eslint/consistent-type-definitions": ["error", "type"],
       "@typescript-eslint/no-non-null-assertion": "error",
+      "@typescript-eslint/no-namespace": "off",
       complexity: ["warn", { max: 20 }],
       "import/prefer-default-export": "off",
       "import/no-default-export": "error",

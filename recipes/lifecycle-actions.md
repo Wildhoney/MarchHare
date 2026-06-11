@@ -5,7 +5,8 @@ March Hare provides lifecycle actions that trigger at specific points in a compo
 Assign lifecycle factories as static properties in your Actions class:
 
 ```ts
-import { useContext, Lifecycle, Action } from "march-hare";
+import { Action, Lifecycle } from "march-hare";
+import { app } from "./app";
 
 export class Actions {
   static Mount = Lifecycle.Mount();
@@ -17,7 +18,7 @@ export class Actions {
 }
 
 export function useActions() {
-  const context = useContext<Model, typeof Actions>();
+  const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions(model);
 
   actions.useAction(Actions.Mount, (context) => {

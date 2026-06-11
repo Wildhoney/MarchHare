@@ -36,11 +36,11 @@ export const ping = app.Resource((context) =>
 
 ```tsx
 // actions.ts
-import { useContext } from "march-hare";
+import { app } from "./app";
 import * as resource from "./resources";
 
 export function useActions() {
-  const context = useContext<Model, typeof Actions>();
+  const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions({
     // Sync cache read at the model literal — returns null when nothing is cached.
     user: resource.user({ id: 5 }),

@@ -7,7 +7,8 @@ Channeled actions allow targeted event delivery by subscribing with a controller
 Define a controller type as the second generic argument and call the action to create a channeled dispatch:
 
 ```tsx
-import { useContext, Action } from "march-hare";
+import { Action } from "march-hare";
+import { app } from "./app";
 
 type User = { id: number; name: string };
 
@@ -17,7 +18,7 @@ class Actions {
 }
 
 function UserCard({ userId }: { userId: number }) {
-  const context = useContext<Model, typeof Actions>();
+  const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions(model);
 
   // Only fires when dispatched with matching controller
@@ -119,7 +120,8 @@ actions.dispatch(Actions.UserUpdated({ OrgId: 42, Role: "admin" }), user);
 ## Real-World Example: Multi-User Dashboard
 
 ```tsx
-import { useContext, Action, Lifecycle, Distribution } from "march-hare";
+import { Action, Distribution, Lifecycle } from "march-hare";
+import { app } from "./app";
 
 type User = { id: number; name: string; status: string };
 type Model = { user: User | null };
@@ -134,7 +136,7 @@ class Actions {
 
 // WebSocket connection component
 function UserWebSocket() {
-  const context = useContext<Model, typeof Actions>();
+  const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions(model);
 
   actions.useAction(Actions.Mount, (context) => {
@@ -156,7 +158,7 @@ function UserWebSocket() {
 
 // Individual user card - only receives its own updates
 function UserCard({ userId }: { userId: number }) {
-  const context = useContext<Model, typeof Actions>();
+  const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions(model);
 
   // Only fires for this specific user's updates

@@ -5,7 +5,7 @@ import type { ScopeEntry } from "../boundary/components/scope/types.ts";
 import { useContext as baseUseContext } from "../context/index.ts";
 import { useEnv as baseUseEnv } from "../boundary/components/env/utils.ts";
 import { Resource as BaseResource } from "../resource/index.ts";
-import type { Fetcher, ResourceHandle } from "../resource/types.ts";
+import type { ResourceHandle } from "../resource/types.ts";
 import type { Cache } from "../cache/index.ts";
 import type {
   AppContextHandle,
@@ -142,17 +142,14 @@ export function createScope<S extends object, MulticastActions>(): Scope<
     function TypedResource<T, P extends object = Record<never, never>>(
       fetcher: AppFetcher<S, T, P>,
     ): ResourceHandle<T, P> {
-      return BaseResource<T, P>(fetcher as unknown as Fetcher<T, P>);
+      return BaseResource<S, T, P>(fetcher);
     },
     {
       Cachable<T, P extends object = Record<never, never>>(
         cache: Cache,
         fetcher: AppFetcher<S, T, P>,
       ): ResourceHandle<T, P> {
-        return BaseResource.Cachable<T, P>(
-          cache,
-          fetcher as unknown as Fetcher<T, P>,
-        );
+        return BaseResource.Cachable<S, T, P>(cache, fetcher);
       },
     },
   ) as AppResource<S>;
@@ -163,4 +160,42 @@ export function createScope<S extends object, MulticastActions>(): Scope<
     useEnv: useTypedEnv,
     Resource,
   };
+}
+
+/**
+ * Standalone counterpart to `app.Scope<MulticastActions>()`, exported
+ * as `shared.Scope` &mdash; opens a typed multicast scope without
+ * going through an `App` handle. Takes the **Env shape `E` as a
+ * mandatory first generic**, mirroring the other standalone exports
+ * (`shared.useContext`, `shared.useEnv`, `shared.Resource`). The Env
+ * carried by `scope.useContext()` is typed as `E`.
+ *
+ * Use this in reusable feature modules that need to open their own
+ * multicast scope without binding to one App's `app.Scope` factory.
+ * For single-app code, prefer `app.Scope<MulticastActions>()` &mdash;
+ * the Env is captured from `app` automatically.
+ *
+ * @template E The Env shape (or union) the scope's `useContext` types
+ *   `context.env` against.
+ * @template A The multicast Actions class (or union of classes) the
+ *   scope's dispatch surface is widened to include.
+ *
+ * @example
+ * ```tsx
+ * import { Action, Distribution, shared } from "march-hare";
+ *
+ * class MulticastActions {
+ *   static Mood = Action<"happy" | "sad">(
+ *     "Mood",
+ *     Distribution.Multicast,
+ *   );
+ * }
+ *
+ * type MoodEnv = { tracker: string };
+ *
+ * export const scope = shared.Scope<MoodEnv, typeof MulticastActions>();
+ * ```
+ */
+export function Scope<E extends object, A>(): Scope<E, A> {
+  return createScope<E, A>();
 }

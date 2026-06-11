@@ -7,24 +7,34 @@ Strongly typed React framework using generators and efficiently updated views al
 ```ts
 import {
   App,
-  useApp,
   Action,
   Distribution,
   Lifecycle,
-  useActions,
   With,
   utils,
-  withScope,
-  useEnv,
   Cache,
   Boundary,
-  Error,
   Reason,
-  Op,
+  Aborted,
+  annotate,
   Operation,
+  Op,
+  State,
+  shared,
 } from "march-hare";
-import type { Box, Fault, Handler, Handlers, Pk, Tap, Taps } from "march-hare";
+import type {
+  Box,
+  Fault,
+  Handler,
+  Handlers,
+  Maybe,
+  Pk,
+  Tap,
+  Taps,
+} from "march-hare";
 ```
+
+`shared.*` &mdash; standalone hooks/factories for reusable components: `shared.useContext`, `shared.useEnv`, `shared.Resource`, `shared.Resource.Cachable`, `shared.Scope`. Reach for `app.X` instead when you only need to support a single App.
 
 ## Core Concepts
 
@@ -332,19 +342,17 @@ Useful for pair-of-actions UI patterns (Open/Close, Show/Hide, Start/Stop) where
 ### Global Error Handler
 
 ```tsx
-import { Error, Reason } from "march-hare";
+import { Lifecycle, Reason } from "march-hare";
 
-<Error
-  handler={({ reason, error, action, handled, tasks }) => {
+actions.useAction(
+  Lifecycle.Fault,
+  (context, { reason, error, action, handled, tasks }) => {
     switch (reason) {
-      case Reason.Timedout: // Action exceeded timeout
-      case Reason.Supplanted: // Newer action instance dispatched
-      case Reason.Errored: // Uncaught error
+      case Reason.Aborted: // Task aborted (supplanted, unmount, timeout)
+      case Reason.Errored: // Uncaught error in handler
     }
-  }}
->
-  <App />
-</Error>;
+  },
+);
 ```
 
 ### Abort Patterns

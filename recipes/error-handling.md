@@ -28,6 +28,7 @@ function App() {
 The `Fault` payload contains:
 
 - **`reason`** &ndash; Either `Reason.Aborted` or `Reason.Errored`.
+
 - **`error`** &ndash; The `Error` object that was thrown.
 - **`action`** &ndash; The name of the action that caused the error.
 - **`handled`** &ndash; Whether the failing component has a `Lifecycle.Error()` handler registered.

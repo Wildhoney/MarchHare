@@ -252,7 +252,7 @@ function useActions() {
 }
 ```
 
-See the [`useContext` recipe](./recipes/use-context.md) for the full pattern.
+See the [`app.useContext` recipe](./recipes/use-controller.md) for the full pattern.
 
 The model defaults to `void`, so a component that only coordinates via events &mdash; forwarding broadcasts, triggering side-effects, bridging external systems &mdash; can call `context.useActions()` with no initial model:
 
@@ -800,10 +800,24 @@ export const app = App();
 
 ## Reusable components
 
-Importing `app` from a single location is fine inside a feature, but it breaks when a component needs to run under **more than one** `App` &mdash; a shared `<Profile />` used by both a web app and a mobile shell, for example. `useApp<S>()` returns a typed handle to the **nearest `<app.Boundary>`** at runtime: same `useContext` / `useEnv` surface as an App-bound handle, with the Env shape (or union of shapes) declared at the call site.
+Importing `app` from a single location is fine inside a feature, but it breaks when a component needs to run under **more than one** `App` &mdash; a shared `<Profile />` used by both a web app and a mobile shell, for example. For that case, every `app.X` factory has a **standalone counterpart** on the `shared` namespace that takes the Env shape `E` as its mandatory first generic:
+
+| Bound to an App              | Standalone (`shared.X`)                  |
+| ---------------------------- | ---------------------------------------- |
+| `app.useContext<M, A, D>()`  | `shared.useContext<E, M, A, D>()`        |
+| `app.useEnv()`               | `shared.useEnv<E>()`                     |
+| `app.Resource<T, P>(...)`    | `shared.Resource<E, T, P>(...)`          |
+| `app.Resource.Cachable(...)` | `shared.Resource.Cachable<E, T, P>(...)` |
+| `app.Scope<A>()`             | `shared.Scope<E, A>()`                   |
+
+The standalone forms take the same runtime path as the App-bound ones &mdash; `E` is purely a type-level binding the caller supplies so reusable code stays App-agnostic.
 
 ```tsx
-import { useApp, Action } from "march-hare";
+import { Action, shared } from "march-hare";
+
+type WebEnv = { session: Session | null; locale: string };
+type MobileEnv = { session: Session | null; platform: "ios" | "android" };
+type Envs = WebEnv | MobileEnv;
 
 type Model = { name: string | null };
 const model: Model = { name: null };
@@ -813,8 +827,7 @@ class Actions {
 }
 
 function useProfileActions() {
-  const app = useApp<{ session: Session | null }>();
-  const context = app.useContext<Model, typeof Actions>();
+  const context = shared.useContext<Envs, Model, typeof Actions>();
   const actions = context.useActions(model);
 
   actions.useAction(Actions.Sign, (context, name) =>
@@ -837,22 +850,24 @@ export default function Profile(): React.ReactElement {
 
 Drop `<Profile />` inside `<web.Boundary>` and it reads the web app's env; drop it inside `<mobile.Boundary>` and it reads the mobile app's env. The component never references either `App()` handle.
 
-When more than one `App` lives in your repo, declare a union of every Env once and parameterise every reusable component against it. TypeScript narrows `app.useEnv()` to the union &mdash; keys present on every member resolve directly, keys on a subset need an `in` / `typeof` guard:
+When more than one `App` lives in your repo, declare a union of every Env once and parameterise every reusable component against it. Keys present on every member resolve directly; keys on a subset need an `in` / `typeof` guard:
 
 ```ts
-// shared/apps.ts
+// shared/envs.ts
 export type WebEnv = { session: Session | null; locale: string };
 export type MobileEnv = {
   session: Session | null;
   platform: "ios" | "android";
 };
-export type Apps = WebEnv | MobileEnv;
+export type Envs = WebEnv | MobileEnv;
 ```
 
 ```tsx
+import { shared } from "march-hare";
+import type { Envs } from "../shared/envs";
+
 function Where(): React.ReactElement {
-  const app = useApp<Apps>();
-  const env = app.useEnv();
+  const env = shared.useEnv<Envs>();
 
   const signedIn = env.session !== null;
   const where = "locale" in env ? env.locale : env.platform;
@@ -861,6 +876,6 @@ function Where(): React.ReactElement {
 }
 ```
 
-The handle exposes `useContext` and `useEnv` &mdash; the same surface as `App<S>` minus `Boundary` (rendered once at the App declaration site) and `Scope` / `Resource` (module-scope, not per-render). See the [reusable components recipe](./recipes/reusable-components.md) for the full pattern including discriminator-keyed switches and the `App()`-with-no-env case.
+`shared.Resource<E, T, P>` and `shared.Resource.Cachable<E, T, P>` are the same story for shared resources &mdash; declare them at module scope, pass the Env union as the first generic, and the fetcher's `context.env` is typed against it. `shared.Scope<E, A>()` opens a multicast scope without going through an App handle. See the [reusable components recipe](./recipes/reusable-components.md) for the full pattern including discriminator-keyed switches and the `App()`-with-no-env case.
 
 For one-line handler binding &mdash; flipping a boolean, assigning a payload to a leaf, pinning a field to a fixed value &mdash; reach for `context.with.{update,invert,always}`. See the [`With` helpers recipe](./recipes/with-helpers.md) for the full surface.

@@ -1,11 +1,25 @@
-# Reusable components with `useApp`
+# Reusable components
 
 A component that calls `app.useContext<...>()` is hard-wired to whichever `app` it imported. That's fine inside a feature, but it breaks down for **shared components used across multiple apps** &mdash; a monorepo with a web app, a mobile shell, and an admin tool can't pull the same `<Profile />` into all three if each one is bound to a different `App()` handle.
 
-`useApp<S>()` solves this. It returns a typed handle to the **nearest `<app.Boundary>`** at runtime, with `useContext` and `useEnv` parameterised by the Env shape (or union of shapes) `S` you declare at the call site. Inside the component, the binding looks identical to the per-app pattern &mdash; only the import changes.
+Every `app.X` factory has a **standalone counterpart** exposed on the `shared` namespace exported from `march-hare`. The standalone form takes the Env shape `E` as a mandatory first generic, so reusable code can declare which Env shapes it supports without importing any specific `app`:
+
+| Bound to an App              | Standalone (`shared.X`)                  |
+| ---------------------------- | ---------------------------------------- |
+| `app.useContext<M, A, D>()`  | `shared.useContext<E, M, A, D>()`        |
+| `app.useEnv()`               | `shared.useEnv<E>()`                     |
+| `app.Resource<T, P>(...)`    | `shared.Resource<E, T, P>(...)`          |
+| `app.Resource.Cachable(...)` | `shared.Resource.Cachable<E, T, P>(...)` |
+| `app.Scope<A>()`             | `shared.Scope<E, A>()`                   |
+
+The runtime is identical &mdash; both reach into the nearest `<app.Boundary>`. `E` is purely a type-level binding the caller supplies so the standalone form stays App-agnostic.
+
+## A reusable feature
+
+Here is the canonical pattern with `shared.useContext`. Note the absence of any `app` import:
 
 ```tsx
-import { useApp, Action } from "march-hare";
+import { Action, shared } from "march-hare";
 
 type Model = { name: string | null };
 const model: Model = { name: null };
@@ -15,8 +29,11 @@ class Actions {
 }
 
 function useProfileActions() {
-  const app = useApp<{ session: Session | null }>();
-  const context = app.useContext<Model, typeof Actions>();
+  const context = shared.useContext<
+    { session: Session | null },
+    Model,
+    typeof Actions
+  >();
   const actions = context.useActions(model);
 
   actions.useAction(Actions.Sign, (context, name) =>
@@ -37,14 +54,14 @@ export default function Profile(): React.ReactElement {
 }
 ```
 
-Drop `<Profile />` inside `<web.Boundary>` and it talks to the web app's env; drop it inside `<mobile.Boundary>` and it talks to the mobile app's env. The component holds no reference to either `App()` handle.
+Drop `<Profile />` inside `<web.Boundary>` and `context.env.session` reads the web app's session; drop it inside `<mobile.Boundary>` and it reads the mobile app's session. The component holds no reference to either App.
 
 ## Recommended: a monorepo Env union
 
-When more than one `App` exists in your repo, declare a union once and parameterise every reusable component against it. Each member is the Env shape passed to that App's `App({ env })` call:
+When more than one `App` exists in your repo, declare a union of every Env once and parameterise every reusable component against it. Each member is the Env shape passed to that App's `App({ env })` call:
 
 ```ts
-// shared/apps.ts
+// shared/envs.ts
 export type WebEnv = {
   session: Session | null;
   locale: string;
@@ -60,13 +77,13 @@ export type AdminEnv = {
   permissions: ReadonlyArray<string>;
 };
 
-export type Apps = WebEnv | MobileEnv | AdminEnv;
+export type Envs = WebEnv | MobileEnv | AdminEnv;
 ```
 
 ```ts
 // web/app.ts
 import { App } from "march-hare";
-import type { WebEnv } from "../shared/apps";
+import type { WebEnv } from "../shared/envs";
 
 export const web = App<WebEnv>({
   env: { session: null, locale: "en-GB" },
@@ -74,28 +91,27 @@ export const web = App<WebEnv>({
 
 // mobile/app.ts
 import { App } from "march-hare";
-import type { MobileEnv } from "../shared/apps";
+import type { MobileEnv } from "../shared/envs";
 
 export const mobile = App<MobileEnv>({
   env: { session: null, platform: "ios" },
 });
 ```
 
-Reusable components reach for `useApp<Apps>()` and TypeScript narrows reads to the intersection &mdash; in the example above, `env.session` works everywhere because every member declares it.
+Reusable components reach for `shared.useContext<Envs, ...>` and TypeScript narrows reads to the intersection &mdash; in the example above, `env.session` works everywhere because every member declares it.
 
 ## Common keys vs. app-specific keys
 
-`useApp<A | B | C>()`'s `useEnv()` returns a value typed as the union, so dot reads only resolve when the key exists on **every** member. Keys that only live on a subset need an `in` / `typeof` narrowing first:
+`shared.useEnv<Envs>()` returns a value typed as the union, so dot reads only resolve when the key exists on **every** member. Keys that only live on a subset need an `in` / `typeof` narrowing first:
 
 ```tsx
+import { shared } from "march-hare";
+import type { Envs } from "../shared/envs";
+
 function Where() {
-  const app = useApp<WebEnv | MobileEnv>();
-  const env = app.useEnv();
+  const env = shared.useEnv<Envs>();
 
-  // Both members have `session` — direct read is fine.
   const signedIn = env.session !== null;
-
-  // `locale` only exists on `WebEnv`; `platform` only on `MobileEnv`.
   const where =
     "locale" in env ? env.locale : "platform" in env ? env.platform : null;
 
@@ -106,7 +122,7 @@ function Where() {
 If a reusable component needs to behave differently per host app, declare a discriminator on every Env (`type WebEnv = { kind: "web"; ... }`) and switch on it:
 
 ```tsx
-const env = app.useEnv();
+const env = shared.useEnv<Envs>();
 
 switch (env.kind) {
   case "web":
@@ -116,6 +132,62 @@ switch (env.kind) {
 }
 ```
 
+## Reusable resources
+
+`shared.Resource<E, T, P>` and `shared.Resource.Cachable<E, T, P>` are the standalone forms of `app.Resource` and `app.Resource.Cachable`. The fetcher's `context.env` is typed against `E`, so the resource can be shared across every App that declares a compatible Env:
+
+```ts
+// shared/resources.ts
+import { Cache, shared } from "march-hare";
+import type { Envs } from "./envs";
+
+export const user = shared.Resource<Envs, User>((context) =>
+  ky
+    .get("/api/user", {
+      headers: context.env.session
+        ? { Authorization: `Bearer ${context.env.session.accessToken}` }
+        : {},
+      signal: context.controller.signal,
+    })
+    .json<User>(),
+);
+
+const cache = Cache({
+  get: (key) => localStorage.getItem(key),
+  set: (key, value) => localStorage.setItem(key, value),
+  remove: (key) => localStorage.removeItem(key),
+  clear: () => localStorage.clear(),
+});
+
+export const cat = shared.Resource.Cachable<Envs, Cat>(cache, (context) =>
+  ky.get("/api/cat", { signal: context.controller.signal }).json<Cat>(),
+);
+```
+
+Single-app resources should still reach for `app.Resource<T>(...)` &mdash; the Env is captured from `app` automatically and the call site is one generic shorter.
+
+## Reusable multicast scopes
+
+`shared.Scope<E, A>()` opens a multicast scope without going through an App handle. The Env carried by `scope.useContext().context.env` is typed as `E`; the multicast surface is `A`:
+
+```tsx
+// shared/mood/index.tsx
+import { Action, Distribution, shared } from "march-hare";
+import type { Envs } from "../envs";
+
+export class MulticastActions {
+  static Mood = Action<"happy" | "sad">("Mood", Distribution.Multicast);
+}
+
+export const scope = shared.Scope<Envs, typeof MulticastActions>();
+
+export default function MoodArea({ children }: { children: React.ReactNode }) {
+  return <scope.Boundary>{children}</scope.Boundary>;
+}
+```
+
+Subscribers and triggers inside the boundary go through `scope.useContext<Model, LocalActions>()` exactly as the App-bound form &mdash; only the factory call site changes.
+
 ## App with no Env
 
 `App()` may be called with no arguments &mdash; `env` is optional. Reach for it when the app coordinates entirely through models and broadcast actions without any ambient state:
@@ -124,23 +196,10 @@ switch (env.kind) {
 export const web = App();
 ```
 
-A reusable component dropped inside `<web.Boundary>` can still call `useApp<{}>()` (or any wider union) &mdash; `useEnv()` returns `{}` and any narrowing branches simply fall through. There's no need to pass `env: {}` explicitly.
+A reusable component dropped inside `<web.Boundary>` can still call `shared.useContext<{}, M, A, D>()` (or any wider union) &mdash; `env` resolves to an empty object and any narrowing branches simply fall through. There's no need to pass `env: {}` explicitly to `App()`.
 
-## What `useApp<S>()` exposes
+## When the standalone form is the wrong tool
 
-The returned handle is intentionally narrower than `App<S>()`:
-
-- `useContext<M, AC, D>()` &mdash; identical to `app.useContext` from a specific App.
-- `useEnv()` &mdash; identical to `app.useEnv`.
-
-Notably absent:
-
-- **`Boundary`** &mdash; rendered once at the App declaration site. A reusable component never opens a new App boundary.
-- **`Resource`** &mdash; resources are declared at module scope so their cache and in-flight slots are stable; a hook-level `Resource(...)` would create a fresh handle each render. Import shared resources from a `resources.ts` module instead.
-- **`Scope`** &mdash; multicast scopes are declared at module scope for the same reason. Open a scope at the call site via `app.Scope<typeof MulticastActions>()`.
-
-## When `useApp` is the wrong tool
-
-- **Single-app projects.** Import the App directly. `useApp` only earns its keep when a component genuinely needs to run under more than one App.
+- **Single-app code.** Use `app.X` directly. The `shared.X` form only earns its keep when the call site needs to run under more than one App.
 - **Per-feature scoping inside a single App.** Reach for [multicast scopes](./multicast-actions.md) instead &mdash; they're designed for that.
-- **Resource declarations and multicast scope construction.** These are module-scope concerns; `useApp` deliberately omits them.
+- **Anywhere the Env isn't relevant.** If your component doesn't read `context.env`, you don't need the standalone form at all &mdash; the App-bound `app.useContext` works the same.

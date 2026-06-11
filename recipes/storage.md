@@ -86,11 +86,11 @@ export const cat = app.Resource({
 
 ```ts
 // actions.ts
-import { useContext } from "march-hare";
+import { app } from "./app";
 import * as resource from "./resources";
 
 export function useActions() {
-  const context = useContext<Model, typeof Actions>();
+  const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions({
     // First render reads the Cache automatically — no explicit get.
     cat: resource.cat(),
