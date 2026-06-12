@@ -2,14 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
-## [0.12.0](https://github.com/Wildhoney/MarchHare/compare/v0.11.1...v0.12.0) (2026-06-12)
+## [0.12.1](https://github.com/Wildhoney/MarchHare/compare/v0.12.0...v0.12.1) (2026-06-12)
 
+## [0.12.0](https://github.com/Wildhoney/MarchHare/compare/v0.11.1...v0.12.0) (2026-06-12)
 
 ### ⚠ BREAKING CHANGES
 
-* group standalone Env-first hooks under shared namespace
+- group standalone Env-first hooks under shared namespace
 
-* group standalone Env-first hooks under shared namespace ([44ba336](https://github.com/Wildhoney/MarchHare/commit/44ba33638ddb5d113c24bce3d4ba9da6ecce5b87))
+- group standalone Env-first hooks under shared namespace ([44ba336](https://github.com/Wildhoney/MarchHare/commit/44ba33638ddb5d113c24bce3d4ba9da6ecce5b87))
 
 ## [0.11.1](https://github.com/Wildhoney/MarchHare/compare/v0.11.0...v0.11.1) (2026-06-10)
 
