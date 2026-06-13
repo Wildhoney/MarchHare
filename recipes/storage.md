@@ -17,7 +17,6 @@ This recipe covers:
 type Stored<T> = {
   readonly data: T | Unset; // unset symbol when nothing is recorded
   readonly at: Temporal.Instant | null; // when the payload was recorded
-  readonly else: <U>(fallback: U) => T | U;
 };
 ```
 
@@ -40,17 +39,16 @@ const cache = Cache({
 
 `Cache()` with no adapter is in-memory only &ndash; useful in tests or when you want a first-class, holdable cache without persistence.
 
-Reads return a `Stored<T>`; writes accept a `Stored<T>` and short-circuit on the empty state so a placeholder snapshot never serialises:
+Reads return a `Stored<T>` synchronously; writes (`set`, `remove`, `clear`) return `Promise<void>` so async adapters can settle before the await resolves. Empty `Stored`s are no-ops on write so placeholder snapshots never serialise:
 
 ```ts
 const stored = cache.get<User>("user");
-// stored.data: User | Unset
+// stored.data: User | Unset — branch on `=== unset` to distinguish empty from null
 // stored.at: Temporal.Instant | null
-// stored.else(null): User | null
 
-cache.set("user", { data: user, at: Temporal.Now.instant(), else: () => user });
-cache.remove("user");
-cache.clear();
+await cache.set("user", { data: user, at: Temporal.Now.instant() });
+await cache.remove("user");
+await cache.clear();
 ```
 
 ## Wiring a Cache into the App

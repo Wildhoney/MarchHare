@@ -26,15 +26,10 @@ export function useRerender(): () => void {
  *
  * @template T The payload type the resulting Stored would carry if populated.
  * @returns A Stored with `data` set to {@link unset} and `at` set to `null`.
- *          Its `.else(fallback)` returns the fallback unchanged.
  * @internal
  */
 export function empty<T>(): Stored<T> {
-  return {
-    data: unset,
-    at: null,
-    else: <U>(fallback: U): T | U => fallback,
-  };
+  return { data: unset, at: null };
 }
 
 /**
@@ -44,13 +39,8 @@ export function empty<T>(): Stored<T> {
  * @param data The payload value to wrap.
  * @param at The instant the payload was recorded — flows through to the
  *           Resource cache as the entry's `at` timestamp.
- * @returns A Stored whose `.else(fallback)` returns `data` unchanged.
  * @internal
  */
 export function present<T>(data: T, at: Temporal.Instant): Stored<T> {
-  return {
-    data,
-    at,
-    else: <U>(_fallback: U): T | U => data,
-  };
+  return { data, at };
 }

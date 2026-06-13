@@ -72,6 +72,12 @@ export type ResourceCall<T> = ResourceFetch<T> & {
    * the configured cache is synchronous, the contract stays async so
    * call sites read uniformly.
    *
+   * The `where` pattern is typed as `Record<string, unknown>` rather
+   * than `Partial<P>` because the resource's params type `P` isn't
+   * threaded through the chain. Pass the literal you'd pass to the
+   * underlying fetcher &mdash; TypeScript won't catch typos in pattern
+   * keys, so prefer the no-argument form when possible.
+   *
    * ```ts
    * // Drop the {id: 5} slot.
    * await context.actions.resource(resource.user({ id: 5 })).evict();
@@ -80,7 +86,7 @@ export type ResourceCall<T> = ResourceFetch<T> & {
    * await context.actions.resource(resource.user()).evict({ name: "Adam" });
    * ```
    */
-  readonly evict: (where?: object) => Promise<void>;
+  readonly evict: (where?: Record<string, unknown>) => Promise<void>;
 };
 import { describe } from "../utils.ts";
 
@@ -795,7 +801,7 @@ export type HandlerContext<
     annotate<T>(value: T, operation?: Operation): T;
     readonly inspect: Readonly<Inspect<M>>;
     resource: (<T>(invocation: T | null) => ResourceCall<T>) & {
-      nuke(where?: object): Promise<void>;
+      nuke(where?: Record<string, unknown>): Promise<void>;
     };
     final<T>(
       action: BroadcastPayload<T> | MulticastPayload<T>,

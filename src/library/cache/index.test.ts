@@ -26,61 +26,47 @@ describe("Cache (persistent)", () => {
 
     expect(stored.data).toBe(unset);
     expect(stored.at).toBeNull();
-    expect(stored.else("fallback")).toBe("fallback");
   });
 
-  it("round-trips data and timestamp through set then get", () => {
+  it("round-trips data and timestamp through set then get", async () => {
     const adapter = memoryAdapter();
     const cache = Cache(adapter);
     const at = Temporal.Now.instant();
 
-    cache.set("user", {
-      data: { name: "Adam" },
-      at,
-      else: <U>(_: U) => ({ name: "Adam" }),
-    });
+    await cache.set("user", { data: { name: "Adam" }, at });
 
     const stored = cache.get<{ name: string }>("user");
     expect(stored.data).toEqual({ name: "Adam" });
     expect(stored.at?.toString()).toBe(at.toString());
-    expect(stored.else(null)).toEqual({ name: "Adam" });
   });
 
-  it("set is a no-op for an empty Stored (no key created)", () => {
+  it("set is a no-op for an empty Stored (no key created)", async () => {
     const adapter = memoryAdapter();
     const cache = Cache(adapter);
 
-    cache.set("nothing", { data: unset, at: null, else: (f) => f });
+    await cache.set("nothing", { data: unset, at: null });
 
     expect(adapter.entries.has("nothing")).toBe(false);
   });
 
-  it("set is a no-op when at is missing even if data is present", () => {
+  it("set is a no-op when at is missing even if data is present", async () => {
     const adapter = memoryAdapter();
     const cache = Cache(adapter);
 
-    cache.set("user", {
-      data: { name: "Adam" },
-      at: null,
-      else: <U>(_: U) => ({ name: "Adam" }),
-    });
+    await cache.set("user", { data: { name: "Adam" }, at: null });
 
     expect(adapter.entries.has("user")).toBe(false);
   });
 
-  it("remove deletes the persisted entry", () => {
+  it("remove deletes the persisted entry", async () => {
     const adapter = memoryAdapter();
     const cache = Cache(adapter);
     const at = Temporal.Now.instant();
 
-    cache.set("user", {
-      data: { name: "Adam" },
-      at,
-      else: <U>(_: U) => ({ name: "Adam" }),
-    });
+    await cache.set("user", { data: { name: "Adam" }, at });
     expect(adapter.entries.has("user")).toBe(true);
 
-    cache.remove("user");
+    await cache.remove("user");
     expect(adapter.entries.has("user")).toBe(false);
   });
 
@@ -107,23 +93,18 @@ describe("Cache (persistent)", () => {
     expect(stored.at).toBeNull();
   });
 
-  it("preserves a legitimately stored null payload through round-trip", () => {
+  it("preserves a legitimately stored null payload through round-trip", async () => {
     const adapter = memoryAdapter();
     const cache = Cache(adapter);
     const at = Temporal.Now.instant();
 
-    cache.set<string | null>("maybe", {
-      data: null,
-      at,
-      else: <U>(_: U) => null,
-    });
+    await cache.set<string | null>("maybe", { data: null, at });
 
     const stored = cache.get<string | null>("maybe");
     expect(stored.data).toBeNull();
-    expect(stored.else("fallback")).toBeNull();
   });
 
-  it("swallows adapter write errors so a resolved fetch isn't poisoned", () => {
+  it("swallows adapter write errors so a resolved fetch isn't poisoned", async () => {
     const cache = Cache({
       get: () => null,
       set: () => {
@@ -133,64 +114,55 @@ describe("Cache (persistent)", () => {
       clear: () => {},
     });
 
-    expect(() =>
+    await expect(
       cache.set("user", {
         data: { name: "Adam" },
         at: Temporal.Now.instant(),
-        else: <U>(_: U) => ({ name: "Adam" }),
       }),
-    ).not.toThrow();
+    ).resolves.toBeUndefined();
   });
 
-  it("clear wipes every entry", () => {
+  it("clear wipes every entry", async () => {
     const adapter = memoryAdapter();
     const cache = Cache(adapter);
     const at = Temporal.Now.instant();
 
-    cache.set("a", { data: 1, at, else: <U>(_: U) => 1 });
-    cache.set("b", { data: 2, at, else: <U>(_: U) => 2 });
+    await cache.set("a", { data: 1, at });
+    await cache.set("b", { data: 2, at });
     expect(adapter.entries.size).toBe(2);
 
-    cache.clear();
+    await cache.clear();
     expect(adapter.entries.size).toBe(0);
   });
 });
 
 describe("Cache (in-memory, no adapter)", () => {
-  it("works as a scoped in-memory store", () => {
+  it("works as a scoped in-memory store", async () => {
     const cache = Cache();
     const at = Temporal.Now.instant();
 
-    cache.set("user", {
-      data: { name: "Adam" },
-      at,
-      else: <U>(_: U) => ({ name: "Adam" }),
-    });
+    await cache.set("user", { data: { name: "Adam" }, at });
 
     expect(cache.get<{ name: string }>("user").data).toEqual({ name: "Adam" });
   });
 
-  it("two in-memory caches are independent", () => {
+  it("two in-memory caches are independent", async () => {
     const a = Cache();
     const b = Cache();
     const at = Temporal.Now.instant();
 
-    a.set("user", {
-      data: { name: "Adam" },
-      at,
-      else: <U>(_: U) => ({ name: "Adam" }),
-    });
+    await a.set("user", { data: { name: "Adam" }, at });
 
     expect(a.get<{ name: string }>("user").data).toEqual({ name: "Adam" });
     expect(b.get<{ name: string }>("user").data).toBe(unset);
   });
 
-  it("clear empties the in-memory entries", () => {
+  it("clear empties the in-memory entries", async () => {
     const cache = Cache();
     const at = Temporal.Now.instant();
 
-    cache.set("a", { data: 1, at, else: <U>(_: U) => 1 });
-    cache.clear();
+    await cache.set("a", { data: 1, at });
+    await cache.clear();
 
     expect(cache.get<number>("a").data).toBe(unset);
   });

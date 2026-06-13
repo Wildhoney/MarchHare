@@ -15,6 +15,4 @@ export type Stored<T> = {
   readonly data: T | Unset;
   /** When the payload was recorded, or `null` when nothing is recorded. */
   readonly at: Temporal.Instant | null;
-  /** Returns {@link data} when present, otherwise the supplied fallback. */
-  readonly else: <U>(fallback: U) => T | U;
 };

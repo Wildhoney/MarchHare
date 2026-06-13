@@ -301,6 +301,154 @@ describe("context.actions.resource(...).exceeds({...})", () => {
   });
 });
 
+describe("context.actions.resource(...).evict() and resource.nuke()", () => {
+  it("evict drops the per-params slot so .exceeds() refetches", async () => {
+    const fetcher = vi.fn(() => Promise.resolve({ name: "Adam" }));
+    const resource = Resource(fetcher);
+
+    class Actions {
+      static Mount = Lifecycle.Mount();
+      static Invalidate = Action("Invalidate");
+      static Refresh = Action("Refresh");
+    }
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <Boundary env={{ counter: 0, label: null, token: null }}>
+        {children}
+      </Boundary>
+    );
+
+    const { result } = renderHook(
+      () => {
+        const actions = useActions<void, typeof Actions>();
+        actions.useAction(Actions.Mount, async (context) => {
+          await context.actions.resource(resource());
+        });
+        actions.useAction(Actions.Invalidate, async (context) => {
+          await context.actions.resource(resource()).evict();
+        });
+        actions.useAction(Actions.Refresh, async (context) => {
+          await context.actions.resource(resource()).exceeds({ minutes: 5 });
+        });
+        return actions;
+      },
+      { wrapper },
+    );
+
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      await result.current[1].dispatch(Actions.Refresh);
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1); // short-circuited
+
+    await act(async () => {
+      await result.current[1].dispatch(Actions.Invalidate);
+    });
+    await act(async () => {
+      await result.current[1].dispatch(Actions.Refresh);
+    });
+    expect(fetcher).toHaveBeenCalledTimes(2); // evicted, refetched
+  });
+
+  it("evict accepts a partial-match pattern", async () => {
+    type Params = { teamId: number; userId: number };
+    const fetcher = vi.fn(({ params }: { params: Params }) =>
+      Promise.resolve({ id: params.userId }),
+    );
+    const users = Resource<{ id: number }, Params>(fetcher);
+
+    class Actions {
+      static Seed = Action("Seed");
+      static EvictTeam = Action<{ teamId: number }>("EvictTeam");
+    }
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <Boundary env={{ counter: 0, label: null, token: null }}>
+        {children}
+      </Boundary>
+    );
+
+    const { result } = renderHook(
+      () => {
+        const actions = useActions<void, typeof Actions>();
+        actions.useAction(Actions.Seed, async (context) => {
+          await context.actions.resource(users({ teamId: 1, userId: 7 }));
+          await context.actions.resource(users({ teamId: 1, userId: 8 }));
+          await context.actions.resource(users({ teamId: 2, userId: 9 }));
+        });
+        actions.useAction(Actions.EvictTeam, async (context, { teamId }) => {
+          await context.actions.resource(users()).evict({ teamId });
+        });
+        return actions;
+      },
+      { wrapper },
+    );
+
+    await act(async () => {
+      await result.current[1].dispatch(Actions.Seed);
+    });
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(users({ teamId: 1, userId: 7 })).toEqual({ id: 7 });
+    expect(users({ teamId: 1, userId: 8 })).toEqual({ id: 8 });
+    expect(users({ teamId: 2, userId: 9 })).toEqual({ id: 9 });
+
+    await act(async () => {
+      await result.current[1].dispatch(Actions.EvictTeam, { teamId: 1 });
+    });
+
+    expect(users({ teamId: 1, userId: 7 })).toBeNull();
+    expect(users({ teamId: 1, userId: 8 })).toBeNull();
+    expect(users({ teamId: 2, userId: 9 })).toEqual({ id: 9 });
+  });
+
+  it("nuke drops every cached entry across all resources", async () => {
+    const userFetcher = vi.fn(() => Promise.resolve({ name: "Adam" }));
+    const settingsFetcher = vi.fn(() => Promise.resolve({ theme: "dark" }));
+    const user = Resource(userFetcher);
+    const settings = Resource(settingsFetcher);
+
+    class Actions {
+      static Seed = Action("Seed");
+      static Clear = Action("Clear");
+    }
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <Boundary env={{ counter: 0, label: null, token: null }}>
+        {children}
+      </Boundary>
+    );
+
+    const { result } = renderHook(
+      () => {
+        const actions = useActions<void, typeof Actions>();
+        actions.useAction(Actions.Seed, async (context) => {
+          await context.actions.resource(user());
+          await context.actions.resource(settings());
+        });
+        actions.useAction(Actions.Clear, async (context) => {
+          await context.actions.resource.nuke();
+        });
+        return actions;
+      },
+      { wrapper },
+    );
+
+    await act(async () => {
+      await result.current[1].dispatch(Actions.Seed);
+    });
+    expect(user()).toEqual({ name: "Adam" });
+    expect(settings()).toEqual({ theme: "dark" });
+
+    await act(async () => {
+      await result.current[1].dispatch(Actions.Clear);
+    });
+
+    expect(user()).toBeNull();
+    expect(settings()).toBeNull();
+  });
+});
+
 describe("Lifecycle.Env broadcast", () => {
   it("fires the handler when produce mutates the env", async () => {
     const seen: Array<number | undefined> = [];

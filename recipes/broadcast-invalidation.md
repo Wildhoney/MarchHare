@@ -167,6 +167,16 @@ actions.useAction(Actions.Broadcast.Reset, async (context, scope) => {
 });
 ```
 
+## When to prefer `.evict()` / `.nuke()`
+
+The reset-then-refetch pattern above keeps the producer in control: each subscriber decides _whether_ to refetch, _what_ params to use, and _how_ to dispatch the resulting broadcast. Use it when:
+
+- Different producers need different reset scopes
+- The reset needs to fan out to UI updates beyond cache flushing (skeleton states, scroll resets, etc.)
+- You want typed payloads on the reset event
+
+Reach for `context.actions.resource(...).evict(where?)` or `context.actions.resource.nuke(where?)` when you just need to drop cache entries without coordinating refetches &mdash; e.g. on sign-out where the next mount will fetch fresh anyway. See [`use-resource.md`](./use-resource.md#invalidation--evict-and-nuke).
+
 ## Comparison with React Query
 
 | React Query                      | March Hare                                     |
