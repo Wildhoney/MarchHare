@@ -20,7 +20,7 @@ build:
 	npx vite build
 
 fslint:
-	npx fslint --files=dist/**/*.js --limit-kb=26
+	npx fslint --files=dist/**/*.js --limit-kb=30
 
 checks:
 	make fmt

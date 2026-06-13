@@ -164,6 +164,7 @@ export default defineConfig(({ mode }) => {
             fileName: "march-hare",
             formats: ["es", "umd"],
           },
+          sourcemap: true,
           minify: "terser",
           terserOptions: {
             compress: {

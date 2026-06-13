@@ -17,6 +17,22 @@ export default defineConfig([
     languageOptions: { globals: globals.browser },
   },
   tseslint.configs.recommended,
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: {
+        project: "./tsconfig.lint.json",
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      "@typescript-eslint/no-floating-promises": [
+        "error",
+        { ignoreVoid: true },
+      ],
+    },
+  },
   pluginReact.configs.flat.recommended,
   {
     plugins: {
@@ -67,6 +83,7 @@ export default defineConfig([
       "fp/no-let": "off",
       "fp/no-loops": "off",
       "fp/no-mutating-methods": "off",
+      "@typescript-eslint/no-floating-promises": "off",
     },
   },
   {

@@ -41,10 +41,10 @@ export type { Adapter, Encoded } from "./types.ts";
  */
 export type Cache = {
   get<T>(key: string): Stored<T>;
-  set<T>(key: string, value: Stored<T>): boolean;
-  remove(key: string): void;
-  clear(): void;
-  keys(): Iterable<string>;
+  set<T>(key: string, value: Stored<T>): Promise<void>;
+  remove(key: string): Promise<void>;
+  clear(): Promise<void>;
+  keys(): Promise<Iterable<string>>;
 };
 
 export function Cache(adapter?: Adapter): Cache {
@@ -74,27 +74,24 @@ export function Cache(adapter?: Adapter): Cache {
         return empty<T>();
       }
     },
-    set<T>(key: string, value: Stored<T>): boolean {
-      if (value.data === unset || G.isNull(value.at)) return false;
+    set<T>(key: string, value: Stored<T>): Promise<void> {
+      if (value.data === unset || G.isNull(value.at)) return Promise.resolve();
       try {
-        backing.set(
-          key,
-          JSON.stringify(<Encoded<T>>{
-            data: value.data,
-            at: value.at.toString(),
-          }),
-        );
-        return true;
+        return Promise.resolve(
+          backing.set(
+            key,
+            JSON.stringify(<Encoded<T>>{
+              data: value.data,
+              at: value.at.toString(),
+            }),
+          ),
+        ).catch(() => {});
       } catch {
-        return false;
+        return Promise.resolve();
       }
     },
-    remove(key: string): void {
-      backing.remove(key);
-    },
-    clear(): void {
-      backing.clear();
-    },
-    keys: () => backing.keys?.() ?? [],
+    remove: (key) => Promise.resolve(backing.remove(key)),
+    clear: () => Promise.resolve(backing.clear()),
+    keys: () => Promise.resolve(backing.keys?.() ?? []),
   };
 }

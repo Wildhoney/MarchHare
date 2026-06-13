@@ -23,13 +23,21 @@ import type { WithHandle } from "../with/index.ts";
  * Awaiting the handle (`await context.actions.resource(...)`) triggers
  * the fetch with whichever options have been set on the chain.
  */
-export type ResourceCall<T> = PromiseLike<T> & {
+/**
+ * Fetch-configured chain returned from `.exceeds(...)` and
+ * `.coalesce(...)`. Awaiting the chain runs the fetch with whichever
+ * options are set; `.evict()` is intentionally absent because the
+ * "configured a fetch then evicted instead" sequence has no coherent
+ * meaning &mdash; eviction is always available off the bare
+ * `context.actions.resource(...)` call.
+ */
+export type ResourceFetch<T> = PromiseLike<T> & {
   /**
    * Skip the fetch when the cached payload is within `duration`.
    * Accepts a `Temporal.Duration`, a `DurationLike` object
    * (`{ minutes: 5 }`), or an ISO 8601 string (`"PT5M"`).
    */
-  readonly exceeds: (duration: Temporal.DurationLike) => ResourceCall<T>;
+  readonly exceeds: (duration: Temporal.DurationLike) => ResourceFetch<T>;
   /**
    * Join an in-flight fetch for the same `(resource, params, token)`
    * tuple. The shared fetch runs against a detached `AbortController`
@@ -40,7 +48,17 @@ export type ResourceCall<T> = PromiseLike<T> & {
    * `token` is optional &mdash; omit it to share with every other
    * untokened caller for the same `(resource, params)` slot.
    */
-  readonly coalesce: (token?: Coalesce) => ResourceCall<T>;
+  readonly coalesce: (token?: Coalesce) => ResourceFetch<T>;
+};
+
+/**
+ * Chainable handle returned from `context.actions.resource(invocation)`.
+ * Either resolve to the fetched value (`.exceeds`/`.coalesce` + await)
+ * or drop the cache slot (`.evict`) &mdash; the two paths are mutually
+ * exclusive, so once `.exceeds` or `.coalesce` runs the chain narrows
+ * to {@link ResourceFetch} and `.evict` is no longer available.
+ */
+export type ResourceCall<T> = ResourceFetch<T> & {
   /**
    * Drop cache entries for the primed resource without fetching. With
    * no argument, uses the params from the originating call as the
@@ -48,15 +66,21 @@ export type ResourceCall<T> = PromiseLike<T> & {
    * satisfy the pattern's keys (partial match &mdash; extra keys in
    * the stored params are ignored).
    *
+   * Returns a `Promise<void>` so async cache backends (RN AsyncStorage,
+   * IndexedDB, etc.) settle before the await resolves. Always
+   * `await context.actions.resource(...).evict()` &mdash; even when
+   * the configured cache is synchronous, the contract stays async so
+   * call sites read uniformly.
+   *
    * ```ts
    * // Drop the {id: 5} slot.
-   * context.actions.resource(resource.user({ id: 5 })).evict();
+   * await context.actions.resource(resource.user({ id: 5 })).evict();
    *
    * // Drop every user slot whose stored params include name "Adam".
-   * context.actions.resource(resource.user()).evict({ name: "Adam" });
+   * await context.actions.resource(resource.user()).evict({ name: "Adam" });
    * ```
    */
-  readonly evict: (where?: object) => void;
+  readonly evict: (where?: object) => Promise<void>;
 };
 import { describe } from "../utils.ts";
 
@@ -771,7 +795,7 @@ export type HandlerContext<
     annotate<T>(value: T, operation?: Operation): T;
     readonly inspect: Readonly<Inspect<M>>;
     resource: (<T>(invocation: T | null) => ResourceCall<T>) & {
-      nuke(where?: object): void;
+      nuke(where?: object): Promise<void>;
     };
     final<T>(
       action: BroadcastPayload<T> | MulticastPayload<T>,

@@ -12,7 +12,7 @@ export function useActions() {
   const actions = context.useActions(model);
 
   actions.useAction(Actions.Select, (context, mood) => {
-    context.actions.dispatch(MulticastActions.Mood, mood);
+    void context.actions.dispatch(MulticastActions.Mood, mood);
   });
 
   actions.useAction(MulticastActions.Mood, (context, mood) => {

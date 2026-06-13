@@ -22,7 +22,7 @@ export function useActions() {
     });
 
     source.addEventListener("visitor", (event) => {
-      context.actions.dispatch(
+      void context.actions.dispatch(
         Actions.Visitor,
         <Country>JSON.parse(event.data),
       );

@@ -24,42 +24,48 @@ export type Encoded<T> = {
 export type Adapter = {
   /**
    * Return the raw string stored under `key`, or `null` when no entry
-   * exists. The Cache wrapper handles JSON parsing and `Temporal.Instant`
-   * round-tripping, so this stays a plain string getter. Treat any
-   * read-time error (decryption, IPC, etc.) as "not found" and return
-   * `null` &mdash; the Cache falls through to its next fallback rather
-   * than crashing the render.
+   * exists. **Sync only** &mdash; the model-literal sync read requires
+   * an immediate answer. Async backends (React Native AsyncStorage,
+   * IndexedDB, etc.) need a sync facade hydrated at app entry; see
+   * `recipes/storage.md` for the pattern. Treat any read-time error
+   * (decryption, IPC, etc.) as "not found" and return `null`.
    */
   readonly get: (key: string) => string | null;
   /**
-   * Persist the raw string `value` under `key`. The Cache guarantees
-   * `value` is a JSON-encoded `{ data, at }` envelope produced by a
-   * resolved snapshot &mdash; never a placeholder. Throwing is fine on
-   * quota, private mode, sandboxed iframes, etc.; the Cache catches and
-   * swallows so a write failure can't poison an already-resolved fetch.
+   * Persist the raw string `value` under `key`. May return `void` for
+   * sync backends or `Promise<void>` for async ones (RN AsyncStorage,
+   * IndexedDB). The Cache awaits the result before resolving its own
+   * `set` so callers know the write has settled when their `await`
+   * returns. Throwing (or rejecting) is fine on quota, private mode,
+   * sandboxed iframes, etc.; the Cache catches and swallows so a write
+   * failure can't poison an already-resolved fetch.
    */
-  readonly set: (key: string, value: string) => void;
+  readonly set: (key: string, value: string) => void | Promise<void>;
   /**
-   * Drop the entry at `key`. Idempotent &mdash; calling `remove` for a
-   * key that isn't present must not throw.
+   * Drop the entry at `key`. May return `void` or `Promise<void>`.
+   * Idempotent &mdash; calling `remove` for a key that isn't present
+   * must not throw.
    */
-  readonly remove: (key: string) => void;
+  readonly remove: (key: string) => void | Promise<void>;
   /**
-   * Wipe every entry this adapter can see. On a shared backend such as
-   * `localStorage` this means the whole origin &mdash; third-party SDK
-   * state, dismissed banners, route hints, etc. all go with it. Adapter
-   * authors should either delegate to the backend's native clear
-   * (accepting that scope) or namespace by key prefix and remove only
-   * their own.
+   * Wipe every entry this adapter can see. May return `void` or
+   * `Promise<void>`. On a shared backend such as `localStorage` this
+   * means the whole origin &mdash; third-party SDK state, dismissed
+   * banners, route hints, etc. all go with it. Adapter authors should
+   * either delegate to the backend's native clear (accepting that
+   * scope) or namespace by key prefix and remove only their own.
    */
-  readonly clear: () => void;
+  readonly clear: () => void | Promise<void>;
   /**
    * Optional enumerator over every key the adapter currently knows
-   * about. When present, partial-match evictions can sweep entries
-   * written in previous sessions; when absent, eviction is limited to
-   * keys touched by the current session. `localStorage` exposes this
-   * via `Object.keys(localStorage)`, MMKV via `getAllKeys()`, and
-   * in-memory adapters can yield from their backing Map.
+   * about. May yield sync or via a `Promise`. When present,
+   * partial-match evictions can sweep entries written in previous
+   * sessions; when absent, eviction is limited to keys touched by the
+   * current session. `localStorage` exposes this via
+   * `Object.keys(localStorage)`, MMKV via `getAllKeys()`, and
+   * AsyncStorage via `getAllKeys(): Promise<readonly string[]>`.
    */
-  readonly keys?: () => Iterable<string>;
+  readonly keys?: () =>
+    | Iterable<string>
+    | Promise<Iterable<string> | readonly string[]>;
 };

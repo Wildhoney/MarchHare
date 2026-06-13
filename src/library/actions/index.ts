@@ -316,14 +316,14 @@ export function useActions<
                   options.coalesceToken = token ?? defaultCoalesceToken;
                   return handle;
                 },
-                evict(where?: object) {
-                  call.evict(where ?? call.params);
+                evict(where?: object): Promise<void> {
+                  return call.evict(where ?? call.params);
                 },
               };
               return handle;
             },
             {
-              nuke: (where?: object): void => nuke(where),
+              nuke: (where?: object): Promise<void> => nuke(where),
             },
           ),
           async final(action: AnyAction) {
@@ -344,7 +344,7 @@ export function useActions<
                 controller.signal.addEventListener("abort", onAbort, {
                   once: true,
                 });
-                inspector.settled().then(() => {
+                void inspector.settled().then(() => {
                   controller.signal.removeEventListener("abort", onAbort);
                   resolve();
                 });
