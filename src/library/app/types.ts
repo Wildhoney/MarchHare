@@ -1,6 +1,5 @@
 import type { Args } from "../resource/types.ts";
 import type { ResourceHandle } from "../resource/types.ts";
-import type { Cache } from "../cache/index.ts";
 import type {
   Actions,
   Context,
@@ -32,20 +31,16 @@ export type AppFetcher<S, T, P extends object = Record<never, never>> = (
 ) => Promise<T>;
 
 /**
- * `app.Resource(fetcher)` &mdash; in-memory cache, no persistence.
- * `app.Resource.Cachable(cache, fetcher)` &mdash; persistent cache wired
- * to the supplied `Cache` adapter. Both forms type `context.env` as
- * the App's Env shape.
+ * `app.Resource(fetcher)` declares a remote interaction bound to the
+ * App's Env shape. Cache behaviour is decided at App construction:
+ * pass `App({ cache })` to share a single {@link Cache} (typically
+ * backed by `localStorage`/MMKV) across every resource on the App, or
+ * omit it to keep each resource's payloads in an isolated in-memory
+ * slot.
  */
-export type AppResource<S> = {
-  <T, P extends object = Record<never, never>>(
-    fetcher: AppFetcher<S, T, P>,
-  ): ResourceHandle<T, P>;
-  readonly Cachable: <T, P extends object = Record<never, never>>(
-    cache: Cache,
-    fetcher: AppFetcher<S, T, P>,
-  ) => ResourceHandle<T, P>;
-};
+export type AppResource<S> = <T, P extends object = Record<never, never>>(
+  fetcher: AppFetcher<S, T, P>,
+) => ResourceHandle<T, P>;
 
 /**
  * Tuple shape returned by `context.useActions(...)` on an App-bound

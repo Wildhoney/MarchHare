@@ -81,7 +81,7 @@ export type Config<T, P extends object = Record<never, never>> = {
 /**
  * Snapshot of the most recent resource invocation. `resource.cat(params)`
  * writes one of these into a module-scope slot; the next
- * `context.actions.resource(...)` / `.set(...)` call consumes it via
+ * `context.actions.resource(...).evict()` or fetch call consumes it via
  * `consumePending` and then clears the slot.
  *
  * @internal
@@ -97,16 +97,25 @@ export type PendingCall = {
     data: unknown;
     at: Temporal.Instant | null;
   };
-  readonly seed: (params: object, data: unknown, at: Temporal.Instant) => void;
+  readonly evict: (where: object) => void;
   readonly params: object;
 };
 
 /**
- * Resource handle returned by `Resource(...)` or `Resource.Cachable(...)`.
- * Call it with `params` to read the per-params cache slot synchronously
- * and prime the slot consumed by `context.actions.resource(...)` for a
- * follow-up fetch or `context.actions.resource.set(...)` for an
- * out-of-band write.
+ * Resource handle returned by `Resource(...)` (or its `app.Resource` /
+ * `shared.Resource` counterparts). Call it with `params` to read the
+ * per-params cache slot synchronously and prime the slot consumed by
+ * `context.actions.resource(...)`. Eviction lives on the handler
+ * context rather than the handle:
+ *
+ * - `context.actions.resource(resource.cat({id: 5})).evict()` &mdash;
+ *   drop the `{id: 5}` slot.
+ * - `context.actions.resource(resource.cat()).evict({name: "Adam"})`
+ *   &mdash; evict every cached `cat` entry whose stored params include
+ *   `name: "Adam"`, regardless of other keys.
+ * - `context.actions.resource.nuke({id: 5})` &mdash; partial-match
+ *   eviction across every resource on the App; nuke with no argument
+ *   clears every known slot.
  *
  * ```ts
  * // Sync cache read in a model literal.
@@ -117,8 +126,8 @@ export type PendingCall = {
  *   .resource(resource.cat({ id: 5 }))
  *   .exceeds({ minutes: 5 });
  *
- * // Write through to the per-params cache slot.
- * context.actions.resource.set(resource.cat({ id: 5 }), data);
+ * // Evict the {id: 5} slot.
+ * context.actions.resource(resource.cat({ id: 5 })).evict();
  * ```
  */
 export type ResourceHandle<T, P extends object = Record<never, never>> = [

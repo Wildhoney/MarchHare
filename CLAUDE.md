@@ -34,7 +34,7 @@ import type {
 } from "march-hare";
 ```
 
-`shared.*` &mdash; standalone hooks/factories for reusable components: `shared.useContext`, `shared.useEnv`, `shared.Resource`, `shared.Resource.Cachable`, `shared.Scope`. Reach for `app.X` instead when you only need to support a single App.
+`shared.*` &mdash; standalone hooks/factories for reusable components: `shared.useContext`, `shared.useEnv`, `shared.Resource`, `shared.Scope`. Reach for `app.X` instead when you only need to support a single App. Persistent caches live on the App: `App({ cache })` is shared by every `app.Resource`.
 
 ## Core Concepts
 
@@ -147,7 +147,8 @@ actions.useAction(Actions.Error, (context, fault) => {
 
 actions.useAction(Actions.Update, (context, changes) => {
   // Triggered when context.data changes (not on initial mount)
-  // changes: Record<string, unknown> with changed keys
+  // changes: Partial<DeepReadonly<D>> — only the data keys whose values
+  // changed between renders, typed against the useContext data generic
 });
 ```
 

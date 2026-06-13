@@ -14,12 +14,37 @@
  * | `app.useContext<M, A, D>()`      | `shared.useContext<E, M, A, D>()`        |
  * | `app.useEnv()`                   | `shared.useEnv<E>()`                     |
  * | `app.Resource<T, P>(...)`        | `shared.Resource<E, T, P>(...)`          |
- * | `app.Resource.Cachable(...)`     | `shared.Resource.Cachable<E, T, P>(...)` |
  * | `app.Scope<A>()`                 | `shared.Scope<E, A>()`                   |
+ *
+ * `shared.Resource` declarations always read from and write to an
+ * in-memory cache &mdash; persistence is an App-level concern wired up
+ * via `App({ cache })`. Reach for `app.Resource` instead when a resource
+ * needs to survive reloads.
  *
  * @see {@link ./app/index.tsx App}
  */
 
+import { Resource as InternalResource } from "../resource/index.ts";
+import type { AppFetcher } from "../app/types.ts";
+import type { ResourceHandle } from "../resource/types.ts";
+
 export { useContext, useEnv } from "../app/index.tsx";
 export { Scope } from "../scope/index.tsx";
-export { Resource } from "../resource/index.ts";
+
+/**
+ * Standalone counterpart to `app.Resource`, exported as
+ * `shared.Resource`. Takes the **Env shape `E` as a mandatory first
+ * generic** so the fetcher's `context.env` is typed even when the
+ * resource isn't bound to a single App.
+ *
+ * Always uses an isolated in-memory cache &mdash; persistent caching
+ * is an App-level concern wired through `App({ cache })`, so reach for
+ * `app.Resource` when a resource needs to survive reloads.
+ */
+export function Resource<
+  E extends object,
+  T,
+  P extends object = Record<never, never>,
+>(fetcher: AppFetcher<E, T, P>): ResourceHandle<T, P> {
+  return InternalResource<E, T, P>(fetcher);
+}

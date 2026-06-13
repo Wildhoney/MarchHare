@@ -41,7 +41,7 @@ import { useScope, getScope } from "../boundary/components/scope/index.tsx";
 import { useEnv, useEnvRef } from "../boundary/components/env/utils.ts";
 import type { Env } from "../boundary/components/env/index.tsx";
 import { produce as produceImmer } from "immer";
-import { consumePending } from "../resource/index.ts";
+import { consumePending, nuke } from "../resource/index.ts";
 import type { Coalesce } from "../resource/types.ts";
 import {
   coalesceKey,
@@ -316,14 +316,14 @@ export function useActions<
                   options.coalesceToken = token ?? defaultCoalesceToken;
                   return handle;
                 },
+                evict(where?: object) {
+                  call.evict(where ?? call.params);
+                },
               };
               return handle;
             },
             {
-              set: <T>(_value: T | null, data: T): void => {
-                const call = consumePending();
-                call.seed(call.params, data, Temporal.Now.instant());
-              },
+              nuke: (where?: object): void => nuke(where),
             },
           ),
           async final(action: AnyAction) {

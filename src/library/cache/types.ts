@@ -53,4 +53,13 @@ export type Adapter = {
    * their own.
    */
   readonly clear: () => void;
+  /**
+   * Optional enumerator over every key the adapter currently knows
+   * about. When present, partial-match evictions can sweep entries
+   * written in previous sessions; when absent, eviction is limited to
+   * keys touched by the current session. `localStorage` exposes this
+   * via `Object.keys(localStorage)`, MMKV via `getAllKeys()`, and
+   * in-memory adapters can yield from their backing Map.
+   */
+  readonly keys?: () => Iterable<string>;
 };

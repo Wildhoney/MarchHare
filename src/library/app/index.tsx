@@ -53,9 +53,10 @@ export type App<S extends object> = {
    */
   readonly useEnv: () => Readonly<S>;
   /**
-   * `Resource` factory bound to this App's Env. Same shape as the
-   * top-level `Resource`: call directly for an in-memory cache, or use
-   * `app.Resource.Cachable(cache, fetcher)` for persistence.
+   * `Resource` factory bound to this App's Env. Resources declared
+   * through this factory share the cache passed to `App({ cache })`
+   * &mdash; or fall back to a per-resource in-memory slot when no
+   * cache is configured on the App.
    */
   readonly Resource: AppResource<S>;
   /**
@@ -87,15 +88,22 @@ export type App<S extends object> = {
  *
  * Pass `tap` to subscribe to every action handler's dispatch / settle /
  * error inside the boundary &mdash; useful for analytics, audit logging,
- * Sentry breadcrumbs. See `recipes/tap.md`. Both `env` and `tap` are
- * fixed at `App()` time; `<app.Boundary>` does not accept overrides.
- * Mutate the live Env through `context.actions.produce(({ env }) => …)`,
- * and declare a separate `App` when a test or storybook needs a
- * different initial value.
+ * Sentry breadcrumbs. See `recipes/tap.md`. Pass `cache` to persist
+ * every `app.Resource(fetcher)` declaration through a single
+ * {@link Cache} &mdash; each resource is namespaced inside the cache by
+ * its declaration order, so reloads seed from storage automatically and
+ * resources do not collide on shared params keys. Omit `cache` to keep
+ * each resource's payloads in an isolated in-memory slot.
+ *
+ * `env`, `tap`, and `cache` are all fixed at `App()` time;
+ * `<app.Boundary>` does not accept overrides. Mutate the live Env
+ * through `context.actions.produce(({ env }) => …)`, and declare a
+ * separate `App` when a test or storybook needs a different initial
+ * value.
  *
  * @example
  * ```tsx
- * import { App, type Taps } from "march-hare";
+ * import { App, Cache, type Taps } from "march-hare";
  *
  * type Session = { accessToken: string };
  *
@@ -111,6 +119,12 @@ export type App<S extends object> = {
  *     operating: "idle" as "idle" | "signing-out",
  *   },
  *   tap,
+ *   cache: Cache({
+ *     get: (key) => localStorage.getItem(key),
+ *     set: (key, value) => localStorage.setItem(key, value),
+ *     remove: (key) => localStorage.removeItem(key),
+ *     clear: () => localStorage.clear(),
+ *   }),
  * });
  *
  * // Root render.
@@ -118,21 +132,7 @@ export type App<S extends object> = {
  *   <Root />
  * </app.Boundary>;
  *
- * // In a feature's actions.ts:
- * export function useAuthActions() {
- *   const context = app.useContext<void, typeof Actions>();
- *   const actions = context.useActions();
- *
- *   actions.useAction(Actions.SignOut, async (context) => {
- *     context.actions.produce(({ env }) => {
- *       env.session = null;
- *     });
- *   });
- *
- *   return actions;
- * }
- *
- * // In resources.ts:
+ * // In resources.ts &mdash; persisted via the App's cache.
  * export const user = app.Resource<User>((context) =>
  *   ky
  *     .get("/api/user", {
@@ -148,6 +148,7 @@ export type App<S extends object> = {
 export function App<S extends object = Env>(config?: {
   env?: S;
   tap?: Tap;
+  cache?: Cache;
 }): App<S> {
   function Boundary({
     children,
@@ -173,21 +174,11 @@ export function App<S extends object = Env>(config?: {
     return baseUseEnv() as unknown as Readonly<S>;
   }
 
-  const Resource = Object.assign(
-    function TypedResource<T, P extends object = Record<never, never>>(
-      fetcher: AppFetcher<S, T, P>,
-    ): ResourceHandle<T, P> {
-      return BaseResource<S, T, P>(fetcher);
-    },
-    {
-      Cachable<T, P extends object = Record<never, never>>(
-        cache: Cache,
-        fetcher: AppFetcher<S, T, P>,
-      ): ResourceHandle<T, P> {
-        return BaseResource.Cachable<S, T, P>(cache, fetcher);
-      },
-    },
-  ) as AppResource<S>;
+  function Resource<T, P extends object = Record<never, never>>(
+    fetcher: AppFetcher<S, T, P>,
+  ): ResourceHandle<T, P> {
+    return BaseResource<S, T, P>(fetcher, config?.cache);
+  }
 
   return {
     Boundary,
@@ -195,7 +186,7 @@ export function App<S extends object = Env>(config?: {
     useEnv: useTypedEnv,
     Resource,
     Scope<MulticastActions>() {
-      return createScope<S, MulticastActions>();
+      return createScope<S, MulticastActions>(config?.cache);
     },
   };
 }

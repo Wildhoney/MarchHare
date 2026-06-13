@@ -40,7 +40,7 @@ For advanced topics, see the [recipes directory](./recipes/).
 - Reduces context proliferation &ndash; events replace many contexts.
 - No need to memoize callbacks &ndash; handlers are stable references with fresh closure access.
 - Clear separation between business logic and markup.
-- Complements [Feature Slice Design](https://feature-sliced.design/) architecture.
+- Complements [Feature Sliced Design](https://feature-sliced.design/) architecture &mdash; **App = host, Scope = feature**; see [Reusable components](#reusable-components).
 - Strongly typed dispatches, models, payloads, etc.
 - Built-in request cancellation with `AbortController`.
 - Granular async state tracking per model field.
@@ -536,21 +536,28 @@ actions.useAction(Actions.Mount, async (context) => {
 
 See the [Resource recipe](./recipes/use-resource.md) for the three-tier error handling model, parameterised resources, and limitations.
 
-By default an `app.Resource`'s cache is in-memory only &ndash; it resets on every page load. To keep the most recent successful payload around between sessions, switch to `app.Resource.Cachable(cache, fetcher)`. The cache is the **first** argument &mdash; persistence is the headline of this form, the fetcher is the operation. Every successful fetch writes through to the Cache; first reads via the call form auto-seed from the Cache's adapter:
+By default an `app.Resource`'s cache is in-memory only &ndash; it resets on every page load. To keep the most recent successful payload around between sessions, wire a `Cache` into `App({ cache })`. Every `app.Resource` declared on that App writes through to the shared Cache and seeds from it on the next reload; resources are namespaced internally so they don't collide on shared params keys:
+
+```ts
+// app.ts
+import { App, Cache } from "march-hare";
+
+export const app = App({
+  env: { session: null as Session | null },
+  cache: Cache({
+    get: (key) => localStorage.getItem(key),
+    set: (key, value) => localStorage.setItem(key, value),
+    remove: (key) => localStorage.removeItem(key),
+    clear: () => localStorage.clear(),
+  }),
+});
+```
 
 ```ts
 // resources.ts
-import { Cache } from "march-hare";
 import { app } from "./app";
 
-const cache = Cache({
-  get: (key) => localStorage.getItem(key),
-  set: (key, value) => localStorage.setItem(key, value),
-  remove: (key) => localStorage.removeItem(key),
-  clear: () => localStorage.clear(),
-});
-
-export const cat = app.Resource.Cachable(cache, (context) =>
+export const cat = app.Resource((context) =>
   fetchCat(context.controller.signal),
 );
 ```
@@ -703,7 +710,7 @@ A few rules worth knowing:
 - **No `scope.Scope()`.** The handle deliberately omits a nested factory. Open another scope by calling `app.Scope<...>()` again and rendering its `<Boundary>` &mdash; that way the multicast surface stays declared at the call site.
 - **Replay on late-mount is per-scope.** Like broadcast, multicast caches its most recent payload per action symbol; components that mount later inside the same boundary pick up the cached value through their `useAction` handler. See the [mount deduplication recipe](./recipes/mount-broadcast-deduplication.md) if you also fetch in `Lifecycle.Mount()`.
 
-See the [multicast recipe](./recipes/multicast-actions.md) for more details.
+See the [multicast recipe](./recipes/multicast-actions.md) for more details. When the scope itself needs to be reusable across multiple hosts, reach for `shared.Scope<HostEnvs, typeof MulticastActions>()` &mdash; the standalone form covered in [Reusable components](#reusable-components). The rule of thumb: never reach for a second `App()` to get a private channel; that's what multicast scopes exist for.
 
 ## Global data
 
@@ -800,15 +807,16 @@ export const app = App();
 
 ## Reusable components
 
+> **App = host, Scope = feature.** One `App<HostEnv>()` per deployable; everything inside it is a component. A component that needs a private channel reaches for `shared.Scope<HostEnvs, _>()`, never another `App()`. A component that runs under more than one `App` reaches for `shared.useContext<HostEnvs, M, A>()` instead of binding to a specific `app`. That one rule keeps the dependency graph acyclic, lets cross-cutting state (session, locale, permissions) live in a single Env, and gives [Feature Sliced Design](https://feature-sliced.design/) a 1:1 runtime expression &mdash; shared layer reuses `shared.X` against a `HostEnvs` union, features open `shared.Scope`s, hosts declare the App.
+
 Importing `app` from a single location is fine inside a feature, but it breaks when a component needs to run under **more than one** `App` &mdash; a shared `<Profile />` used by both a web app and a mobile shell, for example. For that case, every `app.X` factory has a **standalone counterpart** on the `shared` namespace that takes the Env shape `E` as its mandatory first generic:
 
-| Bound to an App              | Standalone (`shared.X`)                  |
-| ---------------------------- | ---------------------------------------- |
-| `app.useContext<M, A, D>()`  | `shared.useContext<E, M, A, D>()`        |
-| `app.useEnv()`               | `shared.useEnv<E>()`                     |
-| `app.Resource<T, P>(...)`    | `shared.Resource<E, T, P>(...)`          |
-| `app.Resource.Cachable(...)` | `shared.Resource.Cachable<E, T, P>(...)` |
-| `app.Scope<A>()`             | `shared.Scope<E, A>()`                   |
+| Bound to an App             | Standalone (`shared.X`)           |
+| --------------------------- | --------------------------------- |
+| `app.useContext<M, A, D>()` | `shared.useContext<E, M, A, D>()` |
+| `app.useEnv()`              | `shared.useEnv<E>()`              |
+| `app.Resource<T, P>(...)`   | `shared.Resource<E, T, P>(...)`   |
+| `app.Scope<A>()`            | `shared.Scope<E, A>()`            |
 
 The standalone forms take the same runtime path as the App-bound ones &mdash; `E` is purely a type-level binding the caller supplies so reusable code stays App-agnostic.
 
@@ -876,6 +884,6 @@ function Where(): React.ReactElement {
 }
 ```
 
-`shared.Resource<E, T, P>` and `shared.Resource.Cachable<E, T, P>` are the same story for shared resources &mdash; declare them at module scope, pass the Env union as the first generic, and the fetcher's `context.env` is typed against it. `shared.Scope<E, A>()` opens a multicast scope without going through an App handle. See the [reusable components recipe](./recipes/reusable-components.md) for the full pattern including discriminator-keyed switches and the `App()`-with-no-env case.
+`shared.Resource<E, T, P>` is the same story for shared resources &mdash; declare them at module scope, pass the Env union as the first generic, and the fetcher's `context.env` is typed against it. Shared resources always use an isolated in-memory cache; reach for `app.Resource` when persistence is required, since the cache is wired into the App via `App({ cache })`. `shared.Scope<E, A>()` opens a multicast scope without going through an App handle. See the [reusable components recipe](./recipes/reusable-components.md) for the full pattern including discriminator-keyed switches and the `App()`-with-no-env case.
 
 For one-line handler binding &mdash; flipping a boolean, assigning a payload to a leaf, pinning a field to a fixed value &mdash; reach for `context.with.{update,invert,always}`. See the [`With` helpers recipe](./recipes/with-helpers.md) for the full surface.

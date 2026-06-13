@@ -1,11 +1,11 @@
 # Persisting resources across reloads
 
-By default a `Resource`'s cache is in-memory only &ndash; it resets on every page load. To keep the most recent successful payload around between sessions, wire a `Cache` instance to the `Resource` definition. The Cache writes through to its adapter on every successful fetch and seeds the per-params slot from storage on first read, so call sites stay free of explicit `cache.set` / `cache.get` ceremony.
+By default a `Resource`'s cache is in-memory only &ndash; it resets on every page load. To keep the most recent successful payload around between sessions, wire a `Cache` into `App({ cache })`. Every `app.Resource` declaration on that App shares the cache: writes go through on every successful fetch, and the per-params slot seeds from storage on first read, so call sites stay free of explicit `cache.set` / `cache.get` ceremony.
 
 This recipe covers:
 
 - The `Cache(adapter)` factory and its `get`/`set`/`remove`/`clear` API.
-- `Resource({ fetch, cache })` &mdash; the cache-aware config form of `Resource`. Pass a `Cache` to persist payloads.
+- `App({ cache })` &mdash; the single place to wire persistence for every resource on an App.
 - Adapter examples for browser `localStorage`, React Native MMKV, and browser-extension `chrome.storage`.
 - Sign-out purge, schema versioning, and the `unset` sentinel.
 
@@ -53,34 +53,38 @@ cache.remove("user");
 cache.clear();
 ```
 
-## Wiring a Cache into a Resource
+## Wiring a Cache into the App
 
-Use the config form `Resource({ fetch, cache })` to wire a Cache. Bare `Resource(fetcher)` is the fetcher shorthand &mdash; in-memory only, no persistence. Every successful fetch writes through to the Cache under a key derived from the call-site params; first reads via `cat(params)` auto-seed from the Cache's adapter:
+Attach a Cache once on `App({ cache })`. Every `app.Resource(fetcher)` declared against that App shares the cache, namespaced internally by declaration order so two resources called with the same params don't collide on the same adapter slot:
+
+```ts
+// app.ts
+import { App, Cache } from "march-hare";
+
+export const app = App({
+  env: { session: null as Session | null },
+  cache: Cache({
+    get: (key) => localStorage.getItem(key),
+    set: (key, value) => localStorage.setItem(key, value),
+    remove: (key) => localStorage.removeItem(key),
+    clear: () => localStorage.clear(),
+  }),
+});
+```
 
 ```ts
 // resources.ts
 import ky from "ky";
-import { Cache } from "march-hare";
 import { app } from "./app";
 import type { Cat } from "./types";
 
-const cache = Cache({
-  get: (key) => localStorage.getItem(key),
-  set: (key, value) => localStorage.setItem(key, value),
-  remove: (key) => localStorage.removeItem(key),
-  clear: () => localStorage.clear(),
-});
-
-export const cat = app.Resource({
-  cache,
-  async fetch(context) {
-    const cats = await ky
-      .get("https://api.thecatapi.com/v1/images/search", {
-        signal: context.controller.signal,
-      })
-      .json<Cat[]>();
-    return cats[0];
-  },
+export const cat = app.Resource(async (context) => {
+  const cats = await ky
+    .get("https://api.thecatapi.com/v1/images/search", {
+      signal: context.controller.signal,
+    })
+    .json<Cat[]>();
+  return cats[0];
 });
 ```
 
@@ -117,52 +121,28 @@ What happens on a cold reload:
 4. The component renders the previous session's payload immediately.
 5. `Mount` fires. `context.actions.resource(resource.cat()).exceeds({ minutes: 5 })` checks the persisted `at`. If it's within five minutes, the fetcher _doesn't run_; otherwise it does. On a successful fetch, the Cache writes through.
 
-> **One Cache per Resource is the default.** The Cache's whole adapter namespace belongs to the Resource it's wired to &mdash; different Resources should each declare their own Cache (with a distinct prefix in the adapter if sharing one backing store like `localStorage`).
+> **One Cache per App.** All `app.Resource` declarations share `App({ cache })`. Each resource is isolated inside the cache via a module-evaluation-order namespace, so two resources called with the same params still resolve to distinct adapter slots and reload-seeding lines up across page loads. Reach for separate `App()` instances when you genuinely need isolated caches.
 
 ## Per-params keying
 
-Cache entries are keyed automatically by `JSON.stringify(params)`. For a parameterised resource like `resource.user({ id: 5 })`, the storage key is `"{\"id\":5}"`. Different params produce independent persistent slots:
+Cache entries are keyed automatically by `JSON.stringify(params)`, prefixed with the resource's declaration-order namespace inside the App's cache. For a parameterised resource like `resource.user({ id: 5 })`, the per-params suffix is `"{\"id\":5}"`. Different params produce independent persistent slots:
 
 ```ts
-const userCache = Cache(namespacedAdapter("users"));
-export const user = app.Resource<User, { id: number }>({
-  cache: userCache,
-  fetch(context) {
-    return ky
-      .get(`users/${context.params.id}`, {
-        signal: context.controller.signal,
-      })
-      .json<User>();
-  },
-});
+export const user = app.Resource<User, { id: number }>((context) =>
+  ky
+    .get(`users/${context.params.id}`, {
+      signal: context.controller.signal,
+    })
+    .json<User>(),
+);
 
 // Each cache slot is independent.
-await context.actions.resource(resource.user({ id: 5 })); // stored under "{\"id\":5}"
-await context.actions.resource(resource.user({ id: 6 })); // stored under "{\"id\":6}"
+await context.actions.resource(resource.user({ id: 5 })); // stored under "<ns>:{\"id\":5}"
+await context.actions.resource(resource.user({ id: 6 })); // stored under "<ns>:{\"id\":6}"
 
 // Sync reads pull from each slot.
 const five: User | null = resource.user({ id: 5 });
 const six: User | null = resource.user({ id: 6 });
-```
-
-If you want to namespace by resource name when sharing a backing store, prefix in the adapter:
-
-```ts
-function namespacedAdapter(prefix: string): Adapter {
-  return {
-    get: (key) => localStorage.getItem(`${prefix}/${key}`),
-    set: (key, value) => localStorage.setItem(`${prefix}/${key}`, value),
-    remove: (key) => localStorage.removeItem(`${prefix}/${key}`),
-    clear: () => {
-      for (const k of Object.keys(localStorage)) {
-        if (k.startsWith(`${prefix}/`)) localStorage.removeItem(k);
-      }
-    },
-  };
-}
-
-const catCache = Cache(namespacedAdapter("cat"));
-const userCache = Cache(namespacedAdapter("user"));
 ```
 
 ## Adapter examples
@@ -241,27 +221,41 @@ On the server, reads return empty Stored handles and writes are no-ops.
 
 ## Sign-out and per-user data
 
-Persisted entries survive sign-out by default. Clear them explicitly when the user signs out:
+Persisted entries survive sign-out by default. Hold a reference to the App's cache (or import it via `app`-adjacent module) and clear it explicitly when the user signs out:
 
 ```ts
-import * as resource from "../resources";
+import { cache } from "./app";
 
 actions.useAction(Actions.SignOut, async (context) => {
   await context.actions.resource(resource.signOut());
   context.actions.produce(({ env }) => {
     env.session = null;
   });
-  catCache.clear();
-  userCache.clear();
+  cache.clear();
 });
 ```
 
+To purge a single resource entry instead of the whole App cache, reach for `context.actions.resource(resource.user(params)).evict()` &mdash; see [`evict()` below](#evicting-a-cache-entry).
+
+## Evicting a cache entry
+
+Inside an action handler, chain `.evict(where?)` on `context.actions.resource(...)` to remove cache entries by partial-match pattern. With no argument, the call's own params become the pattern. With an argument, partial-match drops every stored entry whose params satisfy the supplied keys (extras are ignored):
+
+```ts
+actions.useAction(Actions.UserDeleted, (context, { id }) => {
+  context.actions.resource(resource.user({ id })).evict();
+});
+
+actions.useAction(Actions.TeamUpdated, (context, { teamId }) => {
+  context.actions.resource(resource.user()).evict({ teamId });
+});
+```
+
+For a sweep across every resource on the App, call `context.actions.resource.nuke(where?)` &mdash; same partial-match logic, broader scope. Both `evict` and `nuke` work against persisted entries when the App is configured with `App({ cache })`; partial-match enumeration uses the adapter's `keys()` (when implemented) plus the slots touched in the current session.
+
 ## Schema drift
 
-If the shape of `T` changes between deploys, the persisted JSON may not match the new type. Two ways to handle it:
-
-- **Bump the adapter namespace.** Change `namespacedAdapter("cat")` to `namespacedAdapter("cat-v2")`. Old entries become orphaned and the browser will eventually evict them.
-- **Validate after read.** Wrap the Cache's read with a parser that returns an empty Stored when the payload doesn't match the new shape.
+If the shape of `T` changes between deploys, the persisted JSON may not match the new type. Validate the parsed payload after the Cache read &mdash; wrap your fetcher so the slot is repopulated on the next call, or chain `context.actions.resource(resource.user(params)).evict()` from a one-shot migration handler to wipe the stale entry.
 
 ## The `unset` sentinel
 

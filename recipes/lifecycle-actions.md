@@ -40,7 +40,7 @@ export function useActions() {
 - **`Lifecycle.Mount()`** &ndash; Triggered once when the component mounts (`useLayoutEffect`). Protected against React Strict Mode double-invocation.
 - **`Lifecycle.Error()`** &ndash; Triggered when an action **in this component** throws. Receives `Fault` as payload. Each call returns a unique per-component symbol.
 - **`Lifecycle.Unmount()`** &ndash; Triggered when the component unmounts. All in-flight actions are automatically aborted before this handler runs. Protected against React Strict Mode double-invocation via deferred microtask cancellation.
-- **`Lifecycle.Update()`** &ndash; Triggered when `context.data` changes. Receives an object with the changed keys.
+- **`Lifecycle.Update()`** &ndash; Triggered when `context.data` changes (not on initial mount). The handler payload is typed as `Partial<DeepReadonly<D>>` against the `useContext` data generic &ndash; only the keys whose values changed between the previous and current render are present, and each carries the data shape's exact type. A user-defined `Action<P>("Update")` does **not** pick up this typing &mdash; the special case is keyed off the `Lifecycle.Update` factory.
 
 Because each factory call returns a unique symbol, each component's `Mount`/`Unmount`/`Error`/`Update` is independent &mdash; one component's mount handler never fires for another component in the same boundary.
 

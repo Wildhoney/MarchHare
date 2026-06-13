@@ -81,14 +81,15 @@ export type Scope<S extends object, MulticastActions> = {
 /**
  * Internal constructor for a {@link Scope} handle. Called from inside
  * `App<S>()` so the enclosing Env shape `S` is captured at the type
- * level.
+ * level. The optional `cache` is the same value `App({ cache })` was
+ * constructed with &mdash; resources declared via `scope.Resource`
+ * share that cache.
  *
  * @internal
  */
-export function createScope<S extends object, MulticastActions>(): Scope<
-  S,
-  MulticastActions
-> {
+export function createScope<S extends object, MulticastActions>(
+  cache?: Cache,
+): Scope<S, MulticastActions> {
   function Boundary({
     children,
   }: {
@@ -138,21 +139,11 @@ export function createScope<S extends object, MulticastActions>(): Scope<
     return baseUseEnv() as unknown as Readonly<S>;
   }
 
-  const Resource = Object.assign(
-    function TypedResource<T, P extends object = Record<never, never>>(
-      fetcher: AppFetcher<S, T, P>,
-    ): ResourceHandle<T, P> {
-      return BaseResource<S, T, P>(fetcher);
-    },
-    {
-      Cachable<T, P extends object = Record<never, never>>(
-        cache: Cache,
-        fetcher: AppFetcher<S, T, P>,
-      ): ResourceHandle<T, P> {
-        return BaseResource.Cachable<S, T, P>(cache, fetcher);
-      },
-    },
-  ) as AppResource<S>;
+  function Resource<T, P extends object = Record<never, never>>(
+    fetcher: AppFetcher<S, T, P>,
+  ): ResourceHandle<T, P> {
+    return BaseResource<S, T, P>(fetcher, cache);
+  }
 
   return {
     Boundary,

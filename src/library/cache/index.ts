@@ -44,6 +44,7 @@ export type Cache = {
   set<T>(key: string, value: Stored<T>): boolean;
   remove(key: string): void;
   clear(): void;
+  keys(): Iterable<string>;
 };
 
 export function Cache(adapter?: Adapter): Cache {
@@ -59,6 +60,7 @@ export function Cache(adapter?: Adapter): Cache {
     clear: () => {
       memory.clear();
     },
+    keys: () => memory.keys(),
   };
 
   return {
@@ -93,5 +95,6 @@ export function Cache(adapter?: Adapter): Cache {
     clear(): void {
       backing.clear();
     },
+    keys: () => backing.keys?.() ?? [],
   };
 }

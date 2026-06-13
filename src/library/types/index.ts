@@ -41,6 +41,22 @@ export type ResourceCall<T> = PromiseLike<T> & {
    * untokened caller for the same `(resource, params)` slot.
    */
   readonly coalesce: (token?: Coalesce) => ResourceCall<T>;
+  /**
+   * Drop cache entries for the primed resource without fetching. With
+   * no argument, uses the params from the originating call as the
+   * pattern. With an argument, evicts every stored entry whose params
+   * satisfy the pattern's keys (partial match &mdash; extra keys in
+   * the stored params are ignored).
+   *
+   * ```ts
+   * // Drop the {id: 5} slot.
+   * context.actions.resource(resource.user({ id: 5 })).evict();
+   *
+   * // Drop every user slot whose stored params include name "Adam".
+   * context.actions.resource(resource.user()).evict({ name: "Adam" });
+   * ```
+   */
+  readonly evict: (where?: object) => void;
 };
 import { describe } from "../utils.ts";
 
@@ -126,6 +142,18 @@ export class Brand {
    * symbols imported from a class outside `AC`.
    */
   static readonly Name = Symbol("march-hare.brand/Name");
+  /**
+   * Phantom brand identifying lifecycle actions returned by
+   * `Lifecycle.Mount()`, `Lifecycle.Unmount()`, `Lifecycle.Error()`, and
+   * `Lifecycle.Update()`. Carries the lifecycle's literal kind so that
+   * `useAction` can pick distinct overloads &mdash; in particular,
+   * `Lifecycle.Update` resolves its payload to `Partial<DeepReadonly<D>>`
+   * against the surrounding `useActions` data generic instead of the
+   * factory-level `Record<string, unknown>` placeholder. Without this
+   * brand a user-defined `Action<P>("Update")` would collide with the
+   * lifecycle overload.
+   */
+  static readonly Lifecycle = Symbol("march-hare.brand/Lifecycle");
 }
 
 /**
@@ -139,7 +167,7 @@ function createLifecycleAction<
   P = never,
   C extends Filter = never,
   K extends string = string,
->(name: K): HandlerPayload<P, C, K> {
+>(name: K): LifecyclePayload<P, C, K> {
   const symbol = Symbol(`march-hare.action.lifecycle/${name}`);
   const action = function (channel: C): ChanneledAction<P, C, K> {
     return {
@@ -162,7 +190,12 @@ function createLifecycleAction<
   });
   // eslint-disable-next-line fp/no-mutating-methods
   Object.defineProperty(action, Brand.Name, { value: name, enumerable: false });
-  return <HandlerPayload<P, C, K>>action;
+  // eslint-disable-next-line fp/no-mutating-methods
+  Object.defineProperty(action, Brand.Lifecycle, {
+    value: name,
+    enumerable: false,
+  });
+  return <LifecyclePayload<P, C, K>>action;
 }
 
 /**
@@ -213,22 +246,27 @@ export const EnvSymbol: unique symbol = <typeof EnvSymbol>(
  */
 export class Lifecycle {
   /** Creates a Mount lifecycle action. Triggered once on component mount (`useLayoutEffect`). */
-  static Mount(): HandlerPayload<never, never, "Mount"> {
+  static Mount(): LifecyclePayload<never, never, "Mount"> {
     return createLifecycleAction<never, never, "Mount">("Mount");
   }
 
   /** Creates an Unmount lifecycle action. Triggered when the component unmounts. */
-  static Unmount(): HandlerPayload<never, never, "Unmount"> {
+  static Unmount(): LifecyclePayload<never, never, "Unmount"> {
     return createLifecycleAction<never, never, "Unmount">("Unmount");
   }
 
   /** Creates an Error lifecycle action. Triggered when an action throws. Receives `Fault` as payload. */
-  static Error(): HandlerPayload<Fault, never, "Error"> {
+  static Error(): LifecyclePayload<Fault, never, "Error"> {
     return createLifecycleAction<Fault, never, "Error">("Error");
   }
 
-  /** Creates an Update lifecycle action. Triggered when `context.data` changes (not on initial mount). */
-  static Update(): HandlerPayload<Record<string, unknown>, never, "Update"> {
+  /**
+   * Creates an Update lifecycle action. Triggered when `context.data` changes
+   * (not on initial mount). The handler payload is typed as
+   * `Partial<DeepReadonly<D>>` at the subscription site &mdash; only the keys
+   * whose values changed between the previous and current render are present.
+   */
+  static Update(): LifecyclePayload<Record<string, unknown>, never, "Update"> {
     return createLifecycleAction<Record<string, unknown>, never, "Update">(
       "Update",
     );
@@ -459,6 +497,30 @@ export type HandlerPayload<
   : {
       (channel: C): ChanneledAction<P, C, Name>;
     });
+
+/**
+ * Branded type returned by `Lifecycle.Mount`, `Lifecycle.Unmount`,
+ * `Lifecycle.Error`, and `Lifecycle.Update`. Structurally identical to a
+ * `HandlerPayload` but carries a phantom `Brand.Lifecycle` brand whose value
+ * is the lifecycle's literal kind. The brand is what lets `useAction` and
+ * `Handlers` resolve `Lifecycle.Update`'s payload to `Partial<DeepReadonly<D>>`
+ * (against the surrounding `useActions` data generic) instead of the
+ * factory-level `Record<string, unknown>` placeholder &mdash; a user-defined
+ * `Action<P>("Update")` would have `Name = "Update"` but no `Brand.Lifecycle`,
+ * so it falls into the generic payload overload as expected.
+ *
+ * @template P Payload type for the lifecycle.
+ * @template C Channel filter (always `never` for lifecycles &mdash; they are
+ *   not channeled).
+ * @template Name Literal name (`"Mount"`, `"Unmount"`, `"Error"`, `"Update"`).
+ */
+export type LifecyclePayload<
+  P = unknown,
+  C extends Filter = never,
+  Name extends string = string,
+> = HandlerPayload<P, C, Name> & {
+  readonly [Brand.Lifecycle]: Name;
+};
 
 /**
  * Result of calling an action with a channel argument.
@@ -709,7 +771,7 @@ export type HandlerContext<
     annotate<T>(value: T, operation?: Operation): T;
     readonly inspect: Readonly<Inspect<M>>;
     resource: (<T>(invocation: T | null) => ResourceCall<T>) & {
-      set<T>(invocation: T | null, data: T): void;
+      nuke(where?: object): void;
     };
     final<T>(
       action: BroadcastPayload<T> | MulticastPayload<T>,
@@ -896,12 +958,17 @@ export type Handlers<
   S extends Env = Env,
 > = {
   [K in OwnKeys<AC>]: OwnKeys<AC[K]> extends never
-    ? (
-        context: HandlerContext<M, RootAC, D, S>,
-        ...args: [Payload<AC[K] & HandlerPayload<unknown>>] extends [never]
-          ? []
-          : [payload: Payload<AC[K] & HandlerPayload<unknown>>]
-      ) => void | Promise<void> | AsyncGenerator | Generator
+    ? AC[K] extends { readonly [Brand.Lifecycle]: "Update" }
+      ? (
+          context: HandlerContext<M, RootAC, D, S>,
+          changes: Partial<DeepReadonly<D>>,
+        ) => void | Promise<void> | AsyncGenerator | Generator
+      : (
+          context: HandlerContext<M, RootAC, D, S>,
+          ...args: [Payload<AC[K] & HandlerPayload<unknown>>] extends [never]
+            ? []
+            : [payload: Payload<AC[K] & HandlerPayload<unknown>>]
+        ) => void | Promise<void> | AsyncGenerator | Generator
     : Handlers<M, AC[K] & Actions, D, RootAC, S>;
 };
 
@@ -1008,6 +1075,18 @@ export type UseActions<
     handler: (
       context: HandlerContext<M, AC, D, S>,
       env: Readonly<S>,
+    ) => void | Promise<void> | AsyncGenerator | Generator,
+  ): void;
+  useAction<
+    A extends Extract<
+      Subscribable<AC>,
+      { readonly [Brand.Lifecycle]: "Update" }
+    >,
+  >(
+    action: A,
+    handler: (
+      context: HandlerContext<M, AC, D, S>,
+      changes: Partial<DeepReadonly<D>>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void;
   useAction<A extends WithPayloadActions<Subscribable<AC>>>(

@@ -4,13 +4,12 @@ A component that calls `app.useContext<...>()` is hard-wired to whichever `app` 
 
 Every `app.X` factory has a **standalone counterpart** exposed on the `shared` namespace exported from `march-hare`. The standalone form takes the Env shape `E` as a mandatory first generic, so reusable code can declare which Env shapes it supports without importing any specific `app`:
 
-| Bound to an App              | Standalone (`shared.X`)                  |
-| ---------------------------- | ---------------------------------------- |
-| `app.useContext<M, A, D>()`  | `shared.useContext<E, M, A, D>()`        |
-| `app.useEnv()`               | `shared.useEnv<E>()`                     |
-| `app.Resource<T, P>(...)`    | `shared.Resource<E, T, P>(...)`          |
-| `app.Resource.Cachable(...)` | `shared.Resource.Cachable<E, T, P>(...)` |
-| `app.Scope<A>()`             | `shared.Scope<E, A>()`                   |
+| Bound to an App             | Standalone (`shared.X`)           |
+| --------------------------- | --------------------------------- |
+| `app.useContext<M, A, D>()` | `shared.useContext<E, M, A, D>()` |
+| `app.useEnv()`              | `shared.useEnv<E>()`              |
+| `app.Resource<T, P>(...)`   | `shared.Resource<E, T, P>(...)`   |
+| `app.Scope<A>()`            | `shared.Scope<E, A>()`            |
 
 The runtime is identical &mdash; both reach into the nearest `<app.Boundary>`. `E` is purely a type-level binding the caller supplies so the standalone form stays App-agnostic.
 
@@ -134,11 +133,11 @@ switch (env.kind) {
 
 ## Reusable resources
 
-`shared.Resource<E, T, P>` and `shared.Resource.Cachable<E, T, P>` are the standalone forms of `app.Resource` and `app.Resource.Cachable`. The fetcher's `context.env` is typed against `E`, so the resource can be shared across every App that declares a compatible Env:
+`shared.Resource<E, T, P>` is the standalone form of `app.Resource`. The fetcher's `context.env` is typed against `E`, so the resource can be shared across every App that declares a compatible Env:
 
 ```ts
 // shared/resources.ts
-import { Cache, shared } from "march-hare";
+import { shared } from "march-hare";
 import type { Envs } from "./envs";
 
 export const user = shared.Resource<Envs, User>((context) =>
@@ -151,20 +150,9 @@ export const user = shared.Resource<Envs, User>((context) =>
     })
     .json<User>(),
 );
-
-const cache = Cache({
-  get: (key) => localStorage.getItem(key),
-  set: (key, value) => localStorage.setItem(key, value),
-  remove: (key) => localStorage.removeItem(key),
-  clear: () => localStorage.clear(),
-});
-
-export const cat = shared.Resource.Cachable<Envs, Cat>(cache, (context) =>
-  ky.get("/api/cat", { signal: context.controller.signal }).json<Cat>(),
-);
 ```
 
-Single-app resources should still reach for `app.Resource<T>(...)` &mdash; the Env is captured from `app` automatically and the call site is one generic shorter.
+Shared resources always use an isolated in-memory cache &mdash; persistence is wired through the App via `App({ cache })`, so reach for `app.Resource` when a resource needs to survive reloads. Single-app resources should reach for `app.Resource<T>(...)` regardless &mdash; the Env is captured from `app` automatically and the call site is one generic shorter.
 
 ## Reusable multicast scopes
 

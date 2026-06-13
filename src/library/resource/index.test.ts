@@ -61,7 +61,7 @@ describe("Resource() fetcher invocation", () => {
     const fetcher = vi.fn(({ params }: { params: Params }) =>
       Promise.resolve({ id: params.id }),
     );
-    const item = Resource<{ id: number }, Params>(fetcher);
+    const item = Resource<Env, { id: number }, Params>(fetcher);
     const controller = new AbortController();
 
     item({ id: 5 });
@@ -137,13 +137,12 @@ describe("Resource(params) sync read", () => {
   });
 
   it("returns null verbatim when the fetcher resolved with null", async () => {
-    const user = Resource<string | null>(() => Promise.resolve(null));
+    const user = Resource<Env, string | null>(() => Promise.resolve(null));
 
     user();
     const first = consumePending();
     await first.run(noEnv, noController(), first.params, noDispatch);
 
-    // `user()` returns null for both "not fetched" and "fetched a null".
     expect(user()).toBeNull();
     const second = consumePending();
     expect(second.read({}).data).toBeNull();
@@ -155,7 +154,7 @@ describe("Resource(params) sync read", () => {
     const fetcher = vi.fn(({ params: { id } }: { params: Params }) =>
       Promise.resolve({ id, name: `User ${id}` }),
     );
-    const user = Resource<{ id: number; name: string }, Params>(fetcher);
+    const user = Resource<Env, { id: number; name: string }, Params>(fetcher);
 
     user({ id: 5 });
     const five = consumePending();
@@ -177,7 +176,7 @@ describe("Resource(params) sync read", () => {
 describe("AbortController", () => {
   it("aborts the fetch when the controller fires", async () => {
     const controller = new AbortController();
-    const user = Resource<{ name: string }>(
+    const user = Resource<Env, { name: string }>(
       (context) =>
         new Promise<{ name: string }>((_resolve, reject) => {
           context.controller.signal.addEventListener("abort", () =>
@@ -195,40 +194,54 @@ describe("AbortController", () => {
   });
 });
 
-describe("Resource.Cachable(cache, fetcher)", () => {
+describe("Resource(fetcher, cache) (shared App cache)", () => {
   it("writes through to the supplied Cache on every successful fetch", async () => {
     const adapter = memoryAdapter();
     const cache = Cache(adapter);
-    const user = Resource.Cachable(cache, () =>
-      Promise.resolve({ name: "Adam" }),
-    );
+    const user = Resource(() => Promise.resolve({ name: "Adam" }), cache);
 
     user();
     const call = consumePending();
     await call.run(noEnv, noController(), call.params, noDispatch);
 
-    expect(adapter.entries.has("{}")).toBe(true);
-    const stored = cache.get<{ name: string }>("{}");
-    expect(stored.data).toEqual({ name: "Adam" });
+    expect([...adapter.entries.keys()].some((k) => k.endsWith(":{}"))).toBe(
+      true,
+    );
   });
 
-  it("seeds a fresh Resource from a persisted Cache (simulated reload)", async () => {
+  it("namespaces per-resource so two resources don't collide", async () => {
     const adapter = memoryAdapter();
-    const first = Resource.Cachable(Cache(adapter), () =>
-      Promise.resolve({ name: "FromFirst" }),
-    );
+    const cache = Cache(adapter);
 
-    first();
+    const cat = Resource(() => Promise.resolve({ kind: "cat" }), cache);
+    const dog = Resource(() => Promise.resolve({ kind: "dog" }), cache);
+
+    cat();
     const a = consumePending();
     await a.run(noEnv, noController(), a.params, noDispatch);
-    expect(adapter.entries.has("{}")).toBe(true);
 
-    const fetcher = vi.fn(() => Promise.resolve({ name: "Network" }));
-    const second = Resource.Cachable(Cache(adapter), fetcher);
+    dog();
+    const b = consumePending();
+    await b.run(noEnv, noController(), b.params, noDispatch);
 
-    expect(second()).toEqual({ name: "FromFirst" });
+    expect(cat()).toEqual({ kind: "cat" });
     consumePending();
-    expect(fetcher).not.toHaveBeenCalled();
+    expect(dog()).toEqual({ kind: "dog" });
+    consumePending();
+  });
+
+  it("preserves the per-resource namespace key across writes", async () => {
+    const adapter = memoryAdapter();
+    const cache = Cache(adapter);
+    const user = Resource(() => Promise.resolve({ name: "Adam" }), cache);
+
+    user();
+    const call = consumePending();
+    await call.run(noEnv, noController(), call.params, noDispatch);
+
+    const written = [...adapter.entries.keys()];
+    expect(written).toHaveLength(1);
+    expect(written[0]).toMatch(/^\d+:\{\}$/);
   });
 
   it("per-params slots are persisted independently", async () => {
@@ -238,7 +251,7 @@ describe("Resource.Cachable(cache, fetcher)", () => {
     const fetcher = vi.fn(({ params: { id } }: { params: Params }) =>
       Promise.resolve({ id }),
     );
-    const item = Resource.Cachable<{ id: number }, Params>(cache, fetcher);
+    const item = Resource<Env, { id: number }, Params>(fetcher, cache);
 
     item({ id: 5 });
     const five = consumePending();
@@ -248,21 +261,15 @@ describe("Resource.Cachable(cache, fetcher)", () => {
     const six = consumePending();
     await six.run(noEnv, noController(), six.params, noDispatch);
 
-    expect(adapter.entries.has('{"id":5}')).toBe(true);
-    expect(adapter.entries.has('{"id":6}')).toBe(true);
-
-    const reloaded = Resource.Cachable<{ id: number }, Params>(
-      Cache(adapter),
-      fetcher,
-    );
-
-    expect(reloaded({ id: 5 })).toEqual({ id: 5 });
-    consumePending();
-    expect(reloaded({ id: 6 })).toEqual({ id: 6 });
-    consumePending();
+    expect(
+      [...adapter.entries.keys()].some((k) => k.endsWith(':{"id":5}')),
+    ).toBe(true);
+    expect(
+      [...adapter.entries.keys()].some((k) => k.endsWith(':{"id":6}')),
+    ).toBe(true);
   });
 
-  it("falls back to an in-memory Cache when using bare Resource()", async () => {
+  it("falls back to an in-memory Cache when no cache is supplied", async () => {
     const user = Resource(() => Promise.resolve({ name: "Adam" }));
 
     expect(user()).toBeNull();
@@ -277,28 +284,61 @@ describe("Resource.Cachable(cache, fetcher)", () => {
   });
 });
 
-describe("seed via .resource.set semantics", () => {
-  it("populates the per-params cache slot without invoking the fetcher", () => {
-    const fetcher = vi.fn(() => Promise.resolve({ name: "Adam" }));
-    const user = Resource(fetcher);
-    const at = Temporal.Now.instant();
+describe("evict via PendingCall.evict (chain entry)", () => {
+  it("drops the per-params slot via partial-match pattern", async () => {
+    type Params = { id: number };
+    const fetcher = vi.fn(({ params: { id } }: { params: Params }) =>
+      Promise.resolve({ id }),
+    );
+    const item = Resource<Env, { id: number }, Params>(fetcher);
 
-    user();
-    const call = consumePending();
-    call.seed({}, { name: "Seeded" }, at);
+    item({ id: 5 });
+    const five = consumePending();
+    await five.run(noEnv, noController(), five.params, noDispatch);
 
-    expect(user()).toEqual({ name: "Seeded" });
+    item({ id: 6 });
+    const six = consumePending();
+    await six.run(noEnv, noController(), six.params, noDispatch);
+
+    expect(item({ id: 5 })).toEqual({ id: 5 });
     consumePending();
 
-    user();
-    expect(consumePending().read({}).at?.toString()).toBe(at.toString());
-    expect(fetcher).not.toHaveBeenCalled();
+    item({ id: 5 });
+    consumePending().evict({ id: 5 });
+
+    expect(item({ id: 5 })).toBeNull();
+    consumePending();
+    expect(item({ id: 6 })).toEqual({ id: 6 });
+    consumePending();
+  });
+
+  it("evicts every slot when called with an empty pattern", async () => {
+    type Params = { id: number };
+    const fetcher = vi.fn(({ params: { id } }: { params: Params }) =>
+      Promise.resolve({ id }),
+    );
+    const item = Resource<Env, { id: number }, Params>(fetcher);
+
+    item({ id: 5 });
+    const five = consumePending();
+    await five.run(noEnv, noController(), five.params, noDispatch);
+
+    item({ id: 6 });
+    const six = consumePending();
+    await six.run(noEnv, noController(), six.params, noDispatch);
+
+    item();
+    consumePending().evict({});
+
+    expect(item({ id: 5 })).toBeNull();
+    consumePending();
+    expect(item({ id: 6 })).toBeNull();
+    consumePending();
   });
 });
 
 describe("consumePending() invariants", () => {
   it("throws when called with no pending invocation", () => {
-    // Drain any pending from prior tests.
     try {
       consumePending();
     } catch {
@@ -312,7 +352,7 @@ describe("consumePending() invariants", () => {
   it("clears the slot on next microtask if not consumed", async () => {
     const user = Resource(() => Promise.resolve({ name: "Adam" }));
     user();
-    await Promise.resolve(); // run microtasks
+    await Promise.resolve();
     expect(() => consumePending()).toThrow();
   });
 });

@@ -19,6 +19,11 @@ export type {
 } from "./types.ts";
 
 let pending: PendingCall | null = null;
+let nextResourceId = 0;
+
+type ResourceEvictor = (where: object) => void;
+
+const evictors: Array<ResourceEvictor> = [];
 
 /**
  * Reads and clears the slot populated by the most recent resource
@@ -31,9 +36,8 @@ let pending: PendingCall | null = null;
 export function consumePending(): PendingCall {
   if (G.isNull(pending)) {
     throw new Error(
-      "context.actions.resource(...) and context.actions.resource.set(...) " +
-        "must be called with a fresh resource invocation, e.g. " +
-        "context.actions.resource(resource.cat({ id: 5 })).",
+      "context.actions.resource(...) must be called with a fresh resource " +
+        "invocation, e.g. context.actions.resource(resource.cat({ id: 5 })).",
     );
   }
   const call = pending;
@@ -41,12 +45,31 @@ export function consumePending(): PendingCall {
   return call;
 }
 
+/**
+ * Evicts cache entries across every Resource constructed in the
+ * current process. Resources register themselves on declaration, so
+ * `nuke` covers both `app.Resource` and `shared.Resource`. Pass a
+ * `where` pattern to drop only slots whose stored params satisfy the
+ * pattern's keys (partial match &mdash; extra keys in the stored
+ * params are ignored). Pass nothing to clear every known slot.
+ *
+ * @internal Public surface lives on `context.actions.resource.nuke(...)`.
+ */
+export function nuke(where?: object): void {
+  const pattern = where ?? {};
+  for (const evict of evictors) evict(pattern);
+}
+
 function build<T, P extends object>(
   ƒ: Fetcher<T, P>,
   backing: Cache,
+  namespace: string | null,
 ): ResourceHandle<T, P> {
+  const prefix = G.isNull(namespace) ? "" : `${namespace}:`;
+  const cacheKey = (params: P) => `${prefix}${key(params)}`;
+
   const read = (params: P) => {
-    const stored = backing.get<T>(key(params));
+    const stored = backing.get<T>(cacheKey(params));
     if (stored.data === unset || G.isNull(stored.at)) {
       return { data: unset, at: null };
     }
@@ -60,20 +83,33 @@ function build<T, P extends object>(
     dispatch: Dispatch,
   ): Promise<T> =>
     ƒ(<Args<P>>{ env, controller, params, dispatch }).then((resolved) => {
-      backing.set(key(params), present(resolved, Temporal.Now.instant()));
+      backing.set(cacheKey(params), present(resolved, Temporal.Now.instant()));
       return resolved;
     });
 
-  const seed = (params: P, data: T, at: Temporal.Instant): void => {
-    backing.set(key(params), present(data, at));
+  const evict = (where: object) => {
+    const entries = Object.entries(where);
+    for (const stored of [...backing.keys()]) {
+      if (!stored.startsWith(prefix)) continue;
+      try {
+        const parsed = <Record<string, unknown>>(
+          JSON.parse(stored.slice(prefix.length))
+        );
+        if (entries.every(([k, v]) => parsed[k] === v)) backing.remove(stored);
+      } catch {
+        // skip malformed entries
+      }
+    }
   };
+
+  evictors.push(evict);
 
   function call(params?: P): T | null {
     const effective = <P>(params ?? {});
     pending = {
       run: <PendingCall["run"]>run,
       read: <PendingCall["read"]>read,
-      seed: <PendingCall["seed"]>seed,
+      evict,
       params: effective,
     };
     queueMicrotask(() => {
@@ -89,10 +125,13 @@ function build<T, P extends object>(
 
 /**
  * Defines a remote resource &mdash; declared at module scope and used
- * directly. Exported as `shared.Resource`. Calling the returned handle
- * with `params` returns the sync cache value (`T | null`) and primes
- * the slot consumed by `context.actions.resource(...)` / `.set(...)`
- * for fetch and write paths.
+ * directly. Exported as `shared.Resource` and (via the app factory) as
+ * `app.Resource`. Calling the returned handle with `params` returns the
+ * sync cache value (`T | null`) and primes the slot consumed by
+ * `context.actions.resource(...)` for fetch or
+ * `context.actions.resource(...).evict(where?)` for partial-match
+ * invalidation. Persistence happens automatically when the App is
+ * declared with `App({ cache })`.
  *
  * Takes the **Env shape `E` as a mandatory first generic** &mdash;
  * `context.env` inside the fetcher is typed as `E`. Pass a union of
@@ -105,8 +144,14 @@ function build<T, P extends object>(
  * `controller`, `params`, and a broadcast/multicast-only `dispatch`.
  * `env` is a live handle &mdash; dot reads inside the fetcher always
  * see the latest per-`<Boundary>` Env, even after `await` boundaries.
- * Every successful fetch writes through to a per-resource in-memory
- * cache; pair with {@link Resource.Cachable} to persist across reloads.
+ *
+ * Cache behaviour is decided at the App level: when `App({ cache })`
+ * is supplied, every `app.Resource` declaration on that App writes
+ * through to (and seeds from) the shared cache, isolated per resource
+ * by a stable module-order namespace. When the App is constructed
+ * without a `cache`, every resource keeps its own in-memory slot.
+ * Standalone `shared.Resource` declarations always use an in-memory
+ * cache &mdash; reach for `app.Resource` when persistence is required.
  *
  * Concurrent calls fire fresh requests by default. Opt in to in-flight
  * sharing per call via `.coalesce(key)` on the thenable returned from
@@ -134,63 +179,19 @@ function build<T, P extends object>(
  *     .json<User>(),
  * );
  * ```
+ *
+ * @internal The optional `cache` argument is reserved for `app.Resource`
+ *   &mdash; consumers should use `App({ cache })` instead of passing it
+ *   directly.
  */
 export function Resource<
   E extends object,
   T,
   P extends object = Record<never, never>,
->(ƒ: AppFetcher<E, T, P>): ResourceHandle<T, P> {
+>(ƒ: AppFetcher<E, T, P>, cache?: Cache): ResourceHandle<T, P> {
   const inner = <Fetcher<T, P>>(<unknown>ƒ);
-  return build(inner, defaultCache(inner));
-}
-
-export namespace Resource {
-  /**
-   * Cache-aware variant of {@link Resource}, exported as
-   * `shared.Resource.Cachable`. The supplied {@link Cache} is the
-   * **second** argument (after the Env generic) &mdash; persistence is
-   * the headline of this form, the fetcher is the operation. Every
-   * successful fetch writes through to the cache; first reads via the
-   * call form auto-seed from the cache's adapter.
-   *
-   * Takes the same **Env shape `E` as a mandatory first generic** as
-   * {@link Resource}. For single-app resources, prefer
-   * `app.Resource.Cachable(cache, fetcher)` &mdash; the Env is captured
-   * from `app` automatically.
-   *
-   * @template E The Env shape (or union) the fetcher's `context.env` is
-   *   typed against.
-   * @template T The payload type the fetcher resolves to.
-   * @template P The call-time params type.
-   *
-   * @example
-   * ```ts
-   * import { Cache, shared } from "march-hare";
-   *
-   * type WebEnv = { session: Session | null };
-   *
-   * const cache = Cache({
-   *   get: (key) => localStorage.getItem(key),
-   *   set: (key, value) => localStorage.setItem(key, value),
-   *   remove: (key) => localStorage.removeItem(key),
-   *   clear: () => localStorage.clear(),
-   * });
-   *
-   * export const cat = shared.Resource.Cachable<WebEnv, Cat>(cache, async (context) =>
-   *   ky
-   *     .get("https://api.thecatapi.com/v1/images/search", {
-   *       signal: context.controller.signal,
-   *     })
-   *     .json<Cat[]>()
-   *     .then((cats) => cats[0]),
-   * );
-   * ```
-   */
-  export function Cachable<
-    E extends object,
-    T,
-    P extends object = Record<never, never>,
-  >(cache: Cache, ƒ: AppFetcher<E, T, P>): ResourceHandle<T, P> {
-    return build(<Fetcher<T, P>>(<unknown>ƒ), cache);
+  if (G.isUndefined(cache)) {
+    return build(inner, defaultCache(inner), null);
   }
+  return build(inner, cache, String(nextResourceId++));
 }

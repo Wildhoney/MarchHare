@@ -2,7 +2,7 @@
 
 `Resource(fetcher)` declares a remote interaction at module scope. There's no `useResource` hook &mdash; consume Resources directly:
 
-- **`resource.user(params?)`** &mdash; synchronous read of the cached payload for those params. Returns `T | null`. Safe to call at module scope, in the model literal, anywhere. As a side effect, the call primes the slot that `context.actions.resource(...)` / `.set(...)` consume next.
+- **`resource.user(params?)`** &mdash; synchronous read of the cached payload for those params. Returns `T | null`. Safe to call at module scope, in the model literal, anywhere. As a side effect, the call primes the slot that the next `context.actions.resource(...)` consumes &mdash; whether for a fetch (`.then`/`await`), an eviction (`.evict()`), or a freshness gate (`.exceeds()`).
 - **`context.actions.resource(resource.user(params?))`** &mdash; fires the fetch from an action handler. Auto-threads the `AbortController` from `context.task.controller` and a live handle to the per-`<Boundary>` Env. Returns a thenable that's also chainable with `.exceeds({ minutes: 5 })` for cache-aware refresh.
 
 The fetcher itself receives a single `context` argument carrying `env`, `controller`, `params`, and a broadcast/multicast-only `dispatch`. Access fields directly via `context.controller.signal`, `context.params.id`, etc. &mdash; do not destructure. Pass `context.controller.signal` to `fetch`/`ky`/`EventSource` for cancellation.
@@ -69,7 +69,7 @@ export function useActions() {
 }
 ```
 
-Every successful fetch writes through to a per-resource in-memory cache. Reach for `app.Resource.Cachable(cache, fetcher)` to persist across reloads, or chain `.coalesce(token)` on the call site to share an in-flight fetch with other callers &mdash; both are covered below.
+Every successful fetch writes through to a per-resource in-memory cache. Configure `App({ cache })` to persist payloads across reloads (covered below), or chain `.coalesce(token)` on the call site to share an in-flight fetch with other callers.
 
 > **Convention:** keep resources in `resources.ts` and pull them in as a namespace (`import * as resource from "./resources"`). Awaited results are named after the resource function they invoke &mdash; `const user = await context.actions.resource(resource.user())` &mdash; so call sites read uniformly and a single grep (`resource.user(`) finds every consumer.
 
@@ -80,7 +80,7 @@ Every successful fetch writes through to a per-resource in-memory cache. Reach f
 `resource.user(params)` does two things in one expression:
 
 1. Returns the per-params cache value synchronously (`T | null`).
-2. Primes a single module-scope slot with the fetcher and params. The next `context.actions.resource(...)` or `.resource.set(...)` call consumes that slot.
+2. Primes a single module-scope slot with the fetcher and params. The next `context.actions.resource(...)` or `.resource(...).evict(...)` call consumes that slot.
 
 The slot is consumed the moment `.resource(...)` runs, so the natural inline pattern (`context.actions.resource(resource.user({id:5}))`) always pairs correctly. If a `resource.user(...)` call is not followed by a `.resource(...)` consumption, the slot self-clears on the next microtask &mdash; so stray calls (e.g. in the model literal) don't leak into later handler runs.
 
@@ -236,33 +236,155 @@ When several components need to react to a resource update, the pattern is: the 
 
 > **Note:** TypeScript cannot type promise rejections, so `await context.actions.resource(...)` rejects with `unknown`. To narrow inline, use `error instanceof YourErrorClass` checks within a `try/catch`.
 
-## Persistent cache &mdash; `app.Resource.Cachable`
+## Persistent cache &mdash; `App({ cache })`
 
-`app.Resource(fetcher)` keeps successful payloads in an in-memory slot only &ndash; the cache resets on every page load. To keep the most recent successful payload across reloads, declare with `app.Resource.Cachable(cache, fetcher)`. The cache is the **first** argument &mdash; persistence is the headline of this form, the fetcher is the operation:
+`app.Resource(fetcher)` keeps successful payloads in an in-memory slot only &ndash; the cache resets on every page load. To keep the most recent successful payload across reloads, attach a `Cache` to the App and every `app.Resource` declaration shares it:
 
 ```ts
-import { Cache } from "march-hare";
+// app.ts
+import { App, Cache } from "march-hare";
+
+export const app = App({
+  env: { session: null as Session | null },
+  cache: Cache({
+    get: (key) => localStorage.getItem(key),
+    set: (key, value) => localStorage.setItem(key, value),
+    remove: (key) => localStorage.removeItem(key),
+    clear: () => localStorage.clear(),
+  }),
+});
+```
+
+```ts
+// resources.ts &mdash; persisted via the App's cache.
 import { app } from "./app";
 
-const cache = Cache({
-  get: (key) => localStorage.getItem(key),
-  set: (key, value) => localStorage.setItem(key, value),
-  remove: (key) => localStorage.removeItem(key),
-  clear: () => localStorage.clear(),
-});
-
-export const user = app.Resource.Cachable<User, { id: number }>(
-  cache,
-  (context) =>
-    ky
-      .get(`users/${context.params.id}`, {
-        signal: context.controller.signal,
-      })
-      .json<User>(),
+export const user = app.Resource<User, { id: number }>((context) =>
+  ky
+    .get(`users/${context.params.id}`, {
+      signal: context.controller.signal,
+    })
+    .json<User>(),
 );
 ```
 
+Resources declared on the same App are namespaced internally by their module-evaluation order, so two resources called with the same params don't collide on the shared adapter. Because module load order is deterministic, every reload reuses the same namespace key per resource and seeds back from storage on the next sync read.
+
 See the [storage recipe](./storage.md) for adapter examples (`localStorage`, MMKV, `chrome.storage`) and sign-out cache purging.
+
+## Invalidation &mdash; `.evict()` and `.nuke()`
+
+Cache writes happen automatically on every successful fetch; eviction is the inverse and stays explicit. Both forms use **partial-match** semantics &mdash; the supplied pattern's keys must equal the stored params' values; extra keys in the stored params are ignored. Both work against the in-memory slot **and** the persisted entries from `App({ cache })`.
+
+### `context.actions.resource(...).evict(where?)` &mdash; per-resource
+
+Chains off `context.actions.resource(...)` so it shares the same primed-slot mechanism as `.exceeds(...)` and `.coalesce(...)`. With no argument, the originating call's params become the pattern; pass `(where)` to override.
+
+```ts
+// Drop the {id: 5} slot for the user resource only.
+actions.useAction(Actions.UserDeleted, (context, { id }) => {
+  context.actions.resource(resource.user({ id })).evict();
+});
+```
+
+```ts
+// Override the pattern: drop every user slot whose stored params include
+// `teamId: 4`, regardless of other keys (`id`, `since`, etc).
+actions.useAction(Actions.Broadcast.TeamDisbanded, (context, { teamId }) => {
+  context.actions.resource(resource.user()).evict({ teamId });
+});
+```
+
+```ts
+// No-params resource: evict drops the single {} slot.
+actions.useAction(Actions.Logout, (context) => {
+  context.actions.resource(resource.banner()).evict();
+});
+```
+
+```ts
+// Invalidate so the next `.exceeds()` reader skips the freshness window.
+// Without the evict, a refresh handler running ~1 minute after the mutation
+// would short-circuit on the stale cached payload.
+actions.useAction(Actions.Rename, async (context, { id, name }) => {
+  await context.actions.resource(resource.updateUser({ id, name }));
+  context.actions.resource(resource.user({ id })).evict();
+});
+
+actions.useAction(Actions.Refresh, async (context, { id }) => {
+  const user = await context.actions
+    .resource(resource.user({ id }))
+    .exceeds({ minutes: 5 });
+  context.actions.produce(({ model }) => void (model.user = user));
+});
+```
+
+```ts
+// Sync readers also see fresh state. The model literal pulls from the cache
+// at construction, so a stale entry would seed the next render with the
+// pre-mutation payload until something refetches.
+actions.useAction(Actions.Logout, (context) => {
+  context.actions.resource(resource.user({ id: context.env.userId })).evict();
+});
+
+function useProfileActions() {
+  const context = app.useContext<Model, typeof Actions>();
+  // After the Logout handler runs, this reads null instead of the stale user.
+  return context.useActions({
+    user: resource.user({ id: context.env.userId }),
+  });
+}
+```
+
+```ts
+// Evict by a subset of the original params: a write that returns the
+// affected user IDs invalidates exactly those slots.
+actions.useAction(Actions.BulkUpdate, async (context, payload) => {
+  const { affectedIds } = await context.actions.resource(
+    resource.bulk(payload),
+  );
+  for (const id of affectedIds) {
+    context.actions.resource(resource.user({ id })).evict();
+  }
+});
+```
+
+### `context.actions.resource.nuke(where?)` &mdash; across every resource
+
+Spans every `app.Resource` and `shared.Resource` declared in the process. Pattern matching is the same partial-match logic, but applied resource-by-resource &mdash; only slots whose stored params satisfy the pattern get dropped.
+
+```ts
+// Wipe everything on sign-out — the next mount starts from a clean cache.
+actions.useAction(Actions.SignOut, async (context) => {
+  await context.actions.resource(resource.signOut());
+  context.actions.produce(({ env }) => void (env.session = null));
+  context.actions.resource.nuke();
+});
+```
+
+```ts
+// Surgical: every cache entry — across user, post, comment, etc. —
+// whose stored params include `id: 5` gets evicted. Resources that
+// don't include `id` in their params are untouched.
+actions.useAction(Actions.PurgeUserData, (context, { id }) => {
+  context.actions.resource.nuke({ id });
+});
+```
+
+```ts
+// Tenancy switch: drop every cached entry tied to the previous tenant
+// regardless of which resource owns it.
+actions.useAction(Actions.SwitchTenant, async (context, { tenantId }) => {
+  context.actions.resource.nuke({ tenantId: context.env.tenantId });
+  context.actions.produce(({ env }) => void (env.tenantId = tenantId));
+});
+```
+
+### What `.evict()` and `.nuke()` do **not** do
+
+- **They don't fire any action.** Evicting a slot drops the cached payload but doesn't notify subscribers. If a render needs to react, dispatch a broadcast alongside the eviction &mdash; see [real-time-applications](./real-time-applications.md).
+- **They don't refetch.** Evict + refetch is a two-step pattern; chain the next `context.actions.resource(...)` explicitly when you want a fresh load.
+- **They don't cancel in-flight fetches.** A pending `await context.actions.resource(...)` finishes naturally and writes its result. Combine with `context.task.controller.abort()` if you need to discard a racing request.
 
 ## In-flight coalescing &mdash; `.coalesce(token)`
 
@@ -386,7 +508,7 @@ Each cursor gets its own cache slot &mdash; `.exceeds({...})` is per-cursor, so 
 
 ## Limitations
 
-- **No persistence across reloads by default.** Opt in via `app.Resource.Cachable(cache, fetcher)`. The Cache writes through on every successful fetch and auto-seeds from storage on first read. See [storage](./storage.md).
+- **No persistence across reloads by default.** Opt in via `App({ cache })`. The Cache writes through on every successful fetch and auto-seeds from storage on first read. See [storage](./storage.md).
 - **No focus or reconnect revalidation.** Wire a `window` listener and call `context.actions.resource(...)` again if you need this.
 - **No SSR isolation.** The cache is module-global, so server-side rendering would leak across requests. `Resource` is client-only.
 - **No subscription on the awaiter.** `await context.actions.resource(...)` resolves once and does not re-fire when a broadcast goes out. Use `useAction(broadcastAction)` for change notifications.
