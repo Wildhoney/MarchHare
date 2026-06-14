@@ -21,7 +21,7 @@ export type {
 let pending: PendingCall | null = null;
 let nextResourceId = 0;
 
-type ResourceEvictor = (where: object) => Promise<void>;
+type ResourceEvictor = (where: object) => void;
 
 const evictors: Array<ResourceEvictor> = [];
 
@@ -55,9 +55,9 @@ export function consumePending(): PendingCall {
  *
  * @internal Public surface lives on `context.actions.resource.nuke(...)`.
  */
-export function nuke(where?: object): Promise<void> {
+export function nuke(where?: object): void {
   const pattern = where ?? {};
-  return Promise.all(evictors.map((evict) => evict(pattern))).then(() => {});
+  for (const evict of evictors) evict(pattern);
 }
 
 function build<T, P extends object>(
@@ -82,30 +82,24 @@ function build<T, P extends object>(
     params: P,
     dispatch: Dispatch,
   ): Promise<T> =>
-    ƒ(<Args<P>>{ env, controller, params, dispatch }).then((resolved) =>
-      backing
-        .set(cacheKey(params), present(resolved, Temporal.Now.instant()))
-        .then(() => resolved),
-    );
-
-  const evict = (where: object): Promise<void> => {
-    const entries = Object.entries(where);
-    return backing.keys().then((stored) => {
-      const removals: Array<Promise<void>> = [];
-      for (const k of [...stored]) {
-        if (!k.startsWith(prefix)) continue;
-        try {
-          const parsed = <Record<string, unknown>>(
-            JSON.parse(k.slice(prefix.length))
-          );
-          if (entries.every(([key, v]) => parsed[key] === v))
-            removals.push(backing.remove(k));
-        } catch {
-          // skip malformed entries
-        }
-      }
-      return Promise.all(removals).then(() => {});
+    ƒ(<Args<P>>{ env, controller, params, dispatch }).then((resolved) => {
+      backing.set(cacheKey(params), present(resolved, Temporal.Now.instant()));
+      return resolved;
     });
+
+  const evict = (where: object): void => {
+    const entries = Object.entries(where);
+    for (const k of [...backing.keys()]) {
+      if (!k.startsWith(prefix)) continue;
+      try {
+        const parsed = <Record<string, unknown>>(
+          JSON.parse(k.slice(prefix.length))
+        );
+        if (entries.every(([key, v]) => parsed[key] === v)) backing.remove(k);
+      } catch {
+        // skip malformed entries
+      }
+    }
   };
 
   evictors.push(evict);

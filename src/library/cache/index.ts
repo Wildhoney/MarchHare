@@ -6,18 +6,28 @@ export type { Adapter, Encoded } from "./types.ts";
 
 /**
  * Persistence-aware cache for a single {@link Resource}. Wraps a
- * synchronous {@link Adapter} (localStorage, MMKV, chrome.storage with a
- * sync facade, etc.) and traffics in {@link Stored} envelopes &mdash;
- * storage entries serialise as {@link Encoded}`<T>` so the
- * `Temporal.Instant` timestamp survives the string round-trip and
- * `.exceeds({...})` can short-circuit on the persisted timestamp after
- * a reload.
+ * **strictly synchronous** {@link Adapter} (localStorage, MMKV,
+ * chrome.storage with a sync facade, etc.) and traffics in {@link
+ * Stored} envelopes &mdash; storage entries serialise as {@link
+ * Encoded}`<T>` so the `Temporal.Instant` timestamp survives the
+ * string round-trip and `.exceeds({...})` can short-circuit on the
+ * persisted timestamp after a reload.
+ *
+ * Every method on the Cache is sync &mdash; the model-literal sync
+ * read has no place to wait, so the adapter contract foregoes
+ * `Promise` entirely. Async backends (IndexedDB, AsyncStorage,
+ * `chrome.storage.local`) need a sync facade hydrated at app entry;
+ * see `recipes/storage.md` for the pattern. React Native projects
+ * should reach for {@link https://github.com/mrousavy/react-native-mmkv
+ * `react-native-mmkv`} &mdash; it's synchronous out of the box and
+ * drops straight into the Adapter contract.
  *
  * Call with no arguments for an in-memory cache scoped to this
- * instance &mdash; useful for tests, ephemeral state, or when you want a
- * first-class cache object to share between Resources without
+ * instance &mdash; useful for tests, ephemeral state, or when you
+ * want a first-class cache object to share between Resources without
  * persistence. Pass an {@link Adapter} to back the cache with a
- * persistent store.
+ * persistent store; when supplied, the adapter is the **only** tier
+ * &mdash; the Cache does not maintain a separate in-memory mirror.
  *
  * @example
  * ```ts
@@ -41,15 +51,15 @@ export type { Adapter, Encoded } from "./types.ts";
  */
 export type Cache = {
   get<T>(key: string): Stored<T>;
-  set<T>(key: string, value: Stored<T>): Promise<void>;
-  remove(key: string): Promise<void>;
-  clear(): Promise<void>;
-  keys(): Promise<Iterable<string>>;
+  set<T>(key: string, value: Stored<T>): void;
+  remove(key: string): void;
+  clear(): void;
+  keys(): Iterable<string>;
 };
 
-export function Cache(adapter?: Adapter): Cache {
+function memoryAdapter(): Adapter {
   const memory = new Map<string, string>();
-  const backing: Adapter = adapter ?? {
+  return {
     get: (key) => memory.get(key) ?? null,
     set: (key, value) => {
       memory.set(key, value);
@@ -62,6 +72,10 @@ export function Cache(adapter?: Adapter): Cache {
     },
     keys: () => memory.keys(),
   };
+}
+
+export function Cache(adapter?: Adapter): Cache {
+  const backing: Adapter = adapter ?? memoryAdapter();
 
   return {
     get<T>(key: string): Stored<T> {
@@ -74,24 +88,40 @@ export function Cache(adapter?: Adapter): Cache {
         return empty<T>();
       }
     },
-    set<T>(key: string, value: Stored<T>): Promise<void> {
-      if (value.data === unset || G.isNull(value.at)) return Promise.resolve();
+    set<T>(key: string, value: Stored<T>): void {
+      if (value.data === unset || G.isNull(value.at)) return;
       try {
-        return Promise.resolve(
-          backing.set(
-            key,
-            JSON.stringify(<Encoded<T>>{
-              data: value.data,
-              at: value.at.toString(),
-            }),
-          ),
-        ).catch(() => {});
+        backing.set(
+          key,
+          JSON.stringify(<Encoded<T>>{
+            data: value.data,
+            at: value.at.toString(),
+          }),
+        );
       } catch {
-        return Promise.resolve();
+        // ignore — quota, private mode, unserialisable payload, etc.
       }
     },
-    remove: (key) => Promise.resolve(backing.remove(key)),
-    clear: () => Promise.resolve(backing.clear()),
-    keys: () => Promise.resolve(backing.keys?.() ?? []),
+    remove(key: string): void {
+      try {
+        backing.remove(key);
+      } catch {
+        // ignore — best-effort removal
+      }
+    },
+    clear(): void {
+      try {
+        backing.clear();
+      } catch {
+        // ignore — best-effort clear
+      }
+    },
+    keys(): Iterable<string> {
+      try {
+        return backing.keys?.() ?? [];
+      } catch {
+        return [];
+      }
+    },
   };
 }

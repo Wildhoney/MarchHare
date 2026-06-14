@@ -324,8 +324,8 @@ describe("context.actions.resource(...).evict() and resource.nuke()", () => {
         actions.useAction(Actions.Mount, async (context) => {
           await context.actions.resource(resource());
         });
-        actions.useAction(Actions.Invalidate, async (context) => {
-          await context.actions.resource(resource()).evict();
+        actions.useAction(Actions.Invalidate, (context) => {
+          context.actions.resource(resource()).evict();
         });
         actions.useAction(Actions.Refresh, async (context) => {
           await context.actions.resource(resource()).exceeds({ minutes: 5 });
@@ -377,8 +377,8 @@ describe("context.actions.resource(...).evict() and resource.nuke()", () => {
           await context.actions.resource(users({ teamId: 1, userId: 8 }));
           await context.actions.resource(users({ teamId: 2, userId: 9 }));
         });
-        actions.useAction(Actions.EvictTeam, async (context, { teamId }) => {
-          await context.actions.resource(users()).evict({ teamId });
+        actions.useAction(Actions.EvictTeam, (context, { teamId }) => {
+          context.actions.resource(users()).evict({ teamId });
         });
         return actions;
       },
@@ -426,8 +426,8 @@ describe("context.actions.resource(...).evict() and resource.nuke()", () => {
           await context.actions.resource(user());
           await context.actions.resource(settings());
         });
-        actions.useAction(Actions.Clear, async (context) => {
-          await context.actions.resource.nuke();
+        actions.useAction(Actions.Clear, (context) => {
+          context.actions.resource.nuke();
         });
         return actions;
       },

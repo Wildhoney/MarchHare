@@ -97,7 +97,7 @@ export type PendingCall = {
     data: unknown;
     at: Temporal.Instant | null;
   };
-  readonly evict: (where: object) => Promise<void>;
+  readonly evict: (where: object) => void;
   readonly params: object;
 };
 

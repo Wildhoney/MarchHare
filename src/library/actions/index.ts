@@ -316,14 +316,14 @@ export function useActions<
                   options.coalesceToken = token ?? defaultCoalesceToken;
                   return handle;
                 },
-                evict(where?: object): Promise<void> {
-                  return call.evict(where ?? call.params);
+                evict(where?: object): void {
+                  call.evict(where ?? call.params);
                 },
               };
               return handle;
             },
             {
-              nuke: (where?: object): Promise<void> => nuke(where),
+              nuke: (where?: object): void => nuke(where),
             },
           ),
           async final(action: AnyAction) {

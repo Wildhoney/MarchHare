@@ -601,7 +601,9 @@ export default function CatCard(): React.ReactElement {
 
 `Cache()` with no adapter is an in-memory scope &ndash; useful in tests or when you want a holdable cache without persistence. Per-params keying via `JSON.stringify(params)` is automatic, so `user({ id: 5 })` and `user({ id: 6 })` are distinct slots.
 
-See the [storage recipe](./recipes/storage.md) for backend adapters (React Native MMKV, browser extension `chrome.storage`), sign-out purge, and the `unset` sentinel that keeps "nothing stored" distinct from "a legitimately stored null".
+The adapter contract is **strictly synchronous** &ndash; `get` / `set` / `remove` / `clear` all return immediately, with no `Promise`. The model-literal read (`{ user: resource.user() }`) is evaluated during render and has no place to wait. React Native projects should use [`react-native-mmkv`](https://github.com/mrousavy/react-native-mmkv), which is sync out of the box and drops straight into the contract; `AsyncStorage` is incompatible. Truly async backends (IndexedDB, `chrome.storage.local`) need a sync facade hydrated at app entry &ndash; see the [storage recipe](./recipes/storage.md).
+
+See the [storage recipe](./recipes/storage.md) for backend adapters (React Native `react-native-mmkv`, browser `localStorage`, browser extension `chrome.storage`), sign-out purge, and the `unset` sentinel that keeps "nothing stored" distinct from "a legitimately stored null".
 
 ## Channeled actions
 

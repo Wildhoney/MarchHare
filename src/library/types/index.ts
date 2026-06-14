@@ -66,11 +66,10 @@ export type ResourceCall<T> = ResourceFetch<T> & {
    * satisfy the pattern's keys (partial match &mdash; extra keys in
    * the stored params are ignored).
    *
-   * Returns a `Promise<void>` so async cache backends (RN AsyncStorage,
-   * IndexedDB, etc.) settle before the await resolves. Always
-   * `await context.actions.resource(...).evict()` &mdash; even when
-   * the configured cache is synchronous, the contract stays async so
-   * call sites read uniformly.
+   * Strictly synchronous &mdash; the Adapter contract is sync, so the
+   * warm-start `Map` and the user adapter both settle in the current
+   * tick. Async backends fire-and-forget their underlying delete from
+   * inside the adapter body; the call site doesn't `await` anything.
    *
    * The `where` pattern is typed as `Record<string, unknown>` rather
    * than `Partial<P>` because the resource's params type `P` isn't
@@ -80,13 +79,13 @@ export type ResourceCall<T> = ResourceFetch<T> & {
    *
    * ```ts
    * // Drop the {id: 5} slot.
-   * await context.actions.resource(resource.user({ id: 5 })).evict();
+   * context.actions.resource(resource.user({ id: 5 })).evict();
    *
    * // Drop every user slot whose stored params include name "Adam".
-   * await context.actions.resource(resource.user()).evict({ name: "Adam" });
+   * context.actions.resource(resource.user()).evict({ name: "Adam" });
    * ```
    */
-  readonly evict: (where?: Record<string, unknown>) => Promise<void>;
+  readonly evict: (where?: Record<string, unknown>) => void;
 };
 import { describe } from "../utils.ts";
 
@@ -801,7 +800,7 @@ export type HandlerContext<
     annotate<T>(value: T, operation?: Operation): T;
     readonly inspect: Readonly<Inspect<M>>;
     resource: (<T>(invocation: T | null) => ResourceCall<T>) & {
-      nuke(where?: Record<string, unknown>): Promise<void>;
+      nuke(where?: Record<string, unknown>): void;
     };
     final<T>(
       action: BroadcastPayload<T> | MulticastPayload<T>,

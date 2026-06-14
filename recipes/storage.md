@@ -4,10 +4,12 @@ By default a `Resource`'s cache is in-memory only &ndash; it resets on every pag
 
 This recipe covers:
 
-- The `Cache(adapter)` factory and its `get`/`set`/`remove`/`clear` API.
+- The `Cache(adapter)` factory and its `get`/`set`/`remove`/`clear` API &mdash; **every method is strictly synchronous**.
 - `App({ cache })` &mdash; the single place to wire persistence for every resource on an App.
-- Adapter examples for browser `localStorage`, React Native MMKV, and browser-extension `chrome.storage`.
+- Adapter examples for browser `localStorage`, React Native via [`react-native-mmkv`](https://github.com/mrousavy/react-native-mmkv), and browser-extension `chrome.storage`.
 - Sign-out purge, schema versioning, and the `unset` sentinel.
+
+> **Sync only.** The adapter contract has no `Promise<...>` anywhere. The model-literal read (`{ user: resource.user() }`) is evaluated in the current tick during render &ndash; there's no `await` to lean on. Truly async backends (IndexedDB, AsyncStorage, `chrome.storage.local`) need a synchronous facade hydrated at app entry; the chrome.storage example below shows the pattern. React Native projects should reach for [`react-native-mmkv`](https://github.com/mrousavy/react-native-mmkv), which is sync out of the box and drops straight into the `Adapter` contract.
 
 ## The shape: `Stored<T>`
 
@@ -37,18 +39,18 @@ const cache = Cache({
 });
 ```
 
-`Cache()` with no adapter is in-memory only &ndash; useful in tests or when you want a first-class, holdable cache without persistence.
+`Cache()` with no adapter is in-memory only &ndash; useful in tests or when you want a first-class, holdable cache without persistence. When an adapter **is** supplied, the adapter is the only tier &ndash; the Cache does not also maintain a separate in-memory mirror.
 
-Reads return a `Stored<T>` synchronously; writes (`set`, `remove`, `clear`) return `Promise<void>` so async adapters can settle before the await resolves. Empty `Stored`s are no-ops on write so placeholder snapshots never serialise:
+Every Cache method is sync. Reads return a `Stored<T>` immediately; writes (`set`, `remove`, `clear`) return `void`. Empty `Stored`s are no-ops on write so placeholder snapshots never serialise:
 
 ```ts
 const stored = cache.get<User>("user");
 // stored.data: User | Unset — branch on `=== unset` to distinguish empty from null
 // stored.at: Temporal.Instant | null
 
-await cache.set("user", { data: user, at: Temporal.Now.instant() });
-await cache.remove("user");
-await cache.clear();
+cache.set("user", { data: user, at: Temporal.Now.instant() });
+cache.remove("user");
+cache.clear();
 ```
 
 ## Wiring a Cache into the App
@@ -145,9 +147,13 @@ const six: User | null = resource.user({ id: 6 });
 
 ## Adapter examples
 
-### React Native &mdash; `react-native-mmkv`
+### React Native &mdash; [`react-native-mmkv`](https://github.com/mrousavy/react-native-mmkv) (recommended)
 
-`AsyncStorage` is incompatible because the read path must be synchronous (the model literal is evaluated synchronously). Use `MMKV`:
+MMKV is the recommended React Native backend. It's synchronous out of the box, fast, and JSI-backed &ndash; no bridge round-trips, no `Promise` ceremony. `AsyncStorage` is incompatible with the Cache because the read path must be sync (the model literal is evaluated synchronously during render); MMKV avoids that constraint entirely.
+
+```bash
+npm install react-native-mmkv
+```
 
 ```ts
 import { Cache } from "march-hare";
@@ -160,12 +166,31 @@ export const cache = Cache({
   set: (key, value) => mmkv.set(key, value),
   remove: (key) => mmkv.delete(key),
   clear: () => mmkv.clearAll(),
+  keys: () => mmkv.getAllKeys(),
+});
+```
+
+See the [`react-native-mmkv` README](https://github.com/mrousavy/react-native-mmkv) for encryption, multiple instances, and lifecycle notes.
+
+### Browser &mdash; `localStorage`
+
+`localStorage` is synchronous and ubiquitous; the simplest production-grade backend for the web:
+
+```ts
+import { Cache } from "march-hare";
+
+export const cache = Cache({
+  get: (key) => localStorage.getItem(key),
+  set: (key, value) => localStorage.setItem(key, value),
+  remove: (key) => localStorage.removeItem(key),
+  clear: () => localStorage.clear(),
+  keys: () => Object.keys(localStorage),
 });
 ```
 
 ### Browser extension &mdash; sync facade over `chrome.storage.local`
 
-`chrome.storage.local` is async, so wrap it with an in-memory cache hydrated at startup:
+`chrome.storage.local` is async, so wrap it with an in-memory map hydrated at startup. Hydrate **before** mounting `<Boundary>` so the model-literal read sees the persisted values:
 
 ```ts
 import { Cache } from "march-hare";
@@ -193,8 +218,17 @@ export const cache = Cache({
     memory.clear();
     void chrome.storage.local.clear();
   },
+  keys: () => memory.keys(),
 });
 ```
+
+```ts
+// app entry point
+await hydrate();
+createRoot(node).render(<Boundary>{/* … */}</Boundary>);
+```
+
+The persistent backend stays async; the **adapter** exposed to the Cache is sync because every read hits the hydrated `memory` map. Writes update the map in-line and fire-and-forget into `chrome.storage.local` &ndash; the Cache never awaits the persistent write.
 
 ### Server-rendered apps &mdash; SSR-safe localStorage
 
@@ -249,7 +283,7 @@ actions.useAction(Actions.TeamUpdated, (context, { teamId }) => {
 });
 ```
 
-For a sweep across every resource on the App, call `context.actions.resource.nuke(where?)` &mdash; same partial-match logic, broader scope. Both `evict` and `nuke` work against persisted entries when the App is configured with `App({ cache })`; partial-match enumeration uses the adapter's `keys()` (when implemented) plus the slots touched in the current session.
+For a sweep across every resource on the App, call `context.actions.resource.nuke(where?)` &mdash; same partial-match logic, broader scope. Both `evict` and `nuke` are synchronous &mdash; they settle in the current tick because the adapter contract is sync. Partial-match enumeration uses the adapter's `keys()` when implemented.
 
 ## Schema drift
 
@@ -274,7 +308,7 @@ if (stored.data === utils.unset) {
 
 ## Limitations
 
-- **Synchronous adapters only.** The Cache reads during render (via the model literal). Async backends need a sync facade hydrated at app entry.
+- **Synchronous adapters only.** The Cache reads during render (via the model literal). Async backends need a sync facade hydrated at app entry &mdash; React Native users should use [`react-native-mmkv`](https://github.com/mrousavy/react-native-mmkv) to avoid this entirely.
 - **No cross-tab coherence.** Tab A writes; tab B's in-memory state stays stale until its own next fetch. Wire a `BroadcastChannel` listener if you need this.
-- **No quota recovery.** If `localStorage` is full, the write silently no-ops (the Cache catches the throw). The in-memory slot is unaffected.
+- **No quota recovery.** If `localStorage` is full, the write silently no-ops (the Cache catches the throw).
 - **No SSR support out of the box.** Use the `typeof localStorage !== "undefined"` guard pattern.

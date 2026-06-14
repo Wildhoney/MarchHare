@@ -17,6 +17,7 @@ function memoryAdapter(): Adapter & { entries: Map<string, string> } {
     clear: () => {
       entries.clear();
     },
+    keys: () => entries.keys(),
   };
 }
 
@@ -304,7 +305,7 @@ describe("evict via PendingCall.evict (chain entry)", () => {
     consumePending();
 
     item({ id: 5 });
-    await consumePending().evict({ id: 5 });
+    consumePending().evict({ id: 5 });
 
     expect(item({ id: 5 })).toBeNull();
     consumePending();
@@ -328,7 +329,7 @@ describe("evict via PendingCall.evict (chain entry)", () => {
     await six.run(noEnv, noController(), six.params, noDispatch);
 
     item();
-    await consumePending().evict({});
+    consumePending().evict({});
 
     expect(item({ id: 5 })).toBeNull();
     consumePending();
@@ -336,31 +337,8 @@ describe("evict via PendingCall.evict (chain entry)", () => {
     consumePending();
   });
 
-  it("awaits async adapter operations", async () => {
-    const entries = new Map<string, string>();
-    const sets: Array<string> = [];
-    const removes: Array<string> = [];
-    const adapter = {
-      get: (key: string): string | null => entries.get(key) ?? null,
-      set: async (key: string, value: string): Promise<void> => {
-        await Promise.resolve();
-        entries.set(key, value);
-        sets.push(key);
-      },
-      remove: async (key: string): Promise<void> => {
-        await Promise.resolve();
-        entries.delete(key);
-        removes.push(key);
-      },
-      clear: async (): Promise<void> => {
-        await Promise.resolve();
-        entries.clear();
-      },
-      keys: async (): Promise<Iterable<string>> => {
-        await Promise.resolve();
-        return entries.keys();
-      },
-    };
+  it("evicts persisted entries via the sync adapter", async () => {
+    const adapter = memoryAdapter();
     const cache = Cache(adapter);
 
     const item = Resource<Env, { name: string }, { id: number }>(
@@ -372,14 +350,14 @@ describe("evict via PendingCall.evict (chain entry)", () => {
     const call = consumePending();
     await call.run(noEnv, noController(), call.params, noDispatch);
 
-    expect(sets).toHaveLength(1);
+    expect(adapter.entries.size).toBe(1);
     expect(item({ id: 5 })).toEqual({ name: "User 5" });
     consumePending();
 
     item({ id: 5 });
-    await consumePending().evict({ id: 5 });
+    consumePending().evict({ id: 5 });
 
-    expect(removes).toHaveLength(1);
+    expect(adapter.entries.size).toBe(0);
     expect(item({ id: 5 })).toBeNull();
     consumePending();
   });
