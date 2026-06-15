@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.13.0](https://github.com/Wildhoney/MarchHare/compare/v0.12.1...v0.13.0) (2026-06-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* **resource:** return Invocation from handle call, add .get() for sync reads
+* strictly sync Cache adapter and evict/nuke; recommend react-native-mmkv for RN
+* async evict/nuke, async Cache adapter, type-aware no-floating-promises lint
+* replace Resource.Cachable with App({cache}) and add resource.evict/nuke
+
+* **resource:** return Invocation from handle call, add .get() for sync reads ([7ac8414](https://github.com/Wildhoney/MarchHare/commit/7ac8414f2da6afd528410ea650b366719b696c40))
+
+
+### Features
+
+* async evict/nuke, async Cache adapter, type-aware no-floating-promises lint ([19a8186](https://github.com/Wildhoney/MarchHare/commit/19a81863209eeb7f95fe33bc039257d8539c2c23))
+* replace Resource.Cachable with App({cache}) and add resource.evict/nuke ([eace7a1](https://github.com/Wildhoney/MarchHare/commit/eace7a14a7e933b21d469ec21a9aee0515aa5976))
+* strictly sync Cache adapter and evict/nuke; recommend react-native-mmkv for RN ([c90b19b](https://github.com/Wildhoney/MarchHare/commit/c90b19bbf70973e262c5614d0898091a3ba92765))
+
 ## [0.12.1](https://github.com/Wildhoney/MarchHare/compare/v0.12.0...v0.12.1) (2026-06-12)
 
 ## [0.12.0](https://github.com/Wildhoney/MarchHare/compare/v0.11.1...v0.12.0) (2026-06-12)
