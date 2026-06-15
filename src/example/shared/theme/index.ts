@@ -12,9 +12,9 @@ export const colour = <const>{
 
 export const spacing = <const>{
   xs: "8px",
-  sm: "12px",
-  md: "20px",
-  lg: "24px",
+  s: "12px",
+  m: "20px",
+  l: "24px",
   xl: "32px",
   xxl: "48px",
 };
@@ -31,9 +31,9 @@ export const shadow = <const>{
 export const font = <const>{
   family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
   size: {
-    sm: "14px",
-    md: "15px",
-    lg: "16px",
+    s: "14px",
+    m: "15px",
+    l: "16px",
     xxl: "36px",
   },
   weight: {

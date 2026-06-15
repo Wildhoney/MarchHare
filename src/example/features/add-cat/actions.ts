@@ -1,30 +1,30 @@
-import { shared } from "march-hare";
 import { G } from "@mobily/ts-belt";
 import { Actions, type Model } from "./types.ts";
-import { Env, type Payload } from "@example/shared/types/index.ts";
-import * as resource from "@example/shared/resources/cat/index.ts";
+import { scope } from "./utils.ts";
+import { type Payload } from "@example/shared/types/index.ts";
+import * as resource from "@example/shared/resources/index.ts";
 import { name } from "@example/shared/utils/name/index.ts";
 
-export function useAddCatActions() {
-  const context = shared.useContext<Env.Cat, Model, typeof Actions>();
-  const actions = context.useActions({ pending: false });
+export function useActions() {
+  const context = scope.useContext<Model, typeof Actions>();
+  const actions = context.useActions({ image: null });
 
   actions.useAction(Actions.Click, async (context) => {
-    context.actions.produce(({ model }) => void (model.pending = true));
+    context.actions.produce(({ model, inspect }) => {
+      model.image = context.actions.annotate(inspect.image.draft());
+    });
 
-    try {
-      const [image] = await context.actions.resource(resource.image());
-      if (G.isNullable(image)) return;
+    const [image] = await context.actions.resource(resource.cat.image());
+    if (G.isNullable(image)) return;
 
-      const cat: Payload.Cat = {
-        id: image.id,
-        name: name(),
-        avatar: image.url,
-      };
-      await context.actions.dispatch(Actions.Broadcast.CatAdded, cat);
-    } finally {
-      context.actions.produce(({ model }) => void (model.pending = false));
-    }
+    context.actions.produce(({ model }) => void (model.image = image));
+
+    const cat: Payload.Cat = {
+      id: image.id,
+      name: name(),
+      avatar: image.url,
+    };
+    await context.actions.dispatch(Actions.Broadcast.Cat.Added, cat);
   });
 
   return actions;

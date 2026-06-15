@@ -2,7 +2,8 @@
 
 `Resource(fetcher)` declares a remote interaction at module scope. There's no `useResource` hook &mdash; consume Resources directly:
 
-- **`resource.user(params?)`** &mdash; synchronous read of the cached payload for those params. Returns `T | null`. Safe to call at module scope, in the model literal, anywhere. As a side effect, the call primes the slot that the next `context.actions.resource(...)` consumes &mdash; whether for a fetch (`.then`/`await`), an eviction (`.evict()`), or a freshness gate (`.exceeds()`).
+- **`resource.user.get(params?)`** &mdash; synchronous read of the cached payload for those params. Returns `T | null`. Safe to call at module scope, in the model literal, anywhere. Has no side effects: it only reads the per-params cache slot.
+- **`resource.user(params?)`** &mdash; produces an `Invocation` describing the call. Pass it to `context.actions.resource(...)` for the fetch path or to `.evict(...)` for eviction; outside that, the value is inert.
 - **`context.actions.resource(resource.user(params?))`** &mdash; fires the fetch from an action handler. Auto-threads the `AbortController` from `context.task.controller` and a live handle to the per-`<Boundary>` Env. Returns a thenable that's also chainable with `.exceeds({ minutes: 5 })` for cache-aware refresh.
 
 The fetcher itself receives a single `context` argument carrying `env`, `controller`, `params`, and a broadcast/multicast-only `dispatch`. Access fields directly via `context.controller.signal`, `context.params.id`, etc. &mdash; do not destructure. Pass `context.controller.signal` to `fetch`/`ky`/`EventSource` for cancellation.
@@ -43,7 +44,7 @@ export function useActions() {
   const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions({
     // Sync cache read at the model literal — returns null when nothing is cached.
-    user: resource.user({ id: 5 }),
+    user: resource.user.get({ id: 5 }),
   });
 
   actions.useAction(Actions.Mount, async (context) => {
@@ -75,16 +76,14 @@ Every successful fetch writes through to a per-resource in-memory cache. Configu
 
 > **Temporal runtime requirement.** `.exceeds({...})` reads a `Temporal.Instant` internally. March Hare reads `Temporal` from the host global, so consumers targeting runtimes that do not yet expose it natively must install a polyfill (e.g. [`@js-temporal/polyfill`](https://github.com/js-temporal/temporal-polyfill)) once at app entry.
 
-## How the call form works
+## How the call forms work
 
-`resource.user(params)` does two things in one expression:
+Each Resource handle has two callable forms with different return shapes:
 
-1. Returns the per-params cache value synchronously (`T | null`).
-2. Primes a single module-scope slot with the fetcher and params. The next `context.actions.resource(...)` or `.resource(...).evict(...)` call consumes that slot.
+- `resource.user.get(params)` &mdash; returns the per-params cache value synchronously (`T | null`). Pure read; no side effects on the registry, no module-level state to corrupt.
+- `resource.user(params)` &mdash; returns an `Invocation` &mdash; a plain object carrying the fetcher, params, and eviction closure. Pass it to `context.actions.resource(...)` or to `.evict(...)`. Two synchronous calls produce two independent invocations, so storing one in a variable and passing it across `await` boundaries is safe.
 
-The slot is consumed the moment `.resource(...)` runs, so the natural inline pattern (`context.actions.resource(resource.user({id:5}))`) always pairs correctly. If a `resource.user(...)` call is not followed by a `.resource(...)` consumption, the slot self-clears on the next microtask &mdash; so stray calls (e.g. in the model literal) don't leak into later handler runs.
-
-Keep `resource.user(...)` and `.resource(...)` in the same expression. Splitting them across an `await` lets unrelated `resource.cat(...)` calls overwrite the slot in between.
+Because the descriptor is the return value of the call (not a side-channel hidden behind it), the order and timing of `resource.user(...)` calls does not matter &mdash; the value you pass to `context.actions.resource(...)` is the one that gets fetched. No microtask windows, no "primed slot", nothing to overwrite.
 
 ## The fetcher's `context` argument
 
@@ -121,21 +120,21 @@ await context.actions
   .exceeds({ minutes: 5 });
 
 // Sync read of whichever slot you want.
-const fiveCached: User | null = resource.user({ id: 5 });
+const fiveCached: User | null = resource.user.get({ id: 5 });
 ```
 
 Two callers producing structurally equal params (same key order, same primitive values) hit the same slot.
 
 ## Sync cache read
 
-Calling `resource.user(params)` directly reads the most recent successful payload synchronously. Returns `null` when nothing has resolved yet (whether through "never fetched" or "fetch is still pending").
+`resource.user.get(params)` reads the most recent successful payload synchronously. Returns `null` when nothing has resolved yet (whether through "never fetched" or "fetch is still pending").
 
 Use it in the model literal to seed initial state from the cache:
 
 ```ts
 const context = useContext<Model, typeof Actions>();
 const actions = context.useActions({
-  user: resource.user({ id }), // User | null
+  user: resource.user.get({ id }), // User | null
 });
 ```
 
@@ -148,13 +147,13 @@ actions.useAction(Actions.Refresh, async (context) => {
     context.actions.produce(({ model }) => void (model.user = user));
   } catch {
     context.actions.produce(
-      ({ model }) => void (model.user = resource.user({ id })),
+      ({ model }) => void (model.user = resource.user.get({ id })),
     );
   }
 });
 ```
 
-The cache is module-scope, so every caller of `resource.user({ id: 5 })` &mdash; from a model literal, a handler, even a non-React utility &mdash; sees the same payload.
+The cache is module-scope, so every caller of `resource.user.get({ id: 5 })` &mdash; from a model literal, a handler, even a non-React utility &mdash; sees the same payload.
 
 ## `.exceeds({...})` &mdash; conditional refresh
 
@@ -278,7 +277,7 @@ Cache writes happen automatically on every successful fetch; eviction is the inv
 
 ### `context.actions.resource(...).evict(where?)` &mdash; per-resource
 
-Chains off `context.actions.resource(...)` so it shares the same primed-slot mechanism as `.exceeds(...)` and `.coalesce(...)`. With no argument, the originating call's params become the pattern; pass `(where)` to override.
+Chains off `context.actions.resource(...)` so the invocation passed in is also what's evicted. With no argument, the originating call's params become the pattern; pass `(where)` to override.
 
 ```ts
 // Drop the {id: 5} slot for the user resource only.
@@ -331,7 +330,7 @@ function useProfileActions() {
   const context = app.useContext<Model, typeof Actions>();
   // After the Logout handler runs, this reads null instead of the stale user.
   return context.useActions({
-    user: resource.user({ id: context.env.userId }),
+    user: resource.user.get({ id: context.env.userId }),
   });
 }
 ```

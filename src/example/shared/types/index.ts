@@ -6,6 +6,8 @@ export namespace Env {
   };
 }
 
+export type Envs = Env.Cat;
+
 export namespace Payload {
   export type Cat = {
     id: string;
@@ -15,7 +17,7 @@ export namespace Payload {
 }
 
 export namespace Broadcast {
-  export class Actions {
-    static CatAdded = Action<Payload.Cat>("Cat.Added", Distribution.Broadcast);
+  export class Cat {
+    static Added = Action<Payload.Cat>("Cat.Added", Distribution.Broadcast);
   }
 }

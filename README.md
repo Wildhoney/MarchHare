@@ -28,7 +28,7 @@
 1. [Global data](#global-data)
 1. [Reusable components](#reusable-components)
 
-For advanced topics, see the [recipes directory](./recipes/).
+For advanced topics, see the [recipes directory](./recipes/). For a worked end-to-end example with the FSD layout, see [`src/example/`](./src/example/README.md).
 
 ## Benefits
 
@@ -393,7 +393,12 @@ Components that mount after a broadcast has already been dispatched automaticall
 
 ## Resource handling
 
-For remote data, declare an `app.Resource` at module scope. `resource.user(params)` is the unified call form &mdash; it returns the sync cache read (`User | null`) and primes a slot that `context.actions.resource(resource.user(params))` consumes for the fetch path (with auto-threaded abort controller and a live handle to the per-`<Boundary>` Env). Every successful fetch caches the response in a module-level slot keyed by the fetcher and the stringified params, so different param-sets are independent. Keep all resources in `resources.ts` and pull the whole module in as a namespace (`import * as resource from "./resources"`):
+For remote data, declare an `app.Resource` at module scope. The resulting handle has two call forms:
+
+- `resource.user.get(params)` &mdash; synchronous cache read, returns `User | null`. Use it in model literals, JSX, or anywhere you need the cached value without triggering a fetch.
+- `resource.user(params)` &mdash; produces an `Invocation` you pass to `context.actions.resource(...)` for the fetch path (with auto-threaded abort controller and a live handle to the per-`<Boundary>` Env).
+
+Every successful fetch caches the response in a module-level slot keyed by the fetcher and the stringified params, so different param-sets are independent. Keep all resources in `resources.ts` and pull the whole module in as a namespace (`import * as resource from "./resources"`):
 
 ```ts
 // resources.ts
@@ -430,7 +435,7 @@ function useActions() {
   const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions({
     // Sync cache read at the model literal — returns null when nothing is cached.
-    user: resource.user(),
+    user: resource.user.get(),
     receipt: null,
   });
 
@@ -578,7 +583,7 @@ function useActions() {
   const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions({
     // First render reads the Cache automatically.
-    cat: resource.cat(),
+    cat: resource.cat.get(),
   });
 
   actions.useAction(Actions.Mount, async (context) => {
@@ -601,7 +606,7 @@ export default function CatCard(): React.ReactElement {
 
 `Cache()` with no adapter is an in-memory scope &ndash; useful in tests or when you want a holdable cache without persistence. Per-params keying via `JSON.stringify(params)` is automatic, so `user({ id: 5 })` and `user({ id: 6 })` are distinct slots.
 
-The adapter contract is **strictly synchronous** &ndash; `get` / `set` / `remove` / `clear` all return immediately, with no `Promise`. The model-literal read (`{ user: resource.user() }`) is evaluated during render and has no place to wait. React Native projects should use [`react-native-mmkv`](https://github.com/mrousavy/react-native-mmkv), which is sync out of the box and drops straight into the contract; `AsyncStorage` is incompatible. Truly async backends (IndexedDB, `chrome.storage.local`) need a sync facade hydrated at app entry &ndash; see the [storage recipe](./recipes/storage.md).
+The adapter contract is **strictly synchronous** &ndash; `get` / `set` / `remove` / `clear` all return immediately, with no `Promise`. The model-literal read (`{ user: resource.user.get() }`) is evaluated during render and has no place to wait. React Native projects should use [`react-native-mmkv`](https://github.com/mrousavy/react-native-mmkv), which is sync out of the box and drops straight into the contract; `AsyncStorage` is incompatible. Truly async backends (IndexedDB, `chrome.storage.local`) need a sync facade hydrated at app entry &ndash; see the [storage recipe](./recipes/storage.md).
 
 See the [storage recipe](./recipes/storage.md) for backend adapters (React Native `react-native-mmkv`, browser `localStorage`, browser extension `chrome.storage`), sign-out purge, and the `unset` sentinel that keeps "nothing stored" distinct from "a legitimately stored null".
 

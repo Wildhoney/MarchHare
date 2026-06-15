@@ -79,35 +79,39 @@ export type Config<T, P extends object = Record<never, never>> = {
 };
 
 /**
- * Snapshot of the most recent resource invocation. `resource.cat(params)`
- * writes one of these into a module-scope slot; the next
- * `context.actions.resource(...).evict()` or fetch call consumes it via
- * `consumePending` and then clears the slot.
+ * Descriptor produced by calling a Resource handle. Carries the per-call
+ * `params` together with the closures `context.actions.resource(...)`
+ * needs to run, read, or evict the slot. Pass it straight to
+ * `context.actions.resource(invocation)` &mdash; no module-level state
+ * sits between the producer and the consumer, so two synchronous calls
+ * to the same Resource are independent values that can be stored,
+ * deferred, or passed across `await` boundaries safely.
  *
  * @internal
  */
-export type PendingCall = {
+export type Invocation<T, P extends object = Record<never, never>> = {
   readonly run: (
     env: Env,
     controller: AbortController,
     params: object,
     dispatch: Dispatch,
-  ) => Promise<unknown>;
+  ) => Promise<T>;
   readonly read: (params: object) => {
-    data: unknown;
+    data: T | symbol;
     at: Temporal.Instant | null;
   };
   readonly evict: (where: object) => void;
-  readonly params: object;
+  readonly params: P;
 };
 
 /**
  * Resource handle returned by `Resource(...)` (or its `app.Resource` /
- * `shared.Resource` counterparts). Call it with `params` to read the
- * per-params cache slot synchronously and prime the slot consumed by
- * `context.actions.resource(...)`. Eviction lives on the handler
- * context rather than the handle:
+ * `shared.Resource` counterparts). Call it with `params` to produce an
+ * {@link Invocation} suitable for `context.actions.resource(...)`. Use
+ * `.get(params)` for a synchronous cache read.
  *
+ * - `resource.cat.get({id: 5})` &mdash; sync read, returns `T | null`.
+ * - `context.actions.resource(resource.cat({id: 5}))` &mdash; fetch.
  * - `context.actions.resource(resource.cat({id: 5})).evict()` &mdash;
  *   drop the `{id: 5}` slot.
  * - `context.actions.resource(resource.cat()).evict({name: "Adam"})`
@@ -119,7 +123,7 @@ export type PendingCall = {
  *
  * ```ts
  * // Sync cache read in a model literal.
- * { cat: resource.cat({ id: 5 }) }
+ * { cat: resource.cat.get({ id: 5 }) }
  *
  * // Fetch with `.exceeds(...)` for cache-aware refresh.
  * await context.actions
@@ -130,8 +134,21 @@ export type PendingCall = {
  * context.actions.resource(resource.cat({ id: 5 })).evict();
  * ```
  */
-export type ResourceHandle<T, P extends object = Record<never, never>> = [
+export type ResourceHandle<T, P extends object = Record<never, never>> = ([
   keyof P,
 ] extends [never]
-  ? (params?: P) => T | null
-  : (params: P) => T | null;
+  ? (params?: P) => Invocation<T, P>
+  : (params: P) => Invocation<T, P>) & {
+  readonly get: [keyof P] extends [never]
+    ? (params?: P) => T | null
+    : (params: P) => T | null;
+};
+
+/**
+ * Drops cache slots whose stored params match the supplied `where`
+ * pattern. Each Resource registers one of these on declaration so
+ * `nuke(where)` can iterate them.
+ *
+ * @internal
+ */
+export type ResourceEvictor = (where: object) => void;

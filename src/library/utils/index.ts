@@ -1,5 +1,5 @@
 import { Pk } from "../types/index.ts";
-import { Aborted } from "../error/types.ts";
+import { Aborted } from "../error/index.ts";
 
 export { unset } from "./utils.ts";
 export type { Stored, Unset } from "./types.ts";

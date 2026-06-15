@@ -87,10 +87,10 @@ On mount with a cached `Broadcast.User` value both handlers fire, both call `.re
 
 The dedupe key is the triple `(Resource, params, token)`:
 
-- Two calls to `resource.dashboard({ userId: 7 }).coalesce(Coalesce.Dashboard)` share.
-- `resource.dashboard({ userId: 7 }).coalesce(Coalesce.Dashboard)` and `resource.dashboard({ userId: 8 }).coalesce(Coalesce.Dashboard)` do **not** share &mdash; different params, different fetches.
-- `resource.dashboard({ userId: 7 }).coalesce(Coalesce.Dashboard)` and `resource.dashboard({ userId: 7 }).coalesce(Coalesce.Refresh)` do **not** share &mdash; different tokens, different fetches.
-- `resource.cat().coalesce(Coalesce.Dashboard)` and `resource.dashboard().coalesce(Coalesce.Dashboard)` do **not** share &mdash; same token but different Resources. Identity comes from the fetcher closure, not the token.
+- Two calls to `context.actions.resource(resource.dashboard({ userId: 7 })).coalesce(Coalesce.Dashboard)` share.
+- `resource.dashboard({ userId: 7 })` and `resource.dashboard({ userId: 8 })` under the same token do **not** share &mdash; different params, different fetches.
+- `resource.dashboard({ userId: 7 })` under `Coalesce.Dashboard` and the same call under `Coalesce.Refresh` do **not** share &mdash; different tokens, different fetches.
+- `resource.cat()` and `resource.dashboard()` under the same token do **not** share &mdash; same token but different Resources. Identity comes from the fetcher closure, not the token.
 
 The token namespace is scoped to the enclosing `<app.Boundary>`, so `Coalesce.Dashboard` in one App is independent of the same value in a sibling App's tree.
 

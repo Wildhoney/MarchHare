@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { Resource, consumePending } from "./index.ts";
+import { Resource } from "./index.ts";
 import { Cache, type Adapter } from "../cache/index.ts";
 import type { Env } from "../boundary/components/env/index.tsx";
+import type { Dispatch } from "./types.ts";
 
 function memoryAdapter(): Adapter & { entries: Map<string, string> } {
   const entries = new Map<string, string>();
@@ -23,9 +24,7 @@ function memoryAdapter(): Adapter & { entries: Map<string, string> } {
 
 const noEnv = <Env>{};
 const noController = (): AbortController => new AbortController();
-const noDispatch = <Parameters<ReturnType<typeof consumePending>["run"]>[3]>(
-  (() => Promise.resolve())
-);
+const noDispatch = <Dispatch>(() => Promise.resolve());
 
 describe("Resource() fetcher invocation", () => {
   it("invokes the fetcher with { env, controller, params, dispatch }", async () => {
@@ -33,8 +32,7 @@ describe("Resource() fetcher invocation", () => {
     const user = Resource(fetcher);
     const controller = noController();
 
-    user();
-    const call = consumePending();
+    const call = user();
     await call.run(noEnv, controller, call.params, noDispatch);
 
     expect(fetcher).toHaveBeenCalledWith({
@@ -50,8 +48,7 @@ describe("Resource() fetcher invocation", () => {
     const user = Resource(fetcher);
     const env = <Env>{ token: "abc-123" };
 
-    user();
-    const call = consumePending();
+    const call = user();
     await call.run(env, noController(), call.params, noDispatch);
 
     expect(fetcher).toHaveBeenCalledWith(expect.objectContaining({ env }));
@@ -65,8 +62,7 @@ describe("Resource() fetcher invocation", () => {
     const item = Resource<Env, { id: number }, Params>(fetcher);
     const controller = new AbortController();
 
-    item({ id: 5 });
-    const call = consumePending();
+    const call = item({ id: 5 });
     await call.run(noEnv, controller, call.params, noDispatch);
 
     expect(fetcher).toHaveBeenCalledWith(
@@ -80,8 +76,7 @@ describe("Resource() fetcher invocation", () => {
   it("propagates errors from the fetcher", async () => {
     const pay = Resource(() => Promise.reject(new Error("declined")));
 
-    pay();
-    const call = consumePending();
+    const call = pay();
     await expect(
       call.run(noEnv, noController(), call.params, noDispatch),
     ).rejects.toThrow("declined");
@@ -92,8 +87,7 @@ describe("Resource() fetcher invocation", () => {
     const user = Resource(fetcher);
 
     const runOnce = async () => {
-      user();
-      const call = consumePending();
+      const call = user();
       await call.run(noEnv, noController(), call.params, noDispatch);
     };
 
@@ -103,22 +97,19 @@ describe("Resource() fetcher invocation", () => {
   });
 });
 
-describe("Resource(params) sync read", () => {
+describe("Resource handle .get(params) sync read", () => {
   it("returns null before any successful fetch", () => {
     const user = Resource(() => Promise.resolve({ name: "Adam" }));
-    expect(user()).toBeNull();
-    consumePending();
+    expect(user.get()).toBeNull();
   });
 
   it("returns the cached payload after a successful fetch", async () => {
     const user = Resource(() => Promise.resolve({ name: "Adam" }));
 
-    user();
-    const first = consumePending();
+    const first = user();
     await first.run(noEnv, noController(), first.params, noDispatch);
 
-    expect(user()).toEqual({ name: "Adam" });
-    consumePending();
+    expect(user.get()).toEqual({ name: "Adam" });
   });
 
   it("returns null after a failed fetch (cache not poisoned)", async () => {
@@ -127,27 +118,23 @@ describe("Resource(params) sync read", () => {
       .mockRejectedValueOnce(new Error("boom"));
     const user = Resource(fetcher);
 
-    user();
-    const first = consumePending();
+    const first = user();
     await expect(
       first.run(noEnv, noController(), first.params, noDispatch),
     ).rejects.toThrow("boom");
 
-    expect(user()).toBeNull();
-    consumePending();
+    expect(user.get()).toBeNull();
   });
 
   it("returns null verbatim when the fetcher resolved with null", async () => {
     const user = Resource<Env, string | null>(() => Promise.resolve(null));
 
-    user();
-    const first = consumePending();
+    const first = user();
     await first.run(noEnv, noController(), first.params, noDispatch);
 
-    expect(user()).toBeNull();
-    const second = consumePending();
-    expect(second.read({}).data).toBeNull();
-    expect(second.read({}).at).toBeInstanceOf(Temporal.Instant);
+    expect(user.get()).toBeNull();
+    expect(user().read({}).data).toBeNull();
+    expect(user().read({}).at).toBeInstanceOf(Temporal.Instant);
   });
 
   it("keeps separate cache slots for different params", async () => {
@@ -157,20 +144,15 @@ describe("Resource(params) sync read", () => {
     );
     const user = Resource<Env, { id: number; name: string }, Params>(fetcher);
 
-    user({ id: 5 });
-    const five = consumePending();
+    const five = user({ id: 5 });
     await five.run(noEnv, noController(), five.params, noDispatch);
 
-    user({ id: 6 });
-    const six = consumePending();
+    const six = user({ id: 6 });
     await six.run(noEnv, noController(), six.params, noDispatch);
 
-    expect(user({ id: 5 })).toEqual({ id: 5, name: "User 5" });
-    consumePending();
-    expect(user({ id: 6 })).toEqual({ id: 6, name: "User 6" });
-    consumePending();
-    expect(user({ id: 7 })).toBeNull();
-    consumePending();
+    expect(user.get({ id: 5 })).toEqual({ id: 5, name: "User 5" });
+    expect(user.get({ id: 6 })).toEqual({ id: 6, name: "User 6" });
+    expect(user.get({ id: 7 })).toBeNull();
   });
 });
 
@@ -186,8 +168,7 @@ describe("AbortController", () => {
         }),
     );
 
-    user();
-    const call = consumePending();
+    const call = user();
     const promise = call.run(noEnv, controller, call.params, noDispatch);
     controller.abort();
 
@@ -201,8 +182,7 @@ describe("Resource(fetcher, cache) (shared App cache)", () => {
     const cache = Cache(adapter);
     const user = Resource(() => Promise.resolve({ name: "Adam" }), cache);
 
-    user();
-    const call = consumePending();
+    const call = user();
     await call.run(noEnv, noController(), call.params, noDispatch);
 
     expect([...adapter.entries.keys()].some((k) => k.endsWith(":{}"))).toBe(
@@ -217,18 +197,14 @@ describe("Resource(fetcher, cache) (shared App cache)", () => {
     const cat = Resource(() => Promise.resolve({ kind: "cat" }), cache);
     const dog = Resource(() => Promise.resolve({ kind: "dog" }), cache);
 
-    cat();
-    const a = consumePending();
+    const a = cat();
     await a.run(noEnv, noController(), a.params, noDispatch);
 
-    dog();
-    const b = consumePending();
+    const b = dog();
     await b.run(noEnv, noController(), b.params, noDispatch);
 
-    expect(cat()).toEqual({ kind: "cat" });
-    consumePending();
-    expect(dog()).toEqual({ kind: "dog" });
-    consumePending();
+    expect(cat.get()).toEqual({ kind: "cat" });
+    expect(dog.get()).toEqual({ kind: "dog" });
   });
 
   it("preserves the per-resource namespace key across writes", async () => {
@@ -236,8 +212,7 @@ describe("Resource(fetcher, cache) (shared App cache)", () => {
     const cache = Cache(adapter);
     const user = Resource(() => Promise.resolve({ name: "Adam" }), cache);
 
-    user();
-    const call = consumePending();
+    const call = user();
     await call.run(noEnv, noController(), call.params, noDispatch);
 
     const written = [...adapter.entries.keys()];
@@ -254,12 +229,10 @@ describe("Resource(fetcher, cache) (shared App cache)", () => {
     );
     const item = Resource<Env, { id: number }, Params>(fetcher, cache);
 
-    item({ id: 5 });
-    const five = consumePending();
+    const five = item({ id: 5 });
     await five.run(noEnv, noController(), five.params, noDispatch);
 
-    item({ id: 6 });
-    const six = consumePending();
+    const six = item({ id: 6 });
     await six.run(noEnv, noController(), six.params, noDispatch);
 
     expect(
@@ -273,19 +246,16 @@ describe("Resource(fetcher, cache) (shared App cache)", () => {
   it("falls back to an in-memory Cache when no cache is supplied", async () => {
     const user = Resource(() => Promise.resolve({ name: "Adam" }));
 
-    expect(user()).toBeNull();
-    consumePending();
+    expect(user.get()).toBeNull();
 
-    user();
-    const call = consumePending();
+    const call = user();
     await call.run(noEnv, noController(), call.params, noDispatch);
 
-    expect(user()).toEqual({ name: "Adam" });
-    consumePending();
+    expect(user.get()).toEqual({ name: "Adam" });
   });
 });
 
-describe("evict via PendingCall.evict (chain entry)", () => {
+describe("evict via Invocation.evict (chain entry)", () => {
   it("drops the per-params slot via partial-match pattern", async () => {
     type Params = { id: number };
     const fetcher = vi.fn(({ params: { id } }: { params: Params }) =>
@@ -293,24 +263,18 @@ describe("evict via PendingCall.evict (chain entry)", () => {
     );
     const item = Resource<Env, { id: number }, Params>(fetcher);
 
-    item({ id: 5 });
-    const five = consumePending();
+    const five = item({ id: 5 });
     await five.run(noEnv, noController(), five.params, noDispatch);
 
-    item({ id: 6 });
-    const six = consumePending();
+    const six = item({ id: 6 });
     await six.run(noEnv, noController(), six.params, noDispatch);
 
-    expect(item({ id: 5 })).toEqual({ id: 5 });
-    consumePending();
+    expect(item.get({ id: 5 })).toEqual({ id: 5 });
 
-    item({ id: 5 });
-    consumePending().evict({ id: 5 });
+    item({ id: 5 }).evict({ id: 5 });
 
-    expect(item({ id: 5 })).toBeNull();
-    consumePending();
-    expect(item({ id: 6 })).toEqual({ id: 6 });
-    consumePending();
+    expect(item.get({ id: 5 })).toBeNull();
+    expect(item.get({ id: 6 })).toEqual({ id: 6 });
   });
 
   it("evicts every slot when called with an empty pattern", async () => {
@@ -320,21 +284,16 @@ describe("evict via PendingCall.evict (chain entry)", () => {
     );
     const item = Resource<Env, { id: number }, Params>(fetcher);
 
-    item({ id: 5 });
-    const five = consumePending();
+    const five = item({ id: 5 });
     await five.run(noEnv, noController(), five.params, noDispatch);
 
-    item({ id: 6 });
-    const six = consumePending();
+    const six = item({ id: 6 });
     await six.run(noEnv, noController(), six.params, noDispatch);
 
-    item();
-    consumePending().evict({});
+    item().evict({});
 
-    expect(item({ id: 5 })).toBeNull();
-    consumePending();
-    expect(item({ id: 6 })).toBeNull();
-    consumePending();
+    expect(item.get({ id: 5 })).toBeNull();
+    expect(item.get({ id: 6 })).toBeNull();
   });
 
   it("evicts persisted entries via the sync adapter", async () => {
@@ -346,39 +305,15 @@ describe("evict via PendingCall.evict (chain entry)", () => {
       cache,
     );
 
-    item({ id: 5 });
-    const call = consumePending();
+    const call = item({ id: 5 });
     await call.run(noEnv, noController(), call.params, noDispatch);
 
     expect(adapter.entries.size).toBe(1);
-    expect(item({ id: 5 })).toEqual({ name: "User 5" });
-    consumePending();
+    expect(item.get({ id: 5 })).toEqual({ name: "User 5" });
 
-    item({ id: 5 });
-    consumePending().evict({ id: 5 });
+    item({ id: 5 }).evict({ id: 5 });
 
     expect(adapter.entries.size).toBe(0);
-    expect(item({ id: 5 })).toBeNull();
-    consumePending();
-  });
-});
-
-describe("consumePending() invariants", () => {
-  it("throws when called with no pending invocation", () => {
-    try {
-      consumePending();
-    } catch {
-      // Intentionally swallowed.
-    }
-    expect(() => consumePending()).toThrow(
-      /must be called with a fresh resource invocation/,
-    );
-  });
-
-  it("clears the slot on next microtask if not consumed", async () => {
-    const user = Resource(() => Promise.resolve({ name: "Adam" }));
-    user();
-    await Promise.resolve();
-    expect(() => consumePending()).toThrow();
+    expect(item.get({ id: 5 })).toBeNull();
   });
 });

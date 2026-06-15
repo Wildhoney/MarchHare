@@ -50,13 +50,56 @@ export type { Adapter, Encoded } from "./types.ts";
  * ```
  */
 export type Cache = {
+  /**
+   * Returns the {@link Stored} envelope for `key`. The envelope is
+   * `empty()` when nothing is persisted; otherwise it carries the
+   * decoded payload and the timestamp recorded at write-time.
+   *
+   * @template T The payload type expected at `key`.
+   * @param key Cache slot identifier &mdash; usually the JSON-stringified
+   *   call-site params, prefixed by the Resource's namespace.
+   */
   get<T>(key: string): Stored<T>;
+  /**
+   * Writes `value` to `key`. Skipped when the envelope has no concrete
+   * payload (e.g. an `empty()` slot), since there is nothing meaningful
+   * to persist. Serialisation, quota errors, and unserialisable payloads
+   * are swallowed &mdash; writes are best-effort.
+   *
+   * @template T The payload type contained in `value`.
+   * @param key Cache slot identifier &mdash; usually the JSON-stringified
+   *   call-site params, prefixed by the Resource's namespace.
+   * @param value Stored envelope carrying the payload and its
+   *   write-time `Temporal.Instant`.
+   */
   set<T>(key: string, value: Stored<T>): void;
+  /**
+   * Drops a single cache slot. Best-effort &mdash; backing-store errors
+   * are swallowed.
+   *
+   * @param key Cache slot identifier.
+   */
   remove(key: string): void;
+  /**
+   * Drops every cache slot in the backing store. Best-effort &mdash;
+   * backing-store errors are swallowed.
+   */
   clear(): void;
+  /**
+   * Returns every key currently held by the backing store. Used by
+   * partial-match eviction (`evict(where)`) to iterate slots whose
+   * stored params satisfy a `where` pattern.
+   */
   keys(): Iterable<string>;
 };
 
+/**
+ * In-memory {@link Adapter} backed by a `Map`. Created on demand inside
+ * {@link Cache} when no adapter is supplied; tests and ephemeral use
+ * cases get an isolated slot without touching storage.
+ *
+ * @internal
+ */
 function memoryAdapter(): Adapter {
   const memory = new Map<string, string>();
   return {
@@ -74,10 +117,25 @@ function memoryAdapter(): Adapter {
   };
 }
 
+/**
+ * Constructs a {@link Cache} backed by `adapter`, or by an in-memory
+ * `Map` when none is supplied. The returned object is the same shape
+ * regardless &mdash; only the durability differs.
+ *
+ * @param adapter Optional synchronous backing store (localStorage, MMKV,
+ *   or a custom sync facade). Omit for an in-memory cache scoped to
+ *   this instance.
+ */
 export function Cache(adapter?: Adapter): Cache {
   const backing: Adapter = adapter ?? memoryAdapter();
 
   return {
+    /**
+     * Reads `key` from the backing store, parses the {@link Encoded}
+     * envelope, and re-hydrates the `Temporal.Instant`. Returns
+     * `empty()` when the slot is missing or the stored JSON is
+     * malformed.
+     */
     get<T>(key: string): Stored<T> {
       try {
         const raw = backing.get(key);
@@ -88,6 +146,11 @@ export function Cache(adapter?: Adapter): Cache {
         return empty<T>();
       }
     },
+    /**
+     * Serialises `value` to JSON and writes it under `key`. Skips
+     * envelopes whose payload is unset or whose timestamp is missing,
+     * and swallows quota / encoding / private-mode errors.
+     */
     set<T>(key: string, value: Stored<T>): void {
       if (value.data === unset || G.isNull(value.at)) return;
       try {
@@ -99,23 +162,36 @@ export function Cache(adapter?: Adapter): Cache {
           }),
         );
       } catch {
-        // ignore — quota, private mode, unserialisable payload, etc.
+        return;
       }
     },
+    /**
+     * Removes a single slot. Backing-store errors are swallowed
+     * &mdash; eviction is best-effort.
+     */
     remove(key: string): void {
       try {
         backing.remove(key);
       } catch {
-        // ignore — best-effort removal
+        return;
       }
     },
+    /**
+     * Clears every slot in the backing store. Backing-store errors are
+     * swallowed &mdash; clear is best-effort.
+     */
     clear(): void {
       try {
         backing.clear();
       } catch {
-        // ignore — best-effort clear
+        return;
       }
     },
+    /**
+     * Returns every key the backing store currently holds, or an empty
+     * iterable when the adapter does not expose `keys` (legacy adapters)
+     * or throws while enumerating.
+     */
     keys(): Iterable<string> {
       try {
         return backing.keys?.() ?? [];

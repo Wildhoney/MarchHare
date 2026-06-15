@@ -19,7 +19,7 @@ import type { Actions, Model, Props } from "../types/index.ts";
  *  classes) this scope's `useContext().actions.dispatch` is allowed
  *  to fire.
  */
-export type Scope<E extends object, MulticastActions> = {
+export type ScopeHandle<E extends object, MulticastActions> = {
   /**
    * Boundary component. Wrap a subtree to open a fresh multicast scope
    * &mdash; every `Distribution.Multicast` action dispatched inside this

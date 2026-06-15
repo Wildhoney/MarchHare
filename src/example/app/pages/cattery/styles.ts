@@ -3,7 +3,7 @@ import { colour, font, spacing } from "@example/shared/theme/index.ts";
 
 export const layout = css`
   min-height: 100vh;
-  padding: ${spacing.xxl} ${spacing.lg};
+  padding: ${spacing.xxl} ${spacing.l};
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -29,19 +29,19 @@ export const title = css`
 export const tagline = css`
   margin: 0;
   color: ${colour.text.secondary};
-  font-size: ${font.size.md};
+  font-size: ${font.size.m};
 `;
 
 export const grid = css`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: ${spacing.md};
+  gap: ${spacing.m};
   width: 100%;
   max-width: 880px;
 `;
 
 export const empty = css`
   color: ${colour.text.muted};
-  font-size: ${font.size.sm};
+  font-size: ${font.size.s};
   font-style: italic;
 `;

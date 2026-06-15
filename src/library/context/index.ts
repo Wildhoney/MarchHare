@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useActions } from "../actions/index.ts";
-import { bindWith } from "../with/index.ts";
+import { bindWith } from "../with/utils.ts";
 import type {
   Actions,
   Context as ContextHandle,
@@ -42,7 +42,7 @@ import type { DispatchTarget } from "./types.ts";
  * });
  *
  * const actions = context.useActions(
- *   { user: resource.user() },
+ *   { user: resource.user.get() },
  *   () => ({ form }),
  * );
  * ```

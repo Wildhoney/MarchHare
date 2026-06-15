@@ -1,49 +1,15 @@
-import type {
-  Args,
-  Dispatch,
-  Fetcher,
-  PendingCall,
-  ResourceHandle,
-} from "./types.ts";
-import { Cache, defaultCache, key } from "./utils.ts";
-import { present, unset } from "../utils/utils.ts";
-import type { Env } from "../boundary/components/env/index.tsx";
+import type { Fetcher, ResourceHandle } from "./types.ts";
+import {
+  Cache,
+  build,
+  defaultCache,
+  evictors,
+  nextResourceId,
+} from "./utils.ts";
 import type { AppFetcher } from "../app/types.ts";
 import { G } from "@mobily/ts-belt";
 
-export type {
-  Coalesce,
-  Fetcher,
-  PendingCall,
-  ResourceHandle,
-} from "./types.ts";
-
-let pending: PendingCall | null = null;
-let nextResourceId = 0;
-
-type ResourceEvictor = (where: object) => void;
-
-const evictors: Array<ResourceEvictor> = [];
-
-/**
- * Reads and clears the slot populated by the most recent resource
- * invocation. Throws when the slot is empty &mdash; the public
- * `.resource(...)` shape requires a fresh `resource.cat(params)` call
- * as its argument.
- *
- * @internal
- */
-export function consumePending(): PendingCall {
-  if (G.isNull(pending)) {
-    throw new Error(
-      "context.actions.resource(...) must be called with a fresh resource " +
-        "invocation, e.g. context.actions.resource(resource.cat({ id: 5 })).",
-    );
-  }
-  const call = pending;
-  pending = null;
-  return call;
-}
+export type { Coalesce, Fetcher, Invocation, ResourceHandle } from "./types.ts";
 
 /**
  * Evicts cache entries across every Resource constructed in the
@@ -60,78 +26,15 @@ export function nuke(where?: object): void {
   for (const evict of evictors) evict(pattern);
 }
 
-function build<T, P extends object>(
-  ƒ: Fetcher<T, P>,
-  backing: Cache,
-  namespace: string | null,
-): ResourceHandle<T, P> {
-  const prefix = G.isNull(namespace) ? "" : `${namespace}:`;
-  const cacheKey = (params: P) => `${prefix}${key(params)}`;
-
-  const read = (params: P) => {
-    const stored = backing.get<T>(cacheKey(params));
-    if (stored.data === unset || G.isNull(stored.at)) {
-      return { data: unset, at: null };
-    }
-    return { data: <T>stored.data, at: stored.at };
-  };
-
-  const run = (
-    env: Env,
-    controller: AbortController,
-    params: P,
-    dispatch: Dispatch,
-  ): Promise<T> =>
-    ƒ(<Args<P>>{ env, controller, params, dispatch }).then((resolved) => {
-      backing.set(cacheKey(params), present(resolved, Temporal.Now.instant()));
-      return resolved;
-    });
-
-  const evict = (where: object): void => {
-    const entries = Object.entries(where);
-    for (const k of [...backing.keys()]) {
-      if (!k.startsWith(prefix)) continue;
-      try {
-        const parsed = <Record<string, unknown>>(
-          JSON.parse(k.slice(prefix.length))
-        );
-        if (entries.every(([key, v]) => parsed[key] === v)) backing.remove(k);
-      } catch {
-        // skip malformed entries
-      }
-    }
-  };
-
-  evictors.push(evict);
-
-  function call(params?: P): T | null {
-    const effective = <P>(params ?? {});
-    pending = {
-      run: <PendingCall["run"]>run,
-      read: <PendingCall["read"]>read,
-      evict,
-      params: effective,
-    };
-    queueMicrotask(() => {
-      if (G.isNotNullable(pending) && pending.params === effective)
-        pending = null;
-    });
-    const { data } = read(effective);
-    return data === unset ? null : <T>data;
-  }
-
-  return <ResourceHandle<T, P>>call;
-}
-
 /**
  * Defines a remote resource &mdash; declared at module scope and used
  * directly. Exported as `shared.Resource` and (via the app factory) as
- * `app.Resource`. Calling the returned handle with `params` returns the
- * sync cache value (`T | null`) and primes the slot consumed by
- * `context.actions.resource(...)` for fetch or
- * `context.actions.resource(...).evict(where?)` for partial-match
- * invalidation. Persistence happens automatically when the App is
- * declared with `App({ cache })`.
+ * `app.Resource`. Calling the returned handle with `params` produces an
+ * {@link Invocation} suitable for `context.actions.resource(...)` (fetch
+ * path) or `context.actions.resource(...).evict(where?)` (partial-match
+ * invalidation). Use `.get(params)` on the handle for a synchronous
+ * cache read returning `T | null`. Persistence happens automatically
+ * when the App is declared with `App({ cache })`.
  *
  * Takes the **Env shape `E` as a mandatory first generic** &mdash;
  * `context.env` inside the fetcher is typed as `E`. Pass a union of
@@ -193,5 +96,5 @@ export function Resource<
   if (G.isUndefined(cache)) {
     return build(inner, defaultCache(inner), null);
   }
-  return build(inner, cache, String(nextResourceId++));
+  return build(inner, cache, nextResourceId(inner));
 }

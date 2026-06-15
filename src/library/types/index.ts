@@ -8,8 +8,8 @@ import type {
 } from "../boundary/components/tasks/types.ts";
 import type { Fault } from "../error/types.ts";
 import type { Env } from "../boundary/components/env/index.tsx";
-import type { Coalesce } from "../resource/types.ts";
-import type { WithHandle } from "../with/index.ts";
+import type { Coalesce, Invocation } from "../resource/types.ts";
+import type { WithHandle } from "../with/types.ts";
 
 /**
  * Chainable handle returned from `context.actions.resource(invocation)`.
@@ -799,7 +799,9 @@ export type HandlerContext<
     ): Promise<void>;
     annotate<T>(value: T, operation?: Operation): T;
     readonly inspect: Readonly<Inspect<M>>;
-    resource: (<T>(invocation: T | null) => ResourceCall<T>) & {
+    resource: (<T, P extends object>(
+      invocation: Invocation<T, P>,
+    ) => ResourceCall<T>) & {
       nuke(where?: Record<string, unknown>): void;
     };
     final<T>(

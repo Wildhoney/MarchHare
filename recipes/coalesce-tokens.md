@@ -59,7 +59,7 @@ The token is keyed structurally by its primitive value (for `symbol`, by `descri
 ## Things to know
 
 - **Tokens scope coalesce groups, not subscribers.** A token only controls which dispatchers join the same in-flight promise. Subscribers via `useAction` and the per-params cache slot are unaffected by the token.
-- **Don't pass the same token across unrelated Resources.** The dedupe key includes the Resource identity, so `resource.user().coalesce(Coalesce.X)` and `resource.cat().coalesce(Coalesce.X)` are independent &mdash; but reading two unrelated Resources with the same token is still confusing for the next person reading the code.
+- **Don't pass the same token across unrelated Resources.** The dedupe key includes the Resource identity, so `context.actions.resource(resource.user()).coalesce(Coalesce.X)` and `context.actions.resource(resource.cat()).coalesce(Coalesce.X)` are independent &mdash; but reading two unrelated Resources with the same token is still confusing for the next person reading the code.
 - **`.exceeds(...)` composes with `.coalesce(...)`.** Apply both: `.exceeds({ minutes: 5 }).coalesce(Coalesce.InitialLoad)`. The cache-freshness short-circuit runs first; if the fetch goes ahead, the coalesce group applies.
 - **No global registry.** A scope's token namespace is local to the call sites that import the enum. Keep tokens close to the code that uses them; library-wide enums are not the move.
 

@@ -9,7 +9,7 @@ import type {
 } from "../types/index.ts";
 import type { Data } from "../actions/types.ts";
 import type { Env } from "../boundary/components/env/index.tsx";
-import type { WithHandle } from "../with/index.ts";
+import type { WithHandle } from "../with/types.ts";
 
 /**
  * Args object passed to an `app.Resource` fetcher. Same shape as the
@@ -63,6 +63,68 @@ type AppActionsResult<M, AC, D, E> = UseActions<
 type AppUseActions<M, AC, D, E> = M extends void
   ? (getData?: Data<D & Props>) => AppActionsResult<M, AC, D, E>
   : (model: M, getData?: Data<D & Props>) => AppActionsResult<M, AC, D, E>;
+
+/**
+ * Returned from {@link App}. Bundles the Boundary, hooks, and Resource
+ * factory bound to a single typed Env shape `E`.
+ */
+export type AppHandle<E extends object> = {
+  /**
+   * Boundary component for this App. Wraps the subtree with the `env`
+   * and `tap` declared on {@link App} &mdash; both are fixed at App
+   * construction time and cannot be overridden at the render site.
+   * Runtime mutations to the Env flow through
+   * `context.actions.produce(({ env }) => { ... })`; if a test or
+   * storybook needs a different initial Env, declare a separate `App`.
+   */
+  readonly Boundary: import("react").FC<{
+    children: import("react").ReactNode;
+  }>;
+  /**
+   * Hook returning a stable `Context` handle. The handle's
+   * `context.useActions(model?, getData?)` materialises the
+   * component's `[model, actions, data]` tuple. Every handler's
+   * `context.env` is typed as `E`.
+   */
+  readonly useContext: <
+    M extends Model | void = void,
+    AC extends Actions | void = void,
+    D extends Props = Props,
+  >() => AppContextHandle<M, AC, D, E>;
+  /**
+   * Read-only Proxy over the per-Boundary Env, typed as `E`. Reads use
+   * dot notation (`env.session`) and always reflect the latest value
+   * across `await` boundaries. Writes flow through
+   * `context.actions.produce(({ env }) => { ... })`.
+   */
+  readonly useEnv: () => Readonly<E>;
+  /**
+   * `Resource` factory bound to this App's Env. Resources declared
+   * through this factory share the cache passed to `App({ cache })`
+   * &mdash; or fall back to a per-resource in-memory slot when no
+   * cache is configured on the App.
+   */
+  readonly Resource: AppResource<E>;
+  /**
+   * Opens a typed multicast scope. The generic `MulticastActions` declares
+   * the `Distribution.Multicast` action class (or union of classes)
+   * whose dispatches are routed through this scope &mdash; the
+   * returned handle mirrors the App surface but widens
+   * `useContext().actions.dispatch` to accept actions from `MulticastActions`
+   * on top of the local `AC` class.
+   *
+   * Render `<scope.Boundary>` to open the scope at runtime; nesting
+   * multiple boundaries from different `app.Scope()` calls is fine,
+   * each runs as an independent emitter shadowed for its subtree.
+   *
+   * The Scope handle deliberately does NOT expose a further `Scope`
+   * method &mdash; the multicast surface must be declared at the
+   * `app.Scope<MulticastActions>()` call site so the type union is explicit.
+   */
+  readonly Scope: <
+    MulticastActions,
+  >() => import("../scope/types.ts").ScopeHandle<E, MulticastActions>;
+};
 
 /**
  * `Context` handle returned by `app.useContext()`. Mirrors the base

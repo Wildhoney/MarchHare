@@ -23,7 +23,7 @@ export default defineConfig({
   },
   test: {
     environment: "happy-dom",
-    include: ["src/**/*.test.{ts,tsx}"],
+    include: ["src/**/*.test.{ts,tsx}", "src/**/*.integration.{ts,tsx}"],
     exclude: ["tests/**/*"],
     setupFiles: ["./src/test-setup.ts"],
     clearMocks: true,

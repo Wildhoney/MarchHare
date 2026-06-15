@@ -1,4 +1,5 @@
 export { App } from "./app/index.tsx";
+export type { AppHandle } from "./app/index.tsx";
 
 export { Action } from "./action/index.ts";
 export { Distribution, Lifecycle } from "./types/index.ts";

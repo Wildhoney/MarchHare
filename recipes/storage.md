@@ -9,7 +9,7 @@ This recipe covers:
 - Adapter examples for browser `localStorage`, React Native via [`react-native-mmkv`](https://github.com/mrousavy/react-native-mmkv), and browser-extension `chrome.storage`.
 - Sign-out purge, schema versioning, and the `unset` sentinel.
 
-> **Sync only.** The adapter contract has no `Promise<...>` anywhere. The model-literal read (`{ user: resource.user() }`) is evaluated in the current tick during render &ndash; there's no `await` to lean on. Truly async backends (IndexedDB, AsyncStorage, `chrome.storage.local`) need a synchronous facade hydrated at app entry; the chrome.storage example below shows the pattern. React Native projects should reach for [`react-native-mmkv`](https://github.com/mrousavy/react-native-mmkv), which is sync out of the box and drops straight into the `Adapter` contract.
+> **Sync only.** The adapter contract has no `Promise<...>` anywhere. The model-literal read (`{ user: resource.user.get() }`) is evaluated in the current tick during render &ndash; there's no `await` to lean on. Truly async backends (IndexedDB, AsyncStorage, `chrome.storage.local`) need a synchronous facade hydrated at app entry; the chrome.storage example below shows the pattern. React Native projects should reach for [`react-native-mmkv`](https://github.com/mrousavy/react-native-mmkv), which is sync out of the box and drops straight into the `Adapter` contract.
 
 ## The shape: `Stored<T>`
 
@@ -97,7 +97,7 @@ export function useActions() {
   const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions({
     // First render reads the Cache automatically — no explicit get.
-    cat: resource.cat(),
+    cat: resource.cat.get(),
   });
 
   actions.useAction(Actions.Mount, async (context) => {
@@ -115,7 +115,7 @@ export function useActions() {
 
 What happens on a cold reload:
 
-1. The model literal calls `resource.cat()`.
+1. The model literal calls `resource.cat.get()`.
 2. The Cache reads from the adapter using the params key (here `"{}"` since `cat` is no-params).
 3. If a previous session persisted a payload, the call returns it.
 4. The component renders the previous session's payload immediately.
@@ -141,8 +141,8 @@ await context.actions.resource(resource.user({ id: 5 })); // stored under "<ns>:
 await context.actions.resource(resource.user({ id: 6 })); // stored under "<ns>:{\"id\":6}"
 
 // Sync reads pull from each slot.
-const five: User | null = resource.user({ id: 5 });
-const six: User | null = resource.user({ id: 6 });
+const five: User | null = resource.user.get({ id: 5 });
+const six: User | null = resource.user.get({ id: 6 });
 ```
 
 ## Adapter examples

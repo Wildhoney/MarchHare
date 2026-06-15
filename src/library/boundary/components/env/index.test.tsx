@@ -389,17 +389,17 @@ describe("context.actions.resource(...).evict() and resource.nuke()", () => {
       await result.current[1].dispatch(Actions.Seed);
     });
     expect(fetcher).toHaveBeenCalledTimes(3);
-    expect(users({ teamId: 1, userId: 7 })).toEqual({ id: 7 });
-    expect(users({ teamId: 1, userId: 8 })).toEqual({ id: 8 });
-    expect(users({ teamId: 2, userId: 9 })).toEqual({ id: 9 });
+    expect(users.get({ teamId: 1, userId: 7 })).toEqual({ id: 7 });
+    expect(users.get({ teamId: 1, userId: 8 })).toEqual({ id: 8 });
+    expect(users.get({ teamId: 2, userId: 9 })).toEqual({ id: 9 });
 
     await act(async () => {
       await result.current[1].dispatch(Actions.EvictTeam, { teamId: 1 });
     });
 
-    expect(users({ teamId: 1, userId: 7 })).toBeNull();
-    expect(users({ teamId: 1, userId: 8 })).toBeNull();
-    expect(users({ teamId: 2, userId: 9 })).toEqual({ id: 9 });
+    expect(users.get({ teamId: 1, userId: 7 })).toBeNull();
+    expect(users.get({ teamId: 1, userId: 8 })).toBeNull();
+    expect(users.get({ teamId: 2, userId: 9 })).toEqual({ id: 9 });
   });
 
   it("nuke drops every cached entry across all resources", async () => {
@@ -437,15 +437,15 @@ describe("context.actions.resource(...).evict() and resource.nuke()", () => {
     await act(async () => {
       await result.current[1].dispatch(Actions.Seed);
     });
-    expect(user()).toEqual({ name: "Adam" });
-    expect(settings()).toEqual({ theme: "dark" });
+    expect(user.get()).toEqual({ name: "Adam" });
+    expect(settings.get()).toEqual({ theme: "dark" });
 
     await act(async () => {
       await result.current[1].dispatch(Actions.Clear);
     });
 
-    expect(user()).toBeNull();
-    expect(settings()).toBeNull();
+    expect(user.get()).toBeNull();
+    expect(settings.get()).toBeNull();
   });
 });
 

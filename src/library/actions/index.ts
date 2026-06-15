@@ -34,15 +34,15 @@ import {
 } from "../types/index.ts";
 
 import { getReason, getError } from "../error/utils.ts";
-import { Aborted } from "../error/types.ts";
+import { Aborted } from "../error/index.ts";
 import EventEmitter from "eventemitter3";
 import { useBroadcast } from "../boundary/components/broadcast/index.tsx";
 import { useScope, getScope } from "../boundary/components/scope/index.tsx";
 import { useEnv, useEnvRef } from "../boundary/components/env/utils.ts";
 import type { Env } from "../boundary/components/env/index.tsx";
 import { produce as produceImmer } from "immer";
-import { consumePending, nuke } from "../resource/index.ts";
-import type { Coalesce } from "../resource/types.ts";
+import { nuke } from "../resource/index.ts";
+import type { Coalesce, Invocation } from "../resource/types.ts";
 import {
   coalesceKey,
   withAbort,
@@ -235,8 +235,7 @@ export function useActions<
             return state.current.inspect;
           },
           resource: Object.assign(
-            function resourceCall<T>(_value: T | null) {
-              const call = consumePending();
+            function resourceCall<T, P extends object>(call: Invocation<T, P>) {
               const dispatchFromResource = (
                 action: unknown,
                 payload?: unknown,

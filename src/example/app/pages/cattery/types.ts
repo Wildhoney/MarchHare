@@ -5,5 +5,5 @@ export type Model = {
 };
 
 export class Actions {
-  static Broadcast = Broadcast.Actions;
+  static Broadcast = Broadcast;
 }

@@ -11,8 +11,8 @@ export const card = css`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: ${spacing.sm};
-  padding: ${spacing.md};
+  gap: ${spacing.s};
+  padding: ${spacing.m};
   border-radius: ${radius.card};
   background: ${colour.surface.card};
   box-shadow: ${shadow.card};
@@ -30,7 +30,7 @@ export const avatar = css`
 
 export const name = css`
   font-family: ${font.family};
-  font-size: ${font.size.lg};
+  font-size: ${font.size.l};
   font-weight: ${font.weight.semibold};
   color: ${colour.text.primary};
   margin: 0;

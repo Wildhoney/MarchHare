@@ -1,9 +1,9 @@
 import * as React from "react";
-import type { PendingCall } from "../../../resource/index.ts";
+import type { Invocation } from "../../../resource/index.ts";
 
 /**
  * Per-`<Boundary>` registry for `.coalesce(token)` sharing. Outer map
- * keys on the `PendingCall.run` function identity (stable per Resource
+ * keys on the `Invocation.run` function identity (stable per Resource
  * via the `build()` closure); inner map keys on
  * `${paramsKey}|${coalesceKey(token)}`. While an entry exists every
  * caller awaiting `.coalesce(token)` for the same Resource + params +
@@ -16,7 +16,7 @@ import type { PendingCall } from "../../../resource/index.ts";
  * @internal
  */
 export type Sharing = WeakMap<
-  PendingCall["run"],
+  Invocation<unknown, object>["run"],
   Map<string, Promise<unknown>>
 >;
 

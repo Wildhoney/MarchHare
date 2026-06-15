@@ -133,6 +133,8 @@ export default defineConfig([
       "src/library/context/index.ts",
       "src/library/scope/index.tsx",
       "src/library/with/index.ts",
+      "src/library/with/utils.ts",
+      "src/library/scope/utils.tsx",
       "src/library/resource/index.ts",
       "src/library/resource/utils.ts",
       "src/library/cache/index.ts",
