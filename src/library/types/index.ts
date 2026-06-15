@@ -774,19 +774,19 @@ export type HandlerContext<
   M extends Model | void,
   AC extends Actions | void,
   D extends Props = Props,
-  S extends Env = Env,
+  E extends Env = Env,
 > = {
   readonly model: DeepReadonly<M>;
   readonly phase: Phase;
   readonly task: Task;
   readonly data: DeepReadonly<D>;
   readonly tasks: ReadonlySet<Task>;
-  readonly env: Readonly<S>;
+  readonly env: Readonly<E>;
   readonly actions: {
     produce<
       F extends (draft: {
         model: M;
-        env: S;
+        env: E;
         readonly inspect: Readonly<Inspect<M>>;
       }) => void,
     >(
@@ -859,9 +859,9 @@ export type Handler<
   AC extends Actions | void,
   K extends keyof AC & string,
   D extends Props = Props,
-  S extends Env = Env,
+  E extends Env = Env,
 > = (
-  context: HandlerContext<M, AC, D, S>,
+  context: HandlerContext<M, AC, D, E>,
   ...args: [Payload<AC[K] & HandlerPayload<unknown>>] extends [never]
     ? []
     : [payload: Payload<AC[K] & HandlerPayload<unknown>>]
@@ -984,28 +984,28 @@ export type Handlers<
   AC extends Actions | void,
   D extends Props = Props,
   RootAC extends Actions | void = AC,
-  S extends Env = Env,
+  E extends Env = Env,
 > = {
   [K in OwnKeys<AC>]: OwnKeys<AC[K]> extends never
     ? AC[K] extends { readonly [Brand.Lifecycle]: "Update" }
       ? (
-          context: HandlerContext<M, RootAC, D, S>,
+          context: HandlerContext<M, RootAC, D, E>,
           changes: Partial<DeepReadonly<D>>,
         ) => void | Promise<void> | AsyncGenerator | Generator
       : (
-          context: HandlerContext<M, RootAC, D, S>,
+          context: HandlerContext<M, RootAC, D, E>,
           ...args: [Payload<AC[K] & HandlerPayload<unknown>>] extends [never]
             ? []
             : [payload: Payload<AC[K] & HandlerPayload<unknown>>]
         ) => void | Promise<void> | AsyncGenerator | Generator
-    : Handlers<M, AC[K] & Actions, D, RootAC, S>;
+    : Handlers<M, AC[K] & Actions, D, RootAC, E>;
 };
 
 export type UseActions<
   M extends Model | void,
   AC extends Actions | void,
   D extends Props = Props,
-  S extends Env = Env,
+  E extends Env = Env,
 > = [
   Readonly<M>,
   {
@@ -1044,7 +1044,7 @@ export type UseActions<
      */
     stream(
       action: typeof Lifecycle.Env,
-      renderer: (value: Readonly<S>, inspect: Inspect<S>) => React.ReactNode,
+      renderer: (value: Readonly<E>, inspect: Inspect<E>) => React.ReactNode,
     ): React.ReactNode;
     stream<T extends object>(
       action: BroadcastPayload<T>,
@@ -1096,14 +1096,14 @@ export type UseActions<
   useAction(
     action: NoPayloadActions<Subscribable<AC>>,
     handler: (
-      context: HandlerContext<M, AC, D, S>,
+      context: HandlerContext<M, AC, D, E>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void;
   useAction(
     action: typeof Lifecycle.Env,
     handler: (
-      context: HandlerContext<M, AC, D, S>,
-      env: Readonly<S>,
+      context: HandlerContext<M, AC, D, E>,
+      env: Readonly<E>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void;
   useAction<
@@ -1114,14 +1114,14 @@ export type UseActions<
   >(
     action: A,
     handler: (
-      context: HandlerContext<M, AC, D, S>,
+      context: HandlerContext<M, AC, D, E>,
       changes: Partial<DeepReadonly<D>>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void;
   useAction<A extends WithPayloadActions<Subscribable<AC>>>(
     action: A,
     handler: (
-      context: HandlerContext<M, AC, D, S>,
+      context: HandlerContext<M, AC, D, E>,
       payload: Payload<A>,
     ) => void | Promise<void> | AsyncGenerator | Generator,
   ): void;
@@ -1156,7 +1156,7 @@ export type Context<
   M extends Model | void,
   AC extends Actions | void,
   D extends Props = Props,
-  S extends Env = Env,
+  E extends Env = Env,
 > = {
   readonly actions: { dispatch: Dispatch<AC> };
   /**
@@ -1165,9 +1165,9 @@ export type Context<
    * autocomplete from the model. See {@link WithHandle}.
    */
   readonly with: WithHandle<M>;
-  useActions(getData?: () => D): UseActions<M, AC, D, S>;
+  useActions(getData?: () => D): UseActions<M, AC, D, E>;
   useActions(
     model: M extends void ? never : M,
     getData?: () => D,
-  ): UseActions<M, AC, D, S>;
+  ): UseActions<M, AC, D, E>;
 };

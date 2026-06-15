@@ -18,7 +18,7 @@ import type { Actions, Model, Props } from "../types/index.ts";
  * Handle returned by `app.Scope<MulticastActions>()`. Mirrors the {@link App}
  * surface (`Boundary`, `useContext`, `useEnv`, `Resource`) but typed
  * against a specific multicast action surface `MulticastActions` and the
- * enclosing App's Env shape `S`.
+ * enclosing App's Env shape `E`.
  *
  * Notably absent: a nested `Scope` method. Nesting scopes is supported
  * at the React-tree level &mdash; just render two `<scope.Boundary>`s
@@ -26,12 +26,12 @@ import type { Actions, Model, Props } from "../types/index.ts";
  * `app.Scope<MulticastActions>()` call so that its multicast surface is
  * declared up-front.
  *
- * @template S The enclosing App's Env shape.
+ * @template E The enclosing App's Env shape.
  * @template MulticastActions The multicast Actions class (or union of
  *  classes) this scope's `useContext().actions.dispatch` is allowed
  *  to fire.
  */
-export type Scope<S extends object, MulticastActions> = {
+export type Scope<E extends object, MulticastActions> = {
   /**
    * Boundary component. Wrap a subtree to open a fresh multicast scope
    * &mdash; every `Distribution.Multicast` action dispatched inside this
@@ -62,34 +62,34 @@ export type Scope<S extends object, MulticastActions> = {
         : MulticastActions
       : AC,
     D,
-    S
+    E
   >;
   /**
    * Read-only Proxy over the enclosing App's Env. Identical to
    * `app.useEnv` &mdash; the Scope does not introduce its own Env;
    * scopes are about multicast routing, not ambient state.
    */
-  readonly useEnv: () => Readonly<S>;
+  readonly useEnv: () => Readonly<E>;
   /**
    * Resource factory bound to the enclosing App's Env. Identical to
    * `app.Resource`; provided on the scope handle for convenience so a
    * scoped feature can keep all its primitives in one place.
    */
-  readonly Resource: AppResource<S>;
+  readonly Resource: AppResource<E>;
 };
 
 /**
  * Internal constructor for a {@link Scope} handle. Called from inside
- * `App<S>()` so the enclosing Env shape `S` is captured at the type
+ * `App<E>()` so the enclosing Env shape `E` is captured at the type
  * level. The optional `cache` is the same value `App({ cache })` was
  * constructed with &mdash; resources declared via `scope.Resource`
  * share that cache.
  *
  * @internal
  */
-export function createScope<S extends object, MulticastActions>(
+export function createScope<E extends object, MulticastActions>(
   cache?: Cache,
-): Scope<S, MulticastActions> {
+): Scope<E, MulticastActions> {
   function Boundary({
     children,
   }: {
@@ -121,7 +121,7 @@ export function createScope<S extends object, MulticastActions>(
         : MulticastActions
       : AC,
     D,
-    S
+    E
   > {
     return baseUseContext() as unknown as AppContextHandle<
       LocalModel,
@@ -131,18 +131,18 @@ export function createScope<S extends object, MulticastActions>(
           : MulticastActions
         : AC,
       D,
-      S
+      E
     >;
   }
 
-  function useTypedEnv(): Readonly<S> {
-    return baseUseEnv() as unknown as Readonly<S>;
+  function useTypedEnv(): Readonly<E> {
+    return baseUseEnv() as unknown as Readonly<E>;
   }
 
   function Resource<T, P extends object = Record<never, never>>(
-    fetcher: AppFetcher<S, T, P>,
+    fetcher: AppFetcher<E, T, P>,
   ): ResourceHandle<T, P> {
-    return BaseResource<S, T, P>(fetcher, cache);
+    return BaseResource<E, T, P>(fetcher, cache);
   }
 
   return {

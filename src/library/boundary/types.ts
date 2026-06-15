@@ -19,7 +19,7 @@ import type { Tap } from "./components/tap/types.ts";
 export type Props = {
   /**
    * Initial value of the per-Boundary {@link Env}. Prefer `App({ env })`
-   * &mdash; it infers the Env shape `S` and threads it through
+   * &mdash; it infers the Env shape `E` and threads it through
    * `app.useContext`, `app.useEnv`, and `app.Resource`, so handler
    * `context.env` is typed accordingly. Pass `env` directly here only
    * for advanced cases where the loose record type is sufficient.

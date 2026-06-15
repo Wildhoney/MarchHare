@@ -16,6 +16,9 @@ export default defineConfig({
     dedupe: ["react", "react-dom"],
     alias: {
       "march-hare": resolve(__dirname, "src/library/index.ts"),
+      "@example/app": resolve(__dirname, "src/example/app"),
+      "@example/features": resolve(__dirname, "src/example/features"),
+      "@example/shared": resolve(__dirname, "src/example/shared"),
     },
   },
   test: {

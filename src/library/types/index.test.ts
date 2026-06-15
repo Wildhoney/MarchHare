@@ -106,20 +106,20 @@ describe("Env shape threading", () => {
   }
   type Env = { status: Status };
 
-  it("types HandlerContext.env as Readonly<S>", () => {
+  it("types HandlerContext.env as Readonly<E>", () => {
     type Ctx = HandlerContext<void, object, object, Env>;
     expectTypeOf<Ctx["env"]>().toEqualTypeOf<Readonly<Env>>();
     expectTypeOf<Ctx["env"]["status"]>().toEqualTypeOf<Status>();
   });
 
-  it("types the produce draft's env as S", () => {
+  it("types the produce draft's env as E", () => {
     type Ctx = HandlerContext<void, object, object, Env>;
     type Produce = Ctx["actions"]["produce"];
     type Draft = Parameters<Parameters<Produce>[0]>[0];
     expectTypeOf<Draft["env"]>().toEqualTypeOf<Env>();
   });
 
-  it("threads S from App({ env }) through app.useContext into the handler", () => {
+  it("threads E from App({ env }) through app.useContext into the handler", () => {
     class Actions {
       static SignIn = Action("SignIn");
     }
@@ -145,7 +145,7 @@ describe("Env shape threading", () => {
     }
   });
 
-  it("types the Lifecycle.Env stream renderer's env as Readonly<S>", () => {
+  it("types the Lifecycle.Env stream renderer's env as Readonly<E>", () => {
     class Actions {
       static SignIn = Action("SignIn");
     }
@@ -163,7 +163,7 @@ describe("Env shape threading", () => {
     }
   });
 
-  it("types the Lifecycle.Env useAction handler's env payload as Readonly<S>", () => {
+  it("types the Lifecycle.Env useAction handler's env payload as Readonly<E>", () => {
     class Actions {
       static SignIn = Action("SignIn");
     }

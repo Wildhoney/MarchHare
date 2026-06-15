@@ -11,9 +11,9 @@ import type { Props } from "./types.ts";
  * Env, and Tasks providers required by every March Hare hook.
  *
  * Most applications should reach for {@link App} instead &mdash;
- * `App<S>({ env })` returns a typed `app.Boundary` along with
+ * `App<E>({ env })` returns a typed `app.Boundary` along with
  * matching `useContext` / `useEnv` / `Resource` factories that all
- * close over the App's inferred env shape `S`. The bare `Boundary`
+ * close over the App's inferred env shape `E`. The bare `Boundary`
  * is exposed for advanced or library-internal use where the loose
  * Env record type is sufficient.
  *

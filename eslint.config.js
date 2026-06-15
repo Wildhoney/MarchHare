@@ -4,6 +4,7 @@ import tseslint from "typescript-eslint";
 import pluginReact from "eslint-plugin-react";
 import pluginImport from "eslint-plugin-import";
 import pluginFp from "eslint-plugin-fp";
+import pluginBoundaries from "eslint-plugin-boundaries";
 import { defineConfig } from "eslint/config";
 
 export default defineConfig([
@@ -67,6 +68,24 @@ export default defineConfig([
   },
   {
     files: ["src/example/**/*.{ts,tsx,d.ts}"],
+    plugins: { boundaries: pluginBoundaries },
+    settings: {
+      "import/resolver": {
+        typescript: { project: "./tsconfig.lint.json" },
+        node: true,
+      },
+      "boundaries/include": ["src/example/**/*"],
+      "boundaries/elements": [
+        { type: "app", pattern: "src/example/app", mode: "folder" },
+        {
+          type: "features",
+          pattern: "src/example/features/*",
+          mode: "folder",
+          capture: ["slice"],
+        },
+        { type: "shared", pattern: "src/example/shared", mode: "folder" },
+      ],
+    },
     rules: {
       "import/prefer-default-export": "off",
       "import/no-default-export": "off",
@@ -74,6 +93,25 @@ export default defineConfig([
       "fp/no-let": "off",
       "fp/no-loops": "off",
       "fp/no-mutating-methods": "off",
+      "boundaries/dependencies": [
+        "error",
+        {
+          default: "disallow",
+          message:
+            "${file.type} cannot import ${dependency.type} — layering is top-down (app → features → shared).",
+          rules: [
+            {
+              from: { type: "app" },
+              allow: { to: { type: ["app", "features", "shared"] } },
+            },
+            {
+              from: { type: "features" },
+              allow: { to: { type: "shared" } },
+            },
+            { from: { type: "shared" }, allow: { to: { type: "shared" } } },
+          ],
+        },
+      ],
     },
   },
   {

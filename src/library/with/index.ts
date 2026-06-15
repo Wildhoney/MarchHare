@@ -124,20 +124,20 @@ export type WithHandle<M> = M extends Model
   ? {
       update<K extends Paths<M>>(
         key: K,
-      ): <A extends Actions | void, D extends Props, S extends Env = Env>(
-        context: HandlerContext<M, A, D, S>,
+      ): <A extends Actions | void, D extends Props, E extends Env = Env>(
+        context: HandlerContext<M, A, D, E>,
         payload: Get<M, K>,
       ) => void;
       invert<K extends BooleanPaths<M>>(
         key: K,
-      ): <A extends Actions | void, D extends Props, S extends Env = Env>(
-        context: HandlerContext<M, A, D, S>,
+      ): <A extends Actions | void, D extends Props, E extends Env = Env>(
+        context: HandlerContext<M, A, D, E>,
       ) => void;
       always<K extends Paths<M>>(
         key: K,
         value: Get<M, K>,
-      ): <A extends Actions | void, D extends Props, S extends Env = Env>(
-        context: HandlerContext<M, A, D, S>,
+      ): <A extends Actions | void, D extends Props, E extends Env = Env>(
+        context: HandlerContext<M, A, D, E>,
       ) => void;
     }
   : Record<string, never>;
@@ -236,9 +236,9 @@ export const With = {
     A extends Actions | void,
     D extends Props,
     P extends K extends Paths<M> ? Get<M, K> : never,
-    S extends Env = Env,
+    E extends Env = Env,
   >(
-    context: HandlerContext<M, A, D, S>,
+    context: HandlerContext<M, A, D, E>,
     payload: P,
   ) => void {
     return <(context: unknown, payload: unknown) => void>makeUpdate(key);
@@ -253,9 +253,9 @@ export const With = {
     M extends Model,
     A extends Actions | void,
     D extends Props,
-    S extends Env = Env,
+    E extends Env = Env,
   >(
-    context: K extends BooleanPaths<M> ? HandlerContext<M, A, D, S> : never,
+    context: K extends BooleanPaths<M> ? HandlerContext<M, A, D, E> : never,
   ) => void {
     return <(context: unknown) => void>makeInvert(key);
   },
@@ -270,11 +270,11 @@ export const With = {
     M extends Model,
     A extends Actions | void,
     D extends Props,
-    S extends Env = Env,
+    E extends Env = Env,
   >(
     context: K extends Paths<M>
       ? V extends Get<M, K>
-        ? HandlerContext<M, A, D, S>
+        ? HandlerContext<M, A, D, E>
         : never
       : never,
   ) => void {

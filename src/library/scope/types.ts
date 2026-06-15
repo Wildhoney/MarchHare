@@ -6,7 +6,7 @@ import type { Actions, Model, Props } from "../types/index.ts";
  * Handle returned by `app.Scope<MulticastActions>()`. Mirrors the
  * `App` surface (`Boundary`, `useContext`, `useEnv`, `Resource`) but
  * typed against a specific multicast action surface `MulticastActions`
- * and the enclosing App's Env shape `S`.
+ * and the enclosing App's Env shape `E`.
  *
  * Notably absent: a nested `Scope` method. Nesting scopes is supported
  * at the React-tree level &mdash; just render two `<scope.Boundary>`s
@@ -14,12 +14,12 @@ import type { Actions, Model, Props } from "../types/index.ts";
  * `app.Scope<MulticastActions>()` call so that its multicast surface is
  * declared up-front.
  *
- * @template S The enclosing App's Env shape.
+ * @template E The enclosing App's Env shape.
  * @template MulticastActions The multicast Actions class (or union of
  *  classes) this scope's `useContext().actions.dispatch` is allowed
  *  to fire.
  */
-export type Scope<S extends object, MulticastActions> = {
+export type Scope<E extends object, MulticastActions> = {
   /**
    * Boundary component. Wrap a subtree to open a fresh multicast scope
    * &mdash; every `Distribution.Multicast` action dispatched inside this
@@ -50,18 +50,18 @@ export type Scope<S extends object, MulticastActions> = {
         : MulticastActions
       : AC,
     D,
-    S
+    E
   >;
   /**
    * Read-only Proxy over the enclosing App's Env. Identical to
    * `app.useEnv` &mdash; the Scope does not introduce its own Env;
    * scopes are about multicast routing, not ambient state.
    */
-  readonly useEnv: () => Readonly<S>;
+  readonly useEnv: () => Readonly<E>;
   /**
    * Resource factory bound to the enclosing App's Env. Identical to
    * `app.Resource`; provided on the scope handle for convenience so a
    * scoped feature can keep all its primitives in one place.
    */
-  readonly Resource: AppResource<S>;
+  readonly Resource: AppResource<E>;
 };

@@ -888,4 +888,6 @@ function Where(): React.ReactElement {
 
 `shared.Resource<E, T, P>` is the same story for shared resources &mdash; declare them at module scope, pass the Env union as the first generic, and the fetcher's `context.env` is typed against it. Shared resources always use an isolated in-memory cache; reach for `app.Resource` when persistence is required, since the cache is wired into the App via `App({ cache })`. `shared.Scope<E, A>()` opens a multicast scope without going through an App handle. See the [reusable components recipe](./recipes/reusable-components.md) for the full pattern including discriminator-keyed switches and the `App()`-with-no-env case.
 
+When a reusable component or resource is genuinely Env-agnostic &mdash; the fetcher never touches `context.env`, the hook never calls `shared.useEnv` &mdash; pass `Envless` as `E` instead of spelling out `Record<never, never>`: `shared.Resource<Envless, T>`, `shared.useContext<Envless, M, A>()`. It's a named alias for the empty-record shape exported from `march-hare`, kept around purely for legibility at the call site.
+
 For one-line handler binding &mdash; flipping a boolean, assigning a payload to a leaf, pinning a field to a fixed value &mdash; reach for `context.with.{update,invert,always}`. See the [`With` helpers recipe](./recipes/with-helpers.md) for the full surface.

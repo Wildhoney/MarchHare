@@ -13,21 +13,21 @@ import type { WithHandle } from "../with/index.ts";
 
 /**
  * Args object passed to an `app.Resource` fetcher. Same shape as the
- * base `Resource` fetcher's args but with `env` typed as `S`.
+ * base `Resource` fetcher's args but with `env` typed as `E`.
  */
-export type AppArgs<S, P extends object = Record<never, never>> = Omit<
+export type AppArgs<E, P extends object = Record<never, never>> = Omit<
   Args<P>,
   "env"
 > & {
-  readonly env: Readonly<S>;
+  readonly env: Readonly<E>;
 };
 
 /**
  * Fetcher signature for an `app.Resource` declaration. The fetcher's
- * `context.env` is typed against the App's inferred Env shape `S`.
+ * `context.env` is typed against the App's inferred Env shape `E`.
  */
-export type AppFetcher<S, T, P extends object = Record<never, never>> = (
-  context: AppArgs<S, P>,
+export type AppFetcher<E, T, P extends object = Record<never, never>> = (
+  context: AppArgs<E, P>,
 ) => Promise<T>;
 
 /**
@@ -38,20 +38,20 @@ export type AppFetcher<S, T, P extends object = Record<never, never>> = (
  * omit it to keep each resource's payloads in an isolated in-memory
  * slot.
  */
-export type AppResource<S> = <T, P extends object = Record<never, never>>(
-  fetcher: AppFetcher<S, T, P>,
+export type AppResource<E> = <T, P extends object = Record<never, never>>(
+  fetcher: AppFetcher<E, T, P>,
 ) => ResourceHandle<T, P>;
 
 /**
  * Tuple shape returned by `context.useActions(...)` on an App-bound
- * Context. Re-exports the base {@link UseActions} with the App's `S`
+ * Context. Re-exports the base {@link UseActions} with the App's `E`
  * threaded through every `HandlerContext` and produce draft.
  */
-type AppActionsResult<M, AC, D, S> = UseActions<
+type AppActionsResult<M, AC, D, E> = UseActions<
   M extends Model | void ? M : void,
   AC extends Actions | void ? AC : void,
   D extends Props ? D : Props,
-  S extends Env ? S : Env
+  E extends Env ? E : Env
 >;
 
 /**
@@ -60,13 +60,13 @@ type AppActionsResult<M, AC, D, S> = UseActions<
  * passes their initial model as the first argument and an optional data
  * callback as the second.
  */
-type AppUseActions<M, AC, D, S> = M extends void
-  ? (getData?: Data<D & Props>) => AppActionsResult<M, AC, D, S>
-  : (model: M, getData?: Data<D & Props>) => AppActionsResult<M, AC, D, S>;
+type AppUseActions<M, AC, D, E> = M extends void
+  ? (getData?: Data<D & Props>) => AppActionsResult<M, AC, D, E>
+  : (model: M, getData?: Data<D & Props>) => AppActionsResult<M, AC, D, E>;
 
 /**
  * `Context` handle returned by `app.useContext()`. Mirrors the base
- * {@link Context} but threads the App's Env shape `S` through every
+ * {@link Context} but threads the App's Env shape `E` through every
  * handler's `context.env` and produce draft.
  *
  * @template M The model type for the component's state, or `void`.
@@ -74,9 +74,9 @@ type AppUseActions<M, AC, D, S> = M extends void
  *   definitions, or `void` for actions-only consumers.
  * @template D The reactive data type returned from the `useActions(...)`
  *   data callback.
- * @template S The App's Env shape, supplied at `App({env})` time.
+ * @template E The App's Env shape, supplied at `App({env})` time.
  */
-export type AppContextHandle<M, AC, D, S> = {
+export type AppContextHandle<M, AC, D, E> = {
   /**
    * Stable dispatch surface available before `useActions(...)` runs.
    * Exposes only `dispatch(action, payload?)` &mdash; useful when an
@@ -106,5 +106,5 @@ export type AppContextHandle<M, AC, D, S> = {
    * second &mdash; the callback re-runs every render so handlers reading
    * `context.data` always see fresh values across `await` boundaries.
    */
-  readonly useActions: AppUseActions<M, AC, D, S>;
+  readonly useActions: AppUseActions<M, AC, D, E>;
 };

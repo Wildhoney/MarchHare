@@ -10,7 +10,10 @@
     /* Bundler mode */
     "moduleResolution": "bundler",
     "paths": {
-      "march-hare": ["./src/library/index.ts"]
+      "march-hare": ["./src/library/index.ts"],
+      "@example/app/*": ["./src/example/app/*"],
+      "@example/features/*": ["./src/example/features/*"],
+      "@example/shared/*": ["./src/example/shared/*"]
     },
     "allowImportingTsExtensions": true,
     "isolatedModules": true,

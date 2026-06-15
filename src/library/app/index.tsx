@@ -20,9 +20,9 @@ export type {
 
 /**
  * Returned from {@link App}. Bundles the Boundary, hooks, and Resource
- * factory bound to a single typed Env shape `S`.
+ * factory bound to a single typed Env shape `E`.
  */
-export type App<S extends object> = {
+export type App<E extends object> = {
   /**
    * Boundary component for this App. Wraps the subtree with the `env`
    * and `tap` declared on {@link App} &mdash; both are fixed at App
@@ -38,27 +38,27 @@ export type App<S extends object> = {
    * Hook returning a stable `Context` handle. The handle's
    * `context.useActions(model?, getData?)` materialises the
    * component's `[model, actions, data]` tuple. Every handler's
-   * `context.env` is typed as `S`.
+   * `context.env` is typed as `E`.
    */
   readonly useContext: <
     M extends Model | void = void,
     AC extends Actions | void = void,
     D extends Props = Props,
-  >() => AppContextHandle<M, AC, D, S>;
+  >() => AppContextHandle<M, AC, D, E>;
   /**
-   * Read-only Proxy over the per-Boundary Env, typed as `S`. Reads use
+   * Read-only Proxy over the per-Boundary Env, typed as `E`. Reads use
    * dot notation (`env.session`) and always reflect the latest value
    * across `await` boundaries. Writes flow through
    * `context.actions.produce(({ env }) => { ... })`.
    */
-  readonly useEnv: () => Readonly<S>;
+  readonly useEnv: () => Readonly<E>;
   /**
    * `Resource` factory bound to this App's Env. Resources declared
    * through this factory share the cache passed to `App({ cache })`
    * &mdash; or fall back to a per-resource in-memory slot when no
    * cache is configured on the App.
    */
-  readonly Resource: AppResource<S>;
+  readonly Resource: AppResource<E>;
   /**
    * Opens a typed multicast scope. The generic `MulticastActions` declares
    * the `Distribution.Multicast` action class (or union of classes)
@@ -75,12 +75,12 @@ export type App<S extends object> = {
    * method &mdash; the multicast surface must be declared at the
    * `app.Scope<MulticastActions>()` call site so the type union is explicit.
    */
-  readonly Scope: <MulticastActions>() => Scope<S, MulticastActions>;
+  readonly Scope: <MulticastActions>() => Scope<E, MulticastActions>;
 };
 
 /**
- * Creates an `App` &mdash; the entrypoint for a typed Env shape `S`,
- * inferred from `config.env`. `App<S>` exposes `Boundary`, hooks, and
+ * Creates an `App` &mdash; the entrypoint for a typed Env shape `E`,
+ * inferred from `config.env`. `App<E>` exposes `Boundary`, hooks, and
  * a `Resource` factory all wired against the same shape.
  *
  * Each `<app.Boundary>` instance owns its own Env, so different `App`s
@@ -145,11 +145,11 @@ export type App<S extends object> = {
  * );
  * ```
  */
-export function App<S extends object = Env>(config?: {
-  env?: S;
+export function App<E extends object = Env>(config?: {
+  env?: E;
   tap?: Tap;
   cache?: Cache;
-}): App<S> {
+}): App<E> {
   function Boundary({
     children,
   }: {
@@ -166,18 +166,18 @@ export function App<S extends object = Env>(config?: {
     M extends Model | void = void,
     AC extends Actions | void = void,
     D extends Props = Props,
-  >(): AppContextHandle<M, AC, D, S> {
-    return baseUseContext() as unknown as AppContextHandle<M, AC, D, S>;
+  >(): AppContextHandle<M, AC, D, E> {
+    return baseUseContext() as unknown as AppContextHandle<M, AC, D, E>;
   }
 
-  function useTypedEnv(): Readonly<S> {
-    return baseUseEnv() as unknown as Readonly<S>;
+  function useTypedEnv(): Readonly<E> {
+    return baseUseEnv() as unknown as Readonly<E>;
   }
 
   function Resource<T, P extends object = Record<never, never>>(
-    fetcher: AppFetcher<S, T, P>,
+    fetcher: AppFetcher<E, T, P>,
   ): ResourceHandle<T, P> {
-    return BaseResource<S, T, P>(fetcher, config?.cache);
+    return BaseResource<E, T, P>(fetcher, config?.cache);
   }
 
   return {
@@ -186,7 +186,7 @@ export function App<S extends object = Env>(config?: {
     useEnv: useTypedEnv,
     Resource,
     Scope<MulticastActions>() {
-      return createScope<S, MulticastActions>(config?.cache);
+      return createScope<E, MulticastActions>(config?.cache);
     },
   };
 }

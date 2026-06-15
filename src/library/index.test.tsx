@@ -1,15 +1,9 @@
 import { expect, it } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
-import { Boundary } from "./index.ts";
-import Counter from "../example/counter";
+import { render, screen } from "@testing-library/react";
+import { Root } from "../example/app/index.tsx";
 
-it("renders the fetched user", async () => {
-  render(
-    <Boundary>
-      <Counter />
-    </Boundary>,
-  );
-  await waitFor(() =>
-    expect(screen.getByTestId("user").textContent).toBe("Adam"),
-  );
+it("renders the Cattery page with the add-cat button", () => {
+  render(<Root />);
+  expect(screen.getByRole("heading", { name: "Cattery" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Add a cat" })).toBeInTheDocument();
 });

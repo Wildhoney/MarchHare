@@ -41,6 +41,9 @@ import { ComponentStructureFixture } from "./rules/component-structure.tsx";
 // Fixture imports - Rules 36-39: Utilities
 import { UtilitiesFixture } from "./rules/utilities.tsx";
 
+// Self-wrapping fixtures (provide their own Boundary / StrictMode)
+import { StrictModeFixture } from "./rules/strict-mode.tsx";
+
 const fixtures: Record<string, React.ComponentType> = {
   actions: ActionsFixture,
   "state-updates": StateUpdatesFixture,
@@ -54,6 +57,10 @@ const fixtures: Record<string, React.ComponentType> = {
   utilities: UtilitiesFixture,
 };
 
+const rawFixtures: Record<string, React.ComponentType> = {
+  "strict-mode": StrictModeFixture,
+};
+
 function App() {
   const params = new URLSearchParams(window.location.search);
   const fixtureName = params.get("fixture") ?? "index";
@@ -65,12 +72,23 @@ function App() {
       <div data-testid="fixture-index">
         <h1>March Hare E2E Test Fixtures</h1>
         <ul>
-          {Object.keys(fixtures).map((name) => (
-            <li key={name}>
-              <a href={`?fixture=${name}`}>{name}</a>
-            </li>
-          ))}
+          {[...Object.keys(fixtures), ...Object.keys(rawFixtures)].map(
+            (name) => (
+              <li key={name}>
+                <a href={`?fixture=${name}`}>{name}</a>
+              </li>
+            ),
+          )}
         </ul>
+      </div>
+    );
+  }
+
+  const RawFixture = rawFixtures[fixtureName];
+  if (RawFixture) {
+    return (
+      <div data-testid={`fixture-${fixtureName}`}>
+        <RawFixture />
       </div>
     );
   }

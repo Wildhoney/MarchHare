@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 test.describe("StrictMode resilience", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/test/strict-mode");
+    await page.goto("/?fixture=strict-mode");
     await page.waitForSelector('[data-testid="mount-count"]');
     // Allow StrictMode double-render cycle to settle
     await page.waitForTimeout(200);
