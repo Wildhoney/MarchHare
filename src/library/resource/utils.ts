@@ -1,6 +1,6 @@
 import { Cache } from "../cache/index.ts";
 import { present, unset } from "../utils/utils.ts";
-import type { Env } from "../boundary/components/env/index.tsx";
+import type { Env } from "../boundary/components/env/types.ts";
 import type {
   Args,
   Dispatch,

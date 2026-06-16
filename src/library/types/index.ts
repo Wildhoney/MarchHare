@@ -7,7 +7,7 @@ import type {
   Tasks,
 } from "../boundary/components/tasks/types.ts";
 import type { Fault } from "../error/types.ts";
-import type { Env } from "../boundary/components/env/index.tsx";
+import type { Env } from "../boundary/components/env/types.ts";
 import type { Coalesce, Invocation } from "../resource/types.ts";
 import type { WithHandle } from "../with/types.ts";
 

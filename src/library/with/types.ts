@@ -5,7 +5,7 @@ import type {
   Model,
   Props,
 } from "../types/index.ts";
-import type { Env } from "../boundary/components/env/index.tsx";
+import type { Env } from "../boundary/components/env/types.ts";
 
 /**
  * Non-nullable primitive leaves that {@link Paths} can terminate on. Used

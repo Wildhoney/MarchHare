@@ -2,6 +2,7 @@ import * as React from "react";
 import { Broadcaster } from "./components/broadcast/index.tsx";
 import { Tasks } from "./components/tasks/index.tsx";
 import { Env } from "./components/env/index.tsx";
+import type { Env as EnvType } from "./components/env/types.ts";
 import { SharingProvider } from "./components/sharing/index.tsx";
 import { Tappable } from "./components/tap/index.tsx";
 import type { Props } from "./types.ts";
@@ -27,7 +28,7 @@ import type { Props } from "./types.ts";
 export function Boundary({ env, tap, children }: Props): React.ReactNode {
   return (
     <Broadcaster>
-      <Env initial={env ?? ({} as Env)}>
+      <Env initial={env ?? ({} as EnvType)}>
         <Tasks>
           <Tappable tap={tap}>
             <SharingProvider>{children}</SharingProvider>

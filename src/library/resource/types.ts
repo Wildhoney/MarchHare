@@ -1,4 +1,4 @@
-import type { Env } from "../boundary/components/env/index.tsx";
+import type { Env } from "../boundary/components/env/types.ts";
 import type { Cache } from "../cache/index.ts";
 import type {
   BroadcastPayload,

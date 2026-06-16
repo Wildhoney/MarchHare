@@ -6,6 +6,9 @@
   "packageManager": "yarn@1.22.22",
   "main": "./dist/march-hare.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "mh": "./dist/cli/bin/mh.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -14,8 +17,16 @@
     }
   },
   "dependencies": {
+    "@inquirer/prompts": "^7.2.0",
+    "change-case": "^5.4.4",
+    "ejs": "^3.1.10",
     "eventemitter3": "^5.0.4",
-    "immertation": "^0.1.26"
+    "figlet": "^1.7.0",
+    "find-up": "^8.0.0",
+    "gray-matter": "^4.0.3",
+    "immertation": "^0.1.26",
+    "kleur": "^4.1.5",
+    "tinyglobby": "^0.2.17"
   },
   "peerDependencies": {
     "@mobily/ts-belt": "^3.0.0",
@@ -26,10 +37,12 @@
     "vitest/vite": "^7.3.1"
   },
   "files": [
-    "dist"
+    "dist",
+    "src/cli/README.md"
   ],
   "scripts": {
-    "build": "vite build",
+    "build": "vite build && npm run build:cli",
+    "build:cli": "tsc -p tsconfig.cli.json && rm -rf dist/cli/templates && cp -R src/cli/templates dist/cli/templates && chmod +x dist/cli/bin/mh.js",
     "build:example": "vite build --mode example --outDir dist-example --base /MarchHare/ && mv dist-example/src/example/index.html dist-example/index.html && rm -rf dist-example/src",
     "dev": "vite",
     "preview": "vite preview",
@@ -53,6 +66,7 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/dom-navigation": "^1.0.7",
+    "@types/ejs": "^3.1.5",
     "@types/lodash": "^4.17.23",
     "@types/ms": "^2.1.0",
     "@types/ramda": "^0.31.1",

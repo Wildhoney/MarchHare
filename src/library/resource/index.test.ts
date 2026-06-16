@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { Resource } from "./index.ts";
 import { Cache, type Adapter } from "../cache/index.ts";
-import type { Env } from "../boundary/components/env/index.tsx";
+import type { Env } from "../boundary/components/env/types.ts";
 import type { Dispatch } from "./types.ts";
 
 function memoryAdapter(): Adapter & { entries: Map<string, string> } {

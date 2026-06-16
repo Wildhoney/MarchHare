@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "outDir": "./dist/cli",
+    "rootDir": "./src/cli",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "declaration": false,
+    "noEmit": false,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+    "lib": ["es2024"],
+    "types": ["node"]
+  },
+  "include": ["src/cli/**/*.ts"],
+  "exclude": [
+    "src/cli/templates",
+    "src/cli/**/*.test.ts",
+    "src/cli/**/*.integration.ts"
+  ]
+}

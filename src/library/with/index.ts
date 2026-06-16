@@ -1,5 +1,5 @@
 import type { Actions, HandlerContext, Model, Props } from "../types/index.ts";
-import type { Env } from "../boundary/components/env/index.tsx";
+import type { Env } from "../boundary/components/env/types.ts";
 import type { BooleanPaths, Get, Paths } from "./types.ts";
 import { makeAlways, makeInvert, makeUpdate } from "./utils.ts";
 

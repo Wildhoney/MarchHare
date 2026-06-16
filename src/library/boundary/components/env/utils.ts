@@ -1,7 +1,7 @@
 import * as React from "react";
 import type { RefObject } from "react";
 import { G } from "@mobily/ts-belt";
-import type { Env } from "./index.tsx";
+import type { Env } from "./types.ts";
 
 /**
  * Internal singleton fallback used when `useEnv` is read outside any

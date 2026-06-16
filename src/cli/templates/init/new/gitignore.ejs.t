@@ -1,0 +1,9 @@
+---
+to: .gitignore
+---
+node_modules/
+dist/
+test-results/
+playwright-report/
+.DS_Store
+*.log

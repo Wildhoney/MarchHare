@@ -12,12 +12,13 @@ browser:
 
 typecheck:
 	npx tsc --noEmit
+	npx tsc -p tsconfig.cli.json --noEmit
 
 dev:
 	npx vite
 
 build:
-	npx vite build
+	npm run build
 
 fslint:
 	npx fslint --files=dist/**/*.js --limit-kb=30
@@ -27,9 +28,9 @@ checks:
 	make lint
 	make typecheck
 	make circular
+	make build
 	make unit
 	make integration
-	make build
 	make fslint
 
 preview:

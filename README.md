@@ -27,8 +27,9 @@
 1. [Multicast actions](#multicast-actions)
 1. [Global data](#global-data)
 1. [Reusable components](#reusable-components)
+1. [Scaffolding CLI](#scaffolding-cli)
 
-For advanced topics, see the [recipes directory](./recipes/). For a worked end-to-end example with the FSD layout, see [`src/example/`](./src/example/README.md).
+For advanced topics, see the [recipes directory](./recipes/). For a worked end-to-end example with the FSD layout, see [`src/example/`](./src/example/README.md). To scaffold a new project that mirrors that example, see [`src/cli/`](./src/cli/README.md).
 
 ## Benefits
 
@@ -896,3 +897,26 @@ function Where(): React.ReactElement {
 When a reusable component or resource is genuinely Env-agnostic &mdash; the fetcher never touches `context.env`, the hook never calls `shared.useEnv` &mdash; pass `Envless` as `E` instead of spelling out `Record<never, never>`: `shared.Resource<Envless, T>`, `shared.useContext<Envless, M, A>()`. It's a named alias for the empty-record shape exported from `march-hare`, kept around purely for legibility at the call site.
 
 For one-line handler binding &mdash; flipping a boolean, assigning a payload to a leaf, pinning a field to a fixed value &mdash; reach for `context.with.{update,invert,always}`. See the [`With` helpers recipe](./recipes/with-helpers.md) for the full surface.
+
+## Scaffolding CLI
+
+A [Hygen](https://github.com/jondot/hygen)-style scaffolder ships under [`src/cli/`](./src/cli/) as the `mh` binary. It mirrors the layout of [`src/example/`](./src/example/) and the FSD layering rules enforced by `eslint-plugin-boundaries` &mdash; imports flow strictly downward (`app → features → shared`).
+
+```bash
+cd src/cli
+npm install
+npm link          # creates the global `mh` binary
+```
+
+Run it with no arguments for an interactive menu, or drive any leaf command directly:
+
+```bash
+mh                            # banner + interactive menu
+mh init my-project            # bootstrap a new project
+mh feature new add-cat        # add a stateful feature
+mh app new dashboard          # add a page
+mh shared component card      # add a shared component
+mh feature action counter Reset   # inject an Action + handler stub
+```
+
+Every command lives in a tree &mdash; typing `mh feature` opens a sub-menu, typing `mh feature new` prompts for a name, typing `mh feature new add-cat` runs non-interactively. See [`src/cli/README.md`](./src/cli/README.md) for the full command surface, the template format, and instructions for adding your own generators.

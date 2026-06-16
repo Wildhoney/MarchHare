@@ -39,7 +39,7 @@ import EventEmitter from "eventemitter3";
 import { useBroadcast } from "../boundary/components/broadcast/index.tsx";
 import { useScope, getScope } from "../boundary/components/scope/index.tsx";
 import { useEnv, useEnvRef } from "../boundary/components/env/utils.ts";
-import type { Env } from "../boundary/components/env/index.tsx";
+import type { Env } from "../boundary/components/env/types.ts";
 import { produce as produceImmer } from "immer";
 import { nuke } from "../resource/index.ts";
 import type { Coalesce, Invocation } from "../resource/types.ts";

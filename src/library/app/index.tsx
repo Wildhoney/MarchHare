@@ -2,7 +2,7 @@ import * as React from "react";
 import { Boundary as BaseBoundary } from "../boundary/index.tsx";
 import { useContext as baseUseContext } from "../context/index.ts";
 import { useEnv as baseUseEnv } from "../boundary/components/env/utils.ts";
-import type { Env } from "../boundary/components/env/index.tsx";
+import type { Env } from "../boundary/components/env/types.ts";
 import { Resource as BaseResource } from "../resource/index.ts";
 import type { ResourceHandle } from "../resource/types.ts";
 import type { Cache } from "../cache/index.ts";

@@ -138,13 +138,16 @@ export default defineConfig(({ mode }) => {
             outDir: "dist",
             entryRoot: "src/library",
             beforeWriteFile(filePath, content) {
-              // Strip TypeScript source extensions from re-export specifiers
-              // so consumers don't need `allowImportingTsExtensions`.
+              // Rewrite TypeScript source extensions to `.js` so consumers on
+              // `moduleResolution: nodenext`/`node16` resolve the re-exports
+              // (those modes require explicit file extensions in ESM
+              // relative imports — TS resolves `.js` to the sibling `.d.ts`
+              // for type checking). Bundler resolution still accepts `.js`.
               return {
                 filePath,
                 content: content.replace(
                   /(from\s+['"])(\.{1,2}\/[^'"]+?)\.tsx?(['"])/g,
-                  "$1$2$3",
+                  "$1$2.js$3",
                 ),
               };
             },

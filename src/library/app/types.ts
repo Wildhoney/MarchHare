@@ -8,7 +8,7 @@ import type {
   UseActions,
 } from "../types/index.ts";
 import type { Data } from "../actions/types.ts";
-import type { Env } from "../boundary/components/env/index.tsx";
+import type { Env } from "../boundary/components/env/types.ts";
 import type { WithHandle } from "../with/types.ts";
 
 /**
