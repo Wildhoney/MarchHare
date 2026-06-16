@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.13.1](https://github.com/Wildhoney/MarchHare/compare/v0.13.0...v0.13.1) (2026-06-16)
+
+
+### Features
+
+* **cli:** add mh scaffolding CLI for apps and features ([05b940a](https://github.com/Wildhoney/MarchHare/commit/05b940a931f2536d0ced8c75df61379af938f576))
+
 ## [0.13.0](https://github.com/Wildhoney/MarchHare/compare/v0.12.1...v0.13.0) (2026-06-15)
 
 ### ⚠ BREAKING CHANGES
