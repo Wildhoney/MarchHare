@@ -12,7 +12,7 @@ export { Cache } from "./cache/index.ts";
 export { Reason, Aborted } from "./error/index.ts";
 
 export { annotate } from "./annotate/index.ts";
-export { Operation, Op, State } from "immertation";
+export { Operation, Op, State, isBox } from "immertation";
 
 export * as utils from "./utils/index.ts";
 
