@@ -74,14 +74,11 @@ describe("standalone useContext<E, ...> / useEnv<E>", () => {
       env: { portal: "mobile", device: { id: "ABC" } },
     });
 
-    class _Actions {
-      static Mount = Lifecycle.Mount();
-    }
     type Model = { ready: boolean };
     const model: Model = { ready: true };
 
     function Probe({ testid }: { testid: string }) {
-      const context = useContext<Envs, Model, typeof _Actions>();
+      const context = useContext<Envs, Model>();
       const [, actions] = context.useActions(model);
       return (
         <div data-testid={testid}>
