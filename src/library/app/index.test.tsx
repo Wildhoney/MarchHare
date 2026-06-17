@@ -57,21 +57,38 @@ describe("standalone useContext<E, ...> / useEnv<E>", () => {
   });
 
   it("actions.stream(Lifecycle.Env, ...) exposes union-arm-specific fields on inspect", async () => {
-    type WebEnv = {
+    // Mirrors the Hive Envs shape: multiple arms, of which only some have
+    // an `account` slot, and the slot itself is `Maybe<Account> = Account
+    // | null | undefined`. Cross-arm distribution must reach `accountName`
+    // on the account arm, otherwise navigation collapses to `undefined`.
+    type Account = {
+      id: string;
+      accountName?: string;
+      profile?: { handle?: string };
+    };
+    type Maybe<T> = T | null | undefined;
+    type WebCorporate = {
       portal: "web";
-      account: { name: string } | null;
+      account: Maybe<Account>;
     };
-    type MobileEnv = {
-      portal: "mobile";
-      device: { id: string };
+    type AppCorporate = {
+      portal: "app";
+      account: Maybe<Account>;
     };
-    type Envs = WebEnv | MobileEnv;
+    type WebPayment = { portal: "payment" };
+    type WebVerify = { portal: "verify" };
+    type Envs = WebCorporate | AppCorporate | WebPayment | WebVerify;
+    type WebEnv = WebCorporate;
+    type MobileEnv = WebPayment;
 
     const web = App<WebEnv>({
-      env: { portal: "web", account: { name: "Adam" } },
+      env: {
+        portal: "web",
+        account: { id: "A", accountName: "Adam", profile: { handle: "atimb" } },
+      },
     });
-    const mobile = App<MobileEnv>({
-      env: { portal: "mobile", device: { id: "ABC" } },
+    const payment = App<MobileEnv>({
+      env: { portal: "payment" },
     });
 
     type Model = { ready: boolean };
@@ -83,17 +100,18 @@ describe("standalone useContext<E, ...> / useEnv<E>", () => {
       return (
         <div data-testid={testid}>
           {actions.stream(Lifecycle.Env, (env, inspect) => {
-            // Distributive Inspect: `account` and `device` are both reachable
-            // even though each lives on a different union arm; navigation
-            // returns `Box<...>` of the value (or undefined where the key
-            // is absent on the active arm), so consumers can read
-            // `.box().value` after narrowing.
-            const accountBox = inspect.account.box();
-            const deviceBox = inspect.device.box();
+            // Two-level cross-arm distribution. `inspect.account` reduces
+            // to `Inspect<Account | null | undefined>`; navigating into
+            // `.accountName` must distribute that union again so the leaf
+            // is `Box<string | undefined>`, not `Box<undefined>`.
+            const nameBox = inspect.account.accountName.box();
+            const handleBox = inspect.account.profile.handle.box();
+            const name: string | undefined = nameBox.value;
+            const handle: string | undefined = handleBox.value;
             if (env.portal === "web") {
-              return `web:${env.account?.name ?? "-"}/${accountBox.value?.name ?? "-"}`;
+              return `web:${env.account?.accountName ?? "-"}/${name ?? "-"}/${handle ?? "-"}`;
             }
-            return `mobile:${env.device.id}/${deviceBox.value?.id ?? "-"}`;
+            return `payment:${env.portal}`;
           })}
         </div>
       );
@@ -104,9 +122,9 @@ describe("standalone useContext<E, ...> / useEnv<E>", () => {
         <web.Boundary>
           <Probe testid="web-stream" />
         </web.Boundary>
-        <mobile.Boundary>
-          <Probe testid="mobile-stream" />
-        </mobile.Boundary>
+        <payment.Boundary>
+          <Probe testid="payment-stream" />
+        </payment.Boundary>
       </>,
     );
 
@@ -114,9 +132,11 @@ describe("standalone useContext<E, ...> / useEnv<E>", () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
 
-    expect(screen.getByTestId("web-stream").textContent).toBe("web:Adam/Adam");
-    expect(screen.getByTestId("mobile-stream").textContent).toBe(
-      "mobile:ABC/ABC",
+    expect(screen.getByTestId("web-stream").textContent).toBe(
+      "web:Adam/Adam/atimb",
+    );
+    expect(screen.getByTestId("payment-stream").textContent).toBe(
+      "payment:payment",
     );
   });
 

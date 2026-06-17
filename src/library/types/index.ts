@@ -15,13 +15,13 @@ import type { WithHandle } from "../with/types.ts";
  * Bounded recursion depths for {@link Inspect}. Matches Immertation's
  * `DepthLimiter` shape so the two stay in lock-step.
  */
-type DepthLimiter = [never, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+type DepthLimiter = [never, 0, 1, 2, 3, 4, 5, 6, 7, 8];
 
 /** Union of all keys across each arm of `T`. */
-type UnionKeys<T> = T extends T ? keyof T : never;
+type UnionKeys<T> = T extends unknown ? keyof T : never;
 
 /** The value at `K` for each arm of `T`, falling back to `undefined` if `K` is absent on that arm. */
-type ValueAt<T, K extends PropertyKey> = T extends T
+type ValueAt<T, K extends PropertyKey> = T extends unknown
   ? K extends keyof T
     ? T[K]
     : undefined
@@ -36,7 +36,7 @@ type ValueAt<T, K extends PropertyKey> = T extends T
  *
  * For a single concrete `T`, the wrapper is transparent.
  */
-export type Inspect<T, D extends number = 12> = ImmInspect<T> &
+export type Inspect<T, D extends number = 8> = ImmInspect<T> &
   ([D] extends [0]
     ? object
     : {
