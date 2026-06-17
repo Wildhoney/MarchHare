@@ -34,7 +34,7 @@ import type {
 } from "march-hare";
 ```
 
-`shared.*` &mdash; standalone hooks/factories for reusable components: `shared.useContext`, `shared.useEnv`, `shared.Resource`, `shared.Scope`. Reach for `app.X` instead when you only need to support a single App. Persistent caches live on the App: `App({ cache })` is shared by every `app.Resource`.
+`shared.*` &mdash; standalone hooks/factories for reusable components: `shared.useContext`, `shared.useEnv`, `shared.Resource`, `shared.Scope`. Reach for `app.X` instead when you only need to support a single App. Persistent caches live on the App: `App({ cache })` is shared by every `app.Resource`. Pass `Cache<E>({ ...adapter, key })` to scope every slot by the live Env (multi-tenant per access token, locale, etc.) &mdash; see [recipes/use-resource.md](./recipes/use-resource.md#per-context-scoping--cache-adapter-key).
 
 ## Core Concepts
 
@@ -574,6 +574,7 @@ feature/
 - Use `context.actions.produce` for all state mutations.
 - Pass abort signals to async operations: `signal: context.task.controller.signal`.
 - Never use `as never` or `as unknown as never` casts. They erase every type guard and hide the fact that the value's real type doesn't fit the slot. If a single-step cast (`value as X`) won't compile, prefer restructuring the function signature, widening the target type, or adding a typed adapter &mdash; reach for `as unknown as X` only when bridging genuinely unrelated branded types, and document the reason inline.
+- Don't use single-letter or shorthand variable names &mdash; name the variable for what it is. `for (const cacheKey of cache.keys())` over `for (const k of cache.keys())`; `.map((entry) => ...)` over `.map((e) => ...)`; `(catCall, dogCall)` over `(a, b)`. Loop indices `i`/`j` and generic-parameter letters (`T`, `P`, `E`) are the only acceptable exceptions.
 
 ## Development Workflow
 

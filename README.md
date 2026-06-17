@@ -607,6 +607,26 @@ export default function CatCard(): React.ReactElement {
 
 `Cache()` with no adapter is an in-memory scope &ndash; useful in tests or when you want a holdable cache without persistence. Per-params keying via `JSON.stringify(params)` is automatic, so `user({ id: 5 })` and `user({ id: 6 })` are distinct slots.
 
+For multi-tenant apps that share a single backing store, add a `key(context)` callback alongside the adapter methods to derive a per-context prefix from the live `<app.Boundary>` Env. The callback receives the same `{ env }` an `app.Resource` fetcher sees; its return value is prepended to every cache slot, so two users on the same device do not see each other's data:
+
+```ts
+// app.ts
+type AppEnv = { session: { accessToken: string } | null };
+
+export const app = App<AppEnv>({
+  env: { session: null },
+  cache: Cache<AppEnv>({
+    get: (key) => localStorage.getItem(key),
+    set: (key, value) => localStorage.setItem(key, value),
+    remove: (key) => localStorage.removeItem(key),
+    clear: () => localStorage.clear(),
+    key: ({ env }) => env.session?.accessToken ?? "",
+  }),
+});
+```
+
+Successful writes for Alice land under `alice:0:{...}`; Bob's land under `bob:0:{...}`. Return `""`, `null`, or `undefined` to skip prefixing &ndash; useful for the signed-out gap, where the scope is genuinely empty.
+
 The adapter contract is **strictly synchronous** &ndash; `get` / `set` / `remove` / `clear` all return immediately, with no `Promise`. The model-literal read (`{ user: resource.user.get() }`) is evaluated during render and has no place to wait. React Native projects should use [`react-native-mmkv`](https://github.com/mrousavy/react-native-mmkv), which is sync out of the box and drops straight into the contract; `AsyncStorage` is incompatible. Truly async backends (IndexedDB, `chrome.storage.local`) need a sync facade hydrated at app entry &ndash; see the [storage recipe](./recipes/storage.md).
 
 See the [storage recipe](./recipes/storage.md) for backend adapters (React Native `react-native-mmkv`, browser `localStorage`, browser extension `chrome.storage`), sign-out purge, and the `unset` sentinel that keeps "nothing stored" distinct from "a legitimately stored null".

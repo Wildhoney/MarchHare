@@ -92,6 +92,8 @@ export function App<E extends object = Env>(config?: {
   tap?: Tap;
   cache?: Cache;
 }): AppHandle<E> {
+  const envHolder: { current: Env | undefined } = { current: undefined };
+
   function Boundary({
     children,
   }: {
@@ -99,6 +101,7 @@ export function App<E extends object = Env>(config?: {
   }): React.ReactElement {
     return (
       <BaseBoundary env={config?.env as Env} tap={config?.tap}>
+        <SyncEnvHolder holder={envHolder} />
         {children}
       </BaseBoundary>
     );
@@ -119,7 +122,11 @@ export function App<E extends object = Env>(config?: {
   function Resource<T, P extends object = Record<never, never>>(
     fetcher: AppFetcher<E, T, P>,
   ): ResourceHandle<T, P> {
-    return BaseResource<E, T, P>(fetcher, config?.cache);
+    return BaseResource<E, T, P>(
+      fetcher,
+      config?.cache,
+      () => envHolder.current,
+    );
   }
 
   return {
@@ -128,9 +135,33 @@ export function App<E extends object = Env>(config?: {
     useEnv: useTypedEnv,
     Resource,
     Scope<MulticastActions>() {
-      return createScope<E, MulticastActions>(config?.cache);
+      return createScope<E, MulticastActions>(
+        config?.cache,
+        () => envHolder.current,
+      );
     },
   };
+}
+
+/**
+ * Side-effect-only child of `app.Boundary` that captures the live Env
+ * proxy from the enclosing `<Env>` provider and writes it into the
+ * App's `envHolder` on every render. The proxy itself is stable per
+ * boundary &mdash; subsequent renders re-assign the same reference, so
+ * the holder behaves like a `ref.current` slot the App's `Resource`
+ * factory can read from at any time (including from sync `.get()`
+ * calls executed outside of action handlers).
+ *
+ * @internal
+ */
+function SyncEnvHolder({
+  holder,
+}: {
+  holder: { current: Env | undefined };
+}): null {
+  const env = baseUseEnv();
+  holder.current = env;
+  return null;
 }
 
 /**

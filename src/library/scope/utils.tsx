@@ -7,6 +7,7 @@ import { useEnv as baseUseEnv } from "../boundary/components/env/utils.ts";
 import { Resource as BaseResource } from "../resource/index.ts";
 import type { ResourceHandle } from "../resource/types.ts";
 import type { Cache } from "../cache/index.ts";
+import type { Env } from "../boundary/components/env/types.ts";
 import type { AppContextHandle, AppFetcher } from "../app/types.ts";
 import type { Actions, Model, Props } from "../types/index.ts";
 import type { ScopeHandle } from "./types.ts";
@@ -16,12 +17,14 @@ import type { ScopeHandle } from "./types.ts";
  * `App<E>()` so the enclosing Env shape `E` is captured at the type
  * level. The optional `cache` is the same value `App({ cache })` was
  * constructed with &mdash; resources declared via `scope.Resource`
- * share that cache.
+ * share that cache. `getEnv` resolves the live Env from the enclosing
+ * `app.Boundary` so cache-key scoping works for sync `.get()` reads.
  *
  * @internal
  */
 export function createScope<E extends object, MulticastActions>(
   cache?: Cache,
+  getEnv?: () => Env | undefined,
 ): ScopeHandle<E, MulticastActions> {
   function Boundary({
     children,
@@ -75,7 +78,7 @@ export function createScope<E extends object, MulticastActions>(
   function Resource<T, P extends object = Record<never, never>>(
     fetcher: AppFetcher<E, T, P>,
   ): ResourceHandle<T, P> {
-    return BaseResource<E, T, P>(fetcher, cache);
+    return BaseResource<E, T, P>(fetcher, cache, getEnv);
   }
 
   return {

@@ -7,6 +7,7 @@ import {
   nextResourceId,
 } from "./utils.ts";
 import type { AppFetcher } from "../app/types.ts";
+import type { Env } from "../boundary/components/env/types.ts";
 import { G } from "@mobily/ts-belt";
 
 export type { Coalesce, Fetcher, Invocation, ResourceHandle } from "./types.ts";
@@ -91,10 +92,15 @@ export function Resource<
   E extends object,
   T,
   P extends object = Record<never, never>,
->(ƒ: AppFetcher<E, T, P>, cache?: Cache): ResourceHandle<T, P> {
+>(
+  ƒ: AppFetcher<E, T, P>,
+  cache?: Cache,
+  getEnv?: () => Env | undefined,
+): ResourceHandle<T, P> {
   const inner = <Fetcher<T, P>>(<unknown>ƒ);
+  const resolveEnv = getEnv ?? (() => undefined);
   if (G.isUndefined(cache)) {
-    return build(inner, defaultCache(inner), null);
+    return build(inner, defaultCache(inner), null, resolveEnv);
   }
-  return build(inner, cache, nextResourceId(inner));
+  return build(inner, cache, nextResourceId(inner), resolveEnv);
 }

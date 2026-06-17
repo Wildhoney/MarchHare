@@ -1,9 +1,14 @@
-import { describe, it, beforeAll, afterAll, expect } from "vitest";
+import { describe, it, beforeAll, afterAll, expect, vi } from "vitest";
 import { execSync, spawnSync, type SpawnSyncReturns } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
+
+// Every `it` in this suite shells out to `tsc` / `eslint` against the
+// generated project. The first run hits cold type-checker and lint caches
+// and exceeds vitest's 5s default — especially in CI.
+vi.setConfig({ testTimeout: 60_000 });
 
 const REPO_ROOT = process.cwd();
 const MH_BIN = path.join(REPO_ROOT, "dist", "cli", "bin", "mh.js");

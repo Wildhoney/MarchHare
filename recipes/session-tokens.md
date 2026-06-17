@@ -264,7 +264,28 @@ Notes:
 
 ## Clear Resource Caches on sign-out
 
-If your Resources are wired to persistent `Cache`s, the previous user's cached payloads survive sign-out and bleed into the next session. Clear them alongside the Env reset:
+If your Resources are wired to persistent `Cache`s, the previous user's cached payloads survive sign-out and bleed into the next session. There are two ways to keep tenants from seeing each other's data &mdash; pick one:
+
+**Option A: Scope every slot by access token.** Pass `key({ env })` on the Cache so writes for Alice land under `alice:…` and Bob's land under `bob:…`. Same backing store, no leakage between tenants, no explicit clear required:
+
+```ts
+type AppEnv = { session: { accessToken: string } | null };
+
+export const app = App<AppEnv>({
+  env: { session: null },
+  cache: Cache<AppEnv>({
+    get: (key) => localStorage.getItem(key),
+    set: (key, value) => localStorage.setItem(key, value),
+    remove: (key) => localStorage.removeItem(key),
+    clear: () => localStorage.clear(),
+    key: ({ env }) => env.session?.accessToken ?? "",
+  }),
+});
+```
+
+When `session` flips to `null`, the scope becomes the empty string &mdash; the signed-out gap reads through the top-level (unscoped) tier. See the [scoped cache section in `use-resource.md`](./use-resource.md#per-context-scoping--cache-adapter-key) for the resource-side semantics.
+
+**Option B: Clear on sign-out.** Reach for this when scoping by token isn't an option (e.g. shared cache across resources with different lifetimes). Clear them alongside the Env reset:
 
 ```ts
 import { userCache, ordersCache, settingsCache } from "../caches";

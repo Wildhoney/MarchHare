@@ -269,6 +269,32 @@ export const user = app.Resource<User, { id: number }>((context) =>
 
 Resources declared on the same App are namespaced internally by their module-evaluation order, so two resources called with the same params don't collide on the shared adapter. Because module load order is deterministic, every reload reuses the same namespace key per resource and seeds back from storage on the next sync read.
 
+### Per-context scoping &mdash; `Cache({ ...adapter, key })`
+
+The default behaviour pools every tenant, session, and locale into the same set of slots &mdash; fine for single-user apps, hostile for multi-tenant ones. Add a `key(context)` callback alongside the adapter methods to derive a per-context prefix from the live `<app.Boundary>` Env; the callback receives the same `{ env }` an `app.Resource` fetcher sees and its return value is prepended to every cache slot, separated by `:`.
+
+```ts
+// app.ts
+type AppEnv = { session: { accessToken: string } | null };
+
+export const app = App<AppEnv>({
+  env: { session: null },
+  cache: Cache<AppEnv>({
+    get: (key) => localStorage.getItem(key),
+    set: (key, value) => localStorage.setItem(key, value),
+    remove: (key) => localStorage.removeItem(key),
+    clear: () => localStorage.clear(),
+    key: ({ env }) => env.session?.accessToken ?? "",
+  }),
+});
+```
+
+A successful fetch for Alice writes to `alice:0:{...}`; Bob's writes to `bob:0:{...}`. The two coexist in the same `localStorage` without overwriting each other, and a sync read via `resource.user.get()` resolves through the same scope so Alice never sees Bob's payload.
+
+Return `""`, `null`, or `undefined` to skip prefixing &mdash; useful for the signed-out gap, where the scope is genuinely empty. Slots written while signed out land at the top-level (`0:{...}`) and stay there even after sign-in &mdash; treat them as a separate, public tier of the cache. Evictions (`.evict()` and `.nuke()`) respect the active scope and only drop slots whose prefix matches the current env, so signing out and clearing Alice's slots does not also nuke Bob's.
+
+> **Cross-cutting reads:** `resource.user.get(...)` is a sync read called outside any action handler, so it can't reach a fetcher's `context.env`. The `app.Boundary` keeps an internal Env reference in sync with the live Proxy on every render, and `.get()` reads through it. First-render reads run before the Boundary's commit cycle, so the very first `.get()` after mount may see the unscoped slot &mdash; subsequent renders (and any read inside an action handler) always see the scoped slot.
+
 See the [storage recipe](./storage.md) for adapter examples (`localStorage`, MMKV, `chrome.storage`) and sign-out cache purging.
 
 ## Invalidation &mdash; `.evict()` and `.nuke()`

@@ -41,6 +41,22 @@ const cache = Cache({
 
 `Cache()` with no adapter is in-memory only &ndash; useful in tests or when you want a first-class, holdable cache without persistence. When an adapter **is** supplied, the adapter is the only tier &ndash; the Cache does not also maintain a separate in-memory mirror.
 
+Add a `key(context)` callback alongside the adapter methods to scope every slot by the live per-`<app.Boundary>` Env &ndash; useful for sharing a single backing store across tenants, sessions, or locales without overlap:
+
+```ts
+type AppEnv = { session: { accessToken: string } | null };
+
+const cache = Cache<AppEnv>({
+  get: (key) => localStorage.getItem(key),
+  set: (key, value) => localStorage.setItem(key, value),
+  remove: (key) => localStorage.removeItem(key),
+  clear: () => localStorage.clear(),
+  key: ({ env }) => env.session?.accessToken ?? "",
+});
+```
+
+The callback receives the same `{ env }` an `app.Resource` fetcher sees; its return value is prepended (separated by `:`) to every cache key. Return `""`, `null`, or `undefined` to skip prefixing &mdash; the signed-out gap then writes to the top-level (unscoped) tier. Evictions stay scoped to the active Env, so signing out and clearing one user's slots does not also nuke another's. See the [scoped cache section in the Resource recipe](./use-resource.md#per-context-scoping--cache-adapter-key) for the resource-side semantics and the first-render caveat.
+
 Every Cache method is sync. Reads return a `Stored<T>` immediately; writes (`set`, `remove`, `clear`) return `void`. Empty `Stored`s are no-ops on write so placeholder snapshots never serialise:
 
 ```ts

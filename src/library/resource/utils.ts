@@ -100,18 +100,29 @@ export function nextResourceId(fetcher: object): string {
  * `context.actions.resource(...)` for fetch/evict. `.get(params)` reads
  * the per-params cache slot synchronously.
  *
+ * `getEnv` is the App-supplied accessor used to resolve the live env at
+ * sync read time (`.get(params)`) and at App-side eviction (when the
+ * handler context isn't available). It returns `undefined` when no
+ * Boundary has mounted yet &mdash; in which case `cache.scope(undefined)`
+ * yields the empty prefix and the read/evict targets the unscoped slot.
+ *
  * @internal
  */
 export function build<T, P extends object>(
   ƒ: Fetcher<T, P>,
   backing: Cache,
   namespace: string | null,
+  getEnv: () => Env | undefined,
 ): ResourceHandle<T, P> {
-  const prefix = G.isNull(namespace) ? "" : `${namespace}:`;
-  const cacheKey = (params: P) => `${prefix}${key(params)}`;
+  const suffix = G.isNull(namespace) ? "" : `${namespace}:`;
+  const composeKey = (env: Env | undefined, params: P) => {
+    const scope = backing.scope(env);
+    const prefix = scope === "" ? "" : `${scope}:`;
+    return `${prefix}${suffix}${key(params)}`;
+  };
 
-  const read = (params: P) => {
-    const stored = backing.get<T>(cacheKey(params));
+  const read = (params: P, env: Env | undefined) => {
+    const stored = backing.get<T>(composeKey(env, params));
     if (stored.data === unset || G.isNull(stored.at)) {
       return { data: unset, at: null };
     }
@@ -125,19 +136,26 @@ export function build<T, P extends object>(
     dispatch: Dispatch,
   ): Promise<T> =>
     ƒ(<Args<P>>{ env, controller, params, dispatch }).then((resolved) => {
-      backing.set(cacheKey(params), present(resolved, Temporal.Now.instant()));
+      backing.set(
+        composeKey(env, params),
+        present(resolved, Temporal.Now.instant()),
+      );
       return resolved;
     });
 
   const evict = (where: object): void => {
+    const env = getEnv();
+    const scope = backing.scope(env);
+    const fullPrefix = scope === "" ? suffix : `${scope}:${suffix}`;
     const entries = Object.entries(where);
-    for (const k of [...backing.keys()]) {
-      if (!k.startsWith(prefix)) continue;
+    for (const cacheKey of [...backing.keys()]) {
+      if (!cacheKey.startsWith(fullPrefix)) continue;
       try {
         const parsed = <Record<string, unknown>>(
-          JSON.parse(k.slice(prefix.length))
+          JSON.parse(cacheKey.slice(fullPrefix.length))
         );
-        if (entries.every(([key, v]) => parsed[key] === v)) backing.remove(k);
+        if (entries.every(([field, value]) => parsed[field] === value))
+          backing.remove(cacheKey);
       } catch {
         continue;
       }
@@ -150,14 +168,14 @@ export function build<T, P extends object>(
     const effective = <P>(params ?? {});
     return <Invocation<T, P>>{
       run,
-      read,
+      read: (params: P) => read(params, getEnv()),
       evict,
       params: effective,
     };
   }
 
   function get(params?: P): T | null {
-    const { data } = read(<P>(params ?? {}));
+    const { data } = read(<P>(params ?? {}), getEnv());
     return data === unset ? null : <T>data;
   }
 

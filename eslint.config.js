@@ -142,6 +142,7 @@ export default defineConfig([
       "src/library/resource/index.ts",
       "src/library/resource/utils.ts",
       "src/library/cache/index.ts",
+      "src/library/app/index.tsx",
       "src/library/boundary/components/consumer/components/partition/index.tsx",
       "src/library/boundary/components/tap/index.tsx",
     ],

@@ -159,6 +159,51 @@ describe("Cache (persistent)", () => {
   });
 });
 
+describe("Cache (env-scoped via options.key)", () => {
+  type AppEnv = { session: { accessToken: string } | null };
+
+  it("returns '' when no key option is supplied", () => {
+    const cache = Cache<AppEnv>();
+    expect(cache.scope({ session: null })).toBe("");
+  });
+
+  it("returns '' when no env is supplied", () => {
+    const cache = Cache<AppEnv>({
+      ...memoryAdapter(),
+      key: ({ env }) => env.session?.accessToken ?? "",
+    });
+    expect(cache.scope(undefined)).toBe("");
+  });
+
+  it("returns the key callback's result for the supplied env", () => {
+    const cache = Cache<AppEnv>({
+      ...memoryAdapter(),
+      key: ({ env }) => env.session?.accessToken ?? "",
+    });
+    expect(cache.scope({ session: { accessToken: "abc-123" } })).toBe(
+      "abc-123",
+    );
+  });
+
+  it("returns '' when the callback resolves to null/undefined/empty", () => {
+    const cache = Cache<AppEnv>({
+      ...memoryAdapter(),
+      key: ({ env }) => env.session?.accessToken ?? null,
+    });
+    expect(cache.scope({ session: null })).toBe("");
+  });
+
+  it("swallows callback errors and falls back to '' (no scope)", () => {
+    const cache = Cache<AppEnv>({
+      ...memoryAdapter(),
+      key: () => {
+        throw new Error("boom");
+      },
+    });
+    expect(cache.scope({ session: null })).toBe("");
+  });
+});
+
 describe("Cache (in-memory, no adapter)", () => {
   it("works as a scoped in-memory store", () => {
     const cache = Cache();

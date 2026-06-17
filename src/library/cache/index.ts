@@ -1,8 +1,40 @@
 import type { Adapter, Encoded, Stored } from "./types.ts";
+import type { Env } from "../boundary/components/env/types.ts";
 import { empty, present, unset } from "../utils/utils.ts";
 import { G } from "@mobily/ts-belt";
 
 export type { Adapter, Encoded } from "./types.ts";
+
+/**
+ * Context passed to {@link CacheConfig.key}. Mirrors the shape an
+ * `app.Resource` fetcher receives, restricted to the field the cache
+ * needs to scope on: the live per-`<Boundary>` Env. Future-extensible
+ * &mdash; new fields can land here without breaking the call shape.
+ *
+ * @template E The Env shape the cache is parameterised by.
+ */
+export type CacheContext<E extends object> = {
+  readonly env: E;
+};
+
+/**
+ * Configuration accepted by the {@link Cache} factory. Combines the
+ * synchronous {@link Adapter} (`get`/`set`/`remove`/`clear`/`keys?`)
+ * with an optional `key(context)` callback in a single flat object,
+ * so all the cache's plumbing lives in one literal at the call site.
+ *
+ * - `key` &mdash; derives a per-context cache scope. Called every time
+ *   a cache key is assembled with the same `{ env }` shape an
+ *   `app.Resource` fetcher receives; the returned string is prepended
+ *   to the per-resource namespace and params so different scopes
+ *   (e.g. one cache slot per access token, locale, or tenant id) can
+ *   coexist in the same backing store. Return `""`, `null`, or
+ *   `undefined` to skip prefixing &mdash; useful for "not signed in"
+ *   gaps where the scope is genuinely empty.
+ */
+export type CacheConfig<E extends object> = Adapter & {
+  readonly key?: (context: CacheContext<E>) => string | null | undefined;
+};
 
 /**
  * Persistence-aware cache for a single {@link Resource}. Wraps a
@@ -29,6 +61,21 @@ export type { Adapter, Encoded } from "./types.ts";
  * persistent store; when supplied, the adapter is the **only** tier
  * &mdash; the Cache does not maintain a separate in-memory mirror.
  *
+ * Pass `key(context)` alongside the adapter methods to scope cache
+ * slots by the per-`<Boundary>` Env. The returned string is prepended
+ * to every cache key the Resource layer assembles, so different
+ * tenants / sessions / locales share the adapter without stepping on
+ * each other.
+ *
+ * The `E` generic lives on the {@link Cache} factory and on
+ * {@link CacheConfig}: it parameterises the `key(context)` callback
+ * at construction time so the caller can read `context.env.X` with
+ * full typing. The returned {@link Cache} value is itself
+ * env-agnostic &mdash; the runtime `scope(env)` method takes the
+ * loose {@link Env} record and narrows internally before invoking
+ * the callback &mdash; which keeps it freely assignable across
+ * differently-typed Apps without variance gymnastics.
+ *
  * @example
  * ```ts
  * // In-memory, scoped to this instance.
@@ -40,6 +87,16 @@ export type { Adapter, Encoded } from "./types.ts";
  *   set: (key, value) => localStorage.setItem(key, value),
  *   remove: (key) => localStorage.removeItem(key),
  *   clear: () => localStorage.clear(),
+ * });
+ *
+ * // Multi-tenant: writes go under `${accessToken}:…`.
+ * type AppEnv = { session: { accessToken: string } | null };
+ * const cache = Cache<AppEnv>({
+ *   get: (key) => localStorage.getItem(key),
+ *   set: (key, value) => localStorage.setItem(key, value),
+ *   remove: (key) => localStorage.removeItem(key),
+ *   clear: () => localStorage.clear(),
+ *   key: ({ env }) => env.session?.accessToken ?? "",
  * });
  *
  * // Wire it into a Resource — successful runs write through automatically.
@@ -91,6 +148,22 @@ export type Cache = {
    * stored params satisfy a `where` pattern.
    */
   keys(): Iterable<string>;
+  /**
+   * Returns the per-context prefix derived from the configured
+   * `key(context)`. The returned string is appended with `:` by the
+   * Resource layer to compose the full cache key. Always `""` when
+   * no `key` option was supplied or when the callback returned an
+   * empty value &mdash; "no scope" is encoded as the empty string.
+   *
+   * Takes the loose {@link Env} record at runtime &mdash; the typed
+   * `E` lives on the `key(context)` callback registered at
+   * construction time, which the cache narrows to `E` internally
+   * before invoking.
+   *
+   * @internal Public surface lives on the Resource layer; consumers
+   *   should not need to call this directly.
+   */
+  scope(env: Env | undefined): string;
 };
 
 /**
@@ -118,16 +191,28 @@ function memoryAdapter(): Adapter {
 }
 
 /**
- * Constructs a {@link Cache} backed by `adapter`, or by an in-memory
- * `Map` when none is supplied. The returned object is the same shape
- * regardless &mdash; only the durability differs.
+ * Constructs a {@link Cache} from `config`. The config object carries
+ * the synchronous adapter methods (`get`/`set`/`remove`/`clear`/`keys?`)
+ * and, optionally, a `key(context)` callback that scopes every cache
+ * slot by the live per-`<Boundary>` Env. Omit `config` entirely for an
+ * in-memory cache scoped to this instance.
  *
- * @param adapter Optional synchronous backing store (localStorage, MMKV,
- *   or a custom sync facade). Omit for an in-memory cache scoped to
- *   this instance.
+ * When `key` is supplied, it runs each time the Resource layer
+ * assembles a cache key, receiving the same `{ env }` shape an
+ * `app.Resource` fetcher sees; its return value is prepended
+ * (separated by `:`) to the per-resource namespace and params JSON.
+ *
+ * @template E The Env shape `config.key` is typed against. Defaults
+ *   to the loose {@link Env} record so callers that don't scope by
+ *   env can keep using `Cache({ ...adapter })` without supplying a
+ *   generic.
+ * @param config Optional adapter-plus-options literal. Omit for an
+ *   in-memory cache; supply adapter methods alone for a persisted
+ *   cache; add `key` to also scope writes by the live Env.
  */
-export function Cache(adapter?: Adapter): Cache {
-  const backing: Adapter = adapter ?? memoryAdapter();
+export function Cache<E extends object = Env>(config?: CacheConfig<E>): Cache {
+  const backing: Adapter = G.isUndefined(config) ? memoryAdapter() : config;
+  const scopeFn = config?.key;
 
   return {
     /**
@@ -197,6 +282,15 @@ export function Cache(adapter?: Adapter): Cache {
         return backing.keys?.() ?? [];
       } catch {
         return [];
+      }
+    },
+    scope(env: Env | undefined): string {
+      if (G.isUndefined(scopeFn) || G.isNullable(env)) return "";
+      try {
+        const prefix = scopeFn({ env: <E>(<unknown>env) });
+        return G.isNullable(prefix) ? "" : prefix;
+      } catch {
+        return "";
       }
     },
   };

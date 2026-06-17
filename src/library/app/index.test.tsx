@@ -3,6 +3,8 @@ import { render, screen, act } from "@testing-library/react";
 import * as React from "react";
 import { App, useContext, useEnv } from "./index.tsx";
 import { Action } from "../action/index.ts";
+import { Cache, type Adapter } from "../cache/index.ts";
+import { Lifecycle } from "../types/index.ts";
 
 describe("standalone useContext<E, ...> / useEnv<E>", () => {
   it("lets a reusable component run under different Apps", async () => {
@@ -135,5 +137,195 @@ describe("standalone useContext<E, ...> / useEnv<E>", () => {
 
     expect(screen.getByTestId("alpha").textContent).toBe("1");
     expect(screen.getByTestId("beta").textContent).toBe("0");
+  });
+});
+
+function memoryAdapter(): Adapter & { entries: Map<string, string> } {
+  const entries = new Map<string, string>();
+  return {
+    entries,
+    get: (key) => entries.get(key) ?? null,
+    set: (key, value) => {
+      entries.set(key, value);
+    },
+    remove: (key) => {
+      entries.delete(key);
+    },
+    clear: () => {
+      entries.clear();
+    },
+    keys: () => entries.keys(),
+  };
+}
+
+describe("App({ cache }) with scoped key(context)", () => {
+  it("writes successful fetches under the live Env's scope prefix", async () => {
+    type AppEnv = { session: { accessToken: string } | null };
+
+    const adapter = memoryAdapter();
+    const app = App<AppEnv>({
+      env: { session: { accessToken: "alice" } },
+      cache: Cache<AppEnv>({
+        ...adapter,
+        key: ({ env }) => env.session?.accessToken ?? "",
+      }),
+    });
+
+    const user = app.Resource<{ name: string }>(() =>
+      Promise.resolve({ name: "Adam" }),
+    );
+
+    class Actions {
+      static Mount = Lifecycle.Mount();
+    }
+
+    function Profile() {
+      const context = app.useContext<void, typeof Actions>();
+      const actions = context.useActions();
+
+      actions.useAction(Actions.Mount, async (context) => {
+        await context.actions.resource(user());
+      });
+
+      return <span data-testid="profile">ready</span>;
+    }
+
+    await act(async () => {
+      render(
+        <app.Boundary>
+          <Profile />
+        </app.Boundary>,
+      );
+    });
+
+    const stored = [...adapter.entries.keys()];
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatch(/^alice:\d+:\{\}$/);
+  });
+
+  it("sync .get() under the Boundary resolves the scoped slot", async () => {
+    type AppEnv = { session: { accessToken: string } | null };
+
+    const adapter = memoryAdapter();
+    const app = App<AppEnv>({
+      env: { session: { accessToken: "alice" } },
+      cache: Cache<AppEnv>({
+        ...adapter,
+        key: ({ env }) => env.session?.accessToken ?? "",
+      }),
+    });
+
+    const user = app.Resource<{ name: string }>(() =>
+      Promise.resolve({ name: "Adam" }),
+    );
+
+    type Model = { user: { name: string } | null };
+    class Actions {
+      static Mount = Lifecycle.Mount();
+    }
+
+    function Profile() {
+      const context = app.useContext<Model, typeof Actions>();
+      const actions = context.useActions({ user: user.get() });
+      const [view] = actions;
+
+      actions.useAction(Actions.Mount, async (context) => {
+        const u = await context.actions.resource(user());
+        context.actions.produce(({ model }) => void (model.user = u));
+      });
+
+      return (
+        <span data-testid="profile">{view.user?.name ?? "(loading)"}</span>
+      );
+    }
+
+    await act(async () => {
+      render(
+        <app.Boundary>
+          <Profile />
+        </app.Boundary>,
+      );
+    });
+
+    expect(screen.getByTestId("profile").textContent).toBe("Adam");
+
+    function Probe() {
+      const cached = user.get();
+      return <span data-testid="probe">{cached?.name ?? "(empty)"}</span>;
+    }
+
+    await act(async () => {
+      render(
+        <app.Boundary>
+          <Probe />
+        </app.Boundary>,
+      );
+    });
+
+    expect(screen.getByTestId("probe").textContent).toBe("Adam");
+  });
+
+  it("scopes mutate when context.actions.produce updates env.session", async () => {
+    type AppEnv = { session: { accessToken: string } | null };
+
+    const adapter = memoryAdapter();
+    const app = App<AppEnv>({
+      env: { session: { accessToken: "alice" } },
+      cache: Cache<AppEnv>({
+        ...adapter,
+        key: ({ env }) => env.session?.accessToken ?? "",
+      }),
+    });
+
+    const user = app.Resource<{ name: string }>(({ env }) =>
+      Promise.resolve({ name: env.session?.accessToken ?? "anon" }),
+    );
+
+    class Actions {
+      static Mount = Lifecycle.Mount();
+      static Switch = Action("Switch");
+    }
+
+    function Profile() {
+      const context = app.useContext<void, typeof Actions>();
+      const actions = context.useActions();
+
+      actions.useAction(Actions.Mount, async (context) => {
+        await context.actions.resource(user());
+      });
+
+      actions.useAction(Actions.Switch, async (context) => {
+        context.actions.produce(({ env }) => {
+          env.session = { accessToken: "bob" };
+        });
+        await context.actions.resource(user());
+      });
+
+      return (
+        <button
+          data-testid="switch"
+          onClick={() => actions.dispatch(Actions.Switch)}
+        >
+          go
+        </button>
+      );
+    }
+
+    await act(async () => {
+      render(
+        <app.Boundary>
+          <Profile />
+        </app.Boundary>,
+      );
+    });
+
+    await act(async () => {
+      screen.getByTestId("switch").click();
+    });
+
+    const stored = [...adapter.entries.keys()].sort();
+    expect(stored).toHaveLength(2);
+    expect(stored.some((cacheKey) => cacheKey.startsWith("alice:"))).toBe(true);
+    expect(stored.some((cacheKey) => cacheKey.startsWith("bob:"))).toBe(true);
   });
 });
