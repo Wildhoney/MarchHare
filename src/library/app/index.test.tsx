@@ -56,6 +56,73 @@ describe("standalone useContext<E, ...> / useEnv<E>", () => {
     expect(screen.getByTestId("mobile").textContent).toBe("anon/ios");
   });
 
+  it("actions.stream(Lifecycle.Env, ...) exposes union-arm-specific fields on inspect", async () => {
+    type WebEnv = {
+      portal: "web";
+      account: { name: string } | null;
+    };
+    type MobileEnv = {
+      portal: "mobile";
+      device: { id: string };
+    };
+    type Envs = WebEnv | MobileEnv;
+
+    const web = App<WebEnv>({
+      env: { portal: "web", account: { name: "Adam" } },
+    });
+    const mobile = App<MobileEnv>({
+      env: { portal: "mobile", device: { id: "ABC" } },
+    });
+
+    class _Actions {
+      static Mount = Lifecycle.Mount();
+    }
+    type Model = { ready: boolean };
+    const model: Model = { ready: true };
+
+    function Probe({ testid }: { testid: string }) {
+      const context = useContext<Envs, Model, typeof _Actions>();
+      const [, actions] = context.useActions(model);
+      return (
+        <div data-testid={testid}>
+          {actions.stream(Lifecycle.Env, (env, inspect) => {
+            // Distributive Inspect: `account` and `device` are both reachable
+            // even though each lives on a different union arm; navigation
+            // returns `Box<...>` of the value (or undefined where the key
+            // is absent on the active arm), so consumers can read
+            // `.box().value` after narrowing.
+            const accountBox = inspect.account.box();
+            const deviceBox = inspect.device.box();
+            if (env.portal === "web") {
+              return `web:${env.account?.name ?? "-"}/${accountBox.value?.name ?? "-"}`;
+            }
+            return `mobile:${env.device.id}/${deviceBox.value?.id ?? "-"}`;
+          })}
+        </div>
+      );
+    }
+
+    render(
+      <>
+        <web.Boundary>
+          <Probe testid="web-stream" />
+        </web.Boundary>
+        <mobile.Boundary>
+          <Probe testid="mobile-stream" />
+        </mobile.Boundary>
+      </>,
+    );
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    expect(screen.getByTestId("web-stream").textContent).toBe("web:Adam/Adam");
+    expect(screen.getByTestId("mobile-stream").textContent).toBe(
+      "mobile:ABC/ABC",
+    );
+  });
+
   it("useEnv<E>() reads the nearest Boundary's env", () => {
     type WebEnv = { tag: "web" };
     type MobileEnv = { tag: "mobile" };

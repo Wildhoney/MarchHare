@@ -383,6 +383,12 @@ actions.useAction(Actions.Search, async (context, query) => {
 });
 ```
 
+## Boundary Isolation
+
+Every `<app.Boundary>` (or bare `<Boundary>`) opens a fresh, fully isolated context for its subtree. Two boundaries in the same React tree are **completely separate apps** — they do not share env, broadcast caches, multicast emitters, or stream consumer state. Dispatching a broadcast (including the built-in `Lifecycle.Env` / `Lifecycle.Fault`) inside one boundary never reaches subscribers inside another, even when both boundaries point at the same action symbol.
+
+The same rule applies to `actions.stream(...)`: a stream subscriber attaches to the broadcast emitter of its nearest boundary, and the value cached on that emitter is the only value the subscriber ever sees.
+
 ## Env (Per-Boundary Ambient State)
 
 A typed record of cross-cutting, mutable state shared across every component inside a `<Boundary>`. Holds whatever doesn't belong in the model: session tokens, locale, feature flags, current operational mode, etc.

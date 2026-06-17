@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Operation } from "immertation";
-import { Process, Inspect, Box } from "immertation";
+import { Process, Inspect as ImmInspect, Box } from "immertation";
 import type {
   ActionId,
   Task,
@@ -10,6 +10,42 @@ import type { Fault } from "../error/types.ts";
 import type { Env } from "../boundary/components/env/types.ts";
 import type { Coalesce, Invocation } from "../resource/types.ts";
 import type { WithHandle } from "../with/types.ts";
+
+/**
+ * Bounded recursion depths for {@link Inspect}. Matches Immertation's
+ * `DepthLimiter` shape so the two stay in lock-step.
+ */
+type DepthLimiter = [never, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+/** Union of all keys across each arm of `T`. */
+type UnionKeys<T> = T extends T ? keyof T : never;
+
+/** The value at `K` for each arm of `T`, falling back to `undefined` if `K` is absent on that arm. */
+type ValueAt<T, K extends PropertyKey> = T extends T
+  ? K extends keyof T
+    ? T[K]
+    : undefined
+  : never;
+
+/**
+ * March-hare's `Inspect<T>` wraps Immertation's so that property
+ * navigation works when `T` is a discriminated union (e.g. the App's
+ * Env union). For each key that appears on **any** union arm, the
+ * resulting Inspect is `Inspect<ValueAt<T, K>>` &mdash; arms missing
+ * the key contribute `undefined`, so optional chaining stays sound.
+ *
+ * For a single concrete `T`, the wrapper is transparent.
+ */
+export type Inspect<T, D extends number = 12> = ImmInspect<T> &
+  ([D] extends [0]
+    ? object
+    : {
+        [K in UnionKeys<T> as ValueAt<T, K> extends (
+          ...args: unknown[]
+        ) => unknown
+          ? never
+          : K]: Inspect<ValueAt<T, K>, DepthLimiter[D]>;
+      });
 
 /**
  * Chainable handle returned from `context.actions.resource(invocation)`.
