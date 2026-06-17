@@ -6117,10 +6117,10 @@ immer@^11.1.4:
   resolved "https://registry.yarnpkg.com/immer/-/immer-11.1.8.tgz#08a6426f7019dbce8d6dff8c4a43bb25c550a575"
   integrity sha512-/tbkHMW7y10Lx6i1crLjD4/OhNkRG+Fo7byZHtah0547nIeXYcpIXaUh0IAQY6gO5459qpGGYapcEOHtFXkIuA==
 
-immertation@^0.1.28:
-  version "0.1.28"
-  resolved "https://registry.yarnpkg.com/immertation/-/immertation-0.1.28.tgz#80e765936a32bb8e12d32175011b513eb151640e"
-  integrity sha512-AgUrKQePiNOY22uG4tuz8D8D738tDTgYC/iwSQxgQbIR4mCbWDEEPP6xpn6bJ3B/KGfqvlRq92jL+lj3OhFa+Q==
+immertation@^0.1.29:
+  version "0.1.29"
+  resolved "https://registry.yarnpkg.com/immertation/-/immertation-0.1.29.tgz#64540a73c190820d8540347ff934fcf1e5e26c73"
+  integrity sha512-yJyVXt/dFrNFrQHKJM770IjbKef58CMiVPUkQyU+D2NVaQEzzUDdT8l1ktRnXEvQfmeUl7oNO7oPyr3Yjjx3PQ==
   dependencies:
     nanoid "^5.1.6"
 

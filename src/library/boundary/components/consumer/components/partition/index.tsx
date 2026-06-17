@@ -47,7 +47,7 @@ export function Partition<T extends object>({
     const cached = broadcast.getCached(action);
     if (G.isNotNullable(cached)) state.hydrate({ value: cached as T });
     const entry: Entry<T> = { state, listeners: new Set() };
-    consumer.set(action, entry);
+    consumer.set(action, entry as unknown as Entry);
     return entry;
   }, [action, broadcast, consumer]);
 
