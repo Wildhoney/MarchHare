@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.13.5](https://github.com/Wildhoney/MarchHare/compare/v0.13.0...v0.13.5) (2026-06-17)
+
+
+### Features
+
+* **cache:** add per-context key(context) scoping to Cache config ([320e284](https://github.com/Wildhoney/MarchHare/commit/320e28401a057eefb874ea03742defbc8103fe46))
+* **cli:** add mh scaffolding CLI for apps and features ([05b940a](https://github.com/Wildhoney/MarchHare/commit/05b940a931f2536d0ced8c75df61379af938f576))
+* **core:** re-export isBox from immertation (^0.1.27) ([cf832bd](https://github.com/Wildhoney/MarchHare/commit/cf832bd538104b2cec4c221a8190d6abaaaca0ad))
+
 ## [0.13.4](https://github.com/Wildhoney/MarchHare/compare/v0.13.0...v0.13.4) (2026-06-17)
 
 ### Features
