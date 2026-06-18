@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.13.11](https://github.com/Wildhoney/MarchHare/compare/v0.13.10...v0.13.11) (2026-06-18)
+
+### Features
+
+- **core:** add Lifecycle.Paint factory firing after first browser paint ([d60a0eb](https://github.com/Wildhoney/MarchHare/commit/d60a0eb6fc7ee70141af1a433a1464ce60b3b4fb))
+
 ## [0.13.10](https://github.com/Wildhoney/MarchHare/compare/v0.13.6...v0.13.10) (2026-06-17)
 
 ### Bug Fixes
