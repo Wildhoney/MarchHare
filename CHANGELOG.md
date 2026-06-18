@@ -4,10 +4,9 @@ All notable changes to this project will be documented in this file. See [commit
 
 ## [0.13.10](https://github.com/Wildhoney/MarchHare/compare/v0.13.6...v0.13.10) (2026-06-17)
 
-
 ### Bug Fixes
 
-* **boundary:** isolate stream consumer state per <Boundary> and distribute Inspect over union envs ([8050ae6](https://github.com/Wildhoney/MarchHare/commit/8050ae64c1fc50e3a0d7e71ffe435ac8b5fbafa0))
+- **boundary:** isolate stream consumer state per <Boundary> and distribute Inspect over union envs ([8050ae6](https://github.com/Wildhoney/MarchHare/commit/8050ae64c1fc50e3a0d7e71ffe435ac8b5fbafa0))
 
 ## [0.13.8](https://github.com/Wildhoney/MarchHare/compare/v0.13.6...v0.13.8) (2026-06-17)
 

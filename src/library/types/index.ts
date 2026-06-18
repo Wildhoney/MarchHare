@@ -209,9 +209,10 @@ export class Brand {
   static readonly Name = Symbol("march-hare.brand/Name");
   /**
    * Phantom brand identifying lifecycle actions returned by
-   * `Lifecycle.Mount()`, `Lifecycle.Unmount()`, `Lifecycle.Error()`, and
-   * `Lifecycle.Update()`. Carries the lifecycle's literal kind so that
-   * `useAction` can pick distinct overloads &mdash; in particular,
+   * `Lifecycle.Mount()`, `Lifecycle.Paint()`, `Lifecycle.Unmount()`,
+   * `Lifecycle.Error()`, and `Lifecycle.Update()`. Carries the lifecycle's
+   * literal kind so that `useAction` can pick distinct overloads &mdash; in
+   * particular,
    * `Lifecycle.Update` resolves its payload to `Partial<DeepReadonly<D>>`
    * against the surrounding `useActions` data generic instead of the
    * factory-level `Record<string, unknown>` placeholder. Without this
@@ -296,6 +297,7 @@ export const EnvSymbol: unique symbol = <typeof EnvSymbol>(
  * ```ts
  * export class Actions {
  *   static Mount = Lifecycle.Mount();
+ *   static Paint = Lifecycle.Paint();
  *   static Unmount = Lifecycle.Unmount();
  *   static Error = Lifecycle.Error();
  *   static Update = Lifecycle.Update();
@@ -313,6 +315,17 @@ export class Lifecycle {
   /** Creates a Mount lifecycle action. Triggered once on component mount (`useLayoutEffect`). */
   static Mount(): LifecyclePayload<never, never, "Mount"> {
     return createLifecycleAction<never, never, "Mount">("Mount");
+  }
+
+  /**
+   * Creates a Paint lifecycle action. Triggered once after the browser has
+   * committed the first frame (`useEffect`). Pairs with {@link Lifecycle.Mount}
+   * (pre-paint) &mdash; use Paint for work that should not delay the first
+   * paint: analytics &ldquo;viewed&rdquo; events, focus management, scroll-into-view,
+   * non-blocking prefetch, etc.
+   */
+  static Paint(): LifecyclePayload<never, never, "Paint"> {
+    return createLifecycleAction<never, never, "Paint">("Paint");
   }
 
   /** Creates an Unmount lifecycle action. Triggered when the component unmounts. */
@@ -564,20 +577,21 @@ export type HandlerPayload<
     });
 
 /**
- * Branded type returned by `Lifecycle.Mount`, `Lifecycle.Unmount`,
- * `Lifecycle.Error`, and `Lifecycle.Update`. Structurally identical to a
- * `HandlerPayload` but carries a phantom `Brand.Lifecycle` brand whose value
- * is the lifecycle's literal kind. The brand is what lets `useAction` and
- * `Handlers` resolve `Lifecycle.Update`'s payload to `Partial<DeepReadonly<D>>`
- * (against the surrounding `useActions` data generic) instead of the
- * factory-level `Record<string, unknown>` placeholder &mdash; a user-defined
- * `Action<P>("Update")` would have `Name = "Update"` but no `Brand.Lifecycle`,
- * so it falls into the generic payload overload as expected.
+ * Branded type returned by `Lifecycle.Mount`, `Lifecycle.Paint`,
+ * `Lifecycle.Unmount`, `Lifecycle.Error`, and `Lifecycle.Update`.
+ * Structurally identical to a `HandlerPayload` but carries a phantom
+ * `Brand.Lifecycle` brand whose value is the lifecycle's literal kind. The
+ * brand is what lets `useAction` and `Handlers` resolve `Lifecycle.Update`'s
+ * payload to `Partial<DeepReadonly<D>>` (against the surrounding `useActions`
+ * data generic) instead of the factory-level `Record<string, unknown>`
+ * placeholder &mdash; a user-defined `Action<P>("Update")` would have
+ * `Name = "Update"` but no `Brand.Lifecycle`, so it falls into the generic
+ * payload overload as expected.
  *
  * @template P Payload type for the lifecycle.
  * @template C Channel filter (always `never` for lifecycles &mdash; they are
  *   not channeled).
- * @template Name Literal name (`"Mount"`, `"Unmount"`, `"Error"`, `"Update"`).
+ * @template Name Literal name (`"Mount"`, `"Paint"`, `"Unmount"`, `"Error"`, `"Update"`).
  */
 export type LifecyclePayload<
   P = unknown,

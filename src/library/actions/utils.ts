@@ -100,6 +100,10 @@ export function emitAsync(
  * mount) and `Unmounted` (re-mount after `<Activity>` show) as entry states
  * so that hidden-then-shown subtrees correctly re-emit Mount.
  *
+ * The Paint effect runs as a passive `useEffect` so it fires after the
+ * browser has committed the first frame. It tracks its own ref-guard so it
+ * fires exactly once per mount cycle (re-firing after `<Activity>` show).
+ *
  * Phase transitions:
  * - First mount:           Mounting → Mounted
  * - Activity hide / show:  Mounted → Unmounting → Unmounted → Mounting → Mounted
@@ -114,6 +118,7 @@ export function useLifecycles({
   handlers,
 }: LifecycleConfig): void {
   const previous = React.useRef<Props | null>(null);
+  const painted = React.useRef<boolean>(false);
 
   React.useLayoutEffect(() => {
     if (phase.current === Phase.Mounted) return;
@@ -135,6 +140,15 @@ export function useLifecycles({
     }
 
     phase.current = Phase.Mounted;
+    painted.current = false;
+  }, []);
+
+  React.useEffect(() => {
+    if (painted.current) return;
+    painted.current = true;
+
+    const paintAction = findLifecycleAction(handlers, "Paint");
+    if (paintAction) unicast.emit(paintAction);
   }, []);
 
   React.useLayoutEffect(() => {
