@@ -142,7 +142,7 @@ Any component can trigger the reset:
 actions.dispatch(Actions.Broadcast.Reset);
 ```
 
-Each producer re-fetches via its own `resource(...)` invocation. The reset action carries no payload &mdash; it is purely a signal. Because the fetch goes through `app.Resource`, every cache, abort, and `.exceeds(...)` / `.coalesce(...)` semantics are preserved.
+Each producer re-fetches via its own `resource(...)` invocation. The reset action carries no payload &mdash; it is purely a signal. Because the fetch goes through `app.Resource`, every cache, abort, default coalesce-by-`(Resource, params)`, and `.exceeds(...)` / `.isolated()` semantic is preserved.
 
 ## Typed reset payloads
 

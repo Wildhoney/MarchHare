@@ -10,7 +10,7 @@ import type { AppFetcher } from "../app/types.ts";
 import type { Env } from "../boundary/components/env/types.ts";
 import { G } from "@mobily/ts-belt";
 
-export type { Coalesce, Fetcher, Invocation, ResourceHandle } from "./types.ts";
+export type { Fetcher, Invocation, ResourceHandle } from "./types.ts";
 
 /**
  * Evicts cache entries across every Resource constructed in the
@@ -57,9 +57,13 @@ export function nuke(where?: object): void {
  * Standalone `shared.Resource` declarations always use an in-memory
  * cache &mdash; reach for `app.Resource` when persistence is required.
  *
- * Concurrent calls fire fresh requests by default. Opt in to in-flight
- * sharing per call via `.coalesce(key)` on the thenable returned from
- * `context.actions.resource(...)`.
+ * Concurrent calls with the same `(Resource, params)` share a single
+ * in-flight fetch by default &mdash; one network request, every caller
+ * resolves with the same payload. The underlying work is refcounted: if
+ * every caller aborts, the shared `AbortController` is aborted too.
+ * Chain `.isolated()` on the thenable returned from
+ * `context.actions.resource(...)` to opt out (own controller, own
+ * request) for the rare cases that need it.
  *
  * @template E The Env shape (or union) the fetcher's `context.env` is
  *   typed against.

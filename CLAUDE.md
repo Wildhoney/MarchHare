@@ -619,7 +619,7 @@ docs: update the README file
 - `src/library/actions/utils.ts` - useData, useLifecycles, channel helpers
 - `src/library/context/index.ts` - useContext (consumed via `app.useContext`)
 - `src/library/with/index.ts` - With.Update / With.Invert helpers
-- `src/library/coalesce/index.ts` - coalesceKey, withAbort, default token
+- `src/library/coalesce/index.ts` - withAbort helper for the default-coalesce path
 - `src/library/action/index.ts` - Action factory function
 - `src/library/types/index.ts` - All TypeScript types and interfaces
 - `src/library/utils/index.ts` - sleep, pk utilities
@@ -646,7 +646,7 @@ docs: update the README file
   - `ky-http-client.md` - Integration with ky HTTP client
   - `lifecycle-actions.md` - Mount, Unmount, Error, Update
   - `env.md` - Per-Boundary Env: typed ambient state (session, locale, feature flags); auto-threaded to Resource fetchers and `context.env`
-  - `mount-broadcast-deduplication.md` - Avoiding duplicate fetches on mount with broadcast/multicast
+  - `mount-broadcast-deduplication.md` - Default-coalesce behaviour: mount + broadcast handlers safely share one fetch by `(Resource, params)`
   - `model-annotations.md` - Async state tracking with Immertation
   - `multicast-actions.md` - Scoped component communication
   - `optimistic-updates.md` - End-to-end optimistic create/update/delete with `utils.pk()`, annotations, and rollback via `Lifecycle.Error`

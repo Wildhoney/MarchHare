@@ -464,22 +464,24 @@ export default function Profile(): React.ReactElement {
 `context.actions.resource(invocation)` returns a chainable thenable:
 
 - `.exceeds({ minutes: 5 })` &mdash; short-circuits when the per-params cache age is within the freshness window. Accepts a `Temporal.Duration`, a `DurationLike` object, or an ISO 8601 duration string. `Temporal` is read from the host runtime &ndash; bring a polyfill (e.g. [`@js-temporal/polyfill`](https://github.com/js-temporal/temporal-polyfill)) if your target doesn't expose it natively.
-- `.coalesce()` &mdash; opts the call into in-flight sharing. Any other caller with the same Resource and same structural params receives the same promise. The shared fetch uses a detached `AbortController` so a single caller's abort never cancels work other callers are waiting on; each caller still sees its own `context.task.controller` abort as a rejection of its personal await.
+- `.isolated()` &mdash; opts this call out of the default `(Resource, params)` coalesce path. Fires an independent network request against the caller's own `context.task.controller`. Reach for it only when two callers genuinely need parallel fetches with byte-identical params; the default is almost always what you want.
+
+By default, concurrent callers with the same `(Resource, params)` share a single in-flight fetch &mdash; one network request, every caller resolves with the same payload. The shared fetch runs on a detached `AbortController` so one caller's abort never cancels work other callers are still waiting on; when every caller has released the shared controller is aborted too, so the network gets cancelled rather than orphaned.
 
 ```ts
 // Mount and a broadcast handler both fire on mount — only one network request.
 actions.useAction(Actions.Mount, async (context) => {
-  const user = await context.actions.resource(resource.user()).coalesce();
+  const user = await context.actions.resource(resource.user());
   context.actions.produce(({ model }) => void (model.user = user));
 });
 
 actions.useAction(Actions.Broadcast.UserId, async (context, id) => {
-  const user = await context.actions.resource(resource.user({ id })).coalesce();
+  const user = await context.actions.resource(resource.user({ id }));
   context.actions.produce(({ model }) => void (model.user = user));
 });
 ```
 
-For finer-grained control &mdash; separating concurrent fetches into distinct coalesce groups via a token argument &mdash; see the [coalesce tokens recipe](./recipes/coalesce-tokens.md).
+The dedupe key is `(Resource, params)`. Two callers with different params (`{ id: 5 }` vs. `{ id: 6 }`) never share &mdash; they hash to different slots and fire independent requests. If you ever need two parallel calls with byte-identical params (vanishingly rare, almost always a smell that the params should differ), chain `.isolated()`.
 
 The fetcher receives a `context` object &mdash; read fields via `context.env`, `context.controller`, `context.params`. There are no callbacks &ndash; no `onSuccess`, no `onError`. The `context.dispatch` field can fire broadcast or multicast actions from inside the fetcher (unicast is rejected at compile time), but most side-effects (model writes, analytics) belong in the `useAction` handler that awaited the call:
 

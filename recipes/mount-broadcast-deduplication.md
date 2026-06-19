@@ -1,108 +1,57 @@
 # Mount and broadcast replay deduplication
 
-When a component uses both `Lifecycle.Mount()` and a broadcast (or multicast) `useAction` handler, both fire during mount if a cached value already exists. Without coordination, you get two fetches for the same data and a "last write wins" race for the model field.
+When a component uses both `Lifecycle.Mount()` and a broadcast (or multicast) `useAction` handler, both fire during mount if a cached value already exists. Without coordination this would mean two fetches for the same data and a "last write wins" race for the model field.
 
-## The fix: share the in-flight promise via `.coalesce()`
+March Hare resolves this automatically: concurrent `context.actions.resource(...)` callers with the same `(Resource, params)` share a single in-flight fetch by default. Mount and the replayed broadcast handler can both fire freely; the second caller transparently joins the first call's request, and both resolutions land with the same payload.
 
-Chain `.coalesce(token?)` onto the `context.actions.resource(...)` call. While one fetch for the same `(Resource, params, token)` triple is in-flight, every other caller receives the same promise. Mount and the replayed broadcast handler can both fire freely; the second caller transparently joins the first call's request.
-
-The token is optional. If you simply want every caller of this Resource + params to share, call `.coalesce()` with no argument &mdash; every untokened caller for the same `(Resource, params)` slot collapses onto a single shared promise:
+## The default: one fetch, two resolutions
 
 ```ts
 actions.useAction(Actions.Mount, async (context) => {
-  const dashboard = await context.actions
-    .resource(resource.dashboard())
-    .coalesce();
+  const dashboard = await context.actions.resource(resource.dashboard());
   context.actions.produce(({ model }) => void (model.dashboard = dashboard));
 });
 
 actions.useAction(Actions.Broadcast.User, async (context, payload) => {
-  const dashboard = await context.actions
-    .resource(resource.dashboard({ userId: payload.id }))
-    .coalesce();
+  const dashboard = await context.actions.resource(
+    resource.dashboard({ userId: payload.id }),
+  );
   context.actions.produce(({ model }) => void (model.dashboard = dashboard));
 });
 ```
 
-Reach for the tokened form when you have multiple coalesce groups for the same Resource &mdash; for example, an initial-load group and a separate refresh group that mustn't share with the initial load. Define the token as an enum value &mdash; not a magic string &mdash; so call sites are typed and greppable:
+No `.coalesce()` chain, no opt-in. The runtime keys the dedupe map by `(Resource.run, JSON.stringify(params))`, so:
 
-```ts
-// resources.ts
-import { app } from "./app";
+- Two calls to `resource.dashboard({ userId: 7 })` share &mdash; one network request, both handlers receive the same payload.
+- `resource.dashboard({ userId: 7 })` and `resource.dashboard({ userId: 8 })` do **not** share &mdash; different params, different slots, two requests.
+- `resource.cat()` and `resource.dashboard()` do **not** share &mdash; different Resources, identified by the underlying fetcher closure.
 
-export const dashboard = app.Resource<Dashboard, { userId?: number }>(
-  (context) =>
-    ky
-      .get("/api/dashboard", {
-        searchParams: context.params.userId
-          ? { userId: context.params.userId }
-          : {},
-        signal: context.controller.signal,
-      })
-      .json<Dashboard>(),
-);
-```
-
-```ts
-// dashboard/actions.ts
-import { Action, Lifecycle } from "march-hare";
-import { app } from "../app";
-import * as resource from "../resources";
-
-type Model = { dashboard: Dashboard | null };
-
-export class Actions {
-  static Mount = Lifecycle.Mount();
-  static Broadcast = BroadcastActions;
-}
-
-enum Coalesce {
-  Dashboard,
-  Refresh,
-}
-
-function useActions() {
-  const context = app.useContext<Model, typeof Actions>();
-  const actions = context.useActions({ dashboard: null });
-
-  actions.useAction(Actions.Mount, async (context) => {
-    const dashboard = await context.actions
-      .resource(resource.dashboard())
-      .coalesce(Coalesce.Dashboard);
-    context.actions.produce(({ model }) => void (model.dashboard = dashboard));
-  });
-
-  actions.useAction(Actions.Broadcast.User, async (context, payload) => {
-    const dashboard = await context.actions
-      .resource(resource.dashboard({ userId: payload.id }))
-      .coalesce(Coalesce.Dashboard);
-    context.actions.produce(({ model }) => void (model.dashboard = dashboard));
-  });
-
-  return actions;
-}
-```
-
-On mount with a cached `Broadcast.User` value both handlers fire, both call `.resource(dashboard(...)).coalesce(Coalesce.Dashboard)`, and exactly one HTTP request goes out for any given params slot. The shared fetch uses a detached `AbortController`, so the component unmounting (or one handler being superseded) does not cancel the work the other handler is still awaiting. Each caller's own `context.task.controller` still aborts their personal await on demand.
-
-The dedupe key is the triple `(Resource, params, token)`:
-
-- Two calls to `context.actions.resource(resource.dashboard({ userId: 7 })).coalesce(Coalesce.Dashboard)` share.
-- `resource.dashboard({ userId: 7 })` and `resource.dashboard({ userId: 8 })` under the same token do **not** share &mdash; different params, different fetches.
-- `resource.dashboard({ userId: 7 })` under `Coalesce.Dashboard` and the same call under `Coalesce.Refresh` do **not** share &mdash; different tokens, different fetches.
-- `resource.cat()` and `resource.dashboard()` under the same token do **not** share &mdash; same token but different Resources. Identity comes from the fetcher closure, not the token.
-
-The token namespace is scoped to the enclosing `<app.Boundary>`, so `Coalesce.Dashboard` in one App is independent of the same value in a sibling App's tree.
+The shared fetch runs on a detached `AbortController`. One caller's `context.task.controller` aborting only severs that caller's await &mdash; the underlying work keeps going for everyone else. When every caller has aborted, the shared controller is aborted too, so the network gets cancelled rather than orphaned.
 
 ## Multicast
 
-Multicast actions work identically &mdash; the dedupe key is unchanged, and the `Scope.X` action carries its own scope so coalescing across handlers in the same multicast region just works:
+Multicast actions work identically &mdash; the dedupe key is the same `(Resource, params)` tuple, and a `Scope.X` action carries its own scope so two handlers in the same multicast region share a fetch automatically:
 
 ```ts
 actions.useAction(Scope.User, async (context, payload) => {
-  const dashboard = await context.actions
-    .resource(resource.dashboard({ userId: payload.id }))
-    .coalesce(Coalesce.Dashboard);
+  const dashboard = await context.actions.resource(
+    resource.dashboard({ userId: payload.id }),
+  );
   context.actions.produce(({ model }) => void (model.dashboard = dashboard));
 });
 ```
+
+## When parallel requests are genuinely required
+
+The only case the default doesn't cover: two callers that intentionally want **independent** fetches with byte-identical params. This is rare. Almost every "looks like I want two of the same call" scenario is better modelled by giving the two calls distinguishing params (a discriminator, a timestamp, a nonce) so the dedupe key splits them naturally.
+
+For the residual case, chain `.isolated()`:
+
+```ts
+actions.useAction(Actions.Refresh, async (context) => {
+  const fresh = await context.actions.resource(resource.dashboard()).isolated();
+  context.actions.produce(({ model }) => void (model.dashboard = fresh));
+});
+```
+
+`.isolated()` skips the registry entirely &mdash; the fetch fires as a fresh network request against the caller's own `context.task.controller`, so aborting the caller cancels the network exactly like a regular `fetch`. Use it sparingly; the default is the right answer for virtually every read.

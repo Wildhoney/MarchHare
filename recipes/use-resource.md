@@ -70,7 +70,7 @@ export function useActions() {
 }
 ```
 
-Every successful fetch writes through to a per-resource in-memory cache. Configure `App({ cache })` to persist payloads across reloads (covered below), or chain `.coalesce(token)` on the call site to share an in-flight fetch with other callers.
+Every successful fetch writes through to a per-resource in-memory cache. Configure `App({ cache })` to persist payloads across reloads (covered below). Concurrent callers with the same `(Resource, params)` automatically share a single in-flight fetch &mdash; no `.coalesce()` chain to remember.
 
 > **Convention:** keep resources in `resources.ts` and pull them in as a namespace (`import * as resource from "./resources"`). Awaited results are named after the resource function they invoke &mdash; `const user = await context.actions.resource(resource.user())` &mdash; so call sites read uniformly and a single grep (`resource.user(`) finds every consumer.
 
@@ -411,33 +411,40 @@ actions.useAction(Actions.SwitchTenant, async (context, { tenantId }) => {
 - **They don't refetch.** Evict + refetch is a two-step pattern; chain the next `context.actions.resource(...)` explicitly when you want a fresh load.
 - **They don't cancel in-flight fetches.** A pending `await context.actions.resource(...)` finishes naturally and writes its result. Combine with `context.task.controller.abort()` if you need to discard a racing request.
 
-## In-flight coalescing &mdash; `.coalesce(token)`
+## In-flight coalescing &mdash; the default
 
-By default every `await context.actions.resource(...)` fires a fresh network request. Opt in to in-flight sharing per call by chaining `.coalesce(token)` &mdash; while one fetch is in-flight for the same `(Resource, params, token)` triple, every other caller receives the same promise. One network request, multiple awaits, all resolutions with the same payload.
-
-Use an enum for the token so call sites stay typed and greppable:
+Concurrent callers with the same `(Resource, params)` share a single in-flight fetch automatically. No chainable, no token, no opt-in:
 
 ```ts
-enum Coalesce {
-  Dashboard,
-}
-
 actions.useAction(Actions.Mount, async (context) => {
-  const dashboard = await context.actions
-    .resource(resource.dashboard())
-    .coalesce(Coalesce.Dashboard);
+  const dashboard = await context.actions.resource(resource.dashboard());
   context.actions.produce(({ model }) => void (model.dashboard = dashboard));
 });
 
 actions.useAction(Actions.Broadcast.User, async (context, payload) => {
-  const dashboard = await context.actions
-    .resource(resource.dashboard({ userId: payload.id }))
-    .coalesce(Coalesce.Dashboard);
+  const dashboard = await context.actions.resource(
+    resource.dashboard({ userId: payload.id }),
+  );
   context.actions.produce(({ model }) => void (model.dashboard = dashboard));
 });
 ```
 
-See the [mount deduplication recipe](./mount-broadcast-deduplication.md) for the full pattern, including how the `(Resource, params, token)` triple keys the dedupe map.
+If `Broadcast.User` has a cached value at mount time both handlers fire, both produce the same `Invocation`-equivalent slot, and exactly one HTTP request goes out. The shared fetch runs on a detached `AbortController`: one caller's `context.task.controller` aborting severs that caller's await but the underlying work keeps going for everyone else. When every caller has released, the shared controller is aborted too, so the network is cancelled rather than orphaned.
+
+The dedupe key is the pair `(Resource, params)`. `resource.dashboard({ userId: 7 })` and `resource.dashboard({ userId: 8 })` are different slots and fire independent requests. See the [mount deduplication recipe](./mount-broadcast-deduplication.md) for the full pattern.
+
+### Opting out &mdash; `.isolated()`
+
+The only case the default doesn't cover: two callers that intentionally need **independent** fetches with byte-identical params. Chain `.isolated()` to skip the registry &mdash; the fetch fires as a fresh request against the caller's own `context.task.controller`:
+
+```ts
+actions.useAction(Actions.Refresh, async (context) => {
+  const fresh = await context.actions.resource(resource.dashboard()).isolated();
+  context.actions.produce(({ model }) => void (model.dashboard = fresh));
+});
+```
+
+Reach for this rarely. Almost every "I want two parallel fetches" scenario is better modelled by giving the two callers distinguishing params (a discriminator, a timestamp, a nonce) so the dedupe key splits them naturally. Mutations don't go through Resource at all &mdash; they're plain action handlers calling `ky.post`/`fetch` directly, with no coalesce layer to opt out of.
 
 ## Optimistic updates
 
@@ -469,18 +476,16 @@ Pending state drives the UI via `actions.inspect.user.pending()` &mdash; see [mo
 
 ## Run semantics
 
-By default every `await context.actions.resource(...)` fires a fresh network request &mdash; coordination across components happens at the broadcast layer, not at a hidden cache:
+Concurrent `await context.actions.resource(...)` calls with the same `(Resource, params)` share a single in-flight fetch by default:
 
 ```ts
 const a = context.actions.resource(resource.user({ id: 5 }));
 const b = context.actions.resource(resource.user({ id: 5 }));
 const c = context.actions.resource(resource.user({ id: 5 }));
-await Promise.all([a, b, c]); // three network requests
+await Promise.all([a, b, c]); // one network request, three resolutions
 ```
 
-Each successful response writes through to the per-params cache slot; whichever resolves last for a given params hash wins.
-
-Opt in to in-flight sharing per call by chaining `.coalesce(token)`. While one fetch is in-flight for the same `(Resource, params, token)` triple, every other caller receives the same promise &mdash; one network request, multiple awaits, all resolutions with the same payload. See [`.coalesce(token)`](#in-flight-coalescing--coalescetoken) below.
+The shared fetch writes through to the per-params cache slot once on success. Different params (`{ id: 5 }` vs. `{ id: 6 }`) fall into different slots and fire independent requests, as do unrelated Resources. Chain [`.isolated()`](#opting-out--isolated) on a specific call to opt out for the rare case that needs an independent network request.
 
 ## Mount-time pattern
 

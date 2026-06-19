@@ -42,12 +42,9 @@ import { useEnv, useEnvRef } from "../boundary/components/env/utils.ts";
 import type { Env } from "../boundary/components/env/types.ts";
 import { produce as produceImmer } from "immer";
 import { nuke } from "../resource/index.ts";
-import type { Coalesce, Invocation } from "../resource/types.ts";
-import {
-  coalesceKey,
-  withAbort,
-  token as defaultCoalesceToken,
-} from "../coalesce/index.ts";
+import type { Invocation } from "../resource/types.ts";
+import { withAbort } from "../coalesce/index.ts";
+import type { Share } from "../boundary/components/sharing/index.tsx";
 import { unset } from "../utils/utils.ts";
 import {
   isBroadcastAction,
@@ -256,8 +253,8 @@ export function useActions<
               };
               const options: {
                 exceedsWindow: Temporal.DurationLike | null;
-                coalesceToken: Coalesce | undefined;
-              } = { exceedsWindow: null, coalesceToken: undefined };
+                isolated: boolean;
+              } = { exceedsWindow: null, isolated: false };
               const fetch = (): Promise<T> => {
                 if (G.isNotNullable(options.exceedsWindow)) {
                   const { data, at } = call.read(call.params);
@@ -271,28 +268,53 @@ export function useActions<
                     }
                   }
                 }
-                if (G.isUndefined(options.coalesceToken)) {
+                if (options.isolated) {
                   return <Promise<T>>(
                     call.run(env, controller, call.params, dispatchFromResource)
                   );
                 }
                 let mutable = sharing.get(call.run);
                 if (G.isUndefined(mutable)) {
-                  mutable = new Map<string, Promise<unknown>>();
+                  mutable = new Map<string, Share>();
                   sharing.set(call.run, mutable);
                 }
                 const bucket = mutable;
-                const key = `${JSON.stringify(call.params)}|${coalesceKey(options.coalesceToken)}`;
-                const existing = <Promise<T> | undefined>bucket.get(key);
-                if (existing) return withAbort(existing, controller.signal);
-                const detached = new AbortController();
-                const shared = (<Promise<T>>(
-                  call.run(env, detached, call.params, dispatchFromResource)
-                )).finally(() => {
-                  bucket.delete(key);
-                });
-                bucket.set(key, shared);
-                return withAbort(shared, controller.signal);
+                const slot = JSON.stringify(call.params);
+                let share = <Share<T> | undefined>bucket.get(slot);
+                if (G.isUndefined(share)) {
+                  const detached = new AbortController();
+                  const created: Share<T> = <Share<T>>{
+                    controller: detached,
+                    refs: 0,
+                  };
+                  created.promise = (<Promise<T>>(
+                    call.run(env, detached, call.params, dispatchFromResource)
+                  )).finally(() => {
+                    bucket.delete(slot);
+                  });
+                  bucket.set(slot, <Share>(<unknown>created));
+                  share = created;
+                }
+                const joined = share;
+                joined.refs += 1;
+                const release = (): void => {
+                  joined.refs -= 1;
+                  if (joined.refs === 0) {
+                    bucket.delete(slot);
+                    joined.controller.abort(controller.signal.reason);
+                  }
+                };
+                if (controller.signal.aborted) {
+                  release();
+                } else {
+                  controller.signal.addEventListener("abort", release, {
+                    once: true,
+                  });
+                  const cleanup = (): void =>
+                    controller.signal.removeEventListener("abort", release);
+                  joined.promise.then(cleanup, cleanup);
+                }
+                return withAbort(joined.promise, controller.signal);
               };
               const handle = {
                 then<U = T, V = never>(
@@ -311,8 +333,8 @@ export function useActions<
                   options.exceedsWindow = duration;
                   return handle;
                 },
-                coalesce(token?: Coalesce) {
-                  options.coalesceToken = token ?? defaultCoalesceToken;
+                isolated() {
+                  options.isolated = true;
                   return handle;
                 },
                 evict(where?: object): void {

@@ -8,7 +8,7 @@ import type {
 } from "../boundary/components/tasks/types.ts";
 import type { Fault } from "../error/types.ts";
 import type { Env } from "../boundary/components/env/types.ts";
-import type { Coalesce, Invocation } from "../resource/types.ts";
+import type { Invocation } from "../resource/types.ts";
 import type { WithHandle } from "../with/types.ts";
 
 /**
@@ -48,24 +48,21 @@ export type Inspect<T, D extends number = 8> = ImmInspect<T> &
       });
 
 /**
- * Chainable handle returned from `context.actions.resource(invocation)`.
- *
- * - `.exceeds(duration)` short-circuits the fetch when the per-params
- *   cache age is within the supplied freshness window.
- * - `.coalesce(token)` opts the call into in-flight sharing: any other
- *   caller with the same Resource, same structural params, and equal
- *   `token` joins the same promise.
- *
- * Awaiting the handle (`await context.actions.resource(...)`) triggers
- * the fetch with whichever options have been set on the chain.
- */
-/**
  * Fetch-configured chain returned from `.exceeds(...)` and
- * `.coalesce(...)`. Awaiting the chain runs the fetch with whichever
+ * `.isolated()`. Awaiting the chain runs the fetch with whichever
  * options are set; `.evict()` is intentionally absent because the
  * "configured a fetch then evicted instead" sequence has no coherent
  * meaning &mdash; eviction is always available off the bare
  * `context.actions.resource(...)` call.
+ *
+ * Concurrent callers with the same `(Resource, params)` automatically
+ * share a single in-flight fetch &mdash; one network request, every
+ * caller resolves with the same payload. The shared fetch runs on a
+ * detached `AbortController` so one caller's abort never cancels work
+ * other callers are still waiting on; when every caller has released
+ * (their `context.task.controller` aborted) the shared controller is
+ * aborted too. Chain `.isolated()` to opt out for the rare case that
+ * needs an independent request.
  */
 export type ResourceFetch<T> = PromiseLike<T> & {
   /**
@@ -75,23 +72,26 @@ export type ResourceFetch<T> = PromiseLike<T> & {
    */
   readonly exceeds: (duration: Temporal.DurationLike) => ResourceFetch<T>;
   /**
-   * Join an in-flight fetch for the same `(resource, params, token)`
-   * tuple. The shared fetch runs against a detached `AbortController`
-   * so a single caller's abort never cancels work other callers are
-   * waiting on; each caller still sees its own `context.task.controller`
-   * abort as a rejection of its personal await.
+   * Opt this call out of the default `(Resource, params)` coalesce
+   * path. The fetch fires as an independent network request against
+   * the caller's own `context.task.controller` &mdash; no joining of
+   * any in-flight fetch, no refcounted detached controller. Aborting
+   * the caller's task cancels the network exactly as a regular fetch
+   * would.
    *
-   * `token` is optional &mdash; omit it to share with every other
-   * untokened caller for the same `(resource, params)` slot.
+   * Reach for this only when two callers need parallel fetches with
+   * byte-identical params and the difference in intent genuinely can't
+   * be modelled by differing params. The default is almost always
+   * what you want.
    */
-  readonly coalesce: (token?: Coalesce) => ResourceFetch<T>;
+  readonly isolated: () => ResourceFetch<T>;
 };
 
 /**
  * Chainable handle returned from `context.actions.resource(invocation)`.
- * Either resolve to the fetched value (`.exceeds`/`.coalesce` + await)
+ * Either resolve to the fetched value (`.exceeds`/`.isolated` + await)
  * or drop the cache slot (`.evict`) &mdash; the two paths are mutually
- * exclusive, so once `.exceeds` or `.coalesce` runs the chain narrows
+ * exclusive, so once `.exceeds` or `.isolated` runs the chain narrows
  * to {@link ResourceFetch} and `.evict` is no longer available.
  */
 export type ResourceCall<T> = ResourceFetch<T> & {

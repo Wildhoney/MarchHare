@@ -56,15 +56,6 @@ export type Fetcher<T, P extends object = Record<never, never>> = (
 ) => Promise<T>;
 
 /**
- * Per-call coalescing token. Two callers with the same Resource, same
- * structural params, and equal `Coalesce` value share a single in-flight
- * promise; different tokens (or different params) fire independent
- * fetches. Primitives compose naturally via stringification; objects
- * are serialised with `JSON.stringify`.
- */
-export type Coalesce = string | number | bigint | boolean | symbol | object;
-
-/**
  * Config form accepted by `Resource`. The fetcher shorthand
  * `Resource(fetcher)` is equivalent to `Resource({ fetch: fetcher })`.
  *
