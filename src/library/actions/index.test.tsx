@@ -224,6 +224,70 @@ describe("useActions() data callback", () => {
   });
 });
 
+describe("useActions() context.model reactivity", () => {
+  type CountModel = { count: number };
+  const countModel: CountModel = { count: 0 };
+
+  class CountActions {
+    static Step = Action("Step");
+  }
+
+  it("should reflect the latest model state via context.model across await boundaries within a single handler", async () => {
+    const observed: number[] = [];
+
+    const { result } = renderHook(() => {
+      const actions = useActions<CountModel, typeof CountActions>(countModel);
+
+      actions.useAction(CountActions.Step, async (context) => {
+        observed.push(context.model.count);
+
+        context.actions.produce((draft) => void (draft.model.count = 1));
+        await Promise.resolve();
+        observed.push(context.model.count);
+
+        context.actions.produce((draft) => void (draft.model.count = 2));
+        await Promise.resolve();
+        observed.push(context.model.count);
+      });
+
+      return actions;
+    });
+
+    await act(async () => {
+      await result.current[1].dispatch(CountActions.Step);
+    });
+
+    expect(observed).toEqual([0, 1, 2]);
+  });
+
+  it("should reflect produces from earlier dispatches in subsequent handler runs", async () => {
+    const observed: number[] = [];
+
+    const { result } = renderHook(() => {
+      const actions = useActions<CountModel, typeof CountActions>(countModel);
+
+      actions.useAction(CountActions.Step, (context) => {
+        observed.push(context.model.count);
+        context.actions.produce((draft) => void (draft.model.count += 1));
+      });
+
+      return actions;
+    });
+
+    await act(async () => {
+      await result.current[1].dispatch(CountActions.Step);
+    });
+    await act(async () => {
+      await result.current[1].dispatch(CountActions.Step);
+    });
+    await act(async () => {
+      await result.current[1].dispatch(CountActions.Step);
+    });
+
+    expect(observed).toEqual([0, 1, 2]);
+  });
+});
+
 describe("useActions() broadcast action mount behaviour", () => {
   it("should invoke broadcast action handler with cached value on mount", async () => {
     const capturedPayloads: number[] = [];
