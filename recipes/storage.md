@@ -35,7 +35,7 @@ const cache = Cache({
   get: (key) => localStorage.getItem(key),
   set: (key, value) => localStorage.setItem(key, value),
   remove: (key) => localStorage.removeItem(key),
-  clear: () => localStorage.clear(),
+  keys: () => Object.keys(localStorage),
 });
 ```
 
@@ -50,7 +50,7 @@ const cache = Cache<AppEnv>({
   get: (key) => localStorage.getItem(key),
   set: (key, value) => localStorage.setItem(key, value),
   remove: (key) => localStorage.removeItem(key),
-  clear: () => localStorage.clear(),
+  keys: () => Object.keys(localStorage),
   key: ({ env }) => env.session?.accessToken ?? "",
 });
 ```
@@ -83,7 +83,7 @@ export const app = App({
     get: (key) => localStorage.getItem(key),
     set: (key, value) => localStorage.setItem(key, value),
     remove: (key) => localStorage.removeItem(key),
-    clear: () => localStorage.clear(),
+    keys: () => Object.keys(localStorage),
   }),
 });
 ```
@@ -181,7 +181,6 @@ export const cache = Cache({
   get: (key) => mmkv.getString(key) ?? null,
   set: (key, value) => mmkv.set(key, value),
   remove: (key) => mmkv.delete(key),
-  clear: () => mmkv.clearAll(),
   keys: () => mmkv.getAllKeys(),
 });
 ```
@@ -199,7 +198,6 @@ export const cache = Cache({
   get: (key) => localStorage.getItem(key),
   set: (key, value) => localStorage.setItem(key, value),
   remove: (key) => localStorage.removeItem(key),
-  clear: () => localStorage.clear(),
   keys: () => Object.keys(localStorage),
 });
 ```
@@ -230,10 +228,6 @@ export const cache = Cache({
     memory.delete(key);
     void chrome.storage.local.remove(key);
   },
-  clear: () => {
-    memory.clear();
-    void chrome.storage.local.clear();
-  },
   keys: () => memory.keys(),
 });
 ```
@@ -259,9 +253,7 @@ export const cache = Cache({
   remove: (key) => {
     if (browser) localStorage.removeItem(key);
   },
-  clear: () => {
-    if (browser) localStorage.clear();
-  },
+  keys: () => (browser ? Object.keys(localStorage) : []),
 });
 ```
 

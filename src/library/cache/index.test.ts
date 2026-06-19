@@ -13,9 +13,6 @@ function memoryAdapter(): Adapter & { entries: Map<string, string> } {
     remove: (key) => {
       entries.delete(key);
     },
-    clear: () => {
-      entries.clear();
-    },
     keys: () => entries.keys(),
   };
 }
@@ -65,10 +62,10 @@ describe("Cache (persistent)", () => {
     const at = Temporal.Now.instant();
 
     cache.set("user", { data: { name: "Adam" }, at });
-    expect(adapter.entries.has("user")).toBe(true);
+    expect(adapter.entries.has("mh:user")).toBe(true);
 
     cache.remove("user");
-    expect(adapter.entries.has("user")).toBe(false);
+    expect(adapter.entries.has("mh:user")).toBe(false);
   });
 
   it("returns an empty Stored for malformed JSON rather than throwing", () => {
@@ -112,7 +109,7 @@ describe("Cache (persistent)", () => {
         throw new Error("quota exceeded");
       },
       remove: () => {},
-      clear: () => {},
+      keys: () => [],
     });
 
     expect(() =>
@@ -147,12 +144,14 @@ describe("Cache (persistent)", () => {
     expect([...cache.keys()].sort()).toEqual(["a", "b"]);
   });
 
-  it("keys() returns an empty iterable when the adapter omits keys()", () => {
+  it("keys() returns an empty iterable when the adapter throws while enumerating", () => {
     const cache = Cache({
       get: () => null,
       set: () => {},
       remove: () => {},
-      clear: () => {},
+      keys: () => {
+        throw new Error("backend offline");
+      },
     });
 
     expect([...cache.keys()]).toEqual([]);
@@ -233,5 +232,31 @@ describe("Cache (in-memory, no adapter)", () => {
     cache.clear();
 
     expect(cache.get<number>("a").data).toBe(unset);
+  });
+});
+
+describe("Cache (in-memory + env-scoped via options.key)", () => {
+  type AppEnv = { session: { accessToken: string } | null };
+
+  it("falls back to the in-memory adapter when only `key` is supplied", () => {
+    const cache = Cache<AppEnv>({
+      key: ({ env }) => env.session?.accessToken ?? "",
+    });
+    const at = Temporal.Now.instant();
+
+    cache.set("user", { data: { name: "Adam" }, at });
+
+    expect(cache.get<{ name: string }>("user").data).toEqual({ name: "Adam" });
+  });
+
+  it("applies the key callback even without an adapter", () => {
+    const cache = Cache<AppEnv>({
+      key: ({ env }) => env.session?.accessToken ?? "",
+    });
+
+    expect(cache.scope({ session: { accessToken: "abc-123" } })).toBe(
+      "abc-123",
+    );
+    expect(cache.scope({ session: null })).toBe("");
   });
 });

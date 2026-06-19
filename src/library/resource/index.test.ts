@@ -16,9 +16,6 @@ function memoryAdapter(): Adapter & { entries: Map<string, string> } {
     remove: (key) => {
       entries.delete(key);
     },
-    clear: () => {
-      entries.clear();
-    },
     keys: () => entries.keys(),
   };
 }
@@ -218,7 +215,7 @@ describe("Resource(fetcher, cache) (shared App cache)", () => {
 
     const written = [...adapter.entries.keys()];
     expect(written).toHaveLength(1);
-    expect(written[0]).toMatch(/^\d+:\{\}$/);
+    expect(written[0]).toMatch(/^mh:\d+:\{\}$/);
   });
 
   it("per-params slots are persisted independently", async () => {
@@ -280,7 +277,7 @@ describe("Cache scope via Cache({key}) prefix on resource keys", () => {
 
     const stored = [...adapter.entries.keys()];
     expect(stored).toHaveLength(1);
-    expect(stored[0]).toMatch(/^alice:\d+:\{\}$/);
+    expect(stored[0]).toMatch(/^mh:alice:\d+:\{\}$/);
   });
 
   it("keeps per-tenant slots independent in the same backing store", async () => {
@@ -305,8 +302,12 @@ describe("Cache scope via Cache({key}) prefix on resource keys", () => {
 
     const stored = [...adapter.entries.keys()].sort();
     expect(stored).toHaveLength(2);
-    expect(stored.some((cacheKey) => cacheKey.startsWith("alice:"))).toBe(true);
-    expect(stored.some((cacheKey) => cacheKey.startsWith("bob:"))).toBe(true);
+    expect(stored.some((cacheKey) => cacheKey.startsWith("mh:alice:"))).toBe(
+      true,
+    );
+    expect(stored.some((cacheKey) => cacheKey.startsWith("mh:bob:"))).toBe(
+      true,
+    );
   });
 
   it("falls back to the unscoped slot when no env getter is wired", async () => {
@@ -371,8 +372,8 @@ describe("Cache scope via Cache({key}) prefix on resource keys", () => {
 
     expect([...adapter.entries.keys()].sort()).toEqual(
       expect.arrayContaining([
-        expect.stringMatching(/^alice:\d+:\{"id":5\}$/),
-        expect.stringMatching(/^bob:\d+:\{"id":6\}$/),
+        expect.stringMatching(/^mh:alice:\d+:\{"id":5\}$/),
+        expect.stringMatching(/^mh:bob:\d+:\{"id":6\}$/),
       ]),
     );
 
@@ -380,12 +381,12 @@ describe("Cache scope via Cache({key}) prefix on resource keys", () => {
 
     expect(
       [...adapter.entries.keys()].some((cacheKey) =>
-        cacheKey.startsWith("alice:"),
+        cacheKey.startsWith("mh:alice:"),
       ),
     ).toBe(false);
     expect(
       [...adapter.entries.keys()].some((cacheKey) =>
-        cacheKey.startsWith("bob:"),
+        cacheKey.startsWith("mh:bob:"),
       ),
     ).toBe(true);
   });
@@ -414,7 +415,9 @@ describe("Cache scope via Cache({key}) prefix on resource keys", () => {
 
     const stored = [...adapter.entries.keys()].sort();
     expect(stored).toHaveLength(2);
-    stored.forEach((cacheKey) => expect(cacheKey).toMatch(/^alice:\d+:\{\}$/));
+    stored.forEach((cacheKey) =>
+      expect(cacheKey).toMatch(/^mh:alice:\d+:\{\}$/),
+    );
     expect(new Set(stored).size).toBe(2);
   });
 
@@ -518,12 +521,12 @@ describe("Cache scope via Cache({key}) prefix on resource keys", () => {
 
     expect(
       [...adapter.entries.keys()].some((cacheKey) =>
-        cacheKey.startsWith("alice:"),
+        cacheKey.startsWith("mh:alice:"),
       ),
     ).toBe(true);
     expect(
       [...adapter.entries.keys()].some((cacheKey) =>
-        cacheKey.startsWith("bob:"),
+        cacheKey.startsWith("mh:bob:"),
       ),
     ).toBe(false);
   });

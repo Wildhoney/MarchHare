@@ -556,7 +556,7 @@ export const app = App({
     get: (key) => localStorage.getItem(key),
     set: (key, value) => localStorage.setItem(key, value),
     remove: (key) => localStorage.removeItem(key),
-    clear: () => localStorage.clear(),
+    keys: () => Object.keys(localStorage),
   }),
 });
 ```
@@ -621,15 +621,15 @@ export const app = App<AppEnv>({
     get: (key) => localStorage.getItem(key),
     set: (key, value) => localStorage.setItem(key, value),
     remove: (key) => localStorage.removeItem(key),
-    clear: () => localStorage.clear(),
+    keys: () => Object.keys(localStorage),
     key: ({ env }) => env.session?.accessToken ?? "",
   }),
 });
 ```
 
-Successful writes for Alice land under `alice:0:{...}`; Bob's land under `bob:0:{...}`. Return `""`, `null`, or `undefined` to skip prefixing &ndash; useful for the signed-out gap, where the scope is genuinely empty.
+Successful writes for Alice land under `mh:alice:0:{...}`; Bob's land under `mh:bob:0:{...}`. The Cache layer prepends a global `mh:` namespace so `cache.clear()` and partial-match eviction can scope themselves to March Hare's own entries on shared backends, leaving third-party `localStorage` state untouched. Return `""`, `null`, or `undefined` from `key(context)` to skip the per-context prefix &ndash; useful for the signed-out gap.
 
-The adapter contract is **strictly synchronous** &ndash; `get` / `set` / `remove` / `clear` all return immediately, with no `Promise`. The model-literal read (`{ user: resource.user.get() }`) is evaluated during render and has no place to wait. React Native projects should use [`react-native-mmkv`](https://github.com/mrousavy/react-native-mmkv), which is sync out of the box and drops straight into the contract; `AsyncStorage` is incompatible. Truly async backends (IndexedDB, `chrome.storage.local`) need a sync facade hydrated at app entry &ndash; see the [storage recipe](./recipes/storage.md).
+The adapter contract is **strictly synchronous** &ndash; `get` / `set` / `remove` / `keys` all return immediately, with no `Promise`. The model-literal read (`{ user: resource.user.get() }`) is evaluated during render and has no place to wait. React Native projects should use [`react-native-mmkv`](https://github.com/mrousavy/react-native-mmkv), which is sync out of the box and drops straight into the contract; `AsyncStorage` is incompatible. Truly async backends (IndexedDB, `chrome.storage.local`) need a sync facade hydrated at app entry &ndash; see the [storage recipe](./recipes/storage.md).
 
 See the [storage recipe](./recipes/storage.md) for backend adapters (React Native `react-native-mmkv`, browser `localStorage`, browser extension `chrome.storage`), sign-out purge, and the `unset` sentinel that keeps "nothing stored" distinct from "a legitimately stored null".
 

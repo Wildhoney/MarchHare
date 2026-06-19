@@ -51,20 +51,21 @@ export type Adapter = {
    */
   readonly remove: (key: string) => void;
   /**
-   * Wipe every entry this adapter can see. **Strictly sync.** On a
-   * shared backend such as `localStorage` this means the whole origin
-   * &mdash; third-party SDK state, dismissed banners, route hints, etc.
-   * all go with it. Adapter authors should either delegate to the
-   * backend's native clear (accepting that scope) or namespace by key
-   * prefix and remove only their own.
+   * Enumerator over every key the adapter currently knows about.
+   * **Strictly sync.** Required &mdash; partial-match evictions
+   * (`resource(...).evict(where)` and `nuke(where)`) sweep these keys
+   * in the current tick, so an adapter that can't enumerate cannot
+   * support eviction. `localStorage` exposes this via
+   * `Object.keys(localStorage)`; MMKV via `getAllKeys()`. If your
+   * backend genuinely cannot enumerate (write-only audit logs, opaque
+   * SDK facades), implement `keys` as `() => []` to declare that
+   * choice explicitly and accept the no-op eviction behaviour.
+   *
+   * The Cache layer prepends every key it persists with `mh:`, so
+   * `keys` may return entries outside that namespace (e.g. other
+   * `localStorage` writes on the same origin). The wrapper filters
+   * before reading, removing, or clearing, so non-`mh:` keys are
+   * always safe &mdash; the adapter need not narrow its enumeration.
    */
-  readonly clear: () => void;
-  /**
-   * Optional enumerator over every key the adapter currently knows
-   * about. **Strictly sync** when implemented &mdash; partial-match
-   * evictions sweep these keys in the current tick. `localStorage`
-   * exposes this via `Object.keys(localStorage)`; MMKV via
-   * `getAllKeys()`.
-   */
-  readonly keys?: () => Iterable<string>;
+  readonly keys: () => Iterable<string>;
 };

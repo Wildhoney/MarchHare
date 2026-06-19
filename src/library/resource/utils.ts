@@ -51,15 +51,6 @@ export function key(params: object): string {
 }
 
 /**
- * Re-export of the shared `unset` sentinel from {@link "../utils/index.ts"}.
- *
- * @internal
- */
-export const config = <const>{
-  unset,
-};
-
-/**
  * Per-fetcher namespace registry. Each declared Resource takes a stable
  * id derived from the order of insertion (`namespaces.size`), used to
  * prefix cache keys when an App-shared {@link Cache} is configured.

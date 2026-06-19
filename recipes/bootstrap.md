@@ -148,7 +148,7 @@ const sessionCache = Cache({
   get: (key) => localStorage.getItem(key),
   set: (key, value) => localStorage.setItem(key, value),
   remove: (key) => localStorage.removeItem(key),
-  clear: () => localStorage.clear(),
+  keys: () => Object.keys(localStorage),
 });
 
 const stored = sessionCache.get<Session>("session");

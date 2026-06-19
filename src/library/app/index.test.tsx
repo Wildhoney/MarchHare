@@ -235,9 +235,6 @@ function memoryAdapter(): Adapter & { entries: Map<string, string> } {
     remove: (key) => {
       entries.delete(key);
     },
-    clear: () => {
-      entries.clear();
-    },
     keys: () => entries.keys(),
   };
 }
@@ -284,7 +281,7 @@ describe("App({ cache }) with scoped key(context)", () => {
 
     const stored = [...adapter.entries.keys()];
     expect(stored).toHaveLength(1);
-    expect(stored[0]).toMatch(/^alice:\d+:\{\}$/);
+    expect(stored[0]).toMatch(/^mh:alice:\d+:\{\}$/);
   });
 
   it("sync .get() under the Boundary resolves the scoped slot", async () => {
@@ -409,7 +406,11 @@ describe("App({ cache }) with scoped key(context)", () => {
 
     const stored = [...adapter.entries.keys()].sort();
     expect(stored).toHaveLength(2);
-    expect(stored.some((cacheKey) => cacheKey.startsWith("alice:"))).toBe(true);
-    expect(stored.some((cacheKey) => cacheKey.startsWith("bob:"))).toBe(true);
+    expect(stored.some((cacheKey) => cacheKey.startsWith("mh:alice:"))).toBe(
+      true,
+    );
+    expect(stored.some((cacheKey) => cacheKey.startsWith("mh:bob:"))).toBe(
+      true,
+    );
   });
 });

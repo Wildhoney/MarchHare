@@ -77,7 +77,7 @@ const sessionCache = Cache({
   get: (key) => sessionStorage.getItem(key),
   set: (key, value) => sessionStorage.setItem(key, value),
   remove: (key) => sessionStorage.removeItem(key),
-  clear: () => sessionStorage.clear(),
+  keys: () => Object.keys(sessionStorage),
 });
 
 const stored = sessionCache.get<Session>("session");
@@ -277,7 +277,7 @@ export const app = App<AppEnv>({
     get: (key) => localStorage.getItem(key),
     set: (key, value) => localStorage.setItem(key, value),
     remove: (key) => localStorage.removeItem(key),
-    clear: () => localStorage.clear(),
+    keys: () => Object.keys(localStorage),
     key: ({ env }) => env.session?.accessToken ?? "",
   }),
 });

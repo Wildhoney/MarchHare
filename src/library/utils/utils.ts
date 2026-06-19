@@ -9,6 +9,24 @@ import type { Stored } from "./types.ts";
 export const unset: unique symbol = Symbol("march-hare.unset");
 
 /**
+ * Internal configuration shared across the Resource and Cache layers.
+ *
+ * - `unset` &mdash; re-export of the shared sentinel so consumers can pull
+ *   both fields from a single object.
+ * - `storageNamespace` &mdash; global prefix the Cache layer prepends to
+ *   every key it persists. Lets `Cache.clear()` and the partial-match
+ *   evictors scope themselves to the library's own entries on shared
+ *   backends (`localStorage`, `chrome.storage.local`, MMKV) without
+ *   nuking third-party state on the same origin.
+ *
+ * @internal
+ */
+export const config = <const>{
+  unset,
+  storageNamespace: "mh:",
+};
+
+/**
  * Returns a function to force a component re-render. Useful when state is
  * managed externally (e.g., refs) but the UI needs updating.
  *

@@ -34,7 +34,7 @@ import type {
 } from "march-hare";
 ```
 
-`shared.*` &mdash; standalone hooks/factories for reusable components: `shared.useContext`, `shared.useEnv`, `shared.Resource`, `shared.Scope`. Reach for `app.X` instead when you only need to support a single App. Persistent caches live on the App: `App({ cache })` is shared by every `app.Resource`. Pass `Cache<E>({ ...adapter, key })` to scope every slot by the live Env (multi-tenant per access token, locale, etc.) &mdash; see [recipes/use-resource.md](./recipes/use-resource.md#per-context-scoping--cache-adapter-key).
+`shared.*` &mdash; standalone hooks/factories for reusable components: `shared.useContext`, `shared.useEnv`, `shared.Resource`, `shared.Scope`. Reach for `app.X` instead when you only need to support a single App. Persistent caches live on the App: `App({ cache })` is shared by every `app.Resource`. Both pieces of `Cache(config)` are optional and independent: pass `Cache({ ...adapter })` for a persistent cache, `Cache<E>({ key })` for an env-scoped in-memory cache, or `Cache<E>({ ...adapter, key })` for both. The adapter members are an all-or-nothing group &mdash; supplying a partial adapter is a type error. See [recipes/use-resource.md](./recipes/use-resource.md#per-context-scoping--cache-adapter-key).
 
 ## Core Concepts
 

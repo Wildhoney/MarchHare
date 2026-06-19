@@ -249,7 +249,7 @@ export const app = App({
     get: (key) => localStorage.getItem(key),
     set: (key, value) => localStorage.setItem(key, value),
     remove: (key) => localStorage.removeItem(key),
-    clear: () => localStorage.clear(),
+    keys: () => Object.keys(localStorage),
   }),
 });
 ```
@@ -271,7 +271,7 @@ Resources declared on the same App are namespaced internally by their module-eva
 
 ### Per-context scoping &mdash; `Cache({ ...adapter, key })`
 
-The default behaviour pools every tenant, session, and locale into the same set of slots &mdash; fine for single-user apps, hostile for multi-tenant ones. Add a `key(context)` callback alongside the adapter methods to derive a per-context prefix from the live `<app.Boundary>` Env; the callback receives the same `{ env }` an `app.Resource` fetcher sees and its return value is prepended to every cache slot, separated by `:`.
+The default behaviour pools every tenant, session, and locale into the same set of slots &mdash; fine for single-user apps, hostile for multi-tenant ones. Add a `key(context)` callback to derive a per-context prefix from the live `<app.Boundary>` Env; the callback receives the same `{ env }` an `app.Resource` fetcher sees and its return value is prepended to every cache slot, separated by `:`. `key` is independently optional from the adapter methods: pass both for a scoped persistent cache, pass `key` on its own (`Cache<AppEnv>({ key })`) for an env-scoped in-memory cache, or omit `key` entirely. The adapter methods are an all-or-nothing group &mdash; passing a partial adapter (e.g. just `get` and `set`) is a type error.
 
 ```ts
 // app.ts
@@ -283,7 +283,7 @@ export const app = App<AppEnv>({
     get: (key) => localStorage.getItem(key),
     set: (key, value) => localStorage.setItem(key, value),
     remove: (key) => localStorage.removeItem(key),
-    clear: () => localStorage.clear(),
+    keys: () => Object.keys(localStorage),
     key: ({ env }) => env.session?.accessToken ?? "",
   }),
 });

@@ -1,6 +1,6 @@
 import type { Adapter, Encoded, Stored } from "./types.ts";
 import type { Env } from "../boundary/components/env/types.ts";
-import { empty, present, unset } from "../utils/utils.ts";
+import { config, empty, present, unset } from "../utils/utils.ts";
 import { G } from "@mobily/ts-belt";
 
 export type { Adapter, Encoded } from "./types.ts";
@@ -18,23 +18,51 @@ export type CacheContext<E extends object> = {
 };
 
 /**
- * Configuration accepted by the {@link Cache} factory. Combines the
- * synchronous {@link Adapter} (`get`/`set`/`remove`/`clear`/`keys?`)
- * with an optional `key(context)` callback in a single flat object,
- * so all the cache's plumbing lives in one literal at the call site.
- *
- * - `key` &mdash; derives a per-context cache scope. Called every time
- *   a cache key is assembled with the same `{ env }` shape an
- *   `app.Resource` fetcher receives; the returned string is prepended
- *   to the per-resource namespace and params so different scopes
- *   (e.g. one cache slot per access token, locale, or tenant id) can
- *   coexist in the same backing store. Return `""`, `null`, or
- *   `undefined` to skip prefixing &mdash; useful for "not signed in"
- *   gaps where the scope is genuinely empty.
+ * Optional `key(context)` callback shared by both {@link CacheConfig}
+ * variants. Derives a per-context cache scope. Called every time a
+ * cache key is assembled with the same `{ env }` shape an
+ * `app.Resource` fetcher receives; the returned string is prepended
+ * to the per-resource namespace and params so different scopes
+ * (e.g. one cache slot per access token, locale, or tenant id) can
+ * coexist in the same backing store. Return `""`, `null`, or
+ * `undefined` to skip prefixing &mdash; useful for "not signed in"
+ * gaps where the scope is genuinely empty.
  */
-export type CacheConfig<E extends object> = Adapter & {
+type CacheKeyOnly<E extends object> = {
+  readonly key?: (context: CacheContext<E>) => string | null | undefined;
+  readonly get?: never;
+  readonly set?: never;
+  readonly remove?: never;
+  readonly keys?: never;
+};
+
+type CacheAdapter<E extends object> = Adapter & {
   readonly key?: (context: CacheContext<E>) => string | null | undefined;
 };
+
+/**
+ * Configuration accepted by the {@link Cache} factory. A discriminated
+ * union with two shapes:
+ *
+ * - **Adapter-only / adapter + `key`** &mdash; supply the four
+ *   adapter methods (`get`/`set`/`remove`/`keys`) and an optional
+ *   `key(context)` callback. The cache is backed by the adapter;
+ *   persistence is the caller's responsibility. There is no `clear`
+ *   &mdash; the Cache layer synthesises one by iterating `keys()`
+ *   and removing only entries inside the `mh:` namespace it owns,
+ *   so third-party state on shared backends stays untouched.
+ * - **`key`-only** &mdash; supply just `key(context)` (no adapter
+ *   methods at all). The cache falls back to a per-instance in-memory
+ *   adapter but still scopes every slot by the live Env, which is
+ *   useful for tests, ephemeral state, or signed-out sessions where
+ *   you want env-scoped isolation without touching storage.
+ *
+ * The split is enforced by the union: passing a partial adapter
+ * (e.g. just `get`) is a type error &mdash; either all four required
+ * adapter methods are present or none of them are. {@link Cache} also
+ * accepts no argument at all for a plain in-memory cache.
+ */
+export type CacheConfig<E extends object> = CacheAdapter<E> | CacheKeyOnly<E>;
 
 /**
  * Persistence-aware cache for a single {@link Resource}. Wraps a
@@ -61,11 +89,12 @@ export type CacheConfig<E extends object> = Adapter & {
  * persistent store; when supplied, the adapter is the **only** tier
  * &mdash; the Cache does not maintain a separate in-memory mirror.
  *
- * Pass `key(context)` alongside the adapter methods to scope cache
- * slots by the per-`<Boundary>` Env. The returned string is prepended
- * to every cache key the Resource layer assembles, so different
- * tenants / sessions / locales share the adapter without stepping on
- * each other.
+ * `key(context)` is independently optional. Pass it alongside the
+ * adapter methods to scope a persistent cache by the live Env, or on
+ * its own (with no adapter) for an env-scoped in-memory cache. The
+ * adapter methods are an all-or-nothing group: supply all four
+ * (`get`/`set`/`remove`/`keys`) or none. Supplying a partial adapter
+ * is a type error.
  *
  * The `E` generic lives on the {@link Cache} factory and on
  * {@link CacheConfig}: it parameterises the `key(context)` callback
@@ -86,7 +115,7 @@ export type CacheConfig<E extends object> = Adapter & {
  *   get: (key) => localStorage.getItem(key),
  *   set: (key, value) => localStorage.setItem(key, value),
  *   remove: (key) => localStorage.removeItem(key),
- *   clear: () => localStorage.clear(),
+ *   keys: () => Object.keys(localStorage),
  * });
  *
  * // Multi-tenant: writes go under `${accessToken}:…`.
@@ -95,7 +124,12 @@ export type CacheConfig<E extends object> = Adapter & {
  *   get: (key) => localStorage.getItem(key),
  *   set: (key, value) => localStorage.setItem(key, value),
  *   remove: (key) => localStorage.removeItem(key),
- *   clear: () => localStorage.clear(),
+ *   keys: () => Object.keys(localStorage),
+ *   key: ({ env }) => env.session?.accessToken ?? "",
+ * });
+ *
+ * // Env-scoped in-memory cache: no adapter, just `key`.
+ * const cache = Cache<AppEnv>({
  *   key: ({ env }) => env.session?.accessToken ?? "",
  * });
  *
@@ -167,6 +201,26 @@ export type Cache = {
 };
 
 /**
+ * Type guard: narrows {@link CacheConfig} to its adapter-bearing arm.
+ * Distinguishes the two variants of the union at runtime by checking
+ * whether `get` is a real function &mdash; the `CacheKeyOnly` arm
+ * declares the adapter members as `never`, so the only way `config.get`
+ * can be a function at runtime is if the caller passed a real
+ * {@link Adapter}.
+ *
+ * @internal
+ */
+function isCacheAdapter<E extends object>(
+  options: CacheConfig<E> | undefined,
+): options is CacheAdapter<E> {
+  return (
+    !G.isUndefined(options) &&
+    "get" in options &&
+    typeof options.get === "function"
+  );
+}
+
+/**
  * In-memory {@link Adapter} backed by a `Map`. Created on demand inside
  * {@link Cache} when no adapter is supplied; tests and ephemeral use
  * cases get an isolated slot without touching storage.
@@ -183,19 +237,23 @@ function memoryAdapter(): Adapter {
     remove: (key) => {
       memory.delete(key);
     },
-    clear: () => {
-      memory.clear();
-    },
     keys: () => memory.keys(),
   };
 }
 
 /**
- * Constructs a {@link Cache} from `config`. The config object carries
- * the synchronous adapter methods (`get`/`set`/`remove`/`clear`/`keys?`)
- * and, optionally, a `key(context)` callback that scopes every cache
- * slot by the live per-`<Boundary>` Env. Omit `config` entirely for an
- * in-memory cache scoped to this instance.
+ * Constructs a {@link Cache} from `config`. The config object is a
+ * discriminated union of two shapes:
+ *
+ * - Adapter methods (`get`/`set`/`remove`/`keys`) plus an optional
+ *   `key(context)`.
+ * - Just `key(context)` &mdash; no adapter methods at all, which falls
+ *   back to a per-instance in-memory adapter while still scoping every
+ *   slot by the live Env.
+ *
+ * Supplying a partial adapter (e.g. just `get` and `set`, or omitting
+ * `keys`) is a type error: the adapter members are an all-or-nothing
+ * group. Omit `config` entirely for a plain in-memory cache.
  *
  * When `key` is supplied, it runs each time the Resource layer
  * assembles a cache key, receiving the same `{ env }` shape an
@@ -206,24 +264,38 @@ function memoryAdapter(): Adapter {
  *   to the loose {@link Env} record so callers that don't scope by
  *   env can keep using `Cache({ ...adapter })` without supplying a
  *   generic.
- * @param config Optional adapter-plus-options literal. Omit for an
- *   in-memory cache; supply adapter methods alone for a persisted
- *   cache; add `key` to also scope writes by the live Env.
+ * @param config Optional config literal. Omit for an in-memory cache;
+ *   supply adapter methods for a persisted cache; supply `key` to
+ *   scope writes by the live Env (with or without an adapter).
  */
-export function Cache<E extends object = Env>(config?: CacheConfig<E>): Cache {
-  const backing: Adapter = G.isUndefined(config) ? memoryAdapter() : config;
-  const scopeFn = config?.key;
+export function Cache<E extends object = Env>(options?: CacheConfig<E>): Cache {
+  const backing: Adapter = isCacheAdapter(options) ? options : memoryAdapter();
+  const scopeFn = options?.key;
+
+  function ownedKeys(): readonly string[] {
+    try {
+      return Array.from(backing.keys()).reduce<readonly string[]>(
+        (acc, cacheKey) =>
+          cacheKey.startsWith(config.storageNamespace)
+            ? [...acc, cacheKey]
+            : acc,
+        [],
+      );
+    } catch {
+      return [];
+    }
+  }
 
   return {
     /**
-     * Reads `key` from the backing store, parses the {@link Encoded}
-     * envelope, and re-hydrates the `Temporal.Instant`. Returns
-     * `empty()` when the slot is missing or the stored JSON is
-     * malformed.
+     * Reads `key` from the backing store (with the `mh:` namespace
+     * applied), parses the {@link Encoded} envelope, and re-hydrates
+     * the `Temporal.Instant`. Returns `empty()` when the slot is
+     * missing or the stored JSON is malformed.
      */
     get<T>(key: string): Stored<T> {
       try {
-        const raw = backing.get(key);
+        const raw = backing.get(config.storageNamespace + key);
         if (G.isNull(raw)) return empty<T>();
         const parsed = <Encoded<T>>JSON.parse(raw);
         return present(parsed.data, Temporal.Instant.from(parsed.at));
@@ -232,15 +304,15 @@ export function Cache<E extends object = Env>(config?: CacheConfig<E>): Cache {
       }
     },
     /**
-     * Serialises `value` to JSON and writes it under `key`. Skips
-     * envelopes whose payload is unset or whose timestamp is missing,
-     * and swallows quota / encoding / private-mode errors.
+     * Serialises `value` to JSON and writes it under the namespaced
+     * key. Skips envelopes whose payload is unset or whose timestamp
+     * is missing, and swallows quota / encoding / private-mode errors.
      */
     set<T>(key: string, value: Stored<T>): void {
       if (value.data === unset || G.isNull(value.at)) return;
       try {
         backing.set(
-          key,
+          config.storageNamespace + key,
           JSON.stringify(<Encoded<T>>{
             data: value.data,
             at: value.at.toString(),
@@ -256,32 +328,37 @@ export function Cache<E extends object = Env>(config?: CacheConfig<E>): Cache {
      */
     remove(key: string): void {
       try {
-        backing.remove(key);
+        backing.remove(config.storageNamespace + key);
       } catch {
         return;
       }
     },
     /**
-     * Clears every slot in the backing store. Backing-store errors are
-     * swallowed &mdash; clear is best-effort.
+     * Removes every entry in the `mh:` namespace from the backing
+     * store. Non-March-Hare keys (third-party `localStorage` writes,
+     * dismissed banners, route hints, etc.) are left in place. Errors
+     * from individual `remove` calls are swallowed &mdash; clear is
+     * best-effort.
      */
     clear(): void {
-      try {
-        backing.clear();
-      } catch {
-        return;
+      for (const cacheKey of ownedKeys()) {
+        try {
+          backing.remove(cacheKey);
+        } catch {
+          continue;
+        }
       }
     },
     /**
-     * Returns every key the backing store currently holds, or an empty
-     * iterable when the adapter does not expose `keys` (legacy adapters)
-     * or throws while enumerating.
+     * Yields every `mh:`-namespaced key the backing store currently
+     * holds, with the namespace stripped so callers see the same key
+     * shape they passed to `set`/`get`/`remove`. Throws from the
+     * adapter (decryption, IPC, sandboxed iframes) are swallowed and
+     * surface as an empty iterable so eviction stays best-effort.
      */
-    keys(): Iterable<string> {
-      try {
-        return backing.keys?.() ?? [];
-      } catch {
-        return [];
+    *keys(): IterableIterator<string> {
+      for (const cacheKey of ownedKeys()) {
+        yield cacheKey.slice(config.storageNamespace.length);
       }
     },
     scope(env: Env | undefined): string {
