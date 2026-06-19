@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.14.0](https://github.com/Wildhoney/MarchHare/compare/v0.13.10...v0.14.0) (2026-06-19)
+
+
+### ⚠ BREAKING CHANGES
+
+* **core:** coalesce resource fetches by default; opt out with .isolated()
+
+### Features
+
+* **core:** add Lifecycle.Paint factory firing after first browser paint ([d60a0eb](https://github.com/Wildhoney/MarchHare/commit/d60a0eb6fc7ee70141af1a433a1464ce60b3b4fb))
+* **core:** coalesce resource fetches by default; opt out with .isolated() ([739d7b6](https://github.com/Wildhoney/MarchHare/commit/739d7b6c304afad92d73c9b05915fbc95d0bdffd))
+
 ## [0.13.11](https://github.com/Wildhoney/MarchHare/compare/v0.13.10...v0.13.11) (2026-06-18)
 
 ### Features
