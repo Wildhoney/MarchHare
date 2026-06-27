@@ -35,24 +35,46 @@ function UserCard({ userId }: { userId: number }) {
 
 ## Channel Matching
 
-The controller is an object where each key-value pair must match. By convention, use **uppercase keys** (e.g., `{UserId: 4}` not `{userId: 4}`) to distinguish controller keys from payload properties.
+The controller is an object where each key-value pair the **subscriber** supplies must be present and equal on the dispatch channel. Keys the subscriber omits are not checked, so the subscriber's controller acts as a filter ("everything I want matched against"). The dispatcher is free to be more specific than any single subscriber needs &mdash; extra keys on the dispatch channel are ignored. By convention, use **uppercase keys** (e.g., `{UserId: 4}` not `{userId: 4}`) to distinguish controller keys from payload properties.
 
-### Dispatch with exact controller
-
-```ts
-// Only handlers with matching UserId fire
-actions.dispatch(Actions.UserUpdated({ UserId: 5 }), user);
-```
-
-### Dispatch with subset controller (fan out)
+### Subscribe with an exact controller
 
 ```ts
-// Fires ALL handlers where Role === "admin"
-// Matches: {Role: "admin"}, {Role: "admin", UserId: 5}, {Role: "admin", UserId: 10}
-actions.dispatch(Actions.UserUpdated({ Role: "admin" }), user);
+actions.useAction(Actions.UserUpdated({ UserId: 5 }), handler);
+
+actions.dispatch(Actions.UserUpdated({ UserId: 5 }), user); // Matches
+actions.dispatch(Actions.UserUpdated({ UserId: 6 }), user); // No match
 ```
 
-### Broadcast dispatch (all handlers)
+### Subscribe with a partial controller (fan in)
+
+```ts
+actions.useAction(Actions.UserUpdated({ Role: "admin" }), handler);
+
+actions.dispatch(Actions.UserUpdated({ Role: "admin", UserId: 5 }), user); // Matches
+actions.dispatch(Actions.UserUpdated({ Role: "admin", UserId: 10 }), user); // Matches
+actions.dispatch(Actions.UserUpdated({ Role: "viewer", UserId: 5 }), user); // No match
+```
+
+### Subscribe with an empty controller (catch all)
+
+```ts
+actions.useAction(Actions.UserUpdated({}), handler);
+
+actions.dispatch(Actions.UserUpdated({ UserId: 1 }), user); // Matches
+actions.dispatch(Actions.UserUpdated({ UserId: 2 }), user); // Matches
+```
+
+### Subscribe to a plain action (no filter)
+
+```ts
+actions.useAction(Actions.UserUpdated, handler);
+
+actions.dispatch(Actions.UserUpdated({ UserId: 5 }), user); // Matches every dispatch
+actions.dispatch(Actions.UserUpdated, user); // Matches every dispatch
+```
+
+### Dispatch without a controller (broadcast to every handler)
 
 ```ts
 // ALL handlers fire: plain handlers AND all channeled handlers
@@ -212,7 +234,13 @@ When you dispatch to a plain action, both handlers fire. When you dispatch with 
 
 ## Summary
 
-| Dispatch Pattern                            | Handlers That Fire                       |
-| ------------------------------------------- | ---------------------------------------- |
-| `dispatch(Action, payload)`                 | ALL handlers (plain + all channeled)     |
-| `dispatch(Action({ Key: value }), payload)` | Channeled handlers where `Key === value` |
+The subscriber's controller is the filter. Every key the subscriber supplies must be present and equal on the dispatch channel; extra keys on the dispatch channel are ignored. Uncalled actions on either side bypass channel filtering entirely.
+
+| Dispatch                           | Subscriber                         | Fires?                                                       |
+| ---------------------------------- | ---------------------------------- | ------------------------------------------------------------ |
+| `Action`                           | any                                | Yes (uncalled dispatch is unfiltered)                        |
+| `Action({...})`                    | `Action`                           | Yes (uncalled subscriber is unfiltered)                      |
+| `Action({ Id: 5 })`                | `Action({ Id: 5 })`                | Yes (exact match)                                            |
+| `Action({ Id: 5, Role: "admin" })` | `Action({ Id: 5 })`                | Yes (subscriber's filter is a subset)                        |
+| `Action({ Id: 5 })`                | `Action({ Id: 5, Role: "admin" })` | No (subscriber asked for `Role`, dispatch did not supply it) |
+| `Action({})`                       | `Action({ Id: 5 })`                | No (subscriber asked for `Id`, dispatch did not supply it)   |

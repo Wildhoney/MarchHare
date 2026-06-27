@@ -394,10 +394,11 @@ Components that mount after a broadcast has already been dispatched automaticall
 
 ## Resource handling
 
-For remote data, declare an `app.Resource` at module scope. The resulting handle has two call forms:
+For remote data, declare an `app.Resource` at module scope. The resulting handle has three call forms:
 
 - `resource.user.get(params)` &mdash; synchronous cache read, returns `User | null`. Use it in model literals, JSX, or anywhere you need the cached value without triggering a fetch.
 - `resource.user(params)` &mdash; produces an `Invocation` you pass to `context.actions.resource(...)` for the fetch path (with auto-threaded abort controller and a live handle to the per-`<Boundary>` Env).
+- `resource.user.action(partial?)` &mdash; broadcast channeled action fired automatically after every successful fetch. Always invoke (`resource.user.action()`) before passing to `actions.useAction` or `actions.stream`; supply a subset of params to narrow the filter (more keys = stricter), or pass nothing to receive every fetch. Errors do not broadcast.
 
 Every successful fetch caches the response in a module-level slot keyed by the fetcher and the stringified params, so different param-sets are independent. Keep all resources in `resources.ts` and pull the whole module in as a namespace (`import * as resource from "./resources"`):
 
@@ -460,6 +461,44 @@ export default function Profile(): React.ReactElement {
   // ...
 }
 ```
+
+Every successful fetch also publishes an auto-broadcast via `resource.x.action(partial?)`. Any component &mdash; even one that never called the fetcher &mdash; can react via `actions.useAction` or render the latest payload with `actions.stream`. Call `.action()` with no arguments to match every fetch on the resource, or supply a subset of params to narrow the filter:
+
+```tsx
+// greeting/actions.ts
+import { app } from "../app";
+import * as resource from "../resources";
+
+type Model = { greeting: string | null };
+
+function useActions() {
+  const context = app.useContext<Model>();
+  const actions = context.useActions({ greeting: null });
+
+  actions.useAction(resource.user.action(), (context, user) => {
+    context.actions.produce(
+      ({ model }) => void (model.greeting = `Welcome, ${user.name}`),
+    );
+  });
+
+  return actions;
+}
+
+export default function Greeting() {
+  const [model] = useActions();
+  return <span>{model.greeting ?? "…"}</span>;
+}
+```
+
+Or render the most recent payload declaratively without a local model field:
+
+```tsx
+{
+  actions.stream(resource.user.action(), (user) => <span>{user.name}</span>);
+}
+```
+
+The broadcast cache is sharded by `(action, channel)`, so a late-mounting subscriber replays every cached entry whose channel satisfies its filter &mdash; a `stream` panel that mounts after the page's data has already loaded still paints with the cached value rather than waiting for the next fetch.
 
 `context.actions.resource(invocation)` returns a chainable thenable:
 
@@ -669,6 +708,8 @@ actions.dispatch(Actions.UserUpdated, user);
 ```
 
 Channel values support non-nullable primitives: `string`, `number`, `boolean`, or `symbol`. By convention, use uppercase keys like `{UserId: 4}` to distinguish controller keys from payload properties.
+
+Matching follows a single rule: every key the **subscriber** supplies must be present and equal on the dispatch channel. The subscriber's controller is the filter, more keys narrow it. Extra keys on the dispatch channel are ignored, so the dispatcher is free to be more specific than any single subscriber needs. Uncalled actions on either side bypass channel filtering entirely. See the [channeled-actions recipe](./recipes/channeled-actions.md#channel-matching) for the full matrix.
 
 ## Multicast actions
 

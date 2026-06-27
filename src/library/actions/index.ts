@@ -10,7 +10,6 @@ import {
   findLifecycleAction,
   isGenerator,
   emitAsync,
-  replay,
 } from "./utils.ts";
 import { useRerender } from "../utils/utils.ts";
 import type { Data, Handler, Scope } from "./types.ts";
@@ -239,17 +238,17 @@ export function useActions<
                 action: unknown,
                 payload?: unknown,
               ): Promise<void> => {
-                if (controller.signal.aborted) return Promise.resolve();
                 const a = <AnyAction>action;
                 const base = getActionSymbol(a);
+                const channel = isChanneledAction(a) ? a.channel : undefined;
                 if (isMulticastAction(a)) {
                   const scoped = getScope(scope);
                   if (scoped)
-                    return emitAsync(scoped.emitter, base, payload, undefined);
+                    return emitAsync(scoped.emitter, base, payload, channel);
                   return Promise.resolve();
                 }
                 if (isBroadcastAction(a)) {
-                  return emitAsync(broadcast, base, payload, undefined);
+                  return emitAsync(broadcast, base, payload, channel);
                 }
                 return Promise.resolve();
               };
@@ -400,18 +399,12 @@ export function useActions<
     ) {
       return function handler(
         payload: HandlerPayload,
-        dispatchChannel?: Filter | typeof replay,
+        dispatchChannel?: Filter,
       ) {
         const registeredChannel = getChannel();
 
-        // Skip channeled handlers during replay — they require specific
-        // channel context and cannot process a replay without it.
-        if (dispatchChannel === replay && G.isNotNullable(registeredChannel))
-          return;
-
         if (
           G.isNotNullable(dispatchChannel) &&
-          dispatchChannel !== replay &&
           G.isNotNullable(registeredChannel)
         ) {
           if (!matchesChannel(dispatchChannel, registeredChannel)) return;
@@ -448,15 +441,13 @@ export function useActions<
         });
 
         function retry(): Promise<void> {
-          const channel: Filter | undefined =
-            dispatchChannel === replay ? undefined : dispatchChannel;
           if (isMulticastAction(action)) {
             const scoped = getScope(scope);
             if (!scoped) return Promise.resolve();
-            return emitAsync(scoped.emitter, action, payload, channel);
+            return emitAsync(scoped.emitter, action, payload, dispatchChannel);
           }
           const emitter = isBroadcastAction(action) ? broadcast : unicast;
-          return emitAsync(emitter, action, payload, channel);
+          return emitAsync(emitter, action, payload, dispatchChannel);
         }
 
         function onError(caught: unknown) {

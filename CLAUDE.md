@@ -96,19 +96,22 @@ static Update = Action<number>("Update", Distribution.Multicast);
 
 ### Channeled Actions
 
-Target specific handlers using channel objects:
+Target specific handlers using channel objects. The subscriber's channel is the filter: every key the subscriber supplies must be present and equal on the dispatch channel; extra keys on the dispatch channel are ignored. Uncalled actions on either side bypass channel filtering entirely.
 
 ```ts
 // Second generic defines the channel type
-static UserUpdated = Action<User, { UserId: number }>("UserUpdated");
+static UserUpdated = Action<User, { UserId: number; Role: string }>("UserUpdated");
 
-// Subscribe to specific user only
-actions.useAction(Actions.UserUpdated({ UserId: props.userId }), handler);
+// Subscribe to a specific (UserId, Role) pair
+actions.useAction(Actions.UserUpdated({ UserId: 5, Role: "admin" }), handler);
 
-// Dispatch to specific channel
-actions.dispatch(Actions.UserUpdated({ UserId: 5 }), user);
+// Subscribe to every admin update (partial filter)
+actions.useAction(Actions.UserUpdated({ Role: "admin" }), handler);
 
-// Dispatch to ALL handlers (plain + all channeled)
+// Dispatch with a fully-specified channel
+actions.dispatch(Actions.UserUpdated({ UserId: 5, Role: "admin" }), user);
+
+// Dispatch uncalled — every handler fires (plain + all channeled)
 actions.dispatch(Actions.UserUpdated, user);
 ```
 
@@ -657,7 +660,7 @@ docs: update the README file
   - `stateful-props.md` - Box<T> type for stateful props
   - `storage.md` - Cache class for cross-reload persistence; adapters for localStorage / MMKV / chrome.storage
   - `tap.md` - `<Boundary tap={...}>` observer fired on every handler dispatch and its terminal (`success` / `error`); analytics, audit log, Sentry breadcrumbs
-  - `use-resource.md` - Resource: declare at module scope, sync read via `.get(params)`, fetch via `context.actions.resource(...).exceeds(...)`
+  - `use-resource.md` - Resource: declare at module scope, sync read via `.get(params)`, fetch via `context.actions.resource(...).exceeds(...)`, auto-broadcast via `resource.x.action(partial?)` after every successful fetch
   - `utility-functions.md` - sleep, pk utilities
   - `utility-types.md` - Handler, Handlers types
   - `void-model.md` - Actions without local state

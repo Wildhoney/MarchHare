@@ -3,6 +3,7 @@ import { Resource, nuke } from "./index.ts";
 import { Cache, type Adapter } from "../cache/index.ts";
 import type { Env } from "../boundary/components/env/types.ts";
 import { unset } from "../utils/index.ts";
+import { getActionSymbol, isBroadcastAction } from "../action/index.ts";
 import type { Dispatch } from "./types.ts";
 
 function memoryAdapter(): Adapter & { entries: Map<string, string> } {
@@ -592,5 +593,124 @@ describe("evict via Invocation.evict (chain entry)", () => {
 
     expect(adapter.entries.size).toBe(0);
     expect(item.get({ id: 5 })).toBeNull();
+  });
+});
+
+describe("Resource.action auto-broadcast", () => {
+  it("exposes a broadcast action on the handle", () => {
+    const user = Resource(() => Promise.resolve({ name: "Adam" }));
+
+    expect(user.action).toBeDefined();
+    expect(typeof user.action).toBe("function");
+    const symbol = getActionSymbol(user.action());
+    expect(typeof symbol).toBe("symbol");
+    expect(isBroadcastAction(user.action())).toBe(true);
+  });
+
+  it("mints a distinct action symbol per Resource declaration", () => {
+    const userA = Resource(() => Promise.resolve({ id: 1 }));
+    const userB = Resource(() => Promise.resolve({ id: 2 }));
+
+    expect(getActionSymbol(userA.action())).not.toBe(
+      getActionSymbol(userB.action()),
+    );
+  });
+
+  it("dispatches the action with the resolved payload after a successful fetch", async () => {
+    const dispatch = vi.fn<Dispatch>(() => Promise.resolve());
+    const user = Resource(() => Promise.resolve({ name: "Adam" }));
+
+    const call = user();
+    await call.run(noEnv, noController(), call.params, dispatch);
+
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    const [dispatched, payload] = <[unknown, unknown]>dispatch.mock.calls[0];
+    expect(getActionSymbol(<never>dispatched)).toBe(
+      getActionSymbol(user.action()),
+    );
+    expect(payload).toEqual({ name: "Adam" });
+  });
+
+  it("dispatches with a channel mirroring the call params", async () => {
+    type Params = { id: number; orgId: number };
+    const dispatch = vi.fn<Dispatch>(() => Promise.resolve());
+    const user = Resource<Env, { id: number }, Params>(({ params }) =>
+      Promise.resolve({ id: params.id }),
+    );
+
+    const call = user({ id: 5, orgId: 42 });
+    await call.run(noEnv, noController(), call.params, dispatch);
+
+    const [action] = <[unknown]>dispatch.mock.calls[0];
+    expect((<{ channel: Params }>action).channel).toEqual({
+      id: 5,
+      orgId: 42,
+    });
+  });
+
+  it("dispatches an empty channel when the Resource has no params", async () => {
+    const dispatch = vi.fn<Dispatch>(() => Promise.resolve());
+    const user = Resource(() => Promise.resolve({ name: "Adam" }));
+
+    const call = user();
+    await call.run(noEnv, noController(), call.params, dispatch);
+
+    const [action] = <[unknown]>dispatch.mock.calls[0];
+    expect((<{ channel: object }>action).channel).toEqual({});
+  });
+
+  it("does not dispatch when the fetch rejects", async () => {
+    const dispatch = vi.fn<Dispatch>(() => Promise.resolve());
+    const user = Resource(() => Promise.reject(new Error("nope")));
+
+    const call = user();
+    await expect(
+      call.run(noEnv, noController(), call.params, dispatch),
+    ).rejects.toThrow("nope");
+
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("dispatches one action per fetch when called concurrently with different params", async () => {
+    type Params = { id: number };
+    const dispatch = vi.fn<Dispatch>(() => Promise.resolve());
+    const item = Resource<Env, { id: number }, Params>(({ params }) =>
+      Promise.resolve({ id: params.id }),
+    );
+
+    const five = item({ id: 5 });
+    const six = item({ id: 6 });
+    await Promise.all([
+      five.run(noEnv, noController(), five.params, dispatch),
+      six.run(noEnv, noController(), six.params, dispatch),
+    ]);
+
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const channels = dispatch.mock.calls.map(
+      (call) => (<{ channel: Params }>call[0]).channel,
+    );
+    expect(channels).toContainEqual({ id: 5 });
+    expect(channels).toContainEqual({ id: 6 });
+  });
+
+  it("dispatches after the cache write so subscribers see the warm cache", async () => {
+    const adapter = memoryAdapter();
+    const cache = Cache({ ...adapter });
+    type Params = { id: number };
+
+    let cachedAtDispatch: { name: string } | null = null;
+    const item = Resource<Env, { name: string }, Params>(
+      ({ params }) => Promise.resolve({ name: `User ${params.id}` }),
+      cache,
+    );
+    const dispatch = vi.fn<Dispatch>(() => {
+      cachedAtDispatch = item.get({ id: 5 });
+      return Promise.resolve();
+    });
+
+    const call = item({ id: 5 });
+    await call.run(noEnv, noController(), call.params, dispatch);
+
+    expect(cachedAtDispatch).toEqual({ name: "User 5" });
   });
 });

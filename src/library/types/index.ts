@@ -732,20 +732,22 @@ export type Payload<A> = A extends { readonly [Brand.Payload]: infer P }
  * By convention, use uppercase keys (e.g., `{UserId: 4}` not `{userId: 4}`)
  * to distinguish filter keys from payload properties.
  *
- * When dispatching, handlers are invoked if ALL properties in the dispatch filter
- * match the corresponding properties in the registered filter.
+ * **Matching direction:** the subscriber's filter is the constraint;
+ * every key the subscriber supplies must be present and equal on the
+ * dispatch channel. Extra keys on the dispatch channel are ignored, so a
+ * dispatcher is free to be more specific than any single subscriber
+ * needs. A subscriber that supplies no keys (uncalled action or empty
+ * filter) matches every dispatch.
  *
  * @example
  * ```ts
- * // Register a handler for a specific user
- * actions.useAction([Actions.User, { UserId: 1 }], handler);
+ * actions.useAction(Actions.User({ UserId: 1 }), handler);
  *
- * // Dispatch matches if all dispatch properties match registered properties
- * dispatch([Actions.User, { UserId: 1 }], payload);              // Matches
- * dispatch([Actions.User, { UserId: 2 }], payload);              // No match
- * dispatch([Actions.User, { UserId: 1, Role: "admin" }], payload); // Matches
- * dispatch([Actions.User, {}], payload);                         // Matches all
- * dispatch(Actions.User, payload);                               // Matches ALL handlers
+ * actions.dispatch(Actions.User({ UserId: 1 }), payload);                       // Matches (exact)
+ * actions.dispatch(Actions.User({ UserId: 2 }), payload);                       // No match (UserId mismatch)
+ * actions.dispatch(Actions.User({ UserId: 1, Role: "admin" }), payload);        // Matches (extra dispatch keys ignored)
+ * actions.dispatch(Actions.User({}), payload);                                  // No match (subscriber asked for UserId)
+ * actions.dispatch(Actions.User, payload);                                      // Matches ALL handlers (uncalled bypasses channel filtering)
  * ```
  */
 export type Filter = Record<

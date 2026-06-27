@@ -195,23 +195,38 @@ See [session-tokens](./session-tokens.md) for the full auth pattern and [env](./
 
 ## Fanning out on success or failure
 
-There are two places to fire a broadcast or multicast for a resource:
-
-- **From the fetcher**, via `context.dispatch`. Best for things every interested component should learn as soon as the data arrives, independent of who awaited the run &mdash; freshness pings, analytics, cache invalidation. Unicast is rejected at compile time because a fetcher has no component to deliver to.
-- **From the handler**, via `context.actions.dispatch` after the `await`. Best for events that depend on the awaiter's local state &mdash; "this specific component just finished loading", model-write follow-ups, error narrowing.
+Every Resource declaration exposes an `event` broadcast that fires automatically after each successful fetch, with the resolved payload as the action payload and the call-site params as the channel. Subscribers narrow by supplying any subset of params via `event(partial)`; matching follows the [unified channel rule](./channeled-actions.md#channel-matching) (subscriber's keys must all be satisfied by the dispatch).
 
 ```ts
-// resources.ts — fan-out happens inside the fetcher.
-export const user = app.Resource<User, { id: number }>(async (context) => {
-  const data = await ky
-    .get(`users/${context.params.id}`, {
-      signal: context.controller.signal,
-    })
-    .json<User>();
-  await context.dispatch(Actions.Broadcast.UserUpdated, data);
-  return data;
-});
+// resources.ts — no manual fan-out needed; the auto-broadcast handles it.
+export const user = app.Resource<User, { id: number }>((context) =>
+  ky
+    .get(`users/${context.params.id}`, { signal: context.controller.signal })
+    .json<User>(),
+);
 ```
+
+```tsx
+// Subscribe by useAction for handler-side reactions...
+actions.useAction(user.action({ id: 5 }), (context, user) => {
+  context.actions.produce(({ model }) => void (model.user = user));
+});
+
+// ...or render the most recent value declaratively with stream.
+{
+  actions.stream(user.action({ id: 5 }), (value) => <span>{value.name}</span>);
+}
+
+// No arguments — receives every fetch on this Resource.
+actions.useAction(user.action(), (context, user) => analytics.track(user));
+```
+
+Failures do not broadcast &mdash; the cache is only written on success, and the broadcast follows the same gate. The broadcast cache is sharded by `(action, channel)`, so late-mounting subscribers replay every cached entry whose channel satisfies their filter rather than just the most recent dispatch &mdash; useful for `actions.stream` panels that mount after the bulk of a page's data has already loaded.
+
+Two other places are still available for fan-out when the auto-broadcast isn't enough:
+
+- **From the fetcher**, via `context.dispatch`. Useful when the broadcast needs a payload that isn't the resource value (rate-limit headroom, server-driven hints, etc.). Unicast is rejected at compile time because a fetcher has no component to deliver to.
+- **From the handler**, via `context.actions.dispatch` after the `await`. Best for events that depend on the awaiter's local state &mdash; "this specific component just finished loading", model-write follow-ups, error narrowing.
 
 ```ts
 // actions.ts — handler-side dispatch for awaiter-local concerns.
@@ -231,7 +246,7 @@ actions.useAction(Actions.Mount, async (context) => {
 });
 ```
 
-When several components need to react to a resource update, the pattern is: the fetcher (or a single awaiting handler) dispatches a broadcast; every other component subscribes to that broadcast via `useAction`. See [broadcast-actions](./broadcast-actions.md) for the receiving side.
+When several components need to react to a resource update, the auto-broadcast is the first thing to reach for; manual broadcasts via `context.dispatch` / `context.actions.dispatch` layer on top for the cases above.
 
 > **Note:** TypeScript cannot type promise rejections, so `await context.actions.resource(...)` rejects with `unknown`. To narrow inline, use `error instanceof YourErrorClass` checks within a `try/catch`.
 

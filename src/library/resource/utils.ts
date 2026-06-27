@@ -1,6 +1,8 @@
 import { Cache } from "../cache/index.ts";
 import { present, unset } from "../utils/utils.ts";
 import type { Env } from "../boundary/components/env/types.ts";
+import { Action } from "../action/index.ts";
+import { Distribution, type Filter } from "../types/index.ts";
 import type {
   Args,
   Dispatch,
@@ -112,6 +114,11 @@ export function build<T, P extends object>(
     return `${prefix}${suffix}${key(params)}`;
   };
 
+  const action = Action<T, Filter>(
+    `resource:${ƒ.name || "anonymous"}`,
+    Distribution.Broadcast,
+  );
+
   const read = (params: P, env: Env | undefined) => {
     const stored = backing.get<T>(composeKey(env, params));
     if (stored.data === unset || G.isNull(stored.at)) {
@@ -131,8 +138,13 @@ export function build<T, P extends object>(
         composeKey(env, params),
         present(resolved, Temporal.Now.instant()),
       );
+      void dispatch(action(<Filter>(<unknown>params)), resolved);
       return resolved;
     });
+
+  function actionFn(channel?: Partial<P> & Filter) {
+    return action(<Filter>(channel ?? {}));
+  }
 
   const evict = (where: object): void => {
     const env = getEnv();
@@ -171,6 +183,7 @@ export function build<T, P extends object>(
   }
 
   Object.defineProperty(call, "get", { value: get, enumerable: false });
+  Object.defineProperty(call, "action", { value: actionFn, enumerable: false });
 
   return <ResourceHandle<T, P>>(<unknown>call);
 }

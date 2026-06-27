@@ -311,34 +311,52 @@ describe("isChanneledAction()", () => {
 });
 
 describe("matchesChannel()", () => {
-  it("should return true when dispatch channel matches registered channel exactly", () => {
+  it("returns true when the dispatch channel matches the subscriber's filter exactly", () => {
     expect(matchesChannel({ UserId: 1 }, { UserId: 1 })).toBe(true);
     expect(matchesChannel({ Key: "value" }, { Key: "value" })).toBe(true);
   });
 
-  it("should return true when dispatch channel is a subset of registered channel", () => {
-    expect(matchesChannel({ UserId: 1 }, { UserId: 1, Role: "admin" })).toBe(
+  it("returns true when the subscriber's filter is a subset of the dispatch channel", () => {
+    expect(matchesChannel({ UserId: 1, Role: "admin" }, { UserId: 1 })).toBe(
       true,
     );
-    expect(matchesChannel({}, { UserId: 1 })).toBe(true);
+    expect(
+      matchesChannel(
+        { UserId: 1, Role: "admin", OrgId: 5 },
+        { UserId: 1, Role: "admin" },
+      ),
+    ).toBe(true);
   });
 
-  it("should return false when dispatch channel has properties not matching registered channel", () => {
-    expect(matchesChannel({ UserId: 1 }, { UserId: 2 })).toBe(false);
-    expect(matchesChannel({ UserId: 1, Role: "admin" }, { UserId: 1 })).toBe(
+  it("returns false when the subscriber asked for a key the dispatcher did not supply", () => {
+    expect(matchesChannel({ UserId: 1 }, { UserId: 1, Role: "admin" })).toBe(
       false,
     );
+    expect(matchesChannel({}, { UserId: 1 })).toBe(false);
   });
 
-  it("should return true for empty dispatch channel (matches all)", () => {
+  it("returns false on value mismatch for any key the subscriber asked for", () => {
+    expect(matchesChannel({ UserId: 1 }, { UserId: 2 })).toBe(false);
+    expect(
+      matchesChannel(
+        { UserId: 1, Role: "admin" },
+        { UserId: 1, Role: "viewer" },
+      ),
+    ).toBe(false);
+  });
+
+  it("returns true when the subscriber's filter is empty (no keys to satisfy)", () => {
     expect(matchesChannel({}, {})).toBe(true);
-    expect(matchesChannel({}, { Any: "value" })).toBe(true);
+    expect(matchesChannel({ UserId: 1, Role: "admin" }, {})).toBe(true);
   });
 
-  it("should handle different primitive types correctly", () => {
+  it("handles different primitive types correctly", () => {
     expect(matchesChannel({ Flag: true }, { Flag: true })).toBe(true);
     expect(matchesChannel({ Flag: true }, { Flag: false })).toBe(false);
     const sym = Symbol("test");
     expect(matchesChannel({ Id: sym }, { Id: sym })).toBe(true);
+    expect(matchesChannel({ Id: sym }, { Id: Symbol("test") })).toBe(false);
+    expect(matchesChannel({ Count: 0 }, { Count: 0 })).toBe(true);
+    expect(matchesChannel({ Count: 0 }, { Count: -0 })).toBe(true);
   });
 });

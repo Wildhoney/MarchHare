@@ -3,20 +3,38 @@ import type { Cache } from "../cache/index.ts";
 import type {
   BroadcastPayload,
   MulticastPayload,
+  ChanneledAction,
   Filter,
 } from "../types/index.ts";
 
 /**
+ * Helper that constrains `Partial<P>` to a {@link Filter}-compatible
+ * shape. Resource params hold primitive leaves by convention, so the
+ * auto-broadcast {@link ResourceHandle.action} can use them directly as
+ * a channel filter.
+ */
+export type ActionChannel<P extends object> = Partial<P> & Filter;
+
+/**
  * Dispatch surface exposed on a Resource fetcher's `context`. Restricted
  * to broadcast and multicast actions &mdash; unicast targets the calling
- * component, which a Resource fetcher does not have.
+ * component, which a Resource fetcher does not have. Channeled
+ * dispatches (e.g. `dispatch(action({ UserId: 5 }), payload)`) are
+ * accepted on the same overloads &mdash; the routing layer reads the
+ * action's underlying distribution off its symbol.
  */
 export type Dispatch = {
   <C extends Filter = never>(
-    action: BroadcastPayload<never, C> | MulticastPayload<never, C>,
+    action:
+      | BroadcastPayload<never, C>
+      | MulticastPayload<never, C>
+      | ChanneledAction<never, C>,
   ): Promise<void>;
   <P, C extends Filter = never>(
-    action: BroadcastPayload<P, C> | MulticastPayload<P, C>,
+    action:
+      | BroadcastPayload<P, C>
+      | MulticastPayload<P, C>
+      | ChanneledAction<P, C>,
     payload: P,
   ): Promise<void>;
 };
@@ -133,6 +151,33 @@ export type ResourceHandle<T, P extends object = Record<never, never>> = ([
   readonly get: [keyof P] extends [never]
     ? (params?: P) => T | null
     : (params: P) => T | null;
+  /**
+   * Broadcast channeled action fired automatically after every successful
+   * fetch of this Resource. Always invoke before subscribing: pass no
+   * arguments to match every fetch, or a partial-params object to narrow.
+   * Matching follows the subscriber-as-filter rule &mdash; every key on the
+   * subscriber's channel must equal the same key on the dispatch channel,
+   * and adding keys progressively narrows the filter.
+   *
+   * Late-mounting subscribers replay every cached entry whose channel
+   * satisfies their filter &mdash; the broadcast cache is sharded by
+   * `(action, channel)`, so a partial subscriber that mounts after
+   * several distinct fetches catches up with all of them rather than
+   * just the most recent.
+   *
+   * Failures do not broadcast &mdash; the cache is only written on
+   * success (see resource/utils.ts), and the broadcast follows the same
+   * gate.
+   *
+   * ```ts
+   * actions.useAction(user.action(), (context, value) => { ... });
+   * actions.useAction(user.action({ id: 5 }), (context, value) => { ... });
+   * actions.stream(user.action({ id: 5 }), (value) => <span>{value.name}</span>);
+   * ```
+   */
+  readonly action: (
+    channel?: ActionChannel<P>,
+  ) => ChanneledAction<T, ActionChannel<P>>;
 };
 
 /**

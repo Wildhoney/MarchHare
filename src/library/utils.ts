@@ -17,8 +17,6 @@ export const describe = {
   cache: (name = "") => `march-hare.cache/${name}`,
   /** Lifecycle action description. `describe.lifecycle("Mount")` &rarr; `"march-hare.action.lifecycle/Mount"` */
   lifecycle: (name = "") => `march-hare.action.lifecycle/${name}`,
-  /** Mount replay sentinel description. Used to create the {@link replay} symbol. */
-  replay: (name = "") => `march-hare/replay${name}`,
 };
 
 /**

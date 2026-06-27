@@ -13,7 +13,6 @@ import {
 } from "../types/index.ts";
 import EventEmitter from "eventemitter3";
 import { BroadcastEmitter } from "../boundary/components/broadcast/index.tsx";
-import { describe } from "../utils.ts";
 
 import type { Dispatchers, LifecycleConfig, Handler, Scope } from "./types.ts";
 import { A, G } from "@mobily/ts-belt";
@@ -59,19 +58,10 @@ export function isGenerator(
 }
 
 /**
- * Sentinel passed as the dispatch channel during mount replay. Channeled
- * handlers check for this to skip replay &mdash; they require specific
- * channel context and cannot meaningfully process a replay without it.
- *
- * @internal
- */
-export const replay: unique symbol = Symbol(describe.replay());
-
-/**
  * Invokes all listeners for an event and returns a promise that resolves
  * when every handler has settled. For {@link BroadcastEmitter} instances the
- * payload is cached before listeners fire so late-mounting components still
- * see the latest value.
+ * payload is cached &mdash; sharded by channel &mdash; before listeners
+ * fire so late-mounting components see every cached entry.
  *
  * @internal
  */
@@ -80,7 +70,9 @@ export function emitAsync(
   event: string | symbol,
   ...args: unknown[]
 ): Promise<void> {
-  if (emitter instanceof BroadcastEmitter) emitter.setCache(event, args[0]);
+  if (emitter instanceof BroadcastEmitter) {
+    emitter.setCache(event, args[0], <Filter | undefined>args[1]);
+  }
 
   const listeners = emitter.listeners(event);
   if (listeners.length === 0) return Promise.resolve();
@@ -128,14 +120,18 @@ export function useLifecycles({
     if (mountAction) unicast.emit(mountAction);
 
     dispatchers.broadcast.forEach((action) => {
-      const cached = broadcast.getCached(action);
-      if (!G.isNullable(cached)) unicast.emit(action, cached, replay);
+      for (const { channel, value } of broadcast.getCachedAll(action)) {
+        if (G.isNullable(value)) continue;
+        unicast.emit(action, value, channel);
+      }
     });
 
     if (scope) {
       dispatchers.multicast.forEach((action) => {
-        const cached = scope.emitter.getCached(action);
-        if (!G.isNullable(cached)) unicast.emit(action, cached, replay);
+        for (const { channel, value } of scope.emitter.getCachedAll(action)) {
+          if (G.isNullable(value)) continue;
+          unicast.emit(action, value, channel);
+        }
       });
     }
 
@@ -334,27 +330,37 @@ export function useRegisterHandler<
 }
 
 /**
- * Checks if a dispatch channel matches a registered handler channel.
- * All properties in the dispatch channel must match the corresponding properties in the registered channel.
+ * Checks whether a dispatch channel satisfies a registered handler's
+ * channel filter. The handler's channel is the filter: every key the
+ * subscriber supplied must be present and equal on the dispatch channel.
+ * Extra keys on the dispatch channel are ignored &mdash; the dispatcher
+ * is free to be more specific than any single subscriber needs.
+ *
+ * Mental model: "the subscriber declares everything it wants matched
+ * against; the dispatcher matches what it can." A subscriber that
+ * registers no channel keys (`{}` or no channel at all) matches every
+ * dispatch on the action.
  *
  * @param dispatchChannel - The channel from the dispatch call (from ChanneledAction)
  * @param registeredChannel - The channel registered with useAction
- * @returns `true` if all dispatch channel properties match the registered channel
+ * @returns `true` if every key on the registered channel is satisfied by the dispatch channel
  *
  * @example
  * ```ts
- * matchesChannel({ UserId: 1 }, { UserId: 1 }); // true
- * matchesChannel({ UserId: 1 }, { UserId: 2 }); // false
- * matchesChannel({ UserId: 1 }, { UserId: 1, Role: "admin" }); // true (subset match)
- * matchesChannel({ UserId: 1, Role: "admin" }, { UserId: 1 }); // false (missing Role)
+ * matchesChannel({ UserId: 1 }, { UserId: 1 });                            // true (exact)
+ * matchesChannel({ UserId: 1, Role: "admin" }, { UserId: 1 });             // true (subscriber narrower)
+ * matchesChannel({ UserId: 1 }, { UserId: 1, Role: "admin" });             // false (subscriber asked for Role, dispatch did not supply it)
+ * matchesChannel({ UserId: 1 }, { UserId: 2 });                            // false (value mismatch)
+ * matchesChannel({ UserId: 1, Role: "admin" }, {});                        // true (subscriber filters nothing)
+ * matchesChannel({}, { UserId: 1 });                                       // false (subscriber asked for UserId, dispatch did not supply it)
  * ```
  */
 export function matchesChannel(
   dispatchChannel: Filter,
   registeredChannel: Filter,
 ): boolean {
-  for (const key of Object.keys(dispatchChannel)) {
-    if (registeredChannel[key] !== dispatchChannel[key]) return false;
+  for (const key of Object.keys(registeredChannel)) {
+    if (dispatchChannel[key] !== registeredChannel[key]) return false;
   }
   return true;
 }

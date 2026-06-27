@@ -22,7 +22,7 @@ export function Env({ initial, children }: Props): React.ReactNode {
   const broadcast = useBroadcast();
 
   if (G.isUndefined(broadcast.getCached(EnvSymbol))) {
-    broadcast.setCache(EnvSymbol, ref.current);
+    broadcast.setCache(EnvSymbol, ref.current, undefined);
   }
 
   return <Context.Provider value={ref}>{children}</Context.Provider>;

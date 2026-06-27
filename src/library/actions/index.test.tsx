@@ -923,21 +923,26 @@ describe("useActions() channeled actions", () => {
     expect(handlerCalls).toEqual(["admin-5:specific"]);
   });
 
-  it("should match handlers when dispatch channel is subset of registered channel", async () => {
+  it("matches handlers whose channel filter is a subset of the dispatch channel", async () => {
     const handlerCalls: string[] = [];
 
     const { result } = renderHook(() => {
       const actions = useActions<UserModel, typeof UserActions>(userModel);
 
-      // Subscribe with channel {Role: "admin"} - should fire for all admin dispatches
       actions.useAction(
         UserActions.UserUpdated({ Role: "admin" }),
         (_context, payload) => {
-          handlerCalls.push(`admin:${payload}`);
+          handlerCalls.push(`role-admin:${payload}`);
         },
       );
 
-      // Subscribe with channel {Role: "admin", UserId: 5}
+      actions.useAction(
+        UserActions.UserUpdated({ UserId: 5 }),
+        (_context, payload) => {
+          handlerCalls.push(`user-5:${payload}`);
+        },
+      );
+
       actions.useAction(
         UserActions.UserUpdated({ Role: "admin", UserId: 5 }),
         (_context, payload) => {
@@ -945,7 +950,6 @@ describe("useActions() channeled actions", () => {
         },
       );
 
-      // Subscribe with channel {Role: "admin", UserId: 10}
       actions.useAction(
         UserActions.UserUpdated({ Role: "admin", UserId: 10 }),
         (_context, payload) => {
@@ -953,7 +957,6 @@ describe("useActions() channeled actions", () => {
         },
       );
 
-      // Subscribe with channel {Role: "user", UserId: 1} - should NOT fire for admin dispatches
       actions.useAction(
         UserActions.UserUpdated({ Role: "user", UserId: 1 }),
         (_context, payload) => {
@@ -964,20 +967,54 @@ describe("useActions() channeled actions", () => {
       return actions;
     });
 
-    // Dispatch with {Role: "admin"} - should match all admin handlers
     await act(async () => {
       result.current[1].dispatch(
-        UserActions.UserUpdated({ Role: "admin" }),
+        UserActions.UserUpdated({ Role: "admin", UserId: 5 }),
         "fanout",
       );
     });
 
-    // All admin handlers should have been called, but not user handler
-    expect(handlerCalls).toContain("admin:fanout");
+    expect(handlerCalls).toContain("role-admin:fanout");
+    expect(handlerCalls).toContain("user-5:fanout");
     expect(handlerCalls).toContain("admin-5:fanout");
-    expect(handlerCalls).toContain("admin-10:fanout");
+    expect(handlerCalls).not.toContain("admin-10:fanout");
     expect(handlerCalls).not.toContain("user-1:fanout");
     expect(handlerCalls.length).toBe(3);
+  });
+
+  it("does not match a handler whose filter asks for a key the dispatch did not supply", async () => {
+    const handlerCalls: string[] = [];
+
+    const { result } = renderHook(() => {
+      const actions = useActions<UserModel, typeof UserActions>(userModel);
+
+      actions.useAction(
+        UserActions.UserUpdated({ Role: "admin", UserId: 5 }),
+        (_context, payload) => {
+          handlerCalls.push(`admin-5:${payload}`);
+        },
+      );
+
+      actions.useAction(
+        UserActions.UserUpdated({ Role: "admin" }),
+        (_context, payload) => {
+          handlerCalls.push(`role-admin:${payload}`);
+        },
+      );
+
+      return actions;
+    });
+
+    await act(async () => {
+      result.current[1].dispatch(
+        UserActions.UserUpdated({ Role: "admin" }),
+        "partial",
+      );
+    });
+
+    expect(handlerCalls).toContain("role-admin:partial");
+    expect(handlerCalls).not.toContain("admin-5:partial");
+    expect(handlerCalls.length).toBe(1);
   });
 
   it("should fire all handlers when dispatching plain action with channeled subscriptions", async () => {
@@ -1020,13 +1057,16 @@ describe("useActions() channeled actions", () => {
     expect(handlerCalls.length).toBe(3);
   });
 
-  it("should match all channeled handlers when dispatching with empty channel", async () => {
+  it("matches every channeled handler when the subscriber's filter is empty", async () => {
     const handlerCalls: string[] = [];
 
     const { result } = renderHook(() => {
       const actions = useActions<UserModel, typeof UserActions>(userModel);
 
-      // Subscribe with channel UserId: 1
+      actions.useAction(UserActions.UserUpdated({}), (_context, payload) => {
+        handlerCalls.push(`open:${payload}`);
+      });
+
       actions.useAction(
         UserActions.UserUpdated({ UserId: 1 }),
         (_context, payload) => {
@@ -1034,25 +1074,46 @@ describe("useActions() channeled actions", () => {
         },
       );
 
-      // Subscribe with channel UserId: 2
+      return actions;
+    });
+
+    await act(async () => {
+      result.current[1].dispatch(UserActions.UserUpdated({ UserId: 1 }), "one");
+      result.current[1].dispatch(UserActions.UserUpdated({ UserId: 2 }), "two");
+    });
+
+    expect(handlerCalls).toContain("open:one");
+    expect(handlerCalls).toContain("open:two");
+    expect(handlerCalls).toContain("user-1:one");
+    expect(handlerCalls).not.toContain("user-1:two");
+    expect(handlerCalls.length).toBe(3);
+  });
+
+  it("does not match any channeled handler when the dispatcher's channel is empty but the subscriber asked for a key", async () => {
+    const handlerCalls: string[] = [];
+
+    const { result } = renderHook(() => {
+      const actions = useActions<UserModel, typeof UserActions>(userModel);
+
       actions.useAction(
-        UserActions.UserUpdated({ UserId: 2 }),
+        UserActions.UserUpdated({ UserId: 1 }),
         (_context, payload) => {
-          handlerCalls.push(`user-2:${payload}`);
+          handlerCalls.push(`user-1:${payload}`);
         },
       );
+
+      actions.useAction(UserActions.UserUpdated({}), (_context, payload) => {
+        handlerCalls.push(`open:${payload}`);
+      });
 
       return actions;
     });
 
-    // Dispatch with empty channel {} - should match ALL channeled handlers
     await act(async () => {
-      result.current[1].dispatch(UserActions.UserUpdated({}), "to-all");
+      result.current[1].dispatch(UserActions.UserUpdated({}), "empty");
     });
 
-    expect(handlerCalls).toContain("user-1:to-all");
-    expect(handlerCalls).toContain("user-2:to-all");
-    expect(handlerCalls.length).toBe(2);
+    expect(handlerCalls).toEqual(["open:empty"]);
   });
 
   it("should use reactive channel values when props change", async () => {
