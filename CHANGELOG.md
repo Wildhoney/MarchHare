@@ -4,24 +4,22 @@ All notable changes to this project will be documented in this file. See [commit
 
 ## [0.17.0](https://github.com/Wildhoney/MarchHare/compare/v0.13.10...v0.17.0) (2026-06-27)
 
-
 ### ⚠ BREAKING CHANGES
 
-* **resource:** add .action() auto-broadcast; shard broadcast cache by channel and flip matching to subscriber-as-filter
-* **cache:** prefix entries with "mh:" namespace; require adapter.keys(), drop adapter.clear()
-* **core:** coalesce resource fetches by default; opt out with .isolated()
+- **resource:** add .action() auto-broadcast; shard broadcast cache by channel and flip matching to subscriber-as-filter
+- **cache:** prefix entries with "mh:" namespace; require adapter.keys(), drop adapter.clear()
+- **core:** coalesce resource fetches by default; opt out with .isolated()
 
 ### Features
 
-* **cache:** prefix entries with "mh:" namespace; require adapter.keys(), drop adapter.clear() ([99825ef](https://github.com/Wildhoney/MarchHare/commit/99825ef3ad53227c5bb137a8450522e6a62f3bdc))
-* **core:** add Lifecycle.Paint factory firing after first browser paint ([d60a0eb](https://github.com/Wildhoney/MarchHare/commit/d60a0eb6fc7ee70141af1a433a1464ce60b3b4fb))
-* **core:** coalesce resource fetches by default; opt out with .isolated() ([739d7b6](https://github.com/Wildhoney/MarchHare/commit/739d7b6c304afad92d73c9b05915fbc95d0bdffd))
-* **resource:** add .action() auto-broadcast; shard broadcast cache by channel and flip matching to subscriber-as-filter ([44bb9e3](https://github.com/Wildhoney/MarchHare/commit/44bb9e39ea9666723071306c8935fea892184e82))
-
+- **cache:** prefix entries with "mh:" namespace; require adapter.keys(), drop adapter.clear() ([99825ef](https://github.com/Wildhoney/MarchHare/commit/99825ef3ad53227c5bb137a8450522e6a62f3bdc))
+- **core:** add Lifecycle.Paint factory firing after first browser paint ([d60a0eb](https://github.com/Wildhoney/MarchHare/commit/d60a0eb6fc7ee70141af1a433a1464ce60b3b4fb))
+- **core:** coalesce resource fetches by default; opt out with .isolated() ([739d7b6](https://github.com/Wildhoney/MarchHare/commit/739d7b6c304afad92d73c9b05915fbc95d0bdffd))
+- **resource:** add .action() auto-broadcast; shard broadcast cache by channel and flip matching to subscriber-as-filter ([44bb9e3](https://github.com/Wildhoney/MarchHare/commit/44bb9e39ea9666723071306c8935fea892184e82))
 
 ### Bug Fixes
 
-* **core:** keep context.model fresh across await boundaries ([103f0ef](https://github.com/Wildhoney/MarchHare/commit/103f0ef7ccbb4f489447a7d3d5e8270ad5f8673a))
+- **core:** keep context.model fresh across await boundaries ([103f0ef](https://github.com/Wildhoney/MarchHare/commit/103f0ef7ccbb4f489447a7d3d5e8270ad5f8673a))
 
 ## [0.16.0](https://github.com/Wildhoney/MarchHare/compare/v0.13.10...v0.16.0) (2026-06-19)
 

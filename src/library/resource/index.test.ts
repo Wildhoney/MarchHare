@@ -568,7 +568,7 @@ describe("evict via Invocation.evict (chain entry)", () => {
     const six = item({ id: 6 });
     await six.run(noEnv, noController(), six.params, noDispatch);
 
-    item().evict({});
+    item({ id: 5 }).evict({});
 
     expect(item.get({ id: 5 })).toBeNull();
     expect(item.get({ id: 6 })).toBeNull();
@@ -616,8 +616,55 @@ describe("Resource.action auto-broadcast", () => {
     );
   });
 
+  it("rejects channel keys not declared on the resource's params", () => {
+    type Params = { teamId: number; userId: number };
+    const member = Resource<Env, { id: number }, Params>(({ params }) =>
+      Promise.resolve({ id: params.userId }),
+    );
+
+    member.action({ teamId: 42 });
+    member.action({ teamId: 42, userId: 7 });
+
+    // @ts-expect-error — `tenantId` is not in Params.
+    member.action({ tenantId: 1 });
+    // @ts-expect-error — `teamId` is on Params but `tenantId` is not.
+    member.action({ teamId: 42, tenantId: 1 });
+  });
+
+  it("rejects any channel argument on a params-less resource", () => {
+    const user = Resource(() => Promise.resolve({ name: "Adam" }));
+
+    user.action();
+    user.action({});
+
+    // @ts-expect-error — params-less resources accept no channel keys.
+    user.action({ blah: "Adam" });
+  });
+
+  it("rejects extra keys passed to .get() for a params-less resource", () => {
+    const user = Resource(() => Promise.resolve({ name: "Adam" }));
+
+    user.get();
+    user.get({});
+
+    // @ts-expect-error — params-less resources accept no get keys.
+    user.get({ blah: "Adam" });
+  });
+
+  it("rejects extra keys passed to .get() for a parametric resource", () => {
+    type Params = { id: number };
+    const item = Resource<Env, { id: number }, Params>(({ params }) =>
+      Promise.resolve({ id: params.id }),
+    );
+
+    item.get({ id: 5 });
+
+    // @ts-expect-error — `slug` is not in Params.
+    item.get({ id: 5, slug: "x" });
+  });
+
   it("dispatches the action with the resolved payload after a successful fetch", async () => {
-    const dispatch = vi.fn<Dispatch>(() => Promise.resolve());
+    const dispatch = vi.fn((..._args: unknown[]) => Promise.resolve());
     const user = Resource(() => Promise.resolve({ name: "Adam" }));
 
     const call = user();
@@ -633,7 +680,7 @@ describe("Resource.action auto-broadcast", () => {
 
   it("dispatches with a channel mirroring the call params", async () => {
     type Params = { id: number; orgId: number };
-    const dispatch = vi.fn<Dispatch>(() => Promise.resolve());
+    const dispatch = vi.fn((..._args: unknown[]) => Promise.resolve());
     const user = Resource<Env, { id: number }, Params>(({ params }) =>
       Promise.resolve({ id: params.id }),
     );
@@ -649,7 +696,7 @@ describe("Resource.action auto-broadcast", () => {
   });
 
   it("dispatches an empty channel when the Resource has no params", async () => {
-    const dispatch = vi.fn<Dispatch>(() => Promise.resolve());
+    const dispatch = vi.fn((..._args: unknown[]) => Promise.resolve());
     const user = Resource(() => Promise.resolve({ name: "Adam" }));
 
     const call = user();
@@ -660,7 +707,7 @@ describe("Resource.action auto-broadcast", () => {
   });
 
   it("does not dispatch when the fetch rejects", async () => {
-    const dispatch = vi.fn<Dispatch>(() => Promise.resolve());
+    const dispatch = vi.fn((..._args: unknown[]) => Promise.resolve());
     const user = Resource(() => Promise.reject(new Error("nope")));
 
     const call = user();
@@ -673,7 +720,7 @@ describe("Resource.action auto-broadcast", () => {
 
   it("dispatches one action per fetch when called concurrently with different params", async () => {
     type Params = { id: number };
-    const dispatch = vi.fn<Dispatch>(() => Promise.resolve());
+    const dispatch = vi.fn((..._args: unknown[]) => Promise.resolve());
     const item = Resource<Env, { id: number }, Params>(({ params }) =>
       Promise.resolve({ id: params.id }),
     );
@@ -703,7 +750,7 @@ describe("Resource.action auto-broadcast", () => {
       ({ params }) => Promise.resolve({ name: `User ${params.id}` }),
       cache,
     );
-    const dispatch = vi.fn<Dispatch>(() => {
+    const dispatch = vi.fn((..._args: unknown[]) => {
       cachedAtDispatch = item.get({ id: 5 });
       return Promise.resolve();
     });

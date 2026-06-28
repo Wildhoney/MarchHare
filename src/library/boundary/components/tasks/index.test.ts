@@ -5,16 +5,16 @@ describe("Task", () => {
   const actionA = Symbol("ActionA");
   const actionB = Symbol("ActionB");
 
-  it("should create a task with task, action, and payload", () => {
+  it("should create a task with controller, action, and payload", () => {
     const controller = new AbortController();
     const payload = { value: 42 };
     const t: Task<{ value: number }> = {
-      task: controller,
+      controller,
       action: actionA,
       payload,
     };
 
-    expect(t.task).toBe(controller);
+    expect(t.controller).toBe(controller);
     expect(t.action).toBe(actionA);
     expect(t.payload).toEqual({ value: 42 });
   });
@@ -23,17 +23,17 @@ describe("Task", () => {
     const tasks = <Tasks>new Set();
 
     const task1: Task = {
-      task: new AbortController(),
+      controller: new AbortController(),
       action: actionA,
       payload: 1,
     };
     const task2: Task = {
-      task: new AbortController(),
+      controller: new AbortController(),
       action: actionB,
       payload: 2,
     };
     const task3: Task = {
-      task: new AbortController(),
+      controller: new AbortController(),
       action: actionA,
       payload: 3,
     };
@@ -51,9 +51,21 @@ describe("Task", () => {
   it("should allow filtering tasks by action", () => {
     const tasks = <Tasks>new Set();
 
-    tasks.add({ task: new AbortController(), action: actionA, payload: 1 });
-    tasks.add({ task: new AbortController(), action: actionB, payload: 2 });
-    tasks.add({ task: new AbortController(), action: actionA, payload: 3 });
+    tasks.add({
+      controller: new AbortController(),
+      action: actionA,
+      payload: 1,
+    });
+    tasks.add({
+      controller: new AbortController(),
+      action: actionB,
+      payload: 2,
+    });
+    tasks.add({
+      controller: new AbortController(),
+      action: actionA,
+      payload: 3,
+    });
 
     const actionATasks = [...tasks].filter((t) => t.action === actionA);
     expect(actionATasks).toHaveLength(2);
@@ -65,12 +77,12 @@ describe("Task", () => {
     const tasks = <Tasks>new Set();
 
     const task1: Task = {
-      task: new AbortController(),
+      controller: new AbortController(),
       action: actionA,
       payload: 1,
     };
     const task2: Task = {
-      task: new AbortController(),
+      controller: new AbortController(),
       action: actionB,
       payload: 2,
     };
@@ -78,27 +90,26 @@ describe("Task", () => {
     tasks.add(task1);
     tasks.add(task2);
 
-    // Abort all tasks for actionA
-    for (const t of tasks) {
-      if (t.action === actionA) {
-        t.task.abort();
+    for (const runningTask of tasks) {
+      if (runningTask.action === actionA) {
+        runningTask.controller.abort();
       }
     }
 
-    expect(task1.task.signal.aborted).toBe(true);
-    expect(task2.task.signal.aborted).toBe(false);
+    expect(task1.controller.signal.aborted).toBe(true);
+    expect(task2.controller.signal.aborted).toBe(false);
   });
 
   it("should allow removing tasks from Set", () => {
     const tasks = <Tasks>new Set();
 
     const task1: Task = {
-      task: new AbortController(),
+      controller: new AbortController(),
       action: actionA,
       payload: 1,
     };
     const task2: Task = {
-      task: new AbortController(),
+      controller: new AbortController(),
       action: actionB,
       payload: 2,
     };
@@ -117,12 +128,12 @@ describe("Task", () => {
     const tasks = <Tasks>new Set();
 
     const task1: Task = {
-      task: new AbortController(),
+      controller: new AbortController(),
       action: actionA,
       payload: 1,
     };
     const task2: Task = {
-      task: new AbortController(),
+      controller: new AbortController(),
       action: actionA,
       payload: 2,
     };
@@ -130,25 +141,24 @@ describe("Task", () => {
     tasks.add(task1);
     tasks.add(task2);
 
-    // Get oldest task (first in iteration order)
     const oldest = tasks.values().next().value;
-    oldest?.task.abort();
+    oldest?.controller.abort();
 
-    expect(task1.task.signal.aborted).toBe(true);
-    expect(task2.task.signal.aborted).toBe(false);
+    expect(task1.controller.signal.aborted).toBe(true);
+    expect(task2.controller.signal.aborted).toBe(false);
   });
 
   it("should support abort with reason", () => {
     const t: Task = {
-      task: new AbortController(),
+      controller: new AbortController(),
       action: actionA,
       payload: null,
     };
 
     const reason = "Unmounted";
-    t.task.abort(reason);
+    t.controller.abort(reason);
 
-    expect(t.task.signal.aborted).toBe(true);
-    expect(t.task.signal.reason).toBe(reason);
+    expect(t.controller.signal.aborted).toBe(true);
+    expect(t.controller.signal.reason).toBe(reason);
   });
 });

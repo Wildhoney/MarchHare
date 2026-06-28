@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { render, screen, act } from "@testing-library/react";
-import * as React from "react";
 import { App, useContext, useEnv } from "./index.tsx";
 import { Action } from "../action/index.ts";
 import { Cache, type Adapter } from "../cache/index.ts";

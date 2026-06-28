@@ -7,18 +7,6 @@ import { Resource } from "../../../resource/index.ts";
 import { useActions } from "../../../actions/index.ts";
 import { Action, Lifecycle } from "../../../index.ts";
 
-// Module augmentation requires `interface` (interface merging is the only
-// way to extend the library's Env type).
-
-declare module "../../../index.ts" {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
-  interface Env {
-    counter: number;
-    label: string | null;
-    token: string | null;
-  }
-}
-
 describe("useEnv — dot reads", () => {
   it("returns the fallback empty env outside any provider", () => {
     const { result } = renderHook(() => useEnv());
@@ -82,9 +70,9 @@ describe("Env mutations via context.actions.produce", () => {
         const actions = useActions<Model, typeof Actions>({ snapshot: null });
         actions.useAction(Actions.Bump, (context) => {
           context.actions.produce(({ model, env: draft }) => {
-            draft.counter = (draft.counter ?? 0) + 1;
-
-            model.snapshot = draft.counter;
+            const counter = ((draft.counter as number | undefined) ?? 0) + 1;
+            draft.counter = counter;
+            model.snapshot = counter;
           });
         });
         return { env, actions };
@@ -353,10 +341,12 @@ describe("context.actions.resource(...).evict() and resource.nuke()", () => {
 
   it("evict accepts a partial-match pattern", async () => {
     type Params = { teamId: number; userId: number };
-    const fetcher = vi.fn(({ params }: { params: Params }) =>
-      Promise.resolve({ id: params.userId }),
+    const fetcher = vi.fn((context: { params: Params }) =>
+      Promise.resolve({ id: context.params.userId }),
     );
-    const users = Resource<{ id: number }, Params>(fetcher);
+    const users = Resource<Record<never, never>, { id: number }, Params>(
+      (context) => fetcher(context),
+    );
 
     class Actions {
       static Seed = Action("Seed");
@@ -378,7 +368,9 @@ describe("context.actions.resource(...).evict() and resource.nuke()", () => {
           await context.actions.resource(users({ teamId: 2, userId: 9 }));
         });
         actions.useAction(Actions.EvictTeam, (context, { teamId }) => {
-          context.actions.resource(users()).evict({ teamId });
+          context.actions
+            .resource(users({ teamId, userId: 0 }))
+            .evict({ teamId });
         });
         return actions;
       },
@@ -468,11 +460,11 @@ describe("Lifecycle.Env broadcast", () => {
         const actions = useActions<void, typeof Actions>();
         actions.useAction(Actions.Bump, (context) => {
           context.actions.produce(({ env }) => {
-            env.counter = (env.counter ?? 0) + 1;
+            env.counter = ((env.counter as number | undefined) ?? 0) + 1;
           });
         });
         actions.useAction(Lifecycle.Env, (_context, env) => {
-          seen.push(env.counter);
+          seen.push(env.counter as number);
         });
         return actions;
       },
@@ -546,7 +538,7 @@ describe("Lifecycle.Env broadcast", () => {
       () => {
         const actions = useActions();
         actions.useAction(Lifecycle.Env, (_context, env) => {
-          seen.push(env.label);
+          seen.push(env.label as string | null);
         });
         return actions;
       },
@@ -572,7 +564,9 @@ describe("Lifecycle.Env broadcast", () => {
       return (
         <div>
           <span data-testid="label">
-            {actions[1].stream(Lifecycle.Env, (env) => env.label ?? "—")}
+            {actions[1].stream(Lifecycle.Env, (env) => (
+              <>{(env.label as string | null) ?? "—"}</>
+            ))}
           </span>
           <button
             data-testid="set"

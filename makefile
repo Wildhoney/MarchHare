@@ -12,6 +12,7 @@ browser:
 
 typecheck:
 	npx tsc --noEmit
+	npx tsc -p tsconfig.test.json --noEmit
 	npx tsc -p tsconfig.cli.json --noEmit
 
 dev:

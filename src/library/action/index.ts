@@ -123,13 +123,21 @@ export const Action = <ActionFactory>(<unknown>(<
         : Symbol(describe.action(name));
 
   const action = function (channel: C): ChanneledAction<P, C> {
-    return {
+    const channeled: ChanneledAction<P, C> = {
       [Brand.Action]: symbol,
       [Brand.Payload]: <P>undefined,
       [Brand.Channel]: channel,
       [Brand.Name]: name,
       channel,
     };
+    if (distribution === Distribution.Broadcast) {
+      // eslint-disable-next-line fp/no-mutating-methods
+      Object.defineProperty(channeled, Brand.Broadcast, {
+        value: true,
+        enumerable: false,
+      });
+    }
+    return channeled;
   };
 
   // eslint-disable-next-line fp/no-mutating-methods

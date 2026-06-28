@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { render, screen, act } from "@testing-library/react";
-import * as React from "react";
 import { App } from "../app/index.tsx";
 import { Action } from "../action/index.ts";
 import { Distribution } from "../types/index.ts";
@@ -17,7 +16,7 @@ describe("app.Scope()", () => {
     const received: Array<{ source: string; value: number }> = [];
 
     function Subscriber({ source }: { source: string }) {
-      const context = scope.useContext<void, never>();
+      const context = scope.useContext<void, typeof MulticastActions>();
       const actions = context.useActions();
       actions.useAction(MulticastActions.Tick, (_context, value) => {
         received.push({ source, value });
@@ -69,7 +68,7 @@ describe("app.Scope()", () => {
     const received: Array<{ tree: string; value: number }> = [];
 
     function Subscriber({ tree }: { tree: string }) {
-      const context = scope.useContext<void, never>();
+      const context = scope.useContext<void, typeof MulticastActions>();
       const actions = context.useActions();
       actions.useAction(MulticastActions.Tick, (_context, value) => {
         received.push({ tree, value });

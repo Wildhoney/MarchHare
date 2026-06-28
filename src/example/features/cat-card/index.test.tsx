@@ -11,7 +11,8 @@ describe("CatCard", () => {
     id: "1",
     name: "Whiskers",
     avatar: "https://cdn.example/whiskers.jpg",
-  };
+    filter: "filter-clarendon",
+  } as const;
 
   it("renders the cat's name", () => {
     render(

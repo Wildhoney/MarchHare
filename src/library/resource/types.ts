@@ -3,17 +3,21 @@ import type { Cache } from "../cache/index.ts";
 import type {
   BroadcastPayload,
   MulticastPayload,
+  BroadcastChanneled,
   ChanneledAction,
   Filter,
 } from "../types/index.ts";
 
 /**
- * Helper that constrains `Partial<P>` to a {@link Filter}-compatible
- * shape. Resource params hold primitive leaves by convention, so the
- * auto-broadcast {@link ResourceHandle.action} can use them directly as
- * a channel filter.
+ * Channel shape accepted by {@link ResourceHandle.action}: a partial of
+ * the resource's params. Keys not declared on `P` are rejected at
+ * compile time, so `.action({ unknownKey: ... })` fails to type-check
+ * &mdash; including the params-less case, where the channel collapses
+ * to an object whose only legal value for any key is `never`.
  */
-export type ActionChannel<P extends object> = Partial<P> & Filter;
+export type ActionChannel<P extends object> = [keyof P] extends [never]
+  ? Record<string, never>
+  : Partial<P>;
 
 /**
  * Dispatch surface exposed on a Resource fetcher's `context`. Restricted
@@ -146,10 +150,10 @@ export type Invocation<T, P extends object = Record<never, never>> = {
 export type ResourceHandle<T, P extends object = Record<never, never>> = ([
   keyof P,
 ] extends [never]
-  ? (params?: P) => Invocation<T, P>
+  ? (params?: Record<string, never>) => Invocation<T, P>
   : (params: P) => Invocation<T, P>) & {
   readonly get: [keyof P] extends [never]
-    ? (params?: P) => T | null
+    ? (params?: Record<string, never>) => T | null
     : (params: P) => T | null;
   /**
    * Broadcast channeled action fired automatically after every successful
@@ -177,7 +181,7 @@ export type ResourceHandle<T, P extends object = Record<never, never>> = ([
    */
   readonly action: (
     channel?: ActionChannel<P>,
-  ) => ChanneledAction<T, ActionChannel<P>>;
+  ) => BroadcastChanneled<T, ActionChannel<P>>;
 };
 
 /**

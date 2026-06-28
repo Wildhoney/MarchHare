@@ -9,7 +9,7 @@ import { With } from "../with/index.ts";
 import { getReason, getError } from "../error/utils.ts";
 import { Reason, Aborted } from "../error/index.ts";
 import { Action } from "../action/index.ts";
-import type { HandlerContext } from "../types/index.ts";
+import type { AnyAction, HandlerContext, Model } from "../types/index.ts";
 
 describe("withGetters()", () => {
   it("should create getters that access ref values", () => {
@@ -139,14 +139,14 @@ describe("getError()", () => {
 });
 
 describe("With.Update()", () => {
-  function createMockContext<M>(model: M) {
+  function createMockContext<M extends Model>(model: M) {
     const capturedModel = { ...model };
     const produce = vi.fn((fn: (draft: { model: M }) => void) => {
       fn({ model: capturedModel });
     });
 
     return {
-      context: <HandlerContext<M, object, object>>(<unknown>{
+      context: <HandlerContext<M, void>>(<unknown>{
         model,
         actions: { produce },
       }),
@@ -179,7 +179,7 @@ describe("With.Update()", () => {
     const model: Model = { name: "test", count: 0 };
     const updatedModel = { ...model };
 
-    const context = <HandlerContext<Model, object, object>>(<unknown>{
+    const context = <HandlerContext<Model, void>>(<unknown>{
       model: updatedModel,
       actions: {
         produce: (fn: (draft: { model: Model }) => void) => {
@@ -200,7 +200,7 @@ describe("With.Update()", () => {
     const model: Model = { visitor: null };
     const updatedModel = { ...model };
 
-    const context = <HandlerContext<Model, object, object>>(<unknown>{
+    const context = <HandlerContext<Model, void>>(<unknown>{
       model: updatedModel,
       actions: {
         produce: (fn: (draft: { model: Model }) => void) => {
@@ -220,7 +220,7 @@ describe("With.Update()", () => {
     const model: Model = { items: [] };
     const updatedModel = { ...model };
 
-    const context = <HandlerContext<Model, object, object>>(<unknown>{
+    const context = <HandlerContext<Model, void>>(<unknown>{
       model: updatedModel,
       actions: {
         produce: (fn: (draft: { model: Model }) => void) => {
@@ -241,7 +241,7 @@ describe("With.Invert()", () => {
     type Model = { sidebar: boolean };
     const updatedModel: Model = { sidebar: false };
 
-    const context = <HandlerContext<Model, object, object>>(<unknown>{
+    const context = <HandlerContext<Model, void>>(<unknown>{
       model: updatedModel,
       actions: {
         produce: (fn: (draft: { model: Model }) => void) => {
@@ -258,7 +258,7 @@ describe("With.Invert()", () => {
     type Model = { sidebar: boolean };
     const updatedModel: Model = { sidebar: true };
 
-    const context = <HandlerContext<Model, object, object>>(<unknown>{
+    const context = <HandlerContext<Model, void>>(<unknown>{
       model: updatedModel,
       actions: {
         produce: (fn: (draft: { model: Model }) => void) => {
@@ -275,7 +275,7 @@ describe("With.Invert()", () => {
     type Model = { open: boolean };
     const updatedModel: Model = { open: false };
 
-    const context = <HandlerContext<Model, object, object>>(<unknown>{
+    const context = <HandlerContext<Model, void>>(<unknown>{
       model: updatedModel,
       actions: {
         produce: (fn: (draft: { model: Model }) => void) => {
@@ -303,9 +303,9 @@ describe("isChanneledAction()", () => {
   });
 
   it("should return false for non-channeled values", () => {
-    expect(isChanneledAction({})).toBe(false);
-    expect(isChanneledAction({ channel: 1 })).toBe(false);
-    expect(isChanneledAction(<object>(<unknown>null))).toBe(false);
+    expect(isChanneledAction(<AnyAction>(<unknown>{}))).toBe(false);
+    expect(isChanneledAction(<AnyAction>(<unknown>{ channel: 1 }))).toBe(false);
+    expect(isChanneledAction(<AnyAction>(<unknown>null))).toBe(false);
     expect(isChanneledAction(Symbol("test"))).toBe(false);
   });
 });

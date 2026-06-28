@@ -19,13 +19,20 @@ export const card = css`
   width: 180px;
 `;
 
-export const avatar = css`
+export const frame = css`
   width: 140px;
   height: 140px;
+  margin: 0;
   border-radius: ${radius.pill};
-  object-fit: cover;
-  filter: grayscale(100%);
+  overflow: hidden;
   background: ${colour.surface.placeholder};
+`;
+
+export const avatar = css`
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 `;
 
 export const name = css`

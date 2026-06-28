@@ -179,9 +179,11 @@ export type DeepReadonly<T> = T extends (...args: never) => unknown
 
 /**
  * Union type representing any valid action that can be passed to action utilities.
- * This includes raw ActionIds (symbol/string), and any branded object.
+ * Covers raw ActionIds (symbol/string), branded action values (`Action()` /
+ * `Lifecycle.*()` results carrying `Brand.Action`), and any other symbol-keyed
+ * branded object.
  */
-export type AnyAction = ActionId | BrandedObject;
+export type AnyAction = ActionId | BrandedAction | BrandedObject;
 
 /**
  * Internal symbols used as brand keys to distinguish typed objects at runtime.
@@ -625,7 +627,23 @@ export type ChanneledAction<
   readonly [Brand.Payload]: P;
   readonly [Brand.Channel]: C;
   readonly [Brand.Name]: Name;
+  readonly [Brand.Broadcast]?: boolean;
   readonly channel: C;
+};
+
+/**
+ * `ChanneledAction` that carries the broadcast brand. Produced by calling
+ * a broadcast `Action` with a channel (e.g. `Resource.action({ id: 5 })`,
+ * or `UserBroadcast({ UserId: 5 })`). Any boundary subscriber can listen
+ * to one, so it's admitted by `Subscribable<AC>` regardless of `AC`
+ * &mdash; the same carve-out applied to `Lifecycle.Fault` / `Lifecycle.Env`.
+ */
+export type BroadcastChanneled<
+  P = unknown,
+  C = unknown,
+  Name extends string = string,
+> = ChanneledAction<P, C, Name> & {
+  readonly [Brand.Broadcast]: true;
 };
 
 /**
@@ -968,14 +986,25 @@ export type ChanneledOf<A> =
 export type Dispatchable<AC> = LeafActions<AC> | ChanneledOf<LeafActions<AC>>;
 
 /**
- * Everything `useAction` will subscribe to for a given `AC`: same as
- * `Dispatchable<AC>` plus the shared `Lifecycle.Fault` and `Lifecycle.Env`
- * broadcasts which live outside `AC` but are subscribable by any component.
+ * Everything `useAction` will subscribe to for a given `AC`. Includes:
+ *
+ * - `Dispatchable<AC>` &mdash; leaf actions on `AC` plus their channeled
+ *   variants.
+ * - `Lifecycle.Fault` / `Lifecycle.Env` &mdash; shared boundary broadcasts.
+ * - Any `LifecyclePayload` (`Lifecycle.Mount()`, `Lifecycle.Unmount()`,
+ *   etc.) &mdash; the runtime scans the handler registry for a matching
+ *   lifecycle brand on emit, so a self-declared lifecycle outside `AC`
+ *   still fires.
+ * - Any broadcast-branded channeled action &mdash; resource auto-broadcasts
+ *   (`resource.x.action(...)`) live outside `AC` but any boundary
+ *   subscriber can listen to them.
  */
 export type Subscribable<AC> =
   | Dispatchable<AC>
   | typeof Lifecycle.Fault
-  | typeof Lifecycle.Env;
+  | typeof Lifecycle.Env
+  | LifecyclePayload<unknown, never, string>
+  | BroadcastChanneled;
 
 /**
  * Subset of a union of actions whose payload type is `never`. Used to split
@@ -1101,7 +1130,7 @@ export type UseActions<
       renderer: (value: Readonly<E>, inspect: Inspect<E>) => React.ReactNode,
     ): React.ReactNode;
     stream<T extends object>(
-      action: BroadcastPayload<T>,
+      action: BroadcastPayload<T> | BroadcastChanneled<T>,
       renderer: (value: T, inspect: Inspect<T>) => React.ReactNode,
     ): React.ReactNode;
   },

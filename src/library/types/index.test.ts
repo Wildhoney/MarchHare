@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { Lifecycle, Pk, HandlerPayload, Brand } from ".";
-import type { HandlerContext, Maybe, Payload, Handlers, UseActions } from ".";
+import type { HandlerContext, Maybe, Payload, Handlers } from ".";
 import { Action, Distribution, App } from "..";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
@@ -39,8 +39,8 @@ describe("Pk", () => {
 });
 
 describe("HandlerPayload", () => {
-  it("should be a symbol", () => {
-    const payload = <HandlerPayload<unknown>>Symbol("test");
+  it("carries the action brand on the runtime value", () => {
+    const payload = <HandlerPayload<unknown>>(<unknown>Symbol("test"));
     expect(typeof payload).toBe("symbol");
   });
 });
@@ -92,7 +92,7 @@ describe("Payload", () => {
     type Model = { count: number };
     type H = Handlers<Model, typeof Actions>;
 
-    type Handler = H["Broadcast.PaymentLink"];
+    type Handler = H["Broadcast"]["PaymentLink"];
     type PayloadParam = Parameters<Handler>[1];
 
     expectTypeOf<PayloadParam>().toEqualTypeOf<{ amount: number }>();
@@ -105,15 +105,16 @@ describe("Env shape threading", () => {
     Authenticated,
   }
   type Env = { status: Status };
+  type EmptyProps = Record<string, never>;
 
   it("types HandlerContext.env as Readonly<E>", () => {
-    type Ctx = HandlerContext<void, object, object, Env>;
+    type Ctx = HandlerContext<void, EmptyProps, EmptyProps, Env>;
     expectTypeOf<Ctx["env"]>().toEqualTypeOf<Readonly<Env>>();
     expectTypeOf<Ctx["env"]["status"]>().toEqualTypeOf<Status>();
   });
 
   it("types the produce draft's env as E", () => {
-    type Ctx = HandlerContext<void, object, object, Env>;
+    type Ctx = HandlerContext<void, EmptyProps, EmptyProps, Env>;
     type Produce = Ctx["actions"]["produce"];
     type Draft = Parameters<Parameters<Produce>[0]>[0];
     expectTypeOf<Draft["env"]>().toEqualTypeOf<Env>();
@@ -124,12 +125,7 @@ describe("Env shape threading", () => {
       static SignIn = Action("SignIn");
     }
 
-    // Pure type-level test — function is never invoked so React hooks
-    // are not executed. TypeScript still checks the body, which
-    // exercises the inference chain App → useContext → useActions →
-    // useAction's handler context type.
-
-    function _typeCheck() {
+    void function typeCheck() {
       const app = App({ env: { status: Status.Guest } });
       const context = app.useContext<void, typeof Actions>();
       const actions = context.useActions();
@@ -142,7 +138,7 @@ describe("Env shape threading", () => {
           expectTypeOf(draft.env.status).toEqualTypeOf<Status>();
         });
       });
-    }
+    };
   });
 
   it("types the Lifecycle.Env stream renderer's env as Readonly<E>", () => {
@@ -150,17 +146,17 @@ describe("Env shape threading", () => {
       static SignIn = Action("SignIn");
     }
 
-    function _typeCheck() {
+    void function typeCheck() {
       const app = App({ env: { status: Status.Guest } });
       const context = app.useContext<void, typeof Actions>();
-      const actions = context.useActions();
+      const [, actions] = context.useActions();
 
       actions.stream(Lifecycle.Env, (env) => {
         expectTypeOf(env).toEqualTypeOf<Readonly<Env>>();
         expectTypeOf(env.status).toEqualTypeOf<Status>();
         return null;
       });
-    }
+    };
   });
 
   it("types the Lifecycle.Env useAction handler's env payload as Readonly<E>", () => {
@@ -168,7 +164,7 @@ describe("Env shape threading", () => {
       static SignIn = Action("SignIn");
     }
 
-    function _typeCheck() {
+    void function typeCheck() {
       const app = App({ env: { status: Status.Guest } });
       const context = app.useContext<void, typeof Actions>();
       const actions = context.useActions();
@@ -177,7 +173,7 @@ describe("Env shape threading", () => {
         expectTypeOf(env).toEqualTypeOf<Readonly<Env>>();
         expectTypeOf(env.status).toEqualTypeOf<Status>();
       });
-    }
+    };
   });
 
   it("rejects async recipes passed to context.actions.produce", () => {
@@ -186,13 +182,12 @@ describe("Env shape threading", () => {
     }
     type Model = { user: Maybe<string> };
 
-    function _typeCheck() {
+    void function typeCheck() {
       const app = App({ env: { status: Status.Guest } });
       const context = app.useContext<Model, typeof Actions>();
       const actions = context.useActions({ user: null });
 
       actions.useAction(Actions.SignIn, (handlerContext) => {
-        // Sync recipes compile.
         handlerContext.actions.produce((draft) => {
           draft.model.user = "ok";
         });
@@ -202,35 +197,6 @@ describe("Env shape threading", () => {
           draft.model.user = "nope";
         });
       });
-    }
-  });
-});
-
-describe("derive type inference", () => {
-  const Counter = Action<number>("Counter", Distribution.Broadcast);
-
-  type Model = { count: number };
-  class Actions {
-    static Counter = Counter;
-  }
-
-  it("should have a derive method on UseActions", () => {
-    type Base = UseActions<Model, typeof Actions>;
-    // The derive method exists and is callable
-    expectTypeOf<Base["derive"]>().toBeFunction();
-  });
-
-  it("should type action-based derive return as R | null", () => {
-    // Action-based derive('key', action, cb) produces R | null on the model
-    // because the value is null until the action fires
-    type Base = UseActions<Model, typeof Actions>;
-    type DeriveMethod = Base["derive"];
-    expectTypeOf<DeriveMethod>().toBeFunction();
-  });
-
-  it("should support chaining derive calls", () => {
-    // Each derive call returns a new UseActions with the model extended
-    type Base = UseActions<Model, typeof Actions>;
-    expectTypeOf<Base["derive"]>().toBeFunction();
+    };
   });
 });

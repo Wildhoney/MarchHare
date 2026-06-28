@@ -7,9 +7,10 @@ import { Action } from "../../../action/index.ts";
 import { Lifecycle } from "../../../types/index.ts";
 import { Reason } from "../../../error/types.ts";
 import type { Taps } from "./types.ts";
+import type { UseActions } from "../../../types/index.ts";
 
 type Model = { value: number };
-type ActionsApi = ReturnType<typeof useActions<Model, typeof Actions>>;
+type ActionsApi = UseActions<Model, typeof Actions>;
 
 class Actions {
   static Mount = Lifecycle.Mount();

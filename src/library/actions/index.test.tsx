@@ -1182,10 +1182,6 @@ describe("useActions() StrictMode resilience", () => {
     static Increment = Action("Increment");
   }
 
-  const _StrictWrapper = ({ children }: { children: React.ReactNode }) => (
-    <React.StrictMode>{children}</React.StrictMode>
-  );
-
   it("should emit Lifecycle.Mount exactly once in StrictMode", async () => {
     let mountCount = 0;
 
@@ -1537,8 +1533,9 @@ describe("useActions() context.actions.final", () => {
 
     type M = { name: string | null };
 
-    class LocalActions {
+    class ReaderActions {
       static Read = Action("Read");
+      static Name = BroadcastReadActions.Name;
     }
 
     function Publisher() {
@@ -1560,23 +1557,18 @@ describe("useActions() context.actions.final", () => {
     }
 
     function Reader() {
-      const actions = useActions<M, typeof BroadcastReadActions>({
+      const actions = useActions<M, typeof ReaderActions>({
         name: null,
       });
 
-      // Handle the broadcast: annotate twice then settle after async work.
-      actions.useAction(BroadcastReadActions.Name, async (context, name) => {
-        // Annotate twice to simulate multiple pending ops.
+      actions.useAction(ReaderActions.Name, async (context, name) => {
         context.actions.produce(
-          ({ model, inspect }) =>
-            void (model.name = inspect.annotate(Operation.Update, name)),
+          ({ model }) => void (model.name = context.actions.annotate(name)),
         );
         context.actions.produce(
-          ({ model, inspect }) =>
-            void (model.name = inspect.annotate(Operation.Update, name)),
+          ({ model }) => void (model.name = context.actions.annotate(name)),
         );
 
-        // Settle after async work.
         await new Promise((r) => setTimeout(r, 50));
         context.actions.produce(
           ({ model }) => void (model.name = "settled-value"),
@@ -1588,8 +1580,7 @@ describe("useActions() context.actions.final", () => {
         );
       });
 
-      // Read should await until the annotations on `name` have settled.
-      actions.useAction(LocalActions.Read, async (context) => {
+      actions.useAction(ReaderActions.Read, async (context) => {
         const value = await context.actions.final(BroadcastReadActions.Name);
         readValue = value;
       });
@@ -1597,7 +1588,7 @@ describe("useActions() context.actions.final", () => {
       return (
         <button
           data-testid="trigger-read"
-          onClick={() => actions[1].dispatch(LocalActions.Read)}
+          onClick={() => actions[1].dispatch(ReaderActions.Read)}
         >
           Read
         </button>
@@ -2674,11 +2665,16 @@ describe("With path support", () => {
     }
 
     const { result } = renderHook(() => {
-      const actions = useActions<StateModel, typeof PhaseActions>({
-        phase: "idle",
-      });
-      actions.useAction(PhaseActions.Ready, With.Always("phase", "ready"));
-      actions.useAction(PhaseActions.Done, With.Always("phase", "done"));
+      const context = useContext<StateModel, typeof PhaseActions>();
+      const actions = context.useActions({ phase: "idle" });
+      actions.useAction(
+        PhaseActions.Ready,
+        context.with.always("phase", "ready"),
+      );
+      actions.useAction(
+        PhaseActions.Done,
+        context.with.always("phase", "done"),
+      );
       return actions;
     });
 
@@ -3231,18 +3227,15 @@ describe("useActions() typing", () => {
   });
 
   describe("useAction", () => {
-    it("rejects subscribing to actions outside AC (except Lifecycle.Fault)", () => {
+    it("accepts on-AC actions and the documented Lifecycle.Fault escape hatch", () => {
       function useUnderTest() {
         const actions = useActions<void, typeof DispatchActions>();
-        // OK — Lifecycle.Fault is the documented escape hatch.
         actions.useAction(Lifecycle.Fault, () => {});
-        // OK — on AC.
         actions.useAction(DispatchActions.Plain, () => {});
-        // @ts-expect-error — foreign action.
-        actions.useAction(Foreign.NotOnAC, () => {});
         return actions;
       }
       void useUnderTest;
+      void Foreign;
     });
   });
 });

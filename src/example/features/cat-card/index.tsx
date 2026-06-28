@@ -7,7 +7,9 @@ export function CatCard({ cat }: Props): React.ReactElement {
   return (
     <scope.Boundary>
       <article className={styles.card}>
-        <img className={styles.avatar} src={cat.avatar} alt={cat.name} />
+        <figure className={`${styles.frame} ${cat.filter}`}>
+          <img className={styles.avatar} src={cat.avatar} alt={cat.name} />
+        </figure>
         <p className={styles.name}>{cat.name}</p>
       </article>
     </scope.Boundary>

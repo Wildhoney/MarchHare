@@ -30,7 +30,10 @@ describe("Consumer", () => {
   it("should provide isolated contexts for nested Consumers", () => {
     function InnerComponent({ testId }: { testId: string }) {
       const consumer = useConsumer();
-      consumer.set(Symbol("test"), { state: {} as never });
+      consumer.set(Symbol("test"), {
+        state: {} as never,
+        listeners: new Set(),
+      });
       return <div data-testid={testId}>{String(consumer.size)}</div>;
     }
 
@@ -92,7 +95,7 @@ describe("Partition", () => {
             {(b) => {
               broadcast = b;
               return (
-                <Partition
+                <Partition<{ name: string }>
                   action={testAction}
                   renderer={(value) => (
                     <div data-testid="value">{value.name}</div>
@@ -152,7 +155,7 @@ describe("Partition", () => {
             {(b) => {
               broadcast = b;
               return (
-                <Partition
+                <Partition<{ count: number }>
                   action={testAction}
                   renderer={(value) => (
                     <div data-testid="value">{value.count}</div>
