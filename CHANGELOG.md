@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.18.0](https://github.com/Wildhoney/MarchHare/compare/v0.17.0...v0.18.0) (2026-06-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* **resource:** admit auto-broadcasts in Subscribable, reject unknown channel/get keys, typecheck tests
+
+### Features
+
+* **resource:** admit auto-broadcasts in Subscribable, reject unknown channel/get keys, typecheck tests ([b1b2cd1](https://github.com/Wildhoney/MarchHare/commit/b1b2cd13d80fad72db637fcdceefbea2afe07ce3))
+
 ## [0.17.0](https://github.com/Wildhoney/MarchHare/compare/v0.13.10...v0.17.0) (2026-06-27)
 
 ### ⚠ BREAKING CHANGES
