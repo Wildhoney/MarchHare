@@ -131,8 +131,10 @@ export function useActions() {
 
 Why route through a broadcast action rather than calling `.evict()` directly inside the SSE listener?
 
-- **Fan-out.** Multiple components can listen for `UserUpdated` (a profile screen refetching, an avatar re-rendering) while the cache itself gets one canonical eviction.
+- **Domain semantics.** `UserUpdated` is a business event; `.evict(...)` is a cache mechanic. Subscribers can react to the _event_ (log it, badge a nav item, refetch a related resource) without knowing which resources happen to cache the user.
 - **Cancellation.** The action handler's signal short-circuits the evict when a component unmounts mid-event.
+
+`.evict()` also auto-fans-out via `resource.user.action({ id })` with a `null` payload &mdash; components already subscribed to `resource.user.action(...)` for successful-fetch reactions receive the eviction in the same stream. The domain-event broadcast above still earns its keep for cases where the drop should surface _before_ subscribers depend on the resource itself.
 
 ## Pattern 3: partial-match invalidation
 
@@ -155,6 +157,6 @@ actions.useAction(Actions.SignOut, async (context) => {
 
 ## Limitations
 
-- **`.evict()` doesn't notify subscribers.** Evicting a slot drops the cached payload but does **not** fire any action. If components need to react, dispatch a broadcast as in the SSE pattern above.
+- **`.evict()` broadcasts `null`, not a domain event.** Subscribers to `resource.user.action(...)` see the drop as `(user: User | null)` payload with the evicted params as the channel. If the reaction depends on _why_ the eviction happened (invalidate vs. sign-out vs. tenant switch), dispatch a domain-typed broadcast alongside the eviction as in the SSE pattern above.
 - **SSE / WebSocket connections are component-scoped by default.** If multiple components want the same stream, hoist the connection to a Boundary-level component and broadcast events to subscribers via `Distribution.Broadcast`. Keep one EventSource per origin.
 - **Reconnection logic is yours.** `EventSource` retries on its own; raw `WebSocket` doesn't. For WebSocket, wrap the listener in a reconnect loop driven by `Lifecycle.Unmount` cleanup signals.

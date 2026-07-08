@@ -232,122 +232,132 @@ export function useActions<
           get inspect() {
             return state.current.inspect;
           },
-          resource: Object.assign(
-            function resourceCall<T, P extends object>(call: Invocation<T, P>) {
-              const dispatchFromResource = (
-                action: unknown,
-                payload?: unknown,
-              ): Promise<void> => {
-                const a = <AnyAction>action;
-                const base = getActionSymbol(a);
-                const channel = isChanneledAction(a) ? a.channel : undefined;
-                if (isMulticastAction(a)) {
-                  const scoped = getScope(scope);
-                  if (scoped)
-                    return emitAsync(scoped.emitter, base, payload, channel);
-                  return Promise.resolve();
-                }
-                if (isBroadcastAction(a)) {
-                  return emitAsync(broadcast, base, payload, channel);
-                }
+          resource: (() => {
+            const dispatchFromResource = (
+              action: unknown,
+              payload?: unknown,
+            ): Promise<void> => {
+              const a = <AnyAction>action;
+              const base = getActionSymbol(a);
+              const channel = isChanneledAction(a) ? a.channel : undefined;
+              if (isMulticastAction(a)) {
+                const scoped = getScope(scope);
+                if (scoped)
+                  return emitAsync(scoped.emitter, base, payload, channel);
                 return Promise.resolve();
-              };
-              const options: {
-                exceedsWindow: Temporal.DurationLike | null;
-                isolated: boolean;
-              } = { exceedsWindow: null, isolated: false };
-              const fetch = (): Promise<T> => {
-                if (G.isNotNullable(options.exceedsWindow)) {
-                  const { data, at } = call.read(call.params);
-                  if (data !== unset && G.isNotNullable(at)) {
-                    const elapsed = Temporal.Now.instant().since(at);
-                    const window = Temporal.Duration.from(
-                      options.exceedsWindow,
-                    );
-                    if (Temporal.Duration.compare(elapsed, window) <= 0) {
-                      return Promise.resolve(<T>data);
+              }
+              if (isBroadcastAction(a)) {
+                return emitAsync(broadcast, base, payload, channel);
+              }
+              return Promise.resolve();
+            };
+            return Object.assign(
+              function resourceCall<T, P extends object>(
+                call: Invocation<T, P>,
+              ) {
+                const options: {
+                  exceedsWindow: Temporal.DurationLike | null;
+                  isolated: boolean;
+                } = { exceedsWindow: null, isolated: false };
+                const fetch = (): Promise<T> => {
+                  if (G.isNotNullable(options.exceedsWindow)) {
+                    const { data, at } = call.read(call.params);
+                    if (data !== unset && G.isNotNullable(at)) {
+                      const elapsed = Temporal.Now.instant().since(at);
+                      const window = Temporal.Duration.from(
+                        options.exceedsWindow,
+                      );
+                      if (Temporal.Duration.compare(elapsed, window) <= 0) {
+                        return Promise.resolve(<T>data);
+                      }
                     }
                   }
-                }
-                if (options.isolated) {
-                  return <Promise<T>>(
-                    call.run(env, controller, call.params, dispatchFromResource)
-                  );
-                }
-                let mutable = sharing.get(call.run);
-                if (G.isUndefined(mutable)) {
-                  mutable = new Map<string, Share>();
-                  sharing.set(call.run, mutable);
-                }
-                const bucket = mutable;
-                const slot = JSON.stringify(call.params);
-                let share = <Share<T> | undefined>bucket.get(slot);
-                if (G.isUndefined(share)) {
-                  const detached = new AbortController();
-                  const created: Share<T> = <Share<T>>{
-                    controller: detached,
-                    refs: 0,
-                  };
-                  created.promise = (<Promise<T>>(
-                    call.run(env, detached, call.params, dispatchFromResource)
-                  )).finally(() => {
-                    bucket.delete(slot);
-                  });
-                  bucket.set(slot, <Share>(<unknown>created));
-                  share = created;
-                }
-                const joined = share;
-                joined.refs += 1;
-                const release = (): void => {
-                  joined.refs -= 1;
-                  if (joined.refs === 0) {
-                    bucket.delete(slot);
-                    joined.controller.abort(controller.signal.reason);
+                  if (options.isolated) {
+                    return <Promise<T>>(
+                      call.run(
+                        env,
+                        controller,
+                        call.params,
+                        dispatchFromResource,
+                      )
+                    );
                   }
+                  let mutable = sharing.get(call.run);
+                  if (G.isUndefined(mutable)) {
+                    mutable = new Map<string, Share>();
+                    sharing.set(call.run, mutable);
+                  }
+                  const bucket = mutable;
+                  const slot = JSON.stringify(call.params);
+                  let share = <Share<T> | undefined>bucket.get(slot);
+                  if (G.isUndefined(share)) {
+                    const detached = new AbortController();
+                    const created: Share<T> = <Share<T>>{
+                      controller: detached,
+                      refs: 0,
+                    };
+                    created.promise = (<Promise<T>>(
+                      call.run(env, detached, call.params, dispatchFromResource)
+                    )).finally(() => {
+                      bucket.delete(slot);
+                    });
+                    bucket.set(slot, <Share>(<unknown>created));
+                    share = created;
+                  }
+                  const joined = share;
+                  joined.refs += 1;
+                  const release = (): void => {
+                    joined.refs -= 1;
+                    if (joined.refs === 0) {
+                      bucket.delete(slot);
+                      joined.controller.abort(controller.signal.reason);
+                    }
+                  };
+                  if (controller.signal.aborted) {
+                    release();
+                  } else {
+                    controller.signal.addEventListener("abort", release, {
+                      once: true,
+                    });
+                    const cleanup = (): void =>
+                      controller.signal.removeEventListener("abort", release);
+                    joined.promise.then(cleanup, cleanup);
+                  }
+                  return withAbort(joined.promise, controller.signal);
                 };
-                if (controller.signal.aborted) {
-                  release();
-                } else {
-                  controller.signal.addEventListener("abort", release, {
-                    once: true,
-                  });
-                  const cleanup = (): void =>
-                    controller.signal.removeEventListener("abort", release);
-                  joined.promise.then(cleanup, cleanup);
-                }
-                return withAbort(joined.promise, controller.signal);
-              };
-              const handle = {
-                then<U = T, V = never>(
-                  onFulfilled?:
-                    | ((value: T) => U | PromiseLike<U>)
-                    | null
-                    | undefined,
-                  onRejected?:
-                    | ((reason: unknown) => V | PromiseLike<V>)
-                    | null
-                    | undefined,
-                ): Promise<U | V> {
-                  return fetch().then(onFulfilled, onRejected);
-                },
-                exceeds(duration: Temporal.DurationLike) {
-                  options.exceedsWindow = duration;
-                  return handle;
-                },
-                isolated() {
-                  options.isolated = true;
-                  return handle;
-                },
-                evict(where?: object): void {
-                  call.evict(where ?? call.params);
-                },
-              };
-              return handle;
-            },
-            {
-              nuke: (where?: object): void => nuke(where),
-            },
-          ),
+                const handle = {
+                  then<U = T, V = never>(
+                    onFulfilled?:
+                      | ((value: T) => U | PromiseLike<U>)
+                      | null
+                      | undefined,
+                    onRejected?:
+                      | ((reason: unknown) => V | PromiseLike<V>)
+                      | null
+                      | undefined,
+                  ): Promise<U | V> {
+                    return fetch().then(onFulfilled, onRejected);
+                  },
+                  exceeds(duration: Temporal.DurationLike) {
+                    options.exceedsWindow = duration;
+                    return handle;
+                  },
+                  isolated() {
+                    options.isolated = true;
+                    return handle;
+                  },
+                  evict(where?: object): void {
+                    call.evict(where ?? call.params, dispatchFromResource);
+                  },
+                };
+                return handle;
+              },
+              {
+                nuke: (where?: object): void =>
+                  nuke(where, dispatchFromResource),
+              },
+            );
+          })(),
           async final(action: AnyAction) {
             if (controller.signal.aborted) return null;
             const key = getActionSymbol(action);

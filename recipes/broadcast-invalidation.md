@@ -175,7 +175,7 @@ The reset-then-refetch pattern above keeps the producer in control: each subscri
 - The reset needs to fan out to UI updates beyond cache flushing (skeleton states, scroll resets, etc.)
 - You want typed payloads on the reset event
 
-Reach for `context.actions.resource(...).evict(where?)` or `context.actions.resource.nuke(where?)` when you just need to drop cache entries without coordinating refetches &mdash; e.g. on sign-out where the next mount will fetch fresh anyway. See [`use-resource.md`](./use-resource.md#invalidation--evict-and-nuke).
+Reach for `context.actions.resource(...).evict(where?)` or `context.actions.resource.nuke(where?)` when you just need to drop cache entries without coordinating refetches &mdash; e.g. on sign-out where the next mount will fetch fresh anyway. Eviction still fans out via each Resource's `.action(evictedParams)` broadcast with a `null` payload, so subscribers to `resource.x.action(...)` see the drop in-line with the fetch stream (the payload type is `T | null`). See [`use-resource.md`](./use-resource.md#invalidation--evict-and-nuke).
 
 ## Comparison with React Query
 

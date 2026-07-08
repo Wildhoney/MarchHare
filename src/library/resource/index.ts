@@ -1,4 +1,4 @@
-import type { Fetcher, ResourceHandle } from "./types.ts";
+import type { Dispatch, Fetcher, ResourceHandle } from "./types.ts";
 import {
   Cache,
   build,
@@ -20,11 +20,17 @@ export type { Fetcher, Invocation, ResourceHandle } from "./types.ts";
  * pattern's keys (partial match &mdash; extra keys in the stored
  * params are ignored). Pass nothing to clear every known slot.
  *
+ * When called via `context.actions.resource.nuke(...)`, the calling
+ * boundary's `dispatch` is threaded through so each evicted slot fires
+ * a `null` broadcast on its Resource's `.action()` &mdash; subscribers
+ * inside that boundary see the eviction as a `null` payload with the
+ * evicted params as the channel.
+ *
  * @internal Public surface lives on `context.actions.resource.nuke(...)`.
  */
-export function nuke(where?: object): void {
+export function nuke(where?: object, dispatch?: Dispatch): void {
   const pattern = where ?? {};
-  for (const evict of evictors) evict(pattern);
+  for (const evict of evictors) evict(pattern, dispatch);
 }
 
 /**

@@ -32,6 +32,13 @@ export const tagline = css`
   font-size: ${font.size.m};
 `;
 
+export const controls = css`
+  display: flex;
+  gap: ${spacing.s};
+  flex-wrap: wrap;
+  justify-content: center;
+`;
+
 export const grid = css`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

@@ -113,7 +113,7 @@ export type Invocation<T, P extends object = Record<never, never>> = {
     data: T | symbol;
     at: Temporal.Instant | null;
   };
-  readonly evict: (where: object) => void;
+  readonly evict: (where: object, dispatch?: Dispatch) => void;
   readonly params: P;
 };
 
@@ -173,22 +173,33 @@ export type ResourceHandle<T, P extends object = Record<never, never>> = ([
    * success (see resource/utils.ts), and the broadcast follows the same
    * gate.
    *
+   * Eviction fires the same broadcast with a `null` payload: every
+   * call to `.evict(where?)` (via `context.actions.resource(...).evict`)
+   * or `context.actions.resource.nuke(where?)` walks the matching cache
+   * slots and dispatches `action(evictedParams)` with `null` for each,
+   * so the payload type is `T | null`.
+   *
    * ```ts
-   * actions.useAction(user.action(), (context, value) => { ... });
+   * actions.useAction(user.action(), (context, value) => {
+   *   if (value === null) return;
+   * });
    * actions.useAction(user.action({ id: 5 }), (context, value) => { ... });
-   * actions.stream(user.action({ id: 5 }), (value) => <span>{value.name}</span>);
+   * actions.stream(user.action({ id: 5 }), (value) => <span>{value?.name}</span>);
    * ```
    */
   readonly action: (
     channel?: ActionChannel<P>,
-  ) => BroadcastChanneled<T, ActionChannel<P>>;
+  ) => BroadcastChanneled<T | null, ActionChannel<P>>;
 };
 
 /**
  * Drops cache slots whose stored params match the supplied `where`
- * pattern. Each Resource registers one of these on declaration so
- * `nuke(where)` can iterate them.
+ * pattern, and &mdash; when a `dispatch` is provided &mdash; fires a
+ * `null` broadcast on the Resource's `.action()` for each removed
+ * slot, using the slot's stored params as the channel. Each Resource
+ * registers one of these on declaration so `nuke(where)` can iterate
+ * them.
  *
  * @internal
  */
-export type ResourceEvictor = (where: object) => void;
+export type ResourceEvictor = (where: object, dispatch?: Dispatch) => void;

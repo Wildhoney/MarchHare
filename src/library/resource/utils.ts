@@ -114,7 +114,7 @@ export function build<T, P extends object>(
     return `${prefix}${suffix}${key(params)}`;
   };
 
-  const action = Action<T, Filter>(
+  const action = Action<T | null, Filter>(
     `resource:${ƒ.name || "anonymous"}`,
     Distribution.Broadcast,
   );
@@ -146,21 +146,29 @@ export function build<T, P extends object>(
     return action(<Filter>(channel ?? {}));
   }
 
-  const evict = (where: object): void => {
+  const evict = (where: object, dispatch?: Dispatch): void => {
     const env = getEnv();
     const scope = backing.scope(env);
     const fullPrefix = scope === "" ? suffix : `${scope}:${suffix}`;
     const entries = Object.entries(where);
+    const evicted: Array<Filter> = [];
     for (const cacheKey of [...backing.keys()]) {
       if (!cacheKey.startsWith(fullPrefix)) continue;
       try {
         const parsed = <Record<string, unknown>>(
           JSON.parse(cacheKey.slice(fullPrefix.length))
         );
-        if (entries.every(([field, value]) => parsed[field] === value))
+        if (entries.every(([field, value]) => parsed[field] === value)) {
           backing.remove(cacheKey);
+          evicted.push(<Filter>parsed);
+        }
       } catch {
         continue;
+      }
+    }
+    if (G.isNotNullable(dispatch)) {
+      for (const channel of evicted) {
+        void dispatch(action(channel), null);
       }
     }
   };

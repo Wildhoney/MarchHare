@@ -195,7 +195,7 @@ See [session-tokens](./session-tokens.md) for the full auth pattern and [env](./
 
 ## Fanning out on success or failure
 
-Every Resource declaration exposes an `event` broadcast that fires automatically after each successful fetch, with the resolved payload as the action payload and the call-site params as the channel. Subscribers narrow by supplying any subset of params via `event(partial)`; matching follows the [unified channel rule](./channeled-actions.md#channel-matching) (subscriber's keys must all be satisfied by the dispatch).
+Every Resource declaration exposes an `event` broadcast that fires automatically after each successful fetch, with the resolved payload as the action payload and the call-site params as the channel. The payload type is `T | null`: successful fetches broadcast `T`, evictions broadcast `null`. Subscribers narrow by supplying any subset of params via `event(partial)`; matching follows the [unified channel rule](./channeled-actions.md#channel-matching) (subscriber's keys must all be satisfied by the dispatch).
 
 ```ts
 // resources.ts — no manual fan-out needed; the auto-broadcast handles it.
@@ -209,19 +209,31 @@ export const user = app.Resource<User, { id: number }>((context) =>
 ```tsx
 // Subscribe by useAction for handler-side reactions...
 actions.useAction(user.action({ id: 5 }), (context, user) => {
+  if (G.isNull(user)) {
+    context.actions.produce(({ model }) => void (model.user = null));
+    return;
+  }
   context.actions.produce(({ model }) => void (model.user = user));
 });
 
 // ...or render the most recent value declaratively with stream.
 {
-  actions.stream(user.action({ id: 5 }), (value) => <span>{value.name}</span>);
+  actions.stream(user.action({ id: 5 }), (value) => (
+    <span>{value?.name ?? "—"}</span>
+  ));
 }
 
-// No arguments — receives every fetch on this Resource.
-actions.useAction(user.action(), (context, user) => analytics.track(user));
+// No arguments — receives every fetch (and every eviction) on this Resource.
+actions.useAction(user.action(), (context, user) => {
+  if (G.isNotNull(user)) analytics.track(user);
+});
 ```
 
-Failures do not broadcast &mdash; the cache is only written on success, and the broadcast follows the same gate. The broadcast cache is sharded by `(action, channel)`, so late-mounting subscribers replay every cached entry whose channel satisfies their filter rather than just the most recent dispatch &mdash; useful for `actions.stream` panels that mount after the bulk of a page's data has already loaded.
+Failures do not broadcast &mdash; the cache is only written on success, and the broadcast follows the same gate.
+
+Eviction _does_ broadcast: `context.actions.resource(resource.user({ id: 5 })).evict()` (and the App-wide `context.actions.resource.nuke(where?)`) walks each cache slot the pattern matches, removes it, and dispatches `user.action(evictedParams)` with a `null` payload. That's why the payload type widens to `T | null` &mdash; a subscriber to `user.action({ id: 5 })` sees the fresh value when a fetch succeeds and `null` the moment the slot is dropped. Module-scope calls (`nuke(...)` imported directly from `march-hare`, outside a handler) still evict but do not broadcast &mdash; there's no boundary in scope to dispatch through.
+
+The broadcast cache is sharded by `(action, channel)`, so late-mounting subscribers replay every cached entry whose channel satisfies their filter rather than just the most recent dispatch &mdash; useful for `actions.stream` panels that mount after the bulk of a page's data has already loaded. The `null` from an eviction lands in that same shard, so a late-mounting subscriber to an evicted slot sees `null` on mount rather than the stale pre-eviction value.
 
 Two other places are still available for fan-out when the auto-broadcast isn't enough:
 
@@ -422,9 +434,33 @@ actions.useAction(Actions.SwitchTenant, async (context, { tenantId }) => {
 
 ### What `.evict()` and `.nuke()` do **not** do
 
-- **They don't fire any action.** Evicting a slot drops the cached payload but doesn't notify subscribers. If a render needs to react, dispatch a broadcast alongside the eviction &mdash; see [real-time-applications](./real-time-applications.md).
 - **They don't refetch.** Evict + refetch is a two-step pattern; chain the next `context.actions.resource(...)` explicitly when you want a fresh load.
 - **They don't cancel in-flight fetches.** A pending `await context.actions.resource(...)` finishes naturally and writes its result. Combine with `context.task.controller.abort()` if you need to discard a racing request.
+
+### What `.evict()` and `.nuke()` _do_ auto-broadcast
+
+Every evicted slot fires the Resource's `.action(evictedParams)` with a `null` payload, so subscribers see the drop the same way they see a fetch (`.action()` is typed `T | null`). The dispatch goes through the calling boundary, so:
+
+- Called from a handler (via `context.actions.resource(...).evict(...)` or `context.actions.resource.nuke(...)`): broadcasts as expected.
+- Called from module scope (`import { nuke } from "march-hare"`): the cache is still cleared, but no broadcast fires &mdash; there's no boundary in scope to dispatch through.
+
+```ts
+// resources.ts
+export const user = app.Resource<User, { id: number }>(fetchUser);
+
+// somewhere else — one handler subscribes, another evicts.
+actions.useAction(user.action({ id: 5 }), (context, value) => {
+  if (G.isNull(value)) {
+    context.actions.produce(({ model }) => void (model.user = null));
+    return;
+  }
+  context.actions.produce(({ model }) => void (model.user = value));
+});
+
+actions.useAction(Actions.SignOut, (context) => {
+  context.actions.resource.nuke();
+});
+```
 
 ## In-flight coalescing &mdash; the default
 

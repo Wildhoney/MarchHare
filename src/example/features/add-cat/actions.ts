@@ -11,7 +11,8 @@ export function useActions() {
   const context = scope.useContext<Model, typeof Actions>();
   const actions = context.useActions({ image: null });
 
-  actions.useAction(resource.cat.image.action(), () => {
+  actions.useAction(resource.cat.image.action(), (_context, image) => {
+    if (G.isNull(image)) return void message.info("A new cattery has opened");
     void message.success("Cat adopted");
   });
 

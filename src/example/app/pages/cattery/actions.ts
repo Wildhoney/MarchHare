@@ -9,5 +9,10 @@ export function useActions() {
     context.actions.produce(({ model }) => void model.cats.push(cat));
   });
 
+  actions.useAction(Actions.OpenNew, (context) => {
+    context.actions.produce(({ model }) => void (model.cats = []));
+    context.actions.resource.nuke();
+  });
+
   return actions;
 }

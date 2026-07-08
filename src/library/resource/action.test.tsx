@@ -31,7 +31,7 @@ describe("Resource.action end-to-end", () => {
       Promise.resolve({ name: "Adam" }),
     );
 
-    const seen = vi.fn<(value: { name: string }) => void>();
+    const seen = vi.fn<(value: { name: string } | null) => void>();
 
     class FetcherActions {
       static Mount = Lifecycle.Mount();
@@ -195,7 +195,7 @@ describe("Resource.action end-to-end", () => {
       const [, api] = context.useActions();
       return (
         <span data-testid="watcher">
-          {api.stream(userById.action({ id: 5 }), (value) => value.name)}
+          {api.stream(userById.action({ id: 5 }), (value) => value?.name)}
         </span>
       );
     }
@@ -465,7 +465,7 @@ describe("Resource.action end-to-end", () => {
       const [, api] = context.useActions();
       return (
         <span data-testid="late-stream">
-          {api.stream(userById.action({ id: 9 }), (value) => value.name)}
+          {api.stream(userById.action({ id: 9 }), (value) => value?.name)}
         </span>
       );
     }

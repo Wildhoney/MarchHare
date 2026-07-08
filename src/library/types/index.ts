@@ -1129,7 +1129,7 @@ export type UseActions<
       action: typeof Lifecycle.Env,
       renderer: (value: Readonly<E>, inspect: Inspect<E>) => React.ReactNode,
     ): React.ReactNode;
-    stream<T extends object>(
+    stream<T extends object | null>(
       action: BroadcastPayload<T> | BroadcastChanneled<T>,
       renderer: (value: T, inspect: Inspect<T>) => React.ReactNode,
     ): React.ReactNode;

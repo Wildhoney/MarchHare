@@ -761,3 +761,151 @@ describe("Resource.action auto-broadcast", () => {
     expect(cachedAtDispatch).toEqual({ name: "User 5" });
   });
 });
+
+describe("Resource.action eviction broadcast", () => {
+  it("dispatches null with the evicted params as the channel when Invocation.evict is called with a dispatch", async () => {
+    type Params = { id: number };
+    const dispatch = vi.fn((..._args: unknown[]) => Promise.resolve());
+    const item = Resource<Env, { id: number }, Params>(({ params }) =>
+      Promise.resolve({ id: params.id }),
+    );
+
+    const five = item({ id: 5 });
+    await five.run(noEnv, noController(), five.params, noDispatch);
+
+    dispatch.mockClear();
+    item({ id: 5 }).evict({ id: 5 }, <Dispatch>dispatch);
+
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    const [dispatched, payload] = <[unknown, unknown]>dispatch.mock.calls[0];
+    expect(getActionSymbol(<never>dispatched)).toBe(
+      getActionSymbol(item.action()),
+    );
+    expect((<{ channel: Params }>dispatched).channel).toEqual({ id: 5 });
+    expect(payload).toBeNull();
+  });
+
+  it("does not dispatch when Invocation.evict is called without a dispatch (module-scope call)", async () => {
+    type Params = { id: number };
+    const item = Resource<Env, { id: number }, Params>(({ params }) =>
+      Promise.resolve({ id: params.id }),
+    );
+
+    const five = item({ id: 5 });
+    await five.run(noEnv, noController(), five.params, noDispatch);
+
+    expect(() => item({ id: 5 }).evict({ id: 5 })).not.toThrow();
+    expect(item.get({ id: 5 })).toBeNull();
+  });
+
+  it("fires one null broadcast per evicted slot when the pattern matches multiple slots", async () => {
+    type Params = { id: number; tenantId: number };
+    const dispatch = vi.fn((..._args: unknown[]) => Promise.resolve());
+    const item = Resource<Env, { id: number }, Params>(({ params }) =>
+      Promise.resolve({ id: params.id }),
+    );
+
+    const alice = item({ id: 1, tenantId: 42 });
+    const bob = item({ id: 2, tenantId: 42 });
+    const carol = item({ id: 3, tenantId: 99 });
+    await alice.run(noEnv, noController(), alice.params, noDispatch);
+    await bob.run(noEnv, noController(), bob.params, noDispatch);
+    await carol.run(noEnv, noController(), carol.params, noDispatch);
+
+    dispatch.mockClear();
+    item({ id: 1, tenantId: 42 }).evict({ tenantId: 42 }, <Dispatch>dispatch);
+
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const channels = dispatch.mock.calls.map(
+      (call) => (<{ channel: Params }>call[0]).channel,
+    );
+    expect(channels).toContainEqual({ id: 1, tenantId: 42 });
+    expect(channels).toContainEqual({ id: 2, tenantId: 42 });
+    expect(channels).not.toContainEqual({ id: 3, tenantId: 99 });
+    for (const [, payload] of dispatch.mock.calls) {
+      expect(payload).toBeNull();
+    }
+    expect(item.get({ id: 3, tenantId: 99 })).toEqual({ id: 3 });
+  });
+
+  it("does not dispatch when the pattern matches no cache slot", async () => {
+    type Params = { id: number };
+    const dispatch = vi.fn((..._args: unknown[]) => Promise.resolve());
+    const item = Resource<Env, { id: number }, Params>(({ params }) =>
+      Promise.resolve({ id: params.id }),
+    );
+
+    const five = item({ id: 5 });
+    await five.run(noEnv, noController(), five.params, noDispatch);
+
+    dispatch.mockClear();
+    item({ id: 5 }).evict({ id: 999 }, <Dispatch>dispatch);
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(item.get({ id: 5 })).toEqual({ id: 5 });
+  });
+
+  it("fires null broadcasts across every Resource when nuke is called with a dispatch", async () => {
+    type CatParams = { id: number; marker: "nuke-cross-resource" };
+    type DogParams = { name: string; marker: "nuke-cross-resource" };
+    const dispatch = vi.fn((..._args: unknown[]) => Promise.resolve());
+    const cat = Resource<Env, { id: number }, CatParams>(({ params }) =>
+      Promise.resolve({ id: params.id }),
+    );
+    const dog = Resource<Env, { name: string }, DogParams>(({ params }) =>
+      Promise.resolve({ name: params.name }),
+    );
+
+    const kitty = cat({ id: 7, marker: "nuke-cross-resource" });
+    const rex = dog({ name: "rex", marker: "nuke-cross-resource" });
+    await kitty.run(noEnv, noController(), kitty.params, noDispatch);
+    await rex.run(noEnv, noController(), rex.params, noDispatch);
+
+    dispatch.mockClear();
+    nuke({ marker: "nuke-cross-resource" }, <Dispatch>dispatch);
+
+    const catSymbol = getActionSymbol(cat.action());
+    const dogSymbol = getActionSymbol(dog.action());
+    const dispatched = dispatch.mock.calls.map((call) =>
+      getActionSymbol(<never>call[0]),
+    );
+    expect(dispatched).toContain(catSymbol);
+    expect(dispatched).toContain(dogSymbol);
+    for (const [, payload] of dispatch.mock.calls) {
+      expect(payload).toBeNull();
+    }
+  });
+
+  it("scopes eviction dispatches to the current scope (does not fire for other-scope slots)", async () => {
+    type Params = { id: number };
+    type AppEnv = { session: { accessToken: string } | null };
+    const adapter = memoryAdapter();
+    const cache = Cache<AppEnv>({
+      ...adapter,
+      key: ({ env }) => env.session?.accessToken ?? "",
+    });
+    const alice = <Env>{ session: { accessToken: "alice" } };
+    const bob = <Env>{ session: { accessToken: "bob" } };
+    let currentEnv: Env = alice;
+    const item = Resource<AppEnv, { id: number }, Params>(
+      ({ params }) => Promise.resolve({ id: params.id }),
+      cache,
+      () => currentEnv,
+    );
+
+    const dispatch = vi.fn((..._args: unknown[]) => Promise.resolve());
+
+    const forAlice = item({ id: 1 });
+    await forAlice.run(alice, noController(), forAlice.params, noDispatch);
+    const forBob = item({ id: 1 });
+    await forBob.run(bob, noController(), forBob.params, noDispatch);
+
+    dispatch.mockClear();
+    currentEnv = alice;
+    item({ id: 1 }).evict({ id: 1 }, <Dispatch>dispatch);
+
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    currentEnv = bob;
+    expect(item.get({ id: 1 })).toEqual({ id: 1 });
+  });
+});

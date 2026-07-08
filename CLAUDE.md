@@ -660,7 +660,7 @@ docs: update the README file
   - `stateful-props.md` - Box<T> type for stateful props
   - `storage.md` - Cache class for cross-reload persistence; adapters for localStorage / MMKV / chrome.storage
   - `tap.md` - `<Boundary tap={...}>` observer fired on every handler dispatch and its terminal (`success` / `error`); analytics, audit log, Sentry breadcrumbs
-  - `use-resource.md` - Resource: declare at module scope, sync read via `.get(params)`, fetch via `context.actions.resource(...).exceeds(...)`, auto-broadcast via `resource.x.action(partial?)` after every successful fetch
+  - `use-resource.md` - Resource: declare at module scope, sync read via `.get(params)`, fetch via `context.actions.resource(...).exceeds(...)`, auto-broadcast via `resource.x.action(partial?)` after every successful fetch **and every eviction** (payload `T | null` &mdash; null on evict/nuke, T on success)
   - `utility-functions.md` - sleep, pk utilities
   - `utility-types.md` - Handler, Handlers types
   - `void-model.md` - Actions without local state
