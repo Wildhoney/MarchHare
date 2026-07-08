@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.19.0](https://github.com/Wildhoney/MarchHare/compare/v0.18.0...v0.19.0) (2026-07-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* **resource:** fire .action() with null on evict/nuke; widen payload to T | null
+
+### Features
+
+* **resource:** fire .action() with null on evict/nuke; widen payload to T | null ([8e9ec83](https://github.com/Wildhoney/MarchHare/commit/8e9ec8352952bcddc4430e96cfd193ca2f9b80ce))
+
 ## [0.18.0](https://github.com/Wildhoney/MarchHare/compare/v0.17.0...v0.18.0) (2026-06-28)
 
 ### ⚠ BREAKING CHANGES
