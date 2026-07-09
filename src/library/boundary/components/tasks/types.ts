@@ -40,6 +40,29 @@ export type Task<P = unknown> = {
 export type Tasks = Set<Task>;
 
 /**
+ * The handler's own task, exposed as `context.task`. A {@link Task} plus
+ * {@link CurrentTask.supersede} &mdash; only the current task carries the
+ * method; the {@link Tasks} set holds plain {@link Task} records.
+ */
+export type CurrentTask<P = unknown> = Task<P> & {
+  /**
+   * Abort every other in-flight task dispatched from the same action,
+   * leaving this one running &mdash; the one-line form of the debounce
+   * sibling-abort loop. Superseded tasks reject with `Reason.Aborted`.
+   *
+   * @example
+   * ```ts
+   * actions.useAction(Actions.Search, async (context, query) => {
+   *   context.task.supersede();
+   *   await utils.sleep(300, context.task.controller.signal);
+   *   // ...only the last dispatch in a burst reaches here
+   * });
+   * ```
+   */
+  supersede(): void;
+};
+
+/**
  * Props for the Tasks provider component.
  */
 export type Props = {

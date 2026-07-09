@@ -5,6 +5,7 @@ import type {
   ActionId,
   Task,
   Tasks,
+  CurrentTask,
 } from "../boundary/components/tasks/types.ts";
 import type { Fault } from "../error/types.ts";
 import type { Env } from "../boundary/components/env/types.ts";
@@ -168,7 +169,7 @@ export type ResourceCall<T> = ResourceFetch<T> & {
 };
 import { describe } from "../utils.ts";
 
-export type { ActionId, Box, Task, Tasks };
+export type { ActionId, Box, Task, Tasks, CurrentTask };
 /**
  * Type for objects with a Brand.Action symbol property.
  * Used for type-safe access to the action symbol.
@@ -1009,7 +1010,7 @@ export type HandlerContext<
 > = {
   readonly model: DeepReadonly<M>;
   readonly phase: Phase;
-  readonly task: Task;
+  readonly task: CurrentTask;
   readonly data: DeepReadonly<D>;
   readonly tasks: ReadonlySet<Task>;
   readonly env: Readonly<E>;

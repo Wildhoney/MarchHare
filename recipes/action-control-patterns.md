@@ -58,15 +58,11 @@ actions.useAction(Actions.FetchData, async (context) => {
 
 ## Debouncing and throttling
 
-Re-dispatching an action does **not** abort the previous in-flight handler &ndash; each dispatch is an independent task, and only unmount aborts a task automatically. To debounce, abort the sibling tasks of the same action yourself at the top of the handler, then let the abort signal cancel each superseded sleep:
+Re-dispatching an action does **not** abort the previous in-flight handler &ndash; each dispatch is an independent task, and only unmount aborts a task automatically. To debounce, call `context.task.supersede()` at the top of the handler to abort the in-flight siblings of the same action, then let the abort signal cancel each superseded sleep:
 
 ```ts
 actions.useAction(Actions.Search, async (context, query) => {
-  for (const task of context.tasks) {
-    if (task !== context.task && task.action === context.task.action) {
-      task.controller.abort();
-    }
-  }
+  context.task.supersede();
 
   await utils.sleep(300, context.task.controller.signal); // Debounce delay
   const results = await fetch(`/search?q=${query}`, {

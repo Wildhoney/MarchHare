@@ -177,6 +177,7 @@ actions.useAction(Actions.Fetch, async (context, payload) => {
   context.phase;
 
   // Current task info: { controller: AbortController, action, payload }
+  // context.task.supersede() aborts in-flight siblings of the same action.
   context.task;
 
   // All running tasks across all components
@@ -388,10 +389,13 @@ actions.useAction(Actions.Fetch, async (context) => {
   });
 });
 
-// Debouncing - sleep aborts when new dispatch occurs
+// Debouncing - supersede in-flight siblings, then let the abort cancel the sleep
 actions.useAction(Actions.Search, async (context, query) => {
+  context.task.supersede();
   await utils.sleep(300, context.task.controller.signal);
-  const results = await fetch(`/search?q=${query}`);
+  const results = await fetch(`/search?q=${query}`, {
+    signal: context.task.controller.signal,
+  });
 });
 ```
 

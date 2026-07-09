@@ -25,6 +25,7 @@ import {
   UseActions,
   Result,
   Task,
+  CurrentTask,
   Filter,
   ChanneledAction,
   ActionOrChanneled,
@@ -166,7 +167,18 @@ export function useActions<
   const getContext = React.useCallback(
     (action: ActionId, payload: unknown, result: Result) => {
       const controller = new AbortController();
-      const task: Task = { controller, action, payload };
+      const task: CurrentTask = {
+        controller,
+        action,
+        payload,
+        supersede() {
+          for (const sibling of tasks) {
+            if (sibling !== task && sibling.action === action) {
+              sibling.controller.abort(new Aborted("Superseded"));
+            }
+          }
+        },
+      };
       tasks.add(task);
       localTasks.current.add(task);
 

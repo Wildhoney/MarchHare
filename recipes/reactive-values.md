@@ -97,7 +97,7 @@ Everything else in the boundary reads `Broadcast.User` via `useAction`, `stream(
 
 ## Debouncing
 
-A rapidly-changing bound value (a search query prop typed character by character) fires a dispatch per change. Each dispatch is an **independent** task: consistent with every other dispatch in March Hare, a newer firing does **not** abort the in-flight handler from the previous one &mdash; only unmount aborts a task automatically. To debounce, abort the sibling tasks of the same action yourself before sleeping, then let the abort signal cancel the superseded sleep:
+A rapidly-changing bound value (a search query prop typed character by character) fires a dispatch per change. Each dispatch is an **independent** task: consistent with every other dispatch in March Hare, a newer firing does **not** abort the in-flight handler from the previous one &mdash; only unmount aborts a task automatically. To debounce, call `context.task.supersede()` before sleeping to abort the in-flight siblings, then let the abort signal cancel the superseded sleep:
 
 ```ts
 export class Actions {
@@ -105,11 +105,7 @@ export class Actions {
 }
 
 actions.useAction(Actions.Query(props.query), async (context, query) => {
-  for (const task of context.tasks) {
-    if (task !== context.task && task.action === context.task.action) {
-      task.controller.abort();
-    }
-  }
+  context.task.supersede();
   await utils.sleep(300, context.task.controller.signal);
   const results = await fetch(`/search?q=${query}`, {
     signal: context.task.controller.signal,

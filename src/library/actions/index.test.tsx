@@ -3240,6 +3240,47 @@ describe("useActions() typing", () => {
   });
 });
 
+describe("useActions() context.task.supersede", () => {
+  class SupersedeActions {
+    static Run = Action<string>("Run");
+    static Other = Action("Other");
+  }
+
+  it("should abort in-flight siblings of the same action, sparing other actions and itself", async () => {
+    const runSignals: AbortSignal[] = [];
+    const otherSignals: AbortSignal[] = [];
+
+    const { result } = renderHook(() => {
+      const actions = useActions<void, typeof SupersedeActions>();
+
+      actions.useAction(SupersedeActions.Run, async (context) => {
+        runSignals.push(context.task.controller.signal);
+        context.task.supersede();
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      });
+
+      actions.useAction(SupersedeActions.Other, async (context) => {
+        otherSignals.push(context.task.controller.signal);
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      });
+
+      return actions;
+    });
+
+    await act(async () => {
+      result.current.dispatch(SupersedeActions.Other);
+      result.current.dispatch(SupersedeActions.Run, "first");
+      result.current.dispatch(SupersedeActions.Run, "second");
+      await new Promise((resolve) => setTimeout(resolve, 60));
+    });
+
+    expect(runSignals[0].aborted).toBe(true);
+    expect(runSignals[0].reason.name).toBe("AbortError");
+    expect(runSignals[1].aborted).toBe(false);
+    expect(otherSignals[0].aborted).toBe(false);
+  });
+});
+
 describe("useActions() lifecycle phase correctness", () => {
   type PhaseModel = { value: string | null };
   const phaseModel: PhaseModel = { value: null };
