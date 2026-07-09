@@ -21,6 +21,7 @@ import {
   isChanneledAction,
   getActionSymbol,
   getLifecycleType,
+  isReactiveBinding,
 } from "../action/index.ts";
 
 /**
@@ -262,8 +263,10 @@ export function useDispatchers(): Dispatchers {
  * @template D - The data type for reactive external values
  *
  * @param scope - Ref to the component's handler scope containing registered handlers
- * @param action - The action to register (ActionId, HandlerPayload, or ChanneledAction)
+ * @param action - The action to register (ActionId, HandlerPayload, ChanneledAction, or ReactiveBinding)
  * @param handler - The handler function to invoke when the action is dispatched
+ * @param site - Per-call-site symbol; registered as the channel for reactive
+ *   bindings so each binding's emission reaches only its own handler
  *
  * @example
  * ```ts
@@ -271,12 +274,12 @@ export function useDispatchers(): Dispatchers {
  *   context.actions.produce((draft) => {
  *     draft.model.count += payload;
  *   });
- * });
+ * }, site);
  *
  * // With channeled action
  * useRegisterHandler(scope, Actions.UserUpdated({ UserId: 5 }), (context, user) => {
  *   // Only called when UserId matches 5
- * });
+ * }, site);
  * ```
  *
  * @internal
@@ -292,6 +295,7 @@ export function useRegisterHandler<
     context: HandlerContext<M, A, D>,
     payload: unknown,
   ) => void | Promise<void> | AsyncGenerator | Generator,
+  site: symbol,
 ): void {
   // Store latest handler in ref to avoid stale closures (replaces useEffectEvent)
   const handlerRef = React.useRef(handler);
@@ -314,19 +318,65 @@ export function useRegisterHandler<
     [],
   );
 
-  // Stable channel getter
-  const getChannel = React.useCallback(
-    (): Filter | undefined =>
-      isChanneledAction(actionRef.current)
-        ? <Filter>actionRef.current.channel
-        : undefined,
-    [],
-  );
+  // Stable channel getter. Reactive bindings register their call-site
+  // symbol as the channel so that a binding's emission (which dispatches
+  // on the same channel) reaches only its own handler &mdash; two bindings
+  // of one Reactive static within a component stay isolated, while an
+  // uncalled subscription (no channel) still hears every dispatch.
+  const getChannel = React.useCallback((): Filter | undefined => {
+    if (isChanneledAction(actionRef.current)) {
+      return <Filter>actionRef.current.channel;
+    }
+    if (isReactiveBinding(actionRef.current)) return { Site: site };
+    return undefined;
+  }, [site]);
 
   const base = getActionSymbol(action);
   const entries = scope.current.handlers.get(base) ?? new Set();
   if (entries.size === 0) scope.current.handlers.set(base, entries);
   entries.add({ getChannel, handler: <Handler<M, A, D>>stableHandler });
+}
+
+/**
+ * Emits a reactive binding's value through the component's unicast
+ * emitter whenever it changes between renders. No-ops for every other
+ * registration kind &mdash; it is called unconditionally per `useAction`
+ * call site so the hook order stays stable.
+ *
+ * The comparison is `Object.is` against the last-dispatched value, which
+ * starts as `undefined`. A defined value therefore fires once on mount
+ * &mdash; values already present on the first render (e.g. a hydrated
+ * React Query cache) still reach the handler &mdash; while an `undefined`
+ * mount value stays silent until the first defined value arrives. This
+ * deliberately diverges from `Lifecycle.Update`, which never fires on
+ * mount.
+ *
+ * The effect runs after every commit (no dependency array) because the
+ * binding is a fresh wrapper each render; the `Object.is` guard makes
+ * unchanged renders free. It also runs after the subscription effect in
+ * `useActions` (declared earlier in the hook order), so the mount
+ * emission is never lost.
+ *
+ * The emission carries the registration's site symbol as its channel so
+ * that two bindings of the same static within one component stay
+ * isolated &mdash; each site's dispatch reaches only its own handler,
+ * while uncalled subscriptions on the static hear every site.
+ *
+ * @internal
+ */
+export function useReactiveEmit(
+  action: ActionId | HandlerPayload | ChanneledAction,
+  unicast: EventEmitter,
+  site: symbol,
+): void {
+  const binding = isReactiveBinding(action) ? action : null;
+  const dispatched = React.useRef<unknown>(undefined);
+  React.useLayoutEffect(() => {
+    if (G.isNull(binding)) return;
+    if (Object.is(dispatched.current, binding.value)) return;
+    dispatched.current = binding.value;
+    unicast.emit(getActionSymbol(binding), binding.value, { Site: site });
+  });
 }
 
 /**

@@ -5,9 +5,10 @@ import {
   getName,
   getActionSymbol,
   isChanneledAction,
+  isReactiveBinding,
 } from "./utils.ts";
 import { Action } from "./index.ts";
-import { Distribution } from "../types/index.ts";
+import { Distribution, Lifecycle } from "../types/index.ts";
 
 describe("getActionSymbol()", () => {
   it("should return string as-is", () => {
@@ -91,6 +92,45 @@ describe("getName()", () => {
   it("should return unknown for malformed symbols", () => {
     const malformed = <symbol>(<unknown>Symbol("not-a-march-hare-action"));
     expect(getName(malformed)).toBe("unknown");
+  });
+
+  it("should extract the kind from a lifecycle action", () => {
+    const action = Lifecycle.Mount();
+    expect(getName(action)).toBe("Mount");
+  });
+
+  it("should extract the supplied name from a named reactive action", () => {
+    const action = Lifecycle.Reactive<string>("Profile");
+    expect(getName(action)).toBe("Profile");
+  });
+
+  it("should fall back to the kind for an unnamed reactive action", () => {
+    const action = Lifecycle.Reactive<string>();
+    expect(getName(action)).toBe("Reactive");
+  });
+});
+
+describe("isReactiveBinding()", () => {
+  it("should return false for the uncalled reactive static", () => {
+    const action = Lifecycle.Reactive<string>("Profile");
+    expect(isReactiveBinding(action)).toBe(false);
+  });
+
+  it("should return true for a bound value", () => {
+    const action = Lifecycle.Reactive<string>("Profile");
+    expect(isReactiveBinding(action("Adam"))).toBe(true);
+  });
+
+  it("should return false for regular and channeled actions", () => {
+    const regular = Action<string>("Plain");
+    const channeled = Action<string, { UserId: number }>("Filtered");
+    expect(isReactiveBinding(regular)).toBe(false);
+    expect(isReactiveBinding(channeled({ UserId: 1 }))).toBe(false);
+  });
+
+  it("should expose the bound value on the binding", () => {
+    const action = Lifecycle.Reactive<string>("Profile");
+    expect(action("Adam").value).toBe("Adam");
   });
 });
 
