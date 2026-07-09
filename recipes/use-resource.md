@@ -6,7 +6,7 @@
 - **`resource.user(params?)`** &mdash; produces an `Invocation` describing the call. Pass it to `context.actions.resource(...)` for the fetch path or to `.evict(...)` for eviction; outside that, the value is inert.
 - **`context.actions.resource(resource.user(params?))`** &mdash; fires the fetch from an action handler. Auto-threads the `AbortController` from `context.task.controller` and a live handle to the per-`<Boundary>` Env. Returns a thenable that's also chainable with `.exceeds({ minutes: 5 })` for cache-aware refresh.
 
-The fetcher itself receives a single `context` argument carrying `env`, `controller`, `params`, and a broadcast/multicast-only `dispatch`. Access fields directly via `context.controller.signal`, `context.params.id`, etc. &mdash; do not destructure. Pass `context.controller.signal` to `fetch`/`ky`/`EventSource` for cancellation.
+The fetcher receives a single `context` argument carrying `env`, `controller`, `params`, and a broadcast/multicast-only `dispatch`. Access fields directly via `context.controller.signal`, `context.params.id`, etc. &mdash; do not destructure. Pass `context.controller.signal` to `fetch`/`ky`/`EventSource` for cancellation.
 
 Declaring a Resource **without a fetcher** (`app.Resource<T, P>()`) yields a [local resource](#local-resources--no-fetcher) &mdash; same cache, broadcast, and eviction machinery, written through `.set(value)` instead of a fetch.
 
@@ -31,7 +31,7 @@ export const pay = app.Resource<Receipt, Body>((context) =>
     .json<Receipt>(),
 );
 
-// Simple no-env, no-params:
+// No-env, no-params:
 export const ping = app.Resource((context) =>
   ky.get("ping", { signal: context.controller.signal }).text(),
 );
@@ -259,8 +259,6 @@ actions.useAction(Actions.Mount, async (context) => {
   }
 });
 ```
-
-When several components need to react to a resource update, the auto-broadcast is the first thing to reach for; manual broadcasts via `context.dispatch` / `context.actions.dispatch` layer on top for the cases above.
 
 > **Note:** TypeScript cannot type promise rejections, so `await context.actions.resource(...)` rejects with `unknown`. To narrow inline, use `error instanceof YourErrorClass` checks within a `try/catch`.
 
@@ -505,7 +503,7 @@ const actions = context.useActions({
 });
 ```
 
-Persistence follows the existing rule: declare through `app.Resource` on an `App({ cache })` and every `.set(...)` writes through to the adapter, seeding back on the next reload &mdash; which is usually the whole point of a local Resource (drafts, last-selected tab, an offline queue). `shared.Resource()` is always in-memory. Note that `context.actions.resource.nuke()` clears local slots alongside fetched ones &mdash; desirable on sign-out, but reach for a partial pattern (`nuke({ userId })`) when local values should survive.
+Persistence follows the existing rule: declare through `app.Resource` on an `App({ cache })` and every `.set(...)` writes through to the adapter, seeding back on the next reload &mdash; which is usually the whole point of a local Resource (drafts, last-selected tab, an offline queue). `shared.Resource()` is always in-memory. `context.actions.resource.nuke()` clears local slots alongside fetched ones &mdash; desirable on sign-out, but reach for a partial pattern (`nuke({ userId })`) when local values should survive.
 
 **When not to use it:** component-local state belongs in the model, and cross-cutting ambient state (session, locale, flags) belongs in the [Env](./env.md). A local Resource earns its place when the value needs some combination of params-keyed slots, sync reads at construction time, broadcast fan-out, and persistence &mdash; not as a general key-value store.
 
@@ -577,10 +575,10 @@ Pending state drives the UI via `actions.inspect.user.pending()` &mdash; see [mo
 Concurrent `await context.actions.resource(...)` calls with the same `(Resource, params)` share a single in-flight fetch by default:
 
 ```ts
-const a = context.actions.resource(resource.user({ id: 5 }));
-const b = context.actions.resource(resource.user({ id: 5 }));
-const c = context.actions.resource(resource.user({ id: 5 }));
-await Promise.all([a, b, c]); // one network request, three resolutions
+const first = context.actions.resource(resource.user({ id: 5 }));
+const second = context.actions.resource(resource.user({ id: 5 }));
+const third = context.actions.resource(resource.user({ id: 5 }));
+await Promise.all([first, second, third]); // one network request, three resolutions
 ```
 
 The shared fetch writes through to the per-params cache slot once on success. Different params (`{ id: 5 }` vs. `{ id: 6 }`) fall into different slots and fire independent requests, as do unrelated Resources. Chain [`.isolated()`](#opting-out--isolated) on a specific call to opt out for the rare case that needs an independent network request.
@@ -600,7 +598,7 @@ actions.useAction(Actions.Mount, async (context) => {
 });
 ```
 
-The `annotate` call drives the loading UI via `actions.inspect.user.pending()` &mdash; see [model-annotations](./model-annotations.md). Refresh has the same body, just call `context.actions.resource(resource.user(...))` again.
+The `annotate` call drives the loading UI via `actions.inspect.user.pending()` &mdash; see [model-annotations](./model-annotations.md). Refresh has the same body: call `context.actions.resource(resource.user(...))` again.
 
 ## Infinite scroll
 

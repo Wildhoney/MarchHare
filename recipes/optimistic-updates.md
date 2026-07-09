@@ -1,12 +1,12 @@
 # Optimistic updates
 
-Optimistic updates show the user the expected outcome of an action immediately, without waiting for the server. They are made safe by three primitives that already exist in the library:
+Optimistic updates show the user the expected outcome of an action immediately, without waiting for the server. They are made safe by three primitives:
 
 - **`utils.pk()`** &mdash; generates a unique placeholder identifier that survives concurrent reorders.
 - **Model annotations** &mdash; mark a field as in-flight so the view can show a pending hint, and let concurrent handlers read the latest draft rather than the committed value.
 - **`Lifecycle.Error()`** (or a `try`/`catch` inside the handler) &mdash; rolls the model back when the server rejects the change.
 
-This recipe ties them together. For the individual primitives see [utility-functions.md](./utility-functions.md), [model-annotations.md](./model-annotations.md), and [error-handling.md](./error-handling.md).
+For the individual primitives see [utility-functions.md](./utility-functions.md), [model-annotations.md](./model-annotations.md), and [error-handling.md](./error-handling.md).
 
 ## Create with a placeholder identifier
 
@@ -148,7 +148,7 @@ actions.useAction(Actions.Error, (context, fault) => {
 });
 ```
 
-Choose strategy 1 unless a single rollback genuinely covers multiple actions &mdash; the colocated `try`/`catch` is easier to follow.
+Choose strategy 1 unless a single rollback covers multiple actions &mdash; the colocated `try`/`catch` is easier to follow.
 
 ## Concurrent edits: read the draft, not the model
 
@@ -222,7 +222,7 @@ actions.useAction(Actions.Delete, async (context, id: number) => {
 });
 ```
 
-`context.model` is a read-only snapshot taken at the moment the handler started, which is exactly what we want here &mdash; the row to restore is the row the user asked to delete, not whatever happens to be in the model after concurrent edits.
+`context.model` is a read-only snapshot taken at the moment the handler started &mdash; the row to restore is the row the user asked to delete, not whatever happens to be in the model after concurrent edits.
 
 ## When not to use optimistic updates
 

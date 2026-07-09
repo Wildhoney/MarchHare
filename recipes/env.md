@@ -48,7 +48,7 @@ The initial value lives on the App; the Boundary delivers it to the subtree. Wri
 
 ## Reading via dot notation
 
-The Env is auto-threaded into every handler's `context` and every Resource fetcher's args. There's nothing to wire &mdash; just read `context.env.x`:
+The Env is auto-threaded into every handler's `context` and every Resource fetcher's args &mdash; nothing to wire, read `context.env.x`:
 
 ```ts
 import { app } from "./app";
@@ -156,7 +156,7 @@ export const user = app.Resource<User, { id: number }>({
 
 ## Reactivity caveats
 
-The Env is **not** a React state primitive. Direct `app.useEnv()` reads do not re-render components when the Env changes &mdash; the hook returns a Proxy that delegates to the live ref. Use the Env for the _handler_ side of your app where dot reads inside handlers and fetchers are always fresh.
+The Env is **not** a React state primitive. Direct `app.useEnv()` reads do not re-render components when the Env changes &mdash; the hook returns a Proxy that delegates to the live ref. Use the Env for the _handler_ side, where dot reads inside handlers and fetchers are always fresh.
 
 For the view side, subscribe to `Lifecycle.Env` &mdash; a singleton broadcast that fires every time `produce` mutates the Env. It delivers the full latest snapshot to every subscriber in the surrounding `<app.Boundary>`, and seeds with the initial Env so late mounters see the current value on mount:
 

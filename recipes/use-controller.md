@@ -48,7 +48,7 @@ Reading order maps directly to declaration order:
 
 ## Real-world example: card payment flow
 
-Below is a payment form integrating `formikate` (synchronous form library), a Worldpay SDK, and a Checkout.com SDK. The form's `onSubmit` needs `context.actions.dispatch`, and the resulting form instance is consumed by both handlers (validation, value extraction) and JSX (rendering `<BillingForm form={data.form} />`). Multiple imperative SDKs converge on a single action surface.
+Below is a payment form integrating `formikate` (synchronous form library), a Worldpay SDK, and a Checkout.com SDK. The form's `onSubmit` needs `context.actions.dispatch`, and the resulting form instance is consumed by both handlers (validation, value extraction) and JSX (rendering `<BillingForm form={data.form} />`).
 
 ```ts
 import { useState } from "react";
@@ -144,7 +144,7 @@ export function useActions() {
       const errors = await form.validateForm();
       if (Object.keys(errors).length > 0) {
         const touched = Object.fromEntries(
-          Object.keys(billingFields).map((k) => [k, true]),
+          Object.keys(billingFields).map((field) => [field, true]),
         );
         void form.setTouched(touched);
         checkout.actions.setSubmitting(false);
@@ -237,7 +237,7 @@ The handle is stable across renders, so capturing `context.actions.dispatch` onc
 
 ## Naming convention
 
-When a component's `actions.ts` uses this pattern, the wrapper hook can simply be called `useActions`:
+When a component's `actions.ts` uses this pattern, the wrapper hook can be called `useActions`:
 
 ```ts
 // actions.ts

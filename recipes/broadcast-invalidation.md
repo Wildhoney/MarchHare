@@ -1,6 +1,6 @@
 # Broadcast invalidation
 
-When a domain event occurs (e.g. user signs out, permissions change, locale switches), multiple producers may need to re-fetch and re-broadcast their data. This recipe shows how to coordinate that without coupling producers to each other.
+When a domain event occurs (e.g. user signs out, permissions change, locale switches), multiple producers may need to re-fetch and re-broadcast their data. Coordinate that without coupling producers to each other.
 
 ## The problem
 

@@ -150,13 +150,15 @@ actions.useAction(Actions.Error, (context, fault) => {
 });
 
 actions.useAction(Actions.Update, (context, changes) => {
-  // Triggered when context.data changes (not on initial mount)
+  // Fires on mount with the initial data ({} when there is no data), then on
+  // every context.data change. The mount fire runs while phase is Mounting.
   // changes: Partial<DeepReadonly<D>> — only the data keys whose values
   // changed between renders, typed against the useContext data generic
 });
 
 // Reactive: bind an external value at the call site by calling the static.
-// Fires whenever `user` changes by Object.is, and once on mount if defined.
+// Fires once on mount with the current value (defined or undefined, during
+// Mounting), then whenever `user` changes by Object.is.
 actions.useAction(Actions.User(user), (context, user) => {
   context.actions.produce(({ model }) => void (model.profile = user ?? null));
 });

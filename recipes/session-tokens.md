@@ -92,7 +92,7 @@ Whether to persist access tokens in `sessionStorage` / `localStorage` is a secur
 
 ### Resources read the token via dot notation
 
-Every fetcher receives the Env on its args object. Read the token with plain dot notation; the rest of the Resource stays one-line:
+Every fetcher receives the Env on its args object. Read the token with plain dot notation:
 
 ```ts
 // resources.ts
@@ -127,7 +127,7 @@ export const pay = app.Resource<Receipt, Body>({
 });
 ```
 
-No module-level mutable, no `getSession()` helper, no `ky.beforeRequest` reading a singleton. The token comes from where every other ambient value lives.
+No module-level mutable, no `getSession()` helper, no `ky.beforeRequest` reading a singleton.
 
 ### Sign-in / sign-out write via `context.actions.produce`
 
@@ -164,7 +164,7 @@ export function useActions() {
 }
 ```
 
-Components that need to react to sign-in/sign-out subscribe to the broadcast actions as usual. The Env carries the ambient value; broadcasts carry the _event_.
+Components that react to sign-in/sign-out subscribe to the broadcast actions. The Env carries the ambient value; broadcasts carry the _event_.
 
 ## Refresh on 401
 
@@ -254,7 +254,7 @@ actions.useAction(Actions.RefreshSession, (context, next) => {
 });
 ```
 
-Mount `<AuthBridge />` once inside the `<app.Boundary>` and Resources go on importing `api` from `./api/client` as if nothing fancy was happening. `bindSession` is called every render but it just rebinds two function references &mdash; no allocations, no lifecycle hooks, no `useRef`.
+Mount `<AuthBridge />` once inside the `<app.Boundary>`; Resources keep importing `api` from `./api/client`. `bindSession` runs every render but only rebinds two function references &mdash; no allocations, no lifecycle hooks, no `useRef`.
 
 Notes:
 

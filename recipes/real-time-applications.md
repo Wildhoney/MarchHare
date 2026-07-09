@@ -1,11 +1,11 @@
 # Real-time applications
 
-March Hare's lifecycle actions make it easy to integrate with real-time data sources like Server-Sent Events (SSE), WebSockets, or any event-based API. Use `Lifecycle.Mount()` to establish connections and `Lifecycle.Unmount()` to clean them up.
+Lifecycle actions integrate real-time data sources &mdash; Server-Sent Events (SSE), WebSockets, or any event-based API. Establish connections in `Lifecycle.Mount()` and clean them up in `Lifecycle.Unmount()`.
 
-This recipe covers two patterns:
+Two patterns:
 
-1. **Model-driven** &mdash; the simple case where incoming events update local model state.
-2. **Cache-driven** &mdash; pushing incoming events into a Resource's cache so the rest of the app (other components, fetchers using `.exceeds({...})`) sees the fresh value without an extra round-trip.
+1. **Model-driven** &mdash; incoming events update local model state.
+2. **Cache-driven** &mdash; incoming events push into a Resource's cache so the rest of the app (other components, fetchers using `.exceeds({...})`) sees the fresh value without an extra round-trip.
 
 ## Pattern 1: model-driven (visitor stream)
 

@@ -1,6 +1,6 @@
 # Broadcast actions
 
-Broadcast actions allow different components to communicate with each other. Unlike regular actions which are scoped to a single component, broadcast actions are sent to all mounted components that have defined a handler for them.
+Unlike regular actions, which are scoped to a single component, broadcast actions are sent to all mounted components that have defined a handler for them.
 
 To create a broadcast action, use `Distribution.Broadcast` as the second parameter. A good pattern is to define broadcast actions in a shared class and reference them via a static property:
 

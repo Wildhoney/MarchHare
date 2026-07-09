@@ -1,12 +1,12 @@
 # Multicast actions
 
-Multicast actions let components within a named boundary communicate with each other. Unlike broadcast actions which reach every mounted component, multicast actions are confined to a subtree wrapped in `withScope`.
+Multicast actions let components within a named boundary communicate. Unlike broadcast actions, which reach every mounted component, multicast actions are confined to a subtree wrapped in `withScope`.
 
-Each multicast action defines its own scope &mdash; the same action you dispatch is the one you pass to `withScope`. There is no separate "scope name"; the action's identity is the scope key.
+Each multicast action defines its own scope &mdash; the action you dispatch is the one you pass to `withScope`. There is no separate "scope name"; the action's identity is the scope key.
 
 ## Defining multicast actions
 
-Group multicast actions on a class. Naming the class `Scope` reads naturally at the call site (`Scope.Update`, `Scope.Mood`):
+Group multicast actions on a class named `Scope` for natural call sites (`Scope.Update`, `Scope.Mood`):
 
 ```ts
 // types.ts
@@ -75,7 +75,7 @@ The dispatch walks up the component tree to find the nearest ancestor `withScope
 
 ## Subscribing to multicast values
 
-Use `useAction` to subscribe and store only what you need locally:
+Subscribe with `useAction` and store only what you need locally:
 
 ```tsx
 function ScoreDisplay() {
@@ -108,7 +108,7 @@ function LateComponent() {
 
 ## Nested scopes
 
-Scopes can be nested. Each multicast action opens its own scope independently, so wrapping a subtree in multiple `withScope` HOCs composes naturally:
+Each multicast action opens its own scope independently, so wrapping a subtree in multiple `withScope` HOCs composes:
 
 ```tsx
 class Scope {

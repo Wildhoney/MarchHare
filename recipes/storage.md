@@ -165,7 +165,7 @@ const six: User | null = resource.user.get({ id: 6 });
 
 ### React Native &mdash; [`react-native-mmkv`](https://github.com/mrousavy/react-native-mmkv) (recommended)
 
-MMKV is the recommended React Native backend. It's synchronous out of the box, fast, and JSI-backed &ndash; no bridge round-trips, no `Promise` ceremony. `AsyncStorage` is incompatible with the Cache because the read path must be sync (the model literal is evaluated synchronously during render); MMKV avoids that constraint entirely.
+Synchronous out of the box, fast, and JSI-backed &ndash; no bridge round-trips, no `Promise` ceremony. `AsyncStorage` is incompatible with the Cache because the read path must be sync (the model literal is evaluated synchronously during render); MMKV avoids that constraint entirely.
 
 ```bash
 npm install react-native-mmkv
@@ -189,7 +189,7 @@ See the [`react-native-mmkv` README](https://github.com/mrousavy/react-native-mm
 
 ### Browser &mdash; `localStorage`
 
-`localStorage` is synchronous and ubiquitous; the simplest production-grade backend for the web:
+`localStorage` is synchronous and ubiquitous:
 
 ```ts
 import { Cache } from "march-hare";

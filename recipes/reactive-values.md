@@ -41,12 +41,11 @@ A `useEffect(() => { ... }, [user])` can watch the same value, but the callback 
 
 ## Firing semantics
 
-Changes are detected with `Object.is` against the **last-dispatched** value, which starts as `undefined`:
+Changes are detected with `Object.is` against the **last-dispatched** value. The first render always counts as a change, so mount fires once:
 
 | Transition                                   | Fires?                            |
 | -------------------------------------------- | --------------------------------- |
-| Mount with a defined value                   | Yes &mdash; once, with that value |
-| Mount with `undefined`                       | No &mdash; stays silent           |
+| Mount (defined or `undefined`)               | Yes &mdash; once, with that value |
 | `undefined` &rarr; defined                   | Yes                               |
 | Defined &rarr; defined (different reference) | Yes                               |
 | Defined &rarr; defined (same reference)      | No                                |
@@ -54,7 +53,7 @@ Changes are detected with `Object.is` against the **last-dispatched** value, whi
 
 Two points deserve emphasis:
 
-- **Defined-at-mount fires.** This deliberately diverges from `Lifecycle.Update()`, which never fires on mount. A hydrated cache (React Query with persisted data, SSR dehydration) delivers the value on the very first render and never changes it &mdash; a skip-mount rule would mean the handler never fires at all.
+- **Mount always fires.** The handler runs once on mount with the bound value &mdash; defined (a hydrated React Query or SSR cache) or `undefined` &mdash; then again on every change. The mount fire runs while `context.phase` is `Mounting`, matching `Lifecycle.Mount()` and the mount `Lifecycle.Update()`.
 - **Reference equality is the contract.** React Query's structural sharing keeps `data` referentially stable until its content changes, so `Object.is` is exactly right there. For values recomputed every render (fresh object literals, unmemoised `.map(...)` results), memoise before binding &mdash; an always-new reference fires on every render.
 
 The declared payload type is honest about `undefined`: `Lifecycle.Reactive<User | undefined>` admits the query's loading state, and the handler must handle `undefined` on the way back out (query key changes, cache eviction). Declare `Lifecycle.Reactive<User>` instead and TypeScript rejects binding a possibly-`undefined` value.

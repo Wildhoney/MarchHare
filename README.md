@@ -71,7 +71,7 @@ import { app } from "./app";
 </app.Boundary>;
 ```
 
-Inside a feature, define the model + actions, write a `useActions` hook that wires handlers, and destructure `[model, actions]` from it in the component. We dispatch the `Actions.Name` event on click, subscribe to it via `app.useContext`, and `With.Update` binds the payload directly to a model property:
+Inside a feature, define the model + actions, write a `useActions` hook that wires handlers, and destructure `[model, actions]` from it in the component. `With.Update` binds the payload directly to a model property:
 
 ```tsx
 import { Action, With } from "march-hare";
@@ -113,7 +113,7 @@ export default function Profile(): React.ReactElement {
 }
 ```
 
-This shape &ndash; `useActions` hook, `[model, actions]` destructure in the component &ndash; is the canonical pattern used throughout this README.
+This shape &ndash; `useActions` hook, `[model, actions]` destructure in the component &ndash; is the canonical pattern throughout this README.
 
 ## Async resources
 
@@ -165,11 +165,11 @@ export default function Profile(): React.ReactElement {
 }
 ```
 
-`annotate` is covered in the [Immertation documentation](https://github.com/Wildhoney/Immertation). Once the request resolves we update the model again with the fetched name. `app.Resource` caches the most recent successful payload and exposes typed params &ndash; the full API is covered [further down](#resource-handling).
+`annotate` is covered in the [Immertation documentation](https://github.com/Wildhoney/Immertation). `app.Resource` caches the most recent successful payload and exposes typed params &ndash; the full API is covered [further down](#resource-handling).
 
 ## Reactive data
 
-If you need to access external reactive values (props or `useState` from parent components) that always reflect the latest value even after `await` operations, pass a data callback as the second argument to `context.useActions`. The same snapshot is exposed as the third tuple element so JSX and handlers read from a single named source:
+To access external reactive values (props or `useState` from parent components) that stay current even after `await`, pass a data callback as the second argument to `context.useActions`. The same snapshot is exposed as the third tuple element so JSX and handlers read from a single named source:
 
 ```tsx
 import { Action } from "march-hare";
@@ -212,11 +212,11 @@ export default function Search(props: { query: string }): React.ReactElement {
 }
 ```
 
-`data` is read-only from the view side &ndash; handlers read fresh values via `context.data` (Proxy delegating to a ref kept current across `await`s); JSX reads via the third tuple element (the same Proxy, refreshed synchronously each render). If a handler needs to _react_ to a change in `data`, subscribe to `Lifecycle.Update()` &mdash; it fires whenever `getData`'s result differs from the previous render. See the [referential equality recipe](./recipes/referential-equality.md) and the [React context in handlers recipe](./recipes/react-context-in-handlers.md) for more.
+`data` is read-only from the view side &ndash; handlers read fresh values via `context.data` (Proxy delegating to a ref kept current across `await`s); JSX reads via the third tuple element (the same Proxy, refreshed synchronously each render). If a handler needs to _react_ to a change in `data`, subscribe to `Lifecycle.Update()` &mdash; it fires once on mount with the initial data, then whenever `getData`'s result differs from the previous render. See the [referential equality recipe](./recipes/referential-equality.md) and the [React context in handlers recipe](./recipes/react-context-in-handlers.md) for more.
 
-To run a handler when a **single external value** changes &ndash; a React Query result, a prop, a store selector &ndash; declare a `Lifecycle.Reactive<T>()` action and bind the value at the `useAction` site by calling it: `actions.useAction(Actions.User(user), handler)`. The handler fires through the full dispatch pipeline (task, abort signal, taps, faults) whenever the bound value changes by `Object.is`, and once on mount if it is already defined. See the [reactive values recipe](./recipes/reactive-values.md) for the React Query bridge, firing semantics, and the whole-app broadcast pattern.
+To run a handler when a **single external value** changes &ndash; a React Query result, a prop, a store selector &ndash; declare a `Lifecycle.Reactive<T>()` action and bind the value at the `useAction` site by calling it: `actions.useAction(Actions.User(user), handler)`. The handler fires through the full dispatch pipeline (task, abort signal, taps, faults) whenever the bound value changes by `Object.is`, and once on mount with the current value (defined or `undefined`). See the [reactive values recipe](./recipes/reactive-values.md) for the React Query bridge, firing semantics, and the whole-app broadcast pattern.
 
-When an external library needs the dispatch callback at construction time (form libraries, animation engines) _and_ its return value must flow back into `context.useActions` via the data callback, there's a chicken-and-egg &mdash; each side wants the other to exist first. `app.useContext` resolves this by returning a stable handle up-front: `context.actions.dispatch` is callable from the first line, the external library closes over it, and `context.useActions(initialModel, getData?)` completes the binding once the external value is in scope:
+When an external library needs the dispatch callback at construction time (form libraries, animation engines) _and_ its return value must flow back into `context.useActions` via the data callback, there's a chicken-and-egg. `app.useContext` resolves this by returning a stable handle up-front: `context.actions.dispatch` is callable from the first line, the external library closes over it, and `context.useActions(initialModel, getData?)` completes the binding once the external value is in scope:
 
 ```tsx
 import { Action } from "march-hare";
@@ -304,7 +304,7 @@ export class Actions {
 }
 ```
 
-Inside `useActions`, the handler fetches the user and then dispatches the broadcast so siblings see the result:
+The handler fetches the user, then dispatches the broadcast so siblings see the result:
 
 ```ts
 actions.useAction(Actions.Profile, async (context) => {
@@ -464,7 +464,7 @@ export default function Profile(): React.ReactElement {
 }
 ```
 
-Every successful fetch also publishes an auto-broadcast via `resource.x.action(partial?)`, and every eviction (`.evict(...)` / `.nuke(...)`) publishes a `null` on the same broadcast. Any component &mdash; even one that never called the fetcher &mdash; can react via `actions.useAction` or render the latest payload with `actions.stream`. Call `.action()` with no arguments to match every event on the resource, or supply a subset of params to narrow the filter:
+Any component &mdash; even one that never called the fetcher &mdash; can react to these auto-broadcasts via `actions.useAction` or render the latest payload with `actions.stream`. Call `.action()` with no arguments to match every event on the resource, or supply a subset of params to narrow the filter:
 
 ```tsx
 // greeting/actions.ts
@@ -803,7 +803,7 @@ export function useActions() {
 }
 ```
 
-A few rules worth knowing:
+A few rules:
 
 - **Scope is confined to the subtree.** Multicast dispatches inside `<scope.Boundary>` reach every subscriber inside the same boundary, and only those subscribers. Sibling boundaries don't see each other; nothing outside any boundary sees them either.
 - **Nesting shadows.** `<scope.Boundary>` is a React context provider, so an inner boundary fully shadows an outer one for its subtree. If you need a single scope to dispatch actions from multiple multicast classes, declare them as a union at the call site &mdash; e.g. `app.Scope<typeof PaymentMulticast | typeof RoomMulticast>()`.

@@ -45,7 +45,7 @@ export const app = App({
 
 Both `env` and `tap` are fixed at `App()` time; `<app.Boundary>` deliberately does not accept overrides. If a test render or storybook needs a different initial Env or a spy tap, declare a separate `App` with that configuration and render its boundary instead.
 
-For low-level scenarios where you have not adopted `App()`, the bare `<Boundary tap={...}>` accepts the same callback &mdash; `App()` is just the typed wrapper around it.
+For low-level scenarios where you have not adopted `App()`, the bare `<Boundary tap={...}>` accepts the same callback &mdash; `App()` is the typed wrapper around it.
 
 The boundary re-renders without invalidating the tap context when the callback identity changes &mdash; the provider stores the callback in a ref, so inline arrow functions are safe.
 
@@ -78,7 +78,7 @@ Subscribe to both. Faults handle the consequences of failure; the tap records th
 
 ## Analytics: per-action timing
 
-A common use is feeding action timings into an analytics or APM pipeline:
+Feed action timings into an analytics or APM pipeline:
 
 ```ts
 import { Boundary, type Taps } from "march-hare";
@@ -97,7 +97,7 @@ function tap(event: Taps) {
 </Boundary>;
 ```
 
-Branching on `stage === "end"` narrows the event to either result variant, exposing `elapsed` and `result`. The `start` events carry no `elapsed`, so they're filtered out at the top of the callback.
+Branching on `stage === "end"` narrows the event to either result variant, exposing `elapsed` and `result`; `start` events carry no `elapsed`.
 
 ## Audit log: dispatched action trace
 

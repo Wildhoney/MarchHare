@@ -68,7 +68,7 @@ The mental model is symmetric across the read sites:
 | React      | Hook emits a new value    | `data.X`    | `context.data.X`  |
 | March Hare | `context.actions.produce` | `model.X`   | `context.model.X` |
 
-`data` is read-only from both sides. If a handler needs to _write_ something, that value belongs on the model. If a handler needs to _react_ to a change in `data`, subscribe to `Lifecycle.Update()` &mdash; it fires whenever `getData`'s result differs from the previous render and delivers the changed keys.
+`data` is read-only from both sides. If a handler needs to _write_ something, that value belongs on the model. If a handler needs to _react_ to a change in `data`, subscribe to `Lifecycle.Update()` &mdash; it fires once on mount with the initial data, then whenever `getData`'s result differs from the previous render, delivering the changed keys.
 
 ## Why data stays fresh
 
@@ -84,8 +84,6 @@ actions.useAction(Actions.LongRunning, async (context) => {
   console.log(context.data.count); // e.g., 5
 });
 ```
-
-This makes `context.data` ideal for accessing props, context, or any reactive values that may change during async operations.
 
 ## When to use the third tuple element
 

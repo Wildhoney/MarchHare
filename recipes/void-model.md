@@ -18,7 +18,7 @@ actions.useAction(Actions.Mount, () => {
 });
 ```
 
-When a component needs to dispatch or listen to actions but doesn't manage any local state, call `context.useActions()` with no arguments:
+To dispatch or listen to actions without managing local state, call `context.useActions()` with no arguments:
 
 ```ts
 import { Action } from "march-hare";

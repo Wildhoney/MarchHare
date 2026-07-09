@@ -1,10 +1,8 @@
 # Using ky for HTTP requests
 
-[ky](https://github.com/sindresorhus/ky) is a lightweight HTTP client built on `fetch` with a cleaner API, automatic retries, and better error handling. It pairs well with March Hare actions for data fetching.
+[ky](https://github.com/sindresorhus/ky) is a `fetch`-based HTTP client with automatic retries and typed error handling. It pairs well with March Hare actions for data fetching.
 
 ## Basic usage
-
-Here's a simple example that fetches user data:
 
 ```ts
 import { Action, Lifecycle, Operation } from "march-hare";
@@ -49,7 +47,7 @@ export function useActions() {
 
 ## Request cancellation
 
-March Hare provides an `AbortController` via `context.task.controller` that you can pass to ky. This enables automatic cancellation when the component unmounts or when a newer request supplants the current one:
+Pass `context.task.controller.signal` to ky for automatic cancellation when the component unmounts or a newer request supplants the current one:
 
 ```ts
 actions.useAction(Actions.FetchUser, async (context, userId) => {
@@ -131,7 +129,7 @@ export function useActions(authToken: string) {
 }
 ```
 
-> **Note:** By passing the ky instance through `context.data`, you ensure that handlers always access the latest configuration, even if props like `authToken` change after an `await`.
+> **Note:** Passing the ky instance through `context.data` keeps handlers on the latest configuration, even if props like `authToken` change after an `await`.
 
 ## Error handling with HTTPError
 

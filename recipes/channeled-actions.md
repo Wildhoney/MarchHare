@@ -1,6 +1,6 @@
 # Channeled Actions
 
-Channeled actions allow targeted event delivery by subscribing with a controller object. This pattern is ideal for components that only care about updates relevant to them.
+Channeled actions deliver events to targeted subscribers via a controller object, so a component receives only the updates relevant to it.
 
 ## Basic Usage
 
@@ -35,7 +35,7 @@ function UserCard({ userId }: { userId: number }) {
 
 ## Channel Matching
 
-The controller is an object where each key-value pair the **subscriber** supplies must be present and equal on the dispatch channel. Keys the subscriber omits are not checked, so the subscriber's controller acts as a filter ("everything I want matched against"). The dispatcher is free to be more specific than any single subscriber needs &mdash; extra keys on the dispatch channel are ignored. By convention, use **uppercase keys** (e.g., `{UserId: 4}` not `{userId: 4}`) to distinguish controller keys from payload properties.
+The controller is an object; each key-value pair the **subscriber** supplies must be present and equal on the dispatch channel. Keys the subscriber omits are not checked, so the subscriber's controller acts as a filter. Extra keys on the dispatch channel are ignored &mdash; the dispatcher can be more specific than any subscriber needs. By convention, use **uppercase keys** (e.g., `{UserId: 4}` not `{userId: 4}`) to distinguish controller keys from payload properties.
 
 ### Subscribe with an exact controller
 
@@ -117,8 +117,6 @@ actions.useAction(Actions.UpdateByKey({ Key: myKey }), handler);
 `null` and `undefined` are explicitly forbidden as controller values.
 
 ## Multi-Property Channels
-
-Channels can have multiple properties for precise targeting:
 
 ```ts
 class Actions {

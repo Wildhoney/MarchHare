@@ -1,6 +1,6 @@
 # `With` helpers
 
-`context.with.{update,invert,always}` (and the top-level `With.{Update,Invert,Always}` form) are typed handler factories for the most common one-line mutations &mdash; binding a payload to a field, flipping a boolean, or pinning a leaf to a fixed value. They compile to the same `context.actions.produce(...)` recipe you'd write by hand, but the call site stays a single expression and the path is type-checked against the model.
+`context.with.{update,invert,always}` (and the top-level `With.{Update,Invert,Always}` form) are typed handler factories for one-line mutations &mdash; binding a payload to a field, flipping a boolean, or pinning a leaf to a fixed value. They compile to the same `context.actions.produce(...)` recipe you'd write by hand, but the call site stays a single expression and the path is type-checked against the model.
 
 All three accept lodash-style dotted paths (`"a.b.c"`) and array indices (`"items.0.name"`). Keys autocomplete from the model declared on `app.useContext<Model, …>()`. Prefer the `context.with.*` form &mdash; the methods narrow against the typed context. Reach for the top-level `With.*` import only at call sites without a typed context in scope.
 
@@ -140,7 +140,7 @@ Type-checked: `value` must be assignable to the leaf type at `key`. `phase` acce
 
 ## Top-level `With.*` form
 
-The top-level import is identical at runtime but loses the model-aware autocomplete &mdash; the path is typed against whatever inference the call site can scrounge up. Reach for it only when you don't have a typed `context` in scope, for example inside a generic helper or when wiring handlers from a module that doesn't import the App:
+The top-level import is identical at runtime but loses the model-aware autocomplete &mdash; the path is typed against whatever inference the call site can gather. Reach for it only when you don't have a typed `context` in scope, for example inside a generic helper or when wiring handlers from a module that doesn't import the App:
 
 ```ts
 import { With, Action } from "march-hare";
@@ -149,8 +149,6 @@ actions.useAction(Actions.SetName, With.Update("name"));
 actions.useAction(Actions.Toggle, With.Invert("open"));
 actions.useAction(Actions.Ready, With.Always("phase", "ready"));
 ```
-
-Inside an App-bound feature, `context.with.*` is the more ergonomic choice.
 
 ## When to skip the helpers
 

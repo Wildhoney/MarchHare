@@ -1,6 +1,6 @@
 # Utility functions
 
-March Hare provides a set of utility functions via the `utils` namespace to help with common patterns. Each utility also has a shorthand Greek letter alias for concise code.
+Utility functions live on the `utils` namespace. Each also has a shorthand Greek-letter alias.
 
 ```ts
 import { utils } from "march-hare";

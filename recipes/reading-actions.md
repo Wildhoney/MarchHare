@@ -57,7 +57,7 @@ const score = await context.actions.final(Scope.Score);
 
 ## Cached values for useAction handlers
 
-Components using `useAction()` for broadcast actions also receive cached values on mount. When a component mounts with a handler for a broadcast action, the handler is automatically invoked with the most recent value from the broadcast cache.
+When a component mounts with a `useAction()` handler for a broadcast action, the handler is automatically invoked with the most recent value from the broadcast cache.
 
 ```tsx
 // Component A dispatches a broadcast action

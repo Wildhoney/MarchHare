@@ -74,7 +74,7 @@ actions.useAction(Lifecycle.Fault, (_context, fault) => {
 });
 ```
 
-`retry` is just a function reference, so it can also be surfaced to the view layer &ndash; e.g. stashed on the model and bound directly to a "Retry" button in the UI.
+`retry` is a plain function reference, so it can also be surfaced to the view layer &ndash; e.g. stashed on the model and bound directly to a "Retry" button in the UI.
 
 ## Aborting tasks during error recovery
 
@@ -89,4 +89,4 @@ actions.useAction(Lifecycle.Fault, (_context, { reason, error, tasks }) => {
 });
 ```
 
-This is particularly useful for session expiration scenarios where multiple API calls might be in progress when authentication fails.
+This is useful for session expiration scenarios where multiple API calls might be in progress when authentication fails.

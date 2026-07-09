@@ -15,7 +15,7 @@ The runtime is identical &mdash; both reach into the nearest `<app.Boundary>`. `
 
 ## A reusable feature
 
-Here is the canonical pattern with `shared.useContext`. Note the absence of any `app` import:
+The canonical pattern with `shared.useContext`, with no `app` import:
 
 ```tsx
 import { Action, shared } from "march-hare";

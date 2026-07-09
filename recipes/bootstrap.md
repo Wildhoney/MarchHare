@@ -1,6 +1,6 @@
 # Bootstrapping
 
-Most apps need to do something asynchronous before the main UI is safe to render &mdash; fetch the signed-in user, load feature flags, hydrate persisted state, open an SSE connection. The goal of this recipe is to keep that work in **one** place and let the rest of the tree gate first paint on a signal that already exists.
+Most apps need to do something asynchronous before the main UI is safe to render &mdash; fetch the signed-in user, load feature flags, hydrate persisted state, open an SSE connection. Keep that work in **one** place and let the rest of the tree gate first paint on a signal that already exists.
 
 The rule of thumb: **gate first paint on the Env, or on a Resource's model annotation &mdash; never invent a dedicated `Booted` broadcast**. Both Env and annotations already encode "boot in progress / boot complete"; a separate event is a third copy of the same fact and splits subscribers across two channels.
 

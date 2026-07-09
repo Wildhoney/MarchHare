@@ -33,7 +33,7 @@ actions.useAction(Actions.FetchData, async (context) => {
 
 ## Retry logic
 
-Implement retries with a simple loop:
+Implement retries with a loop:
 
 ```ts
 actions.useAction(Actions.FetchData, async (context) => {
