@@ -197,7 +197,7 @@ See [session-tokens](./session-tokens.md) for the full auth pattern and [env](./
 
 ## Fanning out on success or failure
 
-Every Resource declaration exposes an `event` broadcast that fires automatically after each successful fetch, with the resolved payload as the action payload and the call-site params as the channel. The payload type is `T | null`: successful fetches broadcast `T` (as does every [local-resource](#local-resources--no-fetcher) `.set(...)`), evictions broadcast `null`. Subscribers narrow by supplying any subset of params via `event(partial)`; matching follows the [unified channel rule](./channeled-actions.md#channel-matching) (subscriber's keys must all be satisfied by the dispatch).
+Every Resource declaration exposes an `.action()` broadcast that fires automatically after each successful fetch, with the resolved payload as the action payload and the call-site params as the channel. The payload type is `T | null`: successful fetches broadcast `T` (as does every [local-resource](#local-resources--no-fetcher) `.set(...)`), evictions broadcast `null`. Subscribers narrow by supplying any subset of params via `.action(partial)`; matching follows the [unified channel rule](./channeled-actions.md#channel-matching) (subscriber's keys must all be satisfied by the dispatch).
 
 ```ts
 // resources.ts — no manual fan-out needed; the auto-broadcast handles it.
@@ -639,5 +639,4 @@ Each cursor gets its own cache slot &mdash; `.exceeds({...})` is per-cursor, so 
 - **No SSR isolation.** The cache is module-global, so server-side rendering would leak across requests. `Resource` is client-only.
 - **No subscription on the awaiter.** `await context.actions.resource(...)` resolves once and does not re-fire when a broadcast goes out. Use `useAction(broadcastAction)` for change notifications.
 - **`resource.user(params)` is not reactive.** Reading it inside render does not subscribe the component to updates &mdash; it is a snapshot, not a signal. Drive UI from the model.
-- **Pair `resource.user(...)` with `.resource(...)` in the same expression.** The call-form primes a module-scope slot; an unrelated `resource.cat(...)` call before `.resource(...)` consumes will overwrite it. Inline usage (`.resource(resource.user({id:5}))`) is always safe; the slot self-clears on the next microtask.
 - **Params keying is structural via `JSON.stringify`.** Two callers must produce structurally equal params (same key order, same primitive values) to share a cache slot. Avoid `Date`, `BigInt`, `Symbol`, or non-stable object identities in params.
