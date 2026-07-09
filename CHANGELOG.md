@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.19.1](https://github.com/Wildhoney/MarchHare/compare/v0.19.0...v0.19.1) (2026-07-09)
+
+
+### Features
+
+* **resource:** declare local resources without a fetcher, written via .set() ([2483a54](https://github.com/Wildhoney/MarchHare/commit/2483a54169ac81c78f2f88b04d2dcfb2ea92ee37))
+
 ## [0.19.0](https://github.com/Wildhoney/MarchHare/compare/v0.18.0...v0.19.0) (2026-07-08)
 
 ### ⚠ BREAKING CHANGES
