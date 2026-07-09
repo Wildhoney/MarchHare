@@ -392,10 +392,12 @@ export class Lifecycle {
   }
 
   /**
-   * Creates an Update lifecycle action. Triggered when `context.data` changes
-   * (not on initial mount). The handler payload is typed as
-   * `Partial<DeepReadonly<D>>` at the subscription site &mdash; only the keys
-   * whose values changed between the previous and current render are present.
+   * Creates an Update lifecycle action. Fires once on mount &mdash; with the
+   * initial data keys, or `{}` when there is no data &mdash; then on every
+   * subsequent `context.data` change. The handler payload is typed as
+   * `Partial<DeepReadonly<D>>` at the subscription site: only the keys whose
+   * values changed since the previous render are present. The mount fire runs
+   * while `context.phase` is `Mounting`.
    */
   static Update(): LifecyclePayload<Record<string, unknown>, never, "Update"> {
     return createLifecycleAction<Record<string, unknown>, never, "Update">(
@@ -423,11 +425,10 @@ export class Lifecycle {
    * ```
    *
    * Changes are detected with `Object.is` against the last-dispatched
-   * value, which starts as `undefined`. A defined value therefore fires
-   * once on mount &mdash; deliberately diverging from `Lifecycle.Update`,
-   * which never fires on mount &mdash; so values that are already present
-   * on the first render (e.g. a hydrated React Query cache) still reach
-   * the handler. An `undefined` value at mount stays silent.
+   * value. The handler fires once on mount with the bound value &mdash;
+   * whether defined (e.g. a hydrated React Query cache) or `undefined`
+   * &mdash; then again on every change. Like `Lifecycle.Update`, mount is
+   * treated as the first change.
    *
    * Subscribing with the uncalled static (`useAction(Actions.User,
    * handler)`) receives every reactive dispatch of the action, and

@@ -23,6 +23,7 @@ import {
   getLifecycleType,
   isReactiveBinding,
 } from "../action/index.ts";
+import { unset } from "../utils/utils.ts";
 
 /**
  * Creates a new object with getters for each property of the input object.
@@ -84,22 +85,30 @@ export function emitAsync(
 }
 
 /**
- * Emits lifecycle events for component mount and DOM attachment.
- * Also invokes broadcast action handlers with cached values on mount.
- * Updates the phase ref to track the component's current lifecycle state.
+ * Emits lifecycle events across a component's mount cycle and tracks the
+ * `phase` ref.
  *
- * The Mount effect skips when `phase` is already `Mounted` — this catches
- * Strict Mode's dev-only double-invocation. It accepts both `Mounting` (first
- * mount) and `Unmounted` (re-mount after `<Activity>` show) as entry states
- * so that hidden-then-shown subtrees correctly re-emit Mount.
+ * The Mount effect (layout) fires `Mount`, replays cached broadcast /
+ * multicast values, and &mdash; on first mount &mdash; the initial `Update`
+ * with the starting data (`{}` when there is no data). All of these run while
+ * `phase` is `Mounting`. It skips when `phase` is already `Mounted` (catching
+ * Strict Mode's dev-only double-invocation) and accepts both `Mounting`
+ * (first mount) and `Unmounted` (re-mount after `<Activity>` show) as entry
+ * states.
  *
- * The Paint effect runs as a passive `useEffect` so it fires after the
- * browser has committed the first frame. It tracks its own ref-guard so it
- * fires exactly once per mount cycle (re-firing after `<Activity>` show).
+ * The Paint effect (passive `useEffect`) fires after the first frame commits
+ * and is where `phase` becomes `Mounted` &mdash; so every layout-phase
+ * emission, including each `useAction`'s reactive mount fire, observes
+ * `Mounting`. It ref-guards itself to fire once per mount cycle (re-firing
+ * after `<Activity>` show).
+ *
+ * The Update effect (layout) fires `Update` with the changed data keys on
+ * every render after the first; the first render's Update is owned by the
+ * Mount effect so `context.phase` reads `Mounting` there.
  *
  * Phase transitions:
- * - First mount:           Mounting → Mounted
- * - Activity hide / show:  Mounted → Unmounting → Unmounted → Mounting → Mounted
+ * - First mount:           Mounting → (paint) Mounted
+ * - Activity hide / show:  Mounted → Unmounting → Unmounted → Mounting → (paint) Mounted
  */
 export function useLifecycles({
   unicast,
@@ -110,11 +119,12 @@ export function useLifecycles({
   data,
   handlers,
 }: LifecycleConfig): void {
-  const previous = React.useRef<Props | null>(null);
+  const previous = React.useRef<Props>({});
   const painted = React.useRef<boolean>(false);
 
   React.useLayoutEffect(() => {
     if (phase.current === Phase.Mounted) return;
+    const firstMount = phase.current === Phase.Mounting;
     phase.current = Phase.Mounting;
 
     const mountAction = findLifecycleAction(handlers, "Mount");
@@ -136,25 +146,29 @@ export function useLifecycles({
       });
     }
 
-    phase.current = Phase.Mounted;
+    if (firstMount) {
+      const updateAction = findLifecycleAction(handlers, "Update");
+      if (updateAction) unicast.emit(updateAction, changes({}, data));
+      previous.current = data;
+    }
+
     painted.current = false;
   }, []);
 
   React.useEffect(() => {
     if (painted.current) return;
     painted.current = true;
+    phase.current = Phase.Mounted;
 
     const paintAction = findLifecycleAction(handlers, "Paint");
     if (paintAction) unicast.emit(paintAction);
   }, []);
 
   React.useLayoutEffect(() => {
-    if (G.isNotNullable(previous.current)) {
-      const differences = changes(previous.current, data);
-      if (A.isNotEmpty(Object.keys(differences))) {
-        const updateAction = findLifecycleAction(handlers, "Update");
-        if (updateAction) unicast.emit(updateAction, differences);
-      }
+    const differences = changes(previous.current, data);
+    if (A.isNotEmpty(Object.keys(differences))) {
+      const updateAction = findLifecycleAction(handlers, "Update");
+      if (updateAction) unicast.emit(updateAction, differences);
     }
 
     previous.current = data;
@@ -343,19 +357,16 @@ export function useRegisterHandler<
  * registration kind &mdash; it is called unconditionally per `useAction`
  * call site so the hook order stays stable.
  *
- * The comparison is `Object.is` against the last-dispatched value, which
- * starts as `undefined`. A defined value therefore fires once on mount
- * &mdash; values already present on the first render (e.g. a hydrated
- * React Query cache) still reach the handler &mdash; while an `undefined`
- * mount value stays silent until the first defined value arrives. This
- * deliberately diverges from `Lifecycle.Update`, which never fires on
- * mount.
+ * The comparison is `Object.is` against the last-dispatched value, seeded
+ * with the shared {@link unset} sentinel so the mount emission always fires once
+ * &mdash; whether the initial value is defined (a hydrated React Query
+ * cache) or `undefined`. Every later render fires only on a change, so the
+ * `Object.is` guard makes unchanged renders free.
  *
  * The effect runs after every commit (no dependency array) because the
- * binding is a fresh wrapper each render; the `Object.is` guard makes
- * unchanged renders free. It also runs after the subscription effect in
- * `useActions` (declared earlier in the hook order), so the mount
- * emission is never lost.
+ * binding is a fresh wrapper each render. It also runs after the
+ * subscription effect in `useActions` (declared earlier in the hook
+ * order), so the mount emission is never lost.
  *
  * The emission carries the registration's site symbol as its channel so
  * that two bindings of the same static within one component stay
@@ -370,7 +381,7 @@ export function useReactiveEmit(
   site: symbol,
 ): void {
   const binding = isReactiveBinding(action) ? action : null;
-  const dispatched = React.useRef<unknown>(undefined);
+  const dispatched = React.useRef<unknown>(unset);
   React.useLayoutEffect(() => {
     if (G.isNull(binding)) return;
     if (Object.is(dispatched.current, binding.value)) return;

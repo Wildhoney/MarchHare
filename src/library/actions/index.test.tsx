@@ -3240,6 +3240,170 @@ describe("useActions() typing", () => {
   });
 });
 
+describe("useActions() lifecycle phase correctness", () => {
+  type PhaseModel = { value: string | null };
+  const phaseModel: PhaseModel = { value: null };
+
+  class PhaseActions {
+    static Mount = Lifecycle.Mount();
+    static Paint = Lifecycle.Paint();
+    static Unmount = Lifecycle.Unmount();
+    static Update = Lifecycle.Update();
+    static Value = Lifecycle.Reactive<string | undefined>("Value");
+  }
+
+  it("should report Mounting for every handler that fires during mount", async () => {
+    const mountPhases: Phase[] = [];
+    const paintPhases: Phase[] = [];
+    const updatePhases: Phase[] = [];
+    const reactivePhases: Phase[] = [];
+    let unmountPhase: Phase | null = null;
+    let query = "q";
+    let value: string | undefined = "initial";
+
+    const { rerender, unmount } = renderHook(() => {
+      const actions = useActions<
+        PhaseModel,
+        typeof PhaseActions,
+        { query: string }
+      >(phaseModel, () => ({ query }));
+
+      actions.useAction(PhaseActions.Mount, (context) => {
+        mountPhases.push(context.phase);
+      });
+      actions.useAction(PhaseActions.Paint, (context) => {
+        paintPhases.push(context.phase);
+      });
+      actions.useAction(PhaseActions.Update, (context) => {
+        updatePhases.push(context.phase);
+      });
+      actions.useAction(PhaseActions.Value(value), (context) => {
+        reactivePhases.push(context.phase);
+      });
+      actions.useAction(PhaseActions.Unmount, (context) => {
+        unmountPhase = context.phase;
+      });
+
+      return actions;
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(mountPhases).toEqual([Phase.Mounting]);
+    expect(updatePhases).toEqual([Phase.Mounting]);
+    expect(reactivePhases).toEqual([Phase.Mounting]);
+    expect(paintPhases).toEqual([Phase.Mounted]);
+
+    query = "q2";
+    value = "changed";
+    rerender();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(updatePhases).toEqual([Phase.Mounting, Phase.Mounted]);
+    expect(reactivePhases).toEqual([Phase.Mounting, Phase.Mounted]);
+
+    unmount();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(unmountPhase).toBe(Phase.Unmounting);
+  });
+});
+
+describe("useActions() Lifecycle.Update", () => {
+  type UpdateModel = { value: string | null };
+  const updateModel: UpdateModel = { value: null };
+
+  class UpdateActions {
+    static Update = Lifecycle.Update();
+  }
+
+  it("should fire on mount with the initial data keys", async () => {
+    const received: unknown[] = [];
+
+    renderHook(() => {
+      const actions = useActions<
+        UpdateModel,
+        typeof UpdateActions,
+        { query: string }
+      >(updateModel, () => ({ query: "initial" }));
+
+      actions.useAction(UpdateActions.Update, (_context, changes) => {
+        received.push(changes);
+      });
+
+      return actions;
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(received).toEqual([{ query: "initial" }]);
+  });
+
+  it("should fire again with only the changed keys when data changes", async () => {
+    const received: unknown[] = [];
+    let query = "initial";
+
+    const { rerender } = renderHook(() => {
+      const actions = useActions<
+        UpdateModel,
+        typeof UpdateActions,
+        { query: string }
+      >(updateModel, () => ({ query }));
+
+      actions.useAction(UpdateActions.Update, (_context, changes) => {
+        received.push(changes);
+      });
+
+      return actions;
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    query = "updated";
+    rerender();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(received).toEqual([{ query: "initial" }, { query: "updated" }]);
+  });
+
+  it("should fire on mount with an empty payload when there is no data", async () => {
+    const received: unknown[] = [];
+
+    renderHook(() => {
+      const actions = useActions<UpdateModel, typeof UpdateActions>(
+        updateModel,
+      );
+
+      actions.useAction(UpdateActions.Update, (_context, changes) => {
+        received.push(changes);
+      });
+
+      return actions;
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(received).toEqual([{}]);
+  });
+});
+
 describe("useActions() Lifecycle.Reactive", () => {
   type ReactiveModel = { profile: string | null };
   const reactiveModel: ReactiveModel = { profile: null };
@@ -3274,7 +3438,7 @@ describe("useActions() Lifecycle.Reactive", () => {
     expect(result.current[0].profile).toBe("Adam");
   });
 
-  it("should stay silent on an undefined mount value and fire when defined", async () => {
+  it("should fire once on mount with undefined and again when the value becomes defined", async () => {
     const received: (string | undefined)[] = [];
     let profile: string | undefined = undefined;
 
@@ -3294,7 +3458,7 @@ describe("useActions() Lifecycle.Reactive", () => {
       await new Promise((resolve) => setTimeout(resolve, 25));
     });
 
-    expect(received).toEqual([]);
+    expect(received).toEqual([undefined]);
 
     profile = "Maria";
     rerender();
@@ -3303,7 +3467,7 @@ describe("useActions() Lifecycle.Reactive", () => {
       await new Promise((resolve) => setTimeout(resolve, 25));
     });
 
-    expect(received).toEqual(["Maria"]);
+    expect(received).toEqual([undefined, "Maria"]);
   });
 
   it("should fire on every change with the latest value", async () => {
