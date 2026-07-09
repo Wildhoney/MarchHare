@@ -129,6 +129,7 @@ export class Actions {
   static Unmount = Lifecycle.Unmount();
   static Error = Lifecycle.Error();
   static Update = Lifecycle.Update();
+  static User = Lifecycle.Reactive<User | undefined>("User");
 
   static Increment = Action("Increment");
 }
@@ -152,6 +153,12 @@ actions.useAction(Actions.Update, (context, changes) => {
   // Triggered when context.data changes (not on initial mount)
   // changes: Partial<DeepReadonly<D>> — only the data keys whose values
   // changed between renders, typed against the useContext data generic
+});
+
+// Reactive: bind an external value at the call site by calling the static.
+// Fires whenever `user` changes by Object.is, and once on mount if defined.
+actions.useAction(Actions.User(user), (context, user) => {
+  context.actions.produce(({ model }) => void (model.profile = user ?? null));
 });
 ```
 
@@ -654,6 +661,7 @@ docs: update the README file
   - `multicast-actions.md` - Scoped component communication
   - `optimistic-updates.md` - End-to-end optimistic create/update/delete with `utils.pk()`, annotations, and rollback via `Lifecycle.Error`
   - `react-context-in-handlers.md` - Using context.data
+  - `reactive-values.md` - `Lifecycle.Reactive`: bind an external value (React Query result, prop, store selector) at the `useAction` site via `Actions.X(value)`; the handler fires through the full dispatch pipeline whenever the value changes by `Object.is`, and once on mount if already defined
   - `real-time-applications.md` - SSE/WebSocket patterns
   - `referential-equality.md` - Avoiding stale closures
   - `session-tokens.md` - Session tokens in the Env; HttpOnly cookies vs. Bearer in Env; refresh-on-401 via ky `afterResponse` hook

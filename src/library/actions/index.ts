@@ -6,6 +6,7 @@ import {
   getActionSymbol,
   matchesChannel,
   useRegisterHandler,
+  useReactiveEmit,
   useDispatchers,
   findLifecycleAction,
   isGenerator,
@@ -675,11 +676,18 @@ export function useActions<
   // into no-payload / with-payload overloads. The runtime is AC-agnostic,
   // so the impl is typed against the loose `ActionOrChanneled` union and
   // cast back to the strict public type.
+  //
+  // Each call site owns a stable symbol shared by its registration and its
+  // reactive emission, pairing a `Lifecycle.Reactive` binding's dispatch
+  // with exactly its own handler via the channel machinery.
   const useActionImpl = (
     action: ActionId | HandlerPayload | ChanneledAction,
     handler: Handler<M, A, D>,
   ): void => {
-    useRegisterHandler<M, A, D>(registry, action, handler);
+    const site = React.useRef<symbol | null>(null);
+    site.current ??= Symbol("march-hare.reactive/site");
+    useRegisterHandler<M, A, D>(registry, action, handler, site.current);
+    useReactiveEmit(action, unicast, site.current);
   };
   (<UseActions<M, A, D>>result).useAction = <UseActions<M, A, D>["useAction"]>(
     (<unknown>useActionImpl)

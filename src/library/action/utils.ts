@@ -5,6 +5,7 @@ import {
   BrandedBroadcast,
   BrandedMulticast,
   AnyAction,
+  ReactiveBinding,
 } from "../types/index.ts";
 import type { ActionId } from "../boundary/components/tasks/types.ts";
 import { describe } from "../utils.ts";
@@ -70,9 +71,9 @@ export function isBroadcastAction(action: AnyAction): boolean {
 /**
  * Extracts the action name from an action.
  *
- * Parses both regular actions (`march-hare.action/Name`) and
- * distributed actions (`march-hare.action/distributed/Name`)
- * to extract just the name portion.
+ * Parses regular actions (`march-hare.action/Name`), distributed actions
+ * (`march-hare.action/distributed/Name`), and lifecycle actions
+ * (`march-hare.action.lifecycle/Name`) to extract just the name portion.
  *
  * @param action The action to extract the name from.
  * @returns The extracted action name, or "unknown" if parsing fails.
@@ -84,12 +85,21 @@ export function isBroadcastAction(action: AnyAction): boolean {
  *
  * const SignedOut = Action("SignedOut", Distribution.Broadcast);
  * getName(SignedOut); // "SignedOut"
+ *
+ * const Mount = Lifecycle.Mount();
+ * getName(Mount); // "Mount"
+ *
+ * const User = Lifecycle.Reactive<User>("User");
+ * getName(User); // "User"
  * ```
  */
 export function getName(action: AnyAction): string {
   const symbol = getActionSymbol(action);
   const description = G.isString(symbol) ? symbol : (symbol.description ?? "");
-  if (!description.startsWith(describe.action())) return "unknown";
+  const recognised =
+    description.startsWith(describe.action()) ||
+    description.startsWith(describe.lifecycle());
+  if (!recognised) return "unknown";
   const name = description.slice(description.lastIndexOf("/") + 1);
   return name || "unknown";
 }
@@ -112,6 +122,27 @@ export function isChanneledAction(
   action: AnyAction,
 ): action is ChanneledAction {
   return G.isObject(action) && Brand.Channel in action && "channel" in action;
+}
+
+/**
+ * Checks if the given action is a reactive binding (result of calling a
+ * `Lifecycle.Reactive` static with a value).
+ *
+ * @param action - The action to check
+ * @returns `true` if the action is a reactive binding carrying a bound value
+ *
+ * @example
+ * ```ts
+ * const User = Lifecycle.Reactive<User>("User");
+ *
+ * isReactiveBinding(User); // false
+ * isReactiveBinding(User(user)); // true
+ * ```
+ */
+export function isReactiveBinding(
+  action: AnyAction,
+): action is ReactiveBinding {
+  return G.isObject(action) && Brand.Reactive in action && "value" in action;
 }
 
 /**

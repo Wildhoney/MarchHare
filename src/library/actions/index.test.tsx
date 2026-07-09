@@ -3239,3 +3239,314 @@ describe("useActions() typing", () => {
     });
   });
 });
+
+describe("useActions() Lifecycle.Reactive", () => {
+  type ReactiveModel = { profile: string | null };
+  const reactiveModel: ReactiveModel = { profile: null };
+
+  class ReactiveActions {
+    static Profile = Lifecycle.Reactive<string | undefined>("Profile");
+  }
+
+  it("should fire once on mount when the bound value is defined", async () => {
+    const received: (string | undefined)[] = [];
+
+    const { result } = renderHook(() => {
+      const actions = useActions<ReactiveModel, typeof ReactiveActions>(
+        reactiveModel,
+      );
+
+      actions.useAction(ReactiveActions.Profile("Adam"), (context, profile) => {
+        received.push(profile);
+        context.actions.produce(
+          ({ model }) => void (model.profile = profile ?? null),
+        );
+      });
+
+      return actions;
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(received).toEqual(["Adam"]);
+    expect(result.current[0].profile).toBe("Adam");
+  });
+
+  it("should stay silent on an undefined mount value and fire when defined", async () => {
+    const received: (string | undefined)[] = [];
+    let profile: string | undefined = undefined;
+
+    const { rerender } = renderHook(() => {
+      const actions = useActions<ReactiveModel, typeof ReactiveActions>(
+        reactiveModel,
+      );
+
+      actions.useAction(ReactiveActions.Profile(profile), (_context, value) => {
+        received.push(value);
+      });
+
+      return actions;
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(received).toEqual([]);
+
+    profile = "Maria";
+    rerender();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(received).toEqual(["Maria"]);
+  });
+
+  it("should fire on every change with the latest value", async () => {
+    const received: (string | undefined)[] = [];
+    let profile: string | undefined = "first";
+
+    const { rerender } = renderHook(() => {
+      const actions = useActions<ReactiveModel, typeof ReactiveActions>(
+        reactiveModel,
+      );
+
+      actions.useAction(ReactiveActions.Profile(profile), (_context, value) => {
+        received.push(value);
+      });
+
+      return actions;
+    });
+
+    profile = "second";
+    rerender();
+    profile = "third";
+    rerender();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(received).toEqual(["first", "second", "third"]);
+  });
+
+  it("should not re-fire when the value is referentially unchanged", async () => {
+    type Profile = { name: string };
+    class ObjectActions {
+      static Profile = Lifecycle.Reactive<Profile>("Profile");
+    }
+    const stable: Profile = { name: "Adam" };
+    const received: Profile[] = [];
+
+    const { rerender } = renderHook(() => {
+      const actions = useActions<void, typeof ObjectActions>();
+
+      actions.useAction(ObjectActions.Profile(stable), (_context, value) => {
+        received.push(value);
+      });
+
+      return actions;
+    });
+
+    rerender();
+    rerender();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(received).toEqual([stable]);
+  });
+
+  it("should fire with undefined when a defined value becomes undefined", async () => {
+    const received: (string | undefined)[] = [];
+    let profile: string | undefined = "present";
+
+    const { rerender } = renderHook(() => {
+      const actions = useActions<ReactiveModel, typeof ReactiveActions>(
+        reactiveModel,
+      );
+
+      actions.useAction(ReactiveActions.Profile(profile), (_context, value) => {
+        received.push(value);
+      });
+
+      return actions;
+    });
+
+    profile = undefined;
+    rerender();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(received).toEqual(["present", undefined]);
+  });
+
+  it("should isolate two bindings of the same static to their own handlers", async () => {
+    class TwoSiteActions {
+      static Value = Lifecycle.Reactive<string>("Value");
+    }
+    const first: string[] = [];
+    const second: string[] = [];
+
+    renderHook(() => {
+      const actions = useActions<void, typeof TwoSiteActions>();
+
+      actions.useAction(TwoSiteActions.Value("alpha"), (_context, value) => {
+        first.push(value);
+      });
+      actions.useAction(TwoSiteActions.Value("beta"), (_context, value) => {
+        second.push(value);
+      });
+
+      return actions;
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(first).toEqual(["alpha"]);
+    expect(second).toEqual(["beta"]);
+  });
+
+  it("should deliver binding dispatches to uncalled subscriptions on the static", async () => {
+    class SharedActions {
+      static Value = Lifecycle.Reactive<string>("Value");
+    }
+    const bound: string[] = [];
+    const heard: string[] = [];
+
+    renderHook(() => {
+      const actions = useActions<void, typeof SharedActions>();
+
+      actions.useAction(SharedActions.Value("alpha"), (_context, value) => {
+        bound.push(value);
+      });
+      actions.useAction(SharedActions.Value, (_context, value) => {
+        heard.push(value);
+      });
+
+      return actions;
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(bound).toEqual(["alpha"]);
+    expect(heard).toEqual(["alpha"]);
+  });
+
+  it("should re-fire every handler on a manual dispatch of the static", async () => {
+    class ManualActions {
+      static Value = Lifecycle.Reactive<string>("Value");
+    }
+    const bound: string[] = [];
+    const heard: string[] = [];
+
+    const { result } = renderHook(() => {
+      const actions = useActions<void, typeof ManualActions>();
+
+      actions.useAction(ManualActions.Value("alpha"), (_context, value) => {
+        bound.push(value);
+      });
+      actions.useAction(ManualActions.Value, (_context, value) => {
+        heard.push(value);
+      });
+
+      return actions;
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    await act(async () => {
+      await result.current[1].dispatch(ManualActions.Value, "manual");
+    });
+
+    expect(bound).toEqual(["alpha", "manual"]);
+    expect(heard).toEqual(["alpha", "manual"]);
+  });
+
+  it("should route handler errors to Lifecycle.Error with the reactive name", async () => {
+    class FaultyActions {
+      static Error = Lifecycle.Error();
+      static Profile = Lifecycle.Reactive<string>("Profile");
+    }
+    const faulted: string[] = [];
+
+    renderHook(() => {
+      const actions = useActions<void, typeof FaultyActions>();
+
+      actions.useAction(FaultyActions.Profile("Adam"), () => {
+        throw new Error("boom");
+      });
+      actions.useAction(FaultyActions.Error, (_context, fault) => {
+        faulted.push(fault.action);
+      });
+
+      return actions;
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(faulted).toEqual(["Profile"]);
+  });
+
+  it("should fire exactly once on mount in StrictMode", async () => {
+    class StrictActions {
+      static Profile = Lifecycle.Reactive<string>("Profile");
+    }
+    const received: string[] = [];
+
+    function TestComponent() {
+      const actions = useActions<void, typeof StrictActions>();
+
+      actions.useAction(StrictActions.Profile("Adam"), (_context, value) => {
+        received.push(value);
+      });
+
+      return <div data-testid="reactive">reactive</div>;
+    }
+
+    render(
+      <React.StrictMode>
+        <TestComponent />
+      </React.StrictMode>,
+    );
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(received).toEqual(["Adam"]);
+  });
+
+  it("rejects bindings whose value does not match the declared type", () => {
+    function useUnderTest() {
+      const actions = useActions<void, typeof ReactiveActions>();
+
+      // OK — string | undefined admits both.
+      actions.useAction(ReactiveActions.Profile("Adam"), () => {});
+
+      // @ts-expect-error — number is not assignable to string | undefined.
+      actions.useAction(ReactiveActions.Profile(42), () => {});
+
+      // @ts-expect-error — bindings are subscribe-only, not dispatchable.
+      actions.dispatch(ReactiveActions.Profile("Adam"));
+
+      return actions;
+    }
+    void useUnderTest;
+  });
+});

@@ -265,6 +265,14 @@ export class Brand {
    * lifecycle overload.
    */
   static readonly Lifecycle = Symbol("march-hare.brand/Lifecycle");
+  /**
+   * Identifies reactive bindings &mdash; the result of calling a
+   * `Lifecycle.Reactive` static with a value at the `useAction` site
+   * (e.g. `Actions.User(user)`). The binding carries the observed value
+   * so the registration can diff it between renders and dispatch through
+   * the standard handler pipeline when it changes.
+   */
+  static readonly Reactive = Symbol("march-hare.brand/Reactive");
 }
 
 /**
@@ -393,6 +401,74 @@ export class Lifecycle {
     return createLifecycleAction<Record<string, unknown>, never, "Update">(
       "Update",
     );
+  }
+
+  /**
+   * Creates a Reactive lifecycle action. Declare it as a static, then bind
+   * an external value at the `useAction` site by calling the static with
+   * it &mdash; the handler fires through the standard dispatch pipeline
+   * whenever the bound value changes between renders, receiving the latest
+   * value as its payload:
+   *
+   * ```ts
+   * export class Actions {
+   *   static User = Lifecycle.Reactive<User | undefined>("User");
+   * }
+   *
+   * const { data: user } = useQuery({ queryKey: ["user"], queryFn: fetchUser });
+   *
+   * actions.useAction(Actions.User(user), async (context, user) => {
+   *   context.actions.produce(({ model }) => void (model.profile = user));
+   * });
+   * ```
+   *
+   * Changes are detected with `Object.is` against the last-dispatched
+   * value, which starts as `undefined`. A defined value therefore fires
+   * once on mount &mdash; deliberately diverging from `Lifecycle.Update`,
+   * which never fires on mount &mdash; so values that are already present
+   * on the first render (e.g. a hydrated React Query cache) still reach
+   * the handler. An `undefined` value at mount stays silent.
+   *
+   * Subscribing with the uncalled static (`useAction(Actions.User,
+   * handler)`) receives every reactive dispatch of the action, and
+   * `dispatch(Actions.User, value)` re-fires all handlers manually.
+   *
+   * @param name Optional name surfaced in taps and fault reports.
+   */
+  static Reactive<P>(name?: string): ReactivePayload<P> {
+    const symbol = Symbol(
+      describe.lifecycle(name ? `Reactive/${name}` : "Reactive"),
+    );
+    const action = function (value: P): ReactiveBinding<P> {
+      return <ReactiveBinding<P>>{
+        [Brand.Action]: symbol,
+        [Brand.Payload]: <P>undefined,
+        [Brand.Name]: name ?? "Reactive",
+        [Brand.Reactive]: true,
+        value,
+      };
+    };
+    // eslint-disable-next-line fp/no-mutating-methods
+    Object.defineProperty(action, Brand.Action, {
+      value: symbol,
+      enumerable: false,
+    });
+    // eslint-disable-next-line fp/no-mutating-methods
+    Object.defineProperty(action, Brand.Payload, {
+      value: undefined,
+      enumerable: false,
+    });
+    // eslint-disable-next-line fp/no-mutating-methods
+    Object.defineProperty(action, Brand.Name, {
+      value: name ?? "Reactive",
+      enumerable: false,
+    });
+    // eslint-disable-next-line fp/no-mutating-methods
+    Object.defineProperty(action, Brand.Lifecycle, {
+      value: "Reactive",
+      enumerable: false,
+    });
+    return <ReactivePayload<P>>(<unknown>action);
   }
 
   /**
@@ -644,6 +720,47 @@ export type LifecyclePayload<
   Name extends string = string,
 > = HandlerPayload<P, C, Name> & {
   readonly [Brand.Lifecycle]: Name;
+};
+
+/**
+ * Result of calling a `Lifecycle.Reactive` static with a value at the
+ * `useAction` site (e.g. `Actions.User(user)`). Carries the observed
+ * value alongside the action brands so the registration can diff it
+ * against the previous render and dispatch through the standard handler
+ * pipeline when it changes.
+ *
+ * Mirrors {@link ChanneledAction} &mdash; a per-render wrapper produced
+ * by calling the declared static &mdash; but binds a payload value rather
+ * than a channel filter. Bindings are subscribe-only: they are admitted
+ * by `useAction` and excluded from `dispatch`.
+ *
+ * @template P The observed value type; also the handler payload type.
+ * @template Name Literal name supplied to `Lifecycle.Reactive(name)`.
+ */
+export type ReactiveBinding<P = unknown, Name extends string = string> = {
+  readonly [Brand.Action]: symbol;
+  readonly [Brand.Payload]: P;
+  readonly [Brand.Name]: Name;
+  readonly [Brand.Reactive]: true;
+  readonly value: P;
+};
+
+/**
+ * Branded type returned by `Lifecycle.Reactive`. Declared as a static on
+ * an Actions class like every other lifecycle, and callable with the
+ * observed value to produce a {@link ReactiveBinding} at the `useAction`
+ * site. The `Brand.Lifecycle` value is always `"Reactive"` (the lifecycle
+ * kind), independent of the user-supplied `Name`.
+ *
+ * @template P The observed value type; also the handler payload type.
+ * @template Name Literal name supplied to `Lifecycle.Reactive(name)`.
+ */
+export type ReactivePayload<
+  P = unknown,
+  Name extends string = string,
+> = HandlerPayload<P, never, Name> & {
+  readonly [Brand.Lifecycle]: "Reactive";
+  (value: P): ReactiveBinding<P, Name>;
 };
 
 /**
@@ -1037,13 +1154,18 @@ export type Dispatchable<AC> = LeafActions<AC> | ChanneledOf<LeafActions<AC>>;
  * - Any broadcast-branded channeled action &mdash; resource auto-broadcasts
  *   (`resource.x.action(...)`) live outside `AC` but any boundary
  *   subscriber can listen to them.
+ * - Any `ReactiveBinding` &mdash; the result of calling a
+ *   `Lifecycle.Reactive` static with a value (`Actions.User(user)`).
+ *   Bindings are subscribe-only, so they appear here but not in
+ *   `Dispatchable<AC>`.
  */
 export type Subscribable<AC> =
   | Dispatchable<AC>
   | typeof Lifecycle.Fault
   | typeof Lifecycle.Env
   | LifecyclePayload<unknown, never, string>
-  | BroadcastChanneled;
+  | BroadcastChanneled
+  | ReactiveBinding;
 
 /**
  * Subset of a union of actions whose payload type is `never`. Used to split

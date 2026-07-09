@@ -16,6 +16,7 @@ export {
   isMulticastAction,
   getName,
   isChanneledAction,
+  isReactiveBinding,
 } from "./utils.ts";
 
 /**
