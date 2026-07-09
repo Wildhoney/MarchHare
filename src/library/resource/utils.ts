@@ -8,6 +8,8 @@ import type {
   Dispatch,
   Fetcher,
   Invocation,
+  LocalInvocation,
+  LocalResourceHandle,
   ResourceEvictor,
   ResourceHandle,
 } from "./types.ts";
@@ -87,11 +89,11 @@ export function nextResourceId(fetcher: object): string {
 }
 
 /**
- * Allocates the per-Resource closure shared by `app.Resource` and
- * `shared.Resource`. The returned callable produces an
- * {@link Invocation} on every call &mdash; pass it to
- * `context.actions.resource(...)` for fetch/evict. `.get(params)` reads
- * the per-params cache slot synchronously.
+ * Allocates the per-Resource closures shared by the fetched and local
+ * builders: cache-key composition, the auto-broadcast action, sync
+ * reads, the write-then-broadcast path, eviction, and the handle-level
+ * `.get`/`.action` members. `build` layers the fetcher's `run` on top;
+ * `buildLocal` exposes the write path directly as `.set(...)`.
  *
  * `getEnv` is the App-supplied accessor used to resolve the live env at
  * sync read time (`.get(params)`) and at App-side eviction (when the
@@ -101,12 +103,12 @@ export function nextResourceId(fetcher: object): string {
  *
  * @internal
  */
-export function build<T, P extends object>(
-  ƒ: Fetcher<T, P>,
+function foundations<T, P extends object>(
   backing: Cache,
   namespace: string | null,
   getEnv: () => Env | undefined,
-): ResourceHandle<T, P> {
+  label: string,
+) {
   const suffix = G.isNull(namespace) ? "" : `${namespace}:`;
   const composeKey = (env: Env | undefined, params: P) => {
     const scope = backing.scope(env);
@@ -115,7 +117,7 @@ export function build<T, P extends object>(
   };
 
   const action = Action<T | null, Filter>(
-    `resource:${ƒ.name || "anonymous"}`,
+    `resource:${label}`,
     Distribution.Broadcast,
   );
 
@@ -127,20 +129,18 @@ export function build<T, P extends object>(
     return { data: <T>stored.data, at: stored.at };
   };
 
-  const run = (
-    env: Env,
-    controller: AbortController,
+  const write = (
+    env: Env | undefined,
     params: P,
+    value: T,
     dispatch: Dispatch,
-  ): Promise<T> =>
-    ƒ(<Args<P>>{ env, controller, params, dispatch }).then((resolved) => {
-      backing.set(
-        composeKey(env, params),
-        present(resolved, Temporal.Now.instant()),
-      );
-      void dispatch(action(<Filter>(<unknown>params)), resolved);
-      return resolved;
-    });
+  ): void => {
+    backing.set(
+      composeKey(env, params),
+      present(value, Temporal.Now.instant()),
+    );
+    void dispatch(action(<Filter>(<unknown>params)), value);
+  };
 
   function actionFn(channel?: Partial<P> & Filter) {
     return action(<Filter>(channel ?? {}));
@@ -175,6 +175,47 @@ export function build<T, P extends object>(
 
   evictors.push(evict);
 
+  function get(params?: P): T | null {
+    const { data } = read(<P>(params ?? {}), getEnv());
+    return data === unset ? null : <T>data;
+  }
+
+  return { read, write, evict, actionFn, get };
+}
+
+/**
+ * Allocates the per-Resource closure shared by `app.Resource` and
+ * `shared.Resource`. The returned callable produces an
+ * {@link Invocation} on every call &mdash; pass it to
+ * `context.actions.resource(...)` for fetch/evict. `.get(params)` reads
+ * the per-params cache slot synchronously.
+ *
+ * @internal
+ */
+export function build<T, P extends object>(
+  ƒ: Fetcher<T, P>,
+  backing: Cache,
+  namespace: string | null,
+  getEnv: () => Env | undefined,
+): ResourceHandle<T, P> {
+  const { read, write, evict, actionFn, get } = foundations<T, P>(
+    backing,
+    namespace,
+    getEnv,
+    ƒ.name || "anonymous",
+  );
+
+  const run = (
+    env: Env,
+    controller: AbortController,
+    params: P,
+    dispatch: Dispatch,
+  ): Promise<T> =>
+    ƒ(<Args<P>>{ env, controller, params, dispatch }).then((resolved) => {
+      write(env, params, resolved, dispatch);
+      return resolved;
+    });
+
   function call(params?: P): Invocation<T, P> {
     const effective = <P>(params ?? {});
     return <Invocation<T, P>>{
@@ -185,13 +226,47 @@ export function build<T, P extends object>(
     };
   }
 
-  function get(params?: P): T | null {
-    const { data } = read(<P>(params ?? {}), getEnv());
-    return data === unset ? null : <T>data;
+  Object.defineProperty(call, "get", { value: get, enumerable: false });
+  Object.defineProperty(call, "action", { value: actionFn, enumerable: false });
+
+  return <ResourceHandle<T, P>>(<unknown>call);
+}
+
+/**
+ * Allocates the per-Resource closure for a fetcherless (local)
+ * declaration. The returned callable produces a {@link LocalInvocation}
+ * on every call &mdash; pass it to `context.actions.resource(...)` for
+ * `.set(value)`/`.evict(where?)`. The invocation carries no `run`, so
+ * it cannot be awaited and the fetch chain never applies. `.set` walks
+ * the same write path a successful fetch would: cache write first, then
+ * the auto-broadcast with the call params as the channel.
+ *
+ * @internal
+ */
+export function buildLocal<T, P extends object>(
+  backing: Cache,
+  namespace: string | null,
+  getEnv: () => Env | undefined,
+): LocalResourceHandle<T, P> {
+  const { read, write, evict, actionFn, get } = foundations<T, P>(
+    backing,
+    namespace,
+    getEnv,
+    "local",
+  );
+
+  function call(params?: P): LocalInvocation<T, P> {
+    const effective = <P>(params ?? {});
+    return <LocalInvocation<T, P>>{
+      write,
+      read: (params: P) => read(params, getEnv()),
+      evict,
+      params: effective,
+    };
   }
 
   Object.defineProperty(call, "get", { value: get, enumerable: false });
   Object.defineProperty(call, "action", { value: actionFn, enumerable: false });
 
-  return <ResourceHandle<T, P>>(<unknown>call);
+  return <LocalResourceHandle<T, P>>(<unknown>call);
 }

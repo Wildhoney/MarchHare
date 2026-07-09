@@ -118,6 +118,32 @@ export type Invocation<T, P extends object = Record<never, never>> = {
 };
 
 /**
+ * Descriptor produced by calling a local (fetcherless) Resource handle.
+ * Carries the per-call `params` together with the closures
+ * `context.actions.resource(...)` needs to write, read, or evict the
+ * slot. There is deliberately no `run` &mdash; a local Resource has no
+ * fetcher, so the invocation is not awaitable and the fetch-path
+ * chain (`.exceeds(...)`, `.isolated()`) does not exist on the
+ * resulting handle. `.set(value)` is the only write path.
+ *
+ * @internal
+ */
+export type LocalInvocation<T, P extends object = Record<never, never>> = {
+  readonly write: (
+    env: Env,
+    params: object,
+    value: T,
+    dispatch: Dispatch,
+  ) => void;
+  readonly read: (params: object) => {
+    data: T | symbol;
+    at: Temporal.Instant | null;
+  };
+  readonly evict: (where: object, dispatch?: Dispatch) => void;
+  readonly params: P;
+};
+
+/**
  * Resource handle returned by `Resource(...)` (or its `app.Resource` /
  * `shared.Resource` counterparts). Call it with `params` to produce an
  * {@link Invocation} suitable for `context.actions.resource(...)`. Use
@@ -186,6 +212,52 @@ export type ResourceHandle<T, P extends object = Record<never, never>> = ([
    * actions.useAction(user.action({ id: 5 }), (context, value) => { ... });
    * actions.stream(user.action({ id: 5 }), (value) => <span>{value?.name}</span>);
    * ```
+   */
+  readonly action: (
+    channel?: ActionChannel<P>,
+  ) => BroadcastChanneled<T | null, ActionChannel<P>>;
+};
+
+/**
+ * Handle returned by a fetcherless `Resource()` declaration (or its
+ * `app.Resource()` / `shared.Resource()` counterparts). A local
+ * Resource holds app-written values rather than endpoint payloads:
+ * where a fetched Resource's cache is a materialised view of its
+ * fetcher's results, a local Resource's cache is written exclusively
+ * through `context.actions.resource(resource.draft(params)).set(value)`
+ * &mdash; one write path per variant, so a cached value's origin is
+ * always unambiguous.
+ *
+ * Everything else matches the fetched handle: `.get(params)` reads the
+ * slot synchronously, `.action(channel?)` is the auto-broadcast fired
+ * with the written value after every `.set(...)` (and with `null` on
+ * every eviction), subscribers replay from the broadcast cache on late
+ * mount, and slots participate in `.evict(where?)` and
+ * `context.actions.resource.nuke(where?)`. Persistence follows the
+ * same rule as fetched Resources &mdash; declare through `app.Resource`
+ * on an `App({ cache })` to survive reloads; `shared.Resource()` is
+ * always in-memory.
+ *
+ * Calling the handle produces a {@link LocalInvocation}, which is not
+ * awaitable &mdash; there is no fetcher to run, so `.exceeds(...)` and
+ * `.isolated()` do not exist on the resulting chain.
+ */
+export type LocalResourceHandle<T, P extends object = Record<never, never>> = ([
+  keyof P,
+] extends [never]
+  ? (params?: Record<string, never>) => LocalInvocation<T, P>
+  : (params: P) => LocalInvocation<T, P>) & {
+  readonly get: [keyof P] extends [never]
+    ? (params?: Record<string, never>) => T | null
+    : (params: P) => T | null;
+  /**
+   * Broadcast channeled action fired automatically after every
+   * `.set(...)` on this Resource, with the written value as the
+   * payload and the call-site params as the channel. Eviction fires
+   * the same broadcast with a `null` payload, so the payload type is
+   * `T | null` &mdash; identical semantics to a fetched Resource's
+   * `.action()`, letting subscribers stay agnostic about whether the
+   * value was fetched or written locally.
    */
   readonly action: (
     channel?: ActionChannel<P>,

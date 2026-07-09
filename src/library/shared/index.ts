@@ -26,7 +26,8 @@
 
 import { Resource as InternalResource } from "../resource/index.ts";
 import type { AppFetcher } from "../app/types.ts";
-import type { ResourceHandle } from "../resource/types.ts";
+import type { LocalResourceHandle, ResourceHandle } from "../resource/types.ts";
+import { G } from "@mobily/ts-belt";
 
 export { useContext, useEnv } from "../app/index.tsx";
 export { Scope } from "../scope/index.tsx";
@@ -37,14 +38,33 @@ export { Scope } from "../scope/index.tsx";
  * generic** so the fetcher's `context.env` is typed even when the
  * resource isn't bound to a single App.
  *
+ * Call with **no fetcher** (`shared.Resource<E, T, P>()`) to declare a
+ * local Resource whose slots are written exclusively through
+ * `context.actions.resource(...).set(value)` rather than by a fetch.
+ *
  * Always uses an isolated in-memory cache &mdash; persistent caching
  * is an App-level concern wired through `App({ cache })`, so reach for
  * `app.Resource` when a resource needs to survive reloads.
  */
 export function Resource<
+  _E extends object,
+  T,
+  P extends object = Record<never, never>,
+>(): LocalResourceHandle<T, P>;
+export function Resource<
   E extends object,
   T,
   P extends object = Record<never, never>,
->(fetcher: AppFetcher<E, T, P>): ResourceHandle<T, P> {
+>(fetcher: AppFetcher<E, T, P>): ResourceHandle<T, P>;
+export function Resource<
+  E extends object,
+  T,
+  P extends object = Record<never, never>,
+>(
+  fetcher?: AppFetcher<E, T, P>,
+): ResourceHandle<T, P> | LocalResourceHandle<T, P> {
+  if (G.isUndefined(fetcher)) {
+    return InternalResource<E, T, P>(undefined);
+  }
   return InternalResource<E, T, P>(fetcher);
 }

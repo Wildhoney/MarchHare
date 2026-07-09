@@ -1,5 +1,5 @@
 import type { Args } from "../resource/types.ts";
-import type { ResourceHandle } from "../resource/types.ts";
+import type { LocalResourceHandle, ResourceHandle } from "../resource/types.ts";
 import type {
   Actions,
   Context,
@@ -37,10 +37,19 @@ export type AppFetcher<E, T, P extends object = Record<never, never>> = (
  * backed by `localStorage`/MMKV) across every resource on the App, or
  * omit it to keep each resource's payloads in an isolated in-memory
  * slot.
+ *
+ * `app.Resource()` with **no fetcher** declares a local Resource on
+ * the same App &mdash; identical cache, broadcast, eviction, and
+ * persistence machinery, but written exclusively through
+ * `context.actions.resource(...).set(value)`. Declare local Resources
+ * through an `App({ cache })` when the values must survive reloads.
  */
-export type AppResource<E> = <T, P extends object = Record<never, never>>(
-  fetcher: AppFetcher<E, T, P>,
-) => ResourceHandle<T, P>;
+export type AppResource<E> = {
+  <T, P extends object = Record<never, never>>(): LocalResourceHandle<T, P>;
+  <T, P extends object = Record<never, never>>(
+    fetcher: AppFetcher<E, T, P>,
+  ): ResourceHandle<T, P>;
+};
 
 /**
  * Tuple shape returned by `context.useActions(...)` on an App-bound

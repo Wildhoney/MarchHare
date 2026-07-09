@@ -909,3 +909,133 @@ describe("Resource.action eviction broadcast", () => {
     expect(item.get({ id: 1 })).toEqual({ id: 1 });
   });
 });
+
+describe("Resource() without a fetcher (local resource)", () => {
+  it("returns null from .get() before any set", () => {
+    const draft = Resource<Env, { text: string }>();
+    expect(draft.get()).toBeNull();
+  });
+
+  it("exposes no run on the invocation", () => {
+    const draft = Resource<Env, { text: string }>();
+    const call = draft();
+
+    expect(
+      // @ts-expect-error — local invocations carry no fetcher to run.
+      call.run,
+    ).toBeUndefined();
+  });
+
+  it("writes the slot via Invocation.write and reads it back synchronously", () => {
+    const draft = Resource<Env, { text: string }>();
+    const call = draft();
+
+    call.write(noEnv, call.params, { text: "hello" }, noDispatch);
+
+    expect(draft.get()).toEqual({ text: "hello" });
+  });
+
+  it("keeps separate cache slots for different params", () => {
+    type Params = { id: number };
+    const draft = Resource<Env, { text: string }, Params>();
+
+    const first = draft({ id: 1 });
+    first.write(noEnv, first.params, { text: "one" }, noDispatch);
+    const second = draft({ id: 2 });
+    second.write(noEnv, second.params, { text: "two" }, noDispatch);
+
+    expect(draft.get({ id: 1 })).toEqual({ text: "one" });
+    expect(draft.get({ id: 2 })).toEqual({ text: "two" });
+  });
+
+  it("dispatches the auto-broadcast with the written value and the params as the channel", () => {
+    type Params = { id: number };
+    const dispatch = vi.fn((..._args: unknown[]) => Promise.resolve());
+    const draft = Resource<Env, { text: string }, Params>();
+
+    const call = draft({ id: 5 });
+    call.write(noEnv, call.params, { text: "hello" }, <Dispatch>dispatch);
+
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    const [dispatched, payload] = <[unknown, unknown]>dispatch.mock.calls[0];
+    expect(getActionSymbol(<never>dispatched)).toBe(
+      getActionSymbol(draft.action()),
+    );
+    expect((<{ channel: Params }>dispatched).channel).toEqual({ id: 5 });
+    expect(payload).toEqual({ text: "hello" });
+  });
+
+  it("dispatches the write broadcast after the cache write so subscribers see the warm cache", () => {
+    const draft = Resource<Env, { text: string }>();
+    const seen: Array<{ text: string } | null> = [];
+    const dispatch = <Dispatch>((..._args: unknown[]) => {
+      seen.push(draft.get());
+      return Promise.resolve();
+    });
+
+    const call = draft();
+    call.write(noEnv, call.params, { text: "hello" }, dispatch);
+
+    expect(seen).toEqual([{ text: "hello" }]);
+  });
+
+  it("evicts the slot and broadcasts null with the stored params as the channel", () => {
+    type Params = { id: number };
+    const dispatch = vi.fn((..._args: unknown[]) => Promise.resolve());
+    const draft = Resource<Env, { text: string }, Params>();
+
+    const call = draft({ id: 5 });
+    call.write(noEnv, call.params, { text: "hello" }, noDispatch);
+    call.evict({ id: 5 }, <Dispatch>dispatch);
+
+    expect(draft.get({ id: 5 })).toBeNull();
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    const [dispatched, payload] = <[unknown, unknown]>dispatch.mock.calls[0];
+    expect((<{ channel: Params }>dispatched).channel).toEqual({ id: 5 });
+    expect(payload).toBeNull();
+  });
+
+  it("nuke() drops local slots alongside fetched ones", async () => {
+    type Params = { marker: "nuke-local" };
+    const draft = Resource<Env, { text: string }, Params>();
+    const user = Resource<Env, { name: string }, Params>(() =>
+      Promise.resolve({ name: "Adam" }),
+    );
+
+    const local = draft({ marker: "nuke-local" });
+    local.write(noEnv, local.params, { text: "hello" }, noDispatch);
+    const fetched = user({ marker: "nuke-local" });
+    await fetched.run(noEnv, noController(), fetched.params, noDispatch);
+
+    nuke({ marker: "nuke-local" });
+
+    expect(draft.get({ marker: "nuke-local" })).toBeNull();
+    expect(user.get({ marker: "nuke-local" })).toBeNull();
+  });
+
+  it("writes through to a supplied Cache with a per-resource namespace", () => {
+    const adapter = memoryAdapter();
+    const cache = Cache(adapter);
+    const draftA = Resource<Env, { text: string }>(undefined, cache);
+    const draftB = Resource<Env, { text: string }>(undefined, cache);
+
+    const callA = draftA();
+    callA.write(noEnv, callA.params, { text: "A" }, noDispatch);
+    const callB = draftB();
+    callB.write(noEnv, callB.params, { text: "B" }, noDispatch);
+
+    expect(adapter.entries.size).toBe(2);
+    expect(draftA.get()).toEqual({ text: "A" });
+    expect(draftB.get()).toEqual({ text: "B" });
+  });
+
+  it("rejects channel keys not declared on the params", () => {
+    type Params = { id: number };
+    const draft = Resource<Env, { text: string }, Params>();
+
+    draft.action({ id: 5 });
+
+    // @ts-expect-error — `slug` is not in Params.
+    draft.action({ slug: "x" });
+  });
+});

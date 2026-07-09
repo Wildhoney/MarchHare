@@ -4,12 +4,13 @@ import { useContext as baseUseContext } from "../context/index.ts";
 import { useEnv as baseUseEnv } from "../boundary/components/env/utils.ts";
 import type { Env } from "../boundary/components/env/types.ts";
 import { Resource as BaseResource } from "../resource/index.ts";
-import type { ResourceHandle } from "../resource/types.ts";
+import type { LocalResourceHandle, ResourceHandle } from "../resource/types.ts";
 import type { Cache } from "../cache/index.ts";
 import type { Actions, Model, Props } from "../types/index.ts";
 import { createScope } from "../scope/utils.tsx";
 import type { AppHandle, AppContextHandle, AppFetcher } from "./types.ts";
 import type { Tap } from "../boundary/components/tap/types.ts";
+import { G } from "@mobily/ts-belt";
 
 export type {
   AppArgs,
@@ -119,9 +120,23 @@ export function App<E extends object = Env>(config?: {
     return baseUseEnv() as unknown as Readonly<E>;
   }
 
+  function Resource<
+    T,
+    P extends object = Record<never, never>,
+  >(): LocalResourceHandle<T, P>;
   function Resource<T, P extends object = Record<never, never>>(
     fetcher: AppFetcher<E, T, P>,
-  ): ResourceHandle<T, P> {
+  ): ResourceHandle<T, P>;
+  function Resource<T, P extends object = Record<never, never>>(
+    fetcher?: AppFetcher<E, T, P>,
+  ): ResourceHandle<T, P> | LocalResourceHandle<T, P> {
+    if (G.isUndefined(fetcher)) {
+      return BaseResource<E, T, P>(
+        undefined,
+        config?.cache,
+        () => envHolder.current,
+      );
+    }
     return BaseResource<E, T, P>(
       fetcher,
       config?.cache,

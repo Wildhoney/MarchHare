@@ -584,7 +584,31 @@ actions.useAction(Actions.Mount, async (context) => {
 });
 ```
 
-See the [Resource recipe](./recipes/use-resource.md) for the three-tier error handling model, parameterised resources, and limitations.
+Declaring a Resource with **no fetcher** yields a **local resource** &mdash; the same per-params cache, sync `.get(params)`, `.action()` auto-broadcast, eviction, and persistence machinery, but with the app as the only writer. Values enter through `.set(value)` on the handler chain, which writes the cache slot and then fires the broadcast with the call params as the channel &mdash; exactly the sequence a successful fetch performs. The rule is one write path per variant: a fetched Resource is only ever written by its fetcher (there is no `.set()` on it), a local Resource only ever by `.set(...)` &mdash; and local invocations are not awaitable, so `.exceeds(...)`/`.isolated()` don't exist on them:
+
+```ts
+// resources.ts — persisted when the App is declared with App({ cache }).
+export const draft = app.Resource<Draft, { id: number }>();
+```
+
+```ts
+actions.useAction(Actions.Save, (context, { id, text }) => {
+  context.actions.resource(resource.draft({ id })).set({ id, text });
+});
+
+actions.useAction(Actions.Discard, (context, { id }) => {
+  context.actions.resource(resource.draft({ id })).evict();
+});
+
+// Subscribers can't tell whether the value was fetched or written locally.
+actions.useAction(resource.draft.action({ id: 5 }), (context, value) => {
+  context.actions.produce(({ model }) => void (model.draft = value));
+});
+```
+
+Reach for a local resource when a value needs params-keyed slots, sync reads, broadcast fan-out, or reload persistence (drafts, last-selected tab, an offline queue) &mdash; component-local state still belongs in the model and cross-cutting ambient state in the Env.
+
+See the [Resource recipe](./recipes/use-resource.md) for the three-tier error handling model, parameterised resources, local resources, and limitations.
 
 By default an `app.Resource`'s cache is in-memory only &ndash; it resets on every page load. To keep the most recent successful payload around between sessions, wire a `Cache` into `App({ cache })`. Every `app.Resource` declared on that App writes through to the shared Cache and seeds from it on the next reload; resources are namespaced internally so they don't collide on shared params keys:
 
@@ -958,7 +982,7 @@ function Where(): React.ReactElement {
 }
 ```
 
-`shared.Resource<E, T, P>` is the same story for shared resources &mdash; declare them at module scope, pass the Env union as the first generic, and the fetcher's `context.env` is typed against it. Shared resources always use an isolated in-memory cache; reach for `app.Resource` when persistence is required, since the cache is wired into the App via `App({ cache })`. `shared.Scope<E, A>()` opens a multicast scope without going through an App handle. See the [reusable components recipe](./recipes/reusable-components.md) for the full pattern including discriminator-keyed switches and the `App()`-with-no-env case.
+`shared.Resource<E, T, P>` is the same story for shared resources &mdash; declare them at module scope, pass the Env union as the first generic, and the fetcher's `context.env` is typed against it. The fetcherless form keeps the same generic order: `shared.Resource<E, T, P>()` declares a local resource with `E` leading even though no fetcher reads it. Shared resources always use an isolated in-memory cache; reach for `app.Resource` when persistence is required, since the cache is wired into the App via `App({ cache })`. `shared.Scope<E, A>()` opens a multicast scope without going through an App handle. See the [reusable components recipe](./recipes/reusable-components.md) for the full pattern including discriminator-keyed switches and the `App()`-with-no-env case.
 
 When a reusable component or resource is genuinely Env-agnostic &mdash; the fetcher never touches `context.env`, the hook never calls `shared.useEnv` &mdash; pass `Envless` as `E` instead of spelling out `Record<never, never>`: `shared.Resource<Envless, T>`, `shared.useContext<Envless, M, A>()`. It's a named alias for the empty-record shape exported from `march-hare`, kept around purely for legibility at the call site.
 

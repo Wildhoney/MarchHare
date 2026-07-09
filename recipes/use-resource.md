@@ -8,6 +8,8 @@
 
 The fetcher itself receives a single `context` argument carrying `env`, `controller`, `params`, and a broadcast/multicast-only `dispatch`. Access fields directly via `context.controller.signal`, `context.params.id`, etc. &mdash; do not destructure. Pass `context.controller.signal` to `fetch`/`ky`/`EventSource` for cancellation.
 
+Declaring a Resource **without a fetcher** (`app.Resource<T, P>()`) yields a [local resource](#local-resources--no-fetcher) &mdash; same cache, broadcast, and eviction machinery, written through `.set(value)` instead of a fetch.
+
 ```ts
 // resources.ts
 import { app } from "./app";
@@ -195,7 +197,7 @@ See [session-tokens](./session-tokens.md) for the full auth pattern and [env](./
 
 ## Fanning out on success or failure
 
-Every Resource declaration exposes an `event` broadcast that fires automatically after each successful fetch, with the resolved payload as the action payload and the call-site params as the channel. The payload type is `T | null`: successful fetches broadcast `T`, evictions broadcast `null`. Subscribers narrow by supplying any subset of params via `event(partial)`; matching follows the [unified channel rule](./channeled-actions.md#channel-matching) (subscriber's keys must all be satisfied by the dispatch).
+Every Resource declaration exposes an `event` broadcast that fires automatically after each successful fetch, with the resolved payload as the action payload and the call-site params as the channel. The payload type is `T | null`: successful fetches broadcast `T` (as does every [local-resource](#local-resources--no-fetcher) `.set(...)`), evictions broadcast `null`. Subscribers narrow by supplying any subset of params via `event(partial)`; matching follows the [unified channel rule](./channeled-actions.md#channel-matching) (subscriber's keys must all be satisfied by the dispatch).
 
 ```ts
 // resources.ts — no manual fan-out needed; the auto-broadcast handles it.
@@ -462,6 +464,51 @@ actions.useAction(Actions.SignOut, (context) => {
 });
 ```
 
+## Local resources &mdash; no fetcher
+
+Declare a Resource with **no fetcher** to keep app-written values in the same machinery &mdash; per-params cache slots, sync `.get(params)`, the `.action()` auto-broadcast with late-mount replay, `.evict()`/`.nuke()` participation, and `App({ cache })` persistence &mdash; without an endpoint behind it:
+
+```ts
+// resources.ts
+export const draft = app.Resource<Draft, { id: number }>();
+
+// Standalone form — Env shape still leads the generics.
+export const draft = shared.Resource<WebEnv, Draft, { id: number }>();
+```
+
+The declaration is the contract: **one write path per variant.** A fetched Resource's cache is a materialised view of its fetcher's results &mdash; the fetcher is the only writer, and there is no `.set()` on it. A local Resource inverts that: `.set(value)` is the only writer, and the invocation is not awaitable &mdash; there is no fetch to run, so `.exceeds(...)` and `.isolated()` don't exist on the chain. Whichever variant you're holding, a cached value's origin is never ambiguous.
+
+```ts
+actions.useAction(Actions.Save, (context, { id, text }) => {
+  context.actions.resource(draft({ id })).set({ id, text });
+});
+
+actions.useAction(Actions.Discard, (context, { id }) => {
+  context.actions.resource(draft({ id })).evict();
+});
+```
+
+`.set(value)` walks the same sequence a successful fetch does: the cache slot is written first, then the Resource's `.action(params)` broadcast fires with the value as the payload and the call params as the channel &mdash; subscribers always observe a warm cache. Eviction broadcasts `null` per dropped slot, so the payload stays `T | null` and consumers cannot tell (and shouldn't care) whether a Resource is fetched or local:
+
+```tsx
+actions.useAction(draft.action({ id: 5 }), (context, value) => {
+  context.actions.produce(({ model }) => void (model.draft = value));
+});
+
+actions.stream(draft.action({ id: 5 }), (value) => <span>{value?.text}</span>);
+```
+
+```ts
+// Model literal seeding works the same as any Resource.
+const actions = context.useActions({
+  draft: resource.draft.get({ id: 5 }),
+});
+```
+
+Persistence follows the existing rule: declare through `app.Resource` on an `App({ cache })` and every `.set(...)` writes through to the adapter, seeding back on the next reload &mdash; which is usually the whole point of a local Resource (drafts, last-selected tab, an offline queue). `shared.Resource()` is always in-memory. Note that `context.actions.resource.nuke()` clears local slots alongside fetched ones &mdash; desirable on sign-out, but reach for a partial pattern (`nuke({ userId })`) when local values should survive.
+
+**When not to use it:** component-local state belongs in the model, and cross-cutting ambient state (session, locale, flags) belongs in the [Env](./env.md). A local Resource earns its place when the value needs some combination of params-keyed slots, sync reads at construction time, broadcast fan-out, and persistence &mdash; not as a general key-value store.
+
 ## In-flight coalescing &mdash; the default
 
 Concurrent callers with the same `(Resource, params)` share a single in-flight fetch automatically. No chainable, no token, no opt-in:
@@ -589,7 +636,7 @@ Each cursor gets its own cache slot &mdash; `.exceeds({...})` is per-cursor, so 
 
 ## Limitations
 
-- **No persistence across reloads by default.** Opt in via `App({ cache })`. The Cache writes through on every successful fetch and auto-seeds from storage on first read. See [storage](./storage.md).
+- **No persistence across reloads by default.** Opt in via `App({ cache })`. The Cache writes through on every successful fetch (and every local-resource `.set(...)`) and auto-seeds from storage on first read. See [storage](./storage.md).
 - **No focus or reconnect revalidation.** Wire a `window` listener and call `context.actions.resource(...)` again if you need this.
 - **No SSR isolation.** The cache is module-global, so server-side rendering would leak across requests. `Resource` is client-only.
 - **No subscription on the awaiter.** `await context.actions.resource(...)` resolves once and does not re-fire when a broadcast goes out. Use `useAction(broadcastAction)` for change notifications.

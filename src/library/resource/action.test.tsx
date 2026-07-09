@@ -3,6 +3,7 @@ import { act, render, screen } from "@testing-library/react";
 import * as React from "react";
 import { App } from "../app/index.tsx";
 import { Lifecycle } from "../types/index.ts";
+import type { HandlerContext } from "../types/index.ts";
 
 type Env = { ready: boolean };
 
@@ -704,5 +705,121 @@ describe("Resource.action — call variants", () => {
 
     expect(seen).toHaveBeenCalledTimes(1);
     expect(seen).toHaveBeenCalledWith({ id: 1, orgId: 42 });
+  });
+});
+
+describe("Local resource .set end-to-end", () => {
+  it("writes the slot and fires the broadcast to subscribers on the boundary", async () => {
+    const app = appWithoutCache();
+    type Params = { id: number };
+    const draft = app.Resource<{ text: string }, Params>();
+
+    const seen = vi.fn<(value: { text: string } | null) => void>();
+
+    class WriterActions {
+      static Mount = Lifecycle.Mount();
+    }
+    function Writer() {
+      const context = app.useContext<void, typeof WriterActions>();
+      const actions = context.useActions();
+      actions.useAction(WriterActions.Mount, (context) => {
+        context.actions.resource(draft({ id: 5 })).set({ text: "hello" });
+      });
+      return null;
+    }
+
+    function Watcher() {
+      const context = app.useContext();
+      const actions = context.useActions();
+      actions.useAction(draft.action({ id: 5 }), (_context, value) => {
+        seen(value);
+      });
+      return null;
+    }
+
+    await act(async () => {
+      render(
+        <app.Boundary>
+          <Watcher />
+          <Writer />
+        </app.Boundary>,
+      );
+    });
+
+    expect(seen).toHaveBeenCalledTimes(1);
+    expect(seen).toHaveBeenCalledWith({ text: "hello" });
+    expect(draft.get({ id: 5 })).toEqual({ text: "hello" });
+  });
+
+  it("evict fires a null broadcast for the written slot", async () => {
+    const app = appWithoutCache();
+    type Params = { id: number };
+    const draft = app.Resource<{ text: string }, Params>();
+
+    const seen = vi.fn<(value: { text: string } | null) => void>();
+
+    class WriterActions {
+      static Mount = Lifecycle.Mount();
+    }
+    function Writer() {
+      const context = app.useContext<void, typeof WriterActions>();
+      const actions = context.useActions();
+      actions.useAction(WriterActions.Mount, (context) => {
+        context.actions.resource(draft({ id: 5 })).set({ text: "hello" });
+        context.actions.resource(draft({ id: 5 })).evict();
+      });
+      return null;
+    }
+
+    function Watcher() {
+      const context = app.useContext();
+      const actions = context.useActions();
+      actions.useAction(draft.action({ id: 5 }), (_context, value) => {
+        seen(value);
+      });
+      return null;
+    }
+
+    await act(async () => {
+      render(
+        <app.Boundary>
+          <Watcher />
+          <Writer />
+        </app.Boundary>,
+      );
+    });
+
+    expect(seen).toHaveBeenCalledTimes(2);
+    expect(seen.mock.calls.map(([value]) => value)).toEqual([
+      { text: "hello" },
+      null,
+    ]);
+    expect(draft.get({ id: 5 })).toBeNull();
+  });
+
+  it("type-checks the local call surface against the fetched one", () => {
+    const app = appWithoutCache();
+    type Params = { id: number };
+    const draft = app.Resource<{ text: string }, Params>();
+    const user = app.Resource<{ name: string }, Params>(({ params }) =>
+      Promise.resolve({ name: `User ${params.id}` }),
+    );
+
+    const check = (context: HandlerContext<void, void>) => {
+      const local = context.actions.resource(draft({ id: 5 }));
+      local.set({ text: "hi" });
+      local.evict();
+
+      // @ts-expect-error — the fetch chain does not exist on local resources.
+      local.exceeds({ minutes: 5 });
+      // @ts-expect-error — the payload must match the declared value type.
+      local.set({ text: 42 });
+
+      const fetched = context.actions.resource(user({ id: 5 }));
+      // @ts-expect-error — fetched resources have no .set; the fetcher is the only writer.
+      fetched.set({ name: "x" });
+    };
+
+    expect(check).toBeDefined();
   });
 });

@@ -8,7 +8,7 @@ import type {
 } from "../boundary/components/tasks/types.ts";
 import type { Fault } from "../error/types.ts";
 import type { Env } from "../boundary/components/env/types.ts";
-import type { Invocation } from "../resource/types.ts";
+import type { Invocation, LocalInvocation } from "../resource/types.ts";
 import type { WithHandle } from "../with/types.ts";
 
 /**
@@ -94,6 +94,49 @@ export type ResourceFetch<T> = PromiseLike<T> & {
  * exclusive, so once `.exceeds` or `.isolated` runs the chain narrows
  * to {@link ResourceFetch} and `.evict` is no longer available.
  */
+/**
+ * Handle returned from `context.actions.resource(invocation)` when the
+ * invocation came from a local (fetcherless) Resource. There is no
+ * fetch to await and no freshness window to configure, so the handle
+ * is not thenable and carries no `.exceeds(...)`/`.isolated()` &mdash;
+ * only the two cache transitions a local Resource supports.
+ */
+export type LocalResourceCall<T> = {
+  /**
+   * Write `value` into the slot addressed by the originating call's
+   * params, then fire the Resource's `.action()` auto-broadcast with
+   * the value as the payload and the params as the channel &mdash; the
+   * same cache-write-then-broadcast sequence a successful fetch
+   * performs on a fetched Resource. Synchronous; subscribers observe a
+   * warm cache.
+   *
+   * ```ts
+   * context.actions.resource(resource.draft({ id: 5 })).set(draft);
+   * ```
+   */
+  readonly set: (value: T) => void;
+  /**
+   * Drop cache entries for the primed resource. Identical semantics to
+   * the fetched variant's `.evict` &mdash; partial-match on the stored
+   * params, `null` broadcast per evicted slot.
+   */
+  readonly evict: (where?: Record<string, unknown>) => void;
+};
+
+/**
+ * Dispatch surface exposed as `context.actions.resource`. Overloaded on
+ * the invocation's origin: a local (fetcherless) invocation resolves to
+ * a {@link LocalResourceCall} (`.set`/`.evict` only), a fetched
+ * invocation to a {@link ResourceCall} (awaitable fetch chain plus
+ * `.evict`). `.nuke(where?)` spans every Resource in the process.
+ */
+export type ResourceDispatcher = (<T, P extends object>(
+  invocation: LocalInvocation<T, P>,
+) => LocalResourceCall<T>) &
+  (<T, P extends object>(invocation: Invocation<T, P>) => ResourceCall<T>) & {
+    nuke(where?: Record<string, unknown>): void;
+  };
+
 export type ResourceCall<T> = ResourceFetch<T> & {
   /**
    * Drop cache entries for the primed resource without fetching. With
@@ -869,11 +912,7 @@ export type HandlerContext<
     ): Promise<void>;
     annotate<T>(value: T, operation?: Operation): T;
     readonly inspect: Readonly<Inspect<M>>;
-    resource: (<T, P extends object>(
-      invocation: Invocation<T, P>,
-    ) => ResourceCall<T>) & {
-      nuke(where?: Record<string, unknown>): void;
-    };
+    resource: ResourceDispatcher;
     final<T>(
       action: BroadcastPayload<T> | MulticastPayload<T>,
     ): Promise<T | null>;

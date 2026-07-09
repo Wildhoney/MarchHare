@@ -1,7 +1,13 @@
-import type { Dispatch, Fetcher, ResourceHandle } from "./types.ts";
+import type {
+  Dispatch,
+  Fetcher,
+  LocalResourceHandle,
+  ResourceHandle,
+} from "./types.ts";
 import {
   Cache,
   build,
+  buildLocal,
   defaultCache,
   evictors,
   nextResourceId,
@@ -10,7 +16,13 @@ import type { AppFetcher } from "../app/types.ts";
 import type { Env } from "../boundary/components/env/types.ts";
 import { G } from "@mobily/ts-belt";
 
-export type { Fetcher, Invocation, ResourceHandle } from "./types.ts";
+export type {
+  Fetcher,
+  Invocation,
+  LocalInvocation,
+  LocalResourceHandle,
+  ResourceHandle,
+} from "./types.ts";
 
 /**
  * Evicts cache entries across every Resource constructed in the
@@ -94,10 +106,37 @@ export function nuke(where?: object, dispatch?: Dispatch): void {
  * );
  * ```
  *
+ * Calling `Resource()` with **no fetcher** declares a **local
+ * Resource** &mdash; the same cache, sync `.get(params)`, `.action()`
+ * auto-broadcast, eviction, and persistence machinery, but with the
+ * app as the only writer: values enter exclusively through
+ * `context.actions.resource(resource.draft(params)).set(value)`. One
+ * write path per variant &mdash; a fetched Resource's cache is only
+ * ever written by its fetcher, a local Resource's only ever by
+ * `.set(...)` &mdash; so the origin of a cached value is always
+ * unambiguous. Local invocations are not awaitable and carry no
+ * `.exceeds(...)`/`.isolated()` chain.
+ *
+ * @example
+ * ```ts
+ * import { shared } from "march-hare";
+ *
+ * export const draft = shared.Resource<WebEnv, Draft, { id: number }>();
+ *
+ * actions.useAction(Actions.Save, (context, { id, draft: value }) => {
+ *   context.actions.resource(draft({ id })).set(value);
+ * });
+ * ```
+ *
  * @internal The optional `cache` argument is reserved for `app.Resource`
  *   &mdash; consumers should use `App({ cache })` instead of passing it
  *   directly.
  */
+export function Resource<
+  _E extends object,
+  T,
+  P extends object = Record<never, never>,
+>(): LocalResourceHandle<T, P>;
 export function Resource<
   E extends object,
   T,
@@ -106,9 +145,33 @@ export function Resource<
   ƒ: AppFetcher<E, T, P>,
   cache?: Cache,
   getEnv?: () => Env | undefined,
-): ResourceHandle<T, P> {
-  const inner = <Fetcher<T, P>>(<unknown>ƒ);
+): ResourceHandle<T, P>;
+export function Resource<
+  _E extends object,
+  T,
+  P extends object = Record<never, never>,
+>(
+  ƒ: undefined,
+  cache?: Cache,
+  getEnv?: () => Env | undefined,
+): LocalResourceHandle<T, P>;
+export function Resource<
+  E extends object,
+  T,
+  P extends object = Record<never, never>,
+>(
+  ƒ?: AppFetcher<E, T, P>,
+  cache?: Cache,
+  getEnv?: () => Env | undefined,
+): ResourceHandle<T, P> | LocalResourceHandle<T, P> {
   const resolveEnv = getEnv ?? (() => undefined);
+  if (G.isUndefined(ƒ)) {
+    if (G.isUndefined(cache)) {
+      return buildLocal<T, P>(Cache(), null, resolveEnv);
+    }
+    return buildLocal<T, P>(cache, nextResourceId({}), resolveEnv);
+  }
+  const inner = <Fetcher<T, P>>(<unknown>ƒ);
   if (G.isUndefined(cache)) {
     return build(inner, defaultCache(inner), null, resolveEnv);
   }

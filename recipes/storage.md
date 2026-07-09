@@ -1,6 +1,6 @@
 # Persisting resources across reloads
 
-By default a `Resource`'s cache is in-memory only &ndash; it resets on every page load. To keep the most recent successful payload around between sessions, wire a `Cache` into `App({ cache })`. Every `app.Resource` declaration on that App shares the cache: writes go through on every successful fetch, and the per-params slot seeds from storage on first read, so call sites stay free of explicit `cache.set` / `cache.get` ceremony.
+By default a `Resource`'s cache is in-memory only &ndash; it resets on every page load. To keep the most recent successful payload around between sessions, wire a `Cache` into `App({ cache })`. Every `app.Resource` declaration on that App shares the cache: writes go through on every successful fetch (and on every `.set(value)` for [local resources](./use-resource.md#local-resources--no-fetcher)), and the per-params slot seeds from storage on first read, so call sites stay free of explicit `cache.set` / `cache.get` ceremony.
 
 This recipe covers:
 

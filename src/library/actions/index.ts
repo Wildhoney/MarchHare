@@ -41,7 +41,12 @@ import { useEnv, useEnvRef } from "../boundary/components/env/utils.ts";
 import type { Env } from "../boundary/components/env/types.ts";
 import { produce as produceImmer } from "immer";
 import { nuke } from "../resource/index.ts";
-import type { Invocation } from "../resource/types.ts";
+import type { Invocation, LocalInvocation } from "../resource/types.ts";
+import type {
+  LocalResourceCall,
+  ResourceCall,
+  ResourceDispatcher,
+} from "../types/index.ts";
 import { withAbort } from "../coalesce/index.ts";
 import type { Share } from "../boundary/components/sharing/index.tsx";
 import { unset } from "../utils/utils.ts";
@@ -251,110 +256,124 @@ export function useActions<
               }
               return Promise.resolve();
             };
-            return Object.assign(
-              function resourceCall<T, P extends object>(
-                call: Invocation<T, P>,
-              ) {
-                const options: {
-                  exceedsWindow: Temporal.DurationLike | null;
-                  isolated: boolean;
-                } = { exceedsWindow: null, isolated: false };
-                const fetch = (): Promise<T> => {
-                  if (G.isNotNullable(options.exceedsWindow)) {
-                    const { data, at } = call.read(call.params);
-                    if (data !== unset && G.isNotNullable(at)) {
-                      const elapsed = Temporal.Now.instant().since(at);
-                      const window = Temporal.Duration.from(
-                        options.exceedsWindow,
-                      );
-                      if (Temporal.Duration.compare(elapsed, window) <= 0) {
-                        return Promise.resolve(<T>data);
-                      }
-                    }
-                  }
-                  if (options.isolated) {
-                    return <Promise<T>>(
-                      call.run(
-                        env,
-                        controller,
-                        call.params,
-                        dispatchFromResource,
-                      )
-                    );
-                  }
-                  let mutable = sharing.get(call.run);
-                  if (G.isUndefined(mutable)) {
-                    mutable = new Map<string, Share>();
-                    sharing.set(call.run, mutable);
-                  }
-                  const bucket = mutable;
-                  const slot = JSON.stringify(call.params);
-                  let share = <Share<T> | undefined>bucket.get(slot);
-                  if (G.isUndefined(share)) {
-                    const detached = new AbortController();
-                    const created: Share<T> = <Share<T>>{
-                      controller: detached,
-                      refs: 0,
-                    };
-                    created.promise = (<Promise<T>>(
-                      call.run(env, detached, call.params, dispatchFromResource)
-                    )).finally(() => {
-                      bucket.delete(slot);
-                    });
-                    bucket.set(slot, <Share>(<unknown>created));
-                    share = created;
-                  }
-                  const joined = share;
-                  joined.refs += 1;
-                  const release = (): void => {
-                    joined.refs -= 1;
-                    if (joined.refs === 0) {
-                      bucket.delete(slot);
-                      joined.controller.abort(controller.signal.reason);
-                    }
-                  };
-                  if (controller.signal.aborted) {
-                    release();
-                  } else {
-                    controller.signal.addEventListener("abort", release, {
-                      once: true,
-                    });
-                    const cleanup = (): void =>
-                      controller.signal.removeEventListener("abort", release);
-                    joined.promise.then(cleanup, cleanup);
-                  }
-                  return withAbort(joined.promise, controller.signal);
-                };
-                const handle = {
-                  then<U = T, V = never>(
-                    onFulfilled?:
-                      | ((value: T) => U | PromiseLike<U>)
-                      | null
-                      | undefined,
-                    onRejected?:
-                      | ((reason: unknown) => V | PromiseLike<V>)
-                      | null
-                      | undefined,
-                  ): Promise<U | V> {
-                    return fetch().then(onFulfilled, onRejected);
+            function resourceCall<T, P extends object>(
+              call: LocalInvocation<T, P>,
+            ): LocalResourceCall<T>;
+            function resourceCall<T, P extends object>(
+              call: Invocation<T, P>,
+            ): ResourceCall<T>;
+            function resourceCall<T, P extends object>(
+              call: Invocation<T, P> | LocalInvocation<T, P>,
+            ): LocalResourceCall<T> | ResourceCall<T> {
+              if ("write" in call) {
+                return {
+                  set(value: T): void {
+                    call.write(env, call.params, value, dispatchFromResource);
                   },
-                  exceeds(duration: Temporal.DurationLike) {
-                    options.exceedsWindow = duration;
-                    return handle;
-                  },
-                  isolated() {
-                    options.isolated = true;
-                    return handle;
-                  },
-                  evict(where?: object): void {
+                  evict(where?: Record<string, unknown>): void {
                     call.evict(where ?? call.params, dispatchFromResource);
                   },
                 };
-                return handle;
-              },
+              }
+              const options: {
+                exceedsWindow: Temporal.DurationLike | null;
+                isolated: boolean;
+              } = { exceedsWindow: null, isolated: false };
+              const fetch = (): Promise<T> => {
+                if (G.isNotNullable(options.exceedsWindow)) {
+                  const { data, at } = call.read(call.params);
+                  if (data !== unset && G.isNotNullable(at)) {
+                    const elapsed = Temporal.Now.instant().since(at);
+                    const window = Temporal.Duration.from(
+                      options.exceedsWindow,
+                    );
+                    if (Temporal.Duration.compare(elapsed, window) <= 0) {
+                      return Promise.resolve(<T>data);
+                    }
+                  }
+                }
+                if (options.isolated) {
+                  return <Promise<T>>(
+                    call.run(env, controller, call.params, dispatchFromResource)
+                  );
+                }
+                let mutable = sharing.get(call.run);
+                if (G.isUndefined(mutable)) {
+                  mutable = new Map<string, Share>();
+                  sharing.set(call.run, mutable);
+                }
+                const bucket = mutable;
+                const slot = JSON.stringify(call.params);
+                let share = <Share<T> | undefined>bucket.get(slot);
+                if (G.isUndefined(share)) {
+                  const detached = new AbortController();
+                  const created: Share<T> = <Share<T>>{
+                    controller: detached,
+                    refs: 0,
+                  };
+                  created.promise = (<Promise<T>>(
+                    call.run(env, detached, call.params, dispatchFromResource)
+                  )).finally(() => {
+                    bucket.delete(slot);
+                  });
+                  bucket.set(slot, <Share>(<unknown>created));
+                  share = created;
+                }
+                const joined = share;
+                joined.refs += 1;
+                const release = (): void => {
+                  joined.refs -= 1;
+                  if (joined.refs === 0) {
+                    bucket.delete(slot);
+                    joined.controller.abort(controller.signal.reason);
+                  }
+                };
+                if (controller.signal.aborted) {
+                  release();
+                } else {
+                  controller.signal.addEventListener("abort", release, {
+                    once: true,
+                  });
+                  const cleanup = (): void =>
+                    controller.signal.removeEventListener("abort", release);
+                  joined.promise.then(cleanup, cleanup);
+                }
+                return withAbort(joined.promise, controller.signal);
+              };
+              const handle = {
+                then<U = T, V = never>(
+                  onFulfilled?:
+                    | ((value: T) => U | PromiseLike<U>)
+                    | null
+                    | undefined,
+                  onRejected?:
+                    | ((reason: unknown) => V | PromiseLike<V>)
+                    | null
+                    | undefined,
+                ): Promise<U | V> {
+                  return fetch().then(onFulfilled, onRejected);
+                },
+                exceeds(duration: Temporal.DurationLike) {
+                  options.exceedsWindow = duration;
+                  return handle;
+                },
+                isolated() {
+                  options.isolated = true;
+                  return handle;
+                },
+                evict(where?: object): void {
+                  call.evict(where ?? call.params, dispatchFromResource);
+                },
+              };
+              return handle;
+            }
+            return <ResourceDispatcher>Object.defineProperty(
+              resourceCall,
+              "nuke",
               {
-                nuke: (where?: object): void =>
+                value: (where?: object): void =>
                   nuke(where, dispatchFromResource),
+                enumerable: false,
               },
             );
           })(),
