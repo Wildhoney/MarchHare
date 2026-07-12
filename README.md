@@ -25,6 +25,7 @@
 1. [Resource handling](#resource-handling)
 1. [Channeled actions](#channeled-actions)
 1. [Multicast actions](#multicast-actions)
+1. [Server-sent events](#server-sent-events)
 1. [Global data](#global-data)
 1. [Reusable components](#reusable-components)
 1. [Scaffolding CLI](#scaffolding-cli)
@@ -811,6 +812,70 @@ A few rules:
 - **Replay on late-mount is per-scope.** Like broadcast, multicast caches its most recent payload per action symbol; components that mount later inside the same boundary pick up the cached value through their `useAction` handler. See the [mount deduplication recipe](./recipes/mount-broadcast-deduplication.md) if you also fetch in `Lifecycle.Mount()`.
 
 See the [multicast recipe](./recipes/multicast-actions.md) for more details. When the scope itself needs to be reusable across multiple hosts, reach for `shared.Scope<HostEnvs, typeof MulticastActions>()` &mdash; the standalone form covered in [Reusable components](#reusable-components). The rule of thumb: never reach for a second `App()` to get a private channel; that's what multicast scopes exist for.
+
+## Server-sent events
+
+A broadcast action stops at the edge of its `<Boundary>`. An **omnicast** action goes one ring further out: it behaves exactly like a broadcast locally, but the `Sse` bridge carries it to every connected client &mdash; other tabs, browsers, and devices &mdash; through a Server-Sent Events server (the reference implementation is [Akela](https://github.com/Wildhoney/Akela), a Rust hub that fans out through Redis pub/sub so any number of server instances behave as one).
+
+Declare omnicast actions with `Omnicast(name, schema?)`, inferring the payload type from a Zod-style schema. The schema is not decorative: server-sent events are remote input, so every envelope arriving over the wire is validated with `schema.parse` and **rejected when invalid** &mdash; a misbehaving peer cannot push malformed payloads into your handlers.
+
+```ts
+import { Omnicast as Omni, Sse } from "march-hare";
+import { z } from "zod";
+
+export namespace Payload {
+  export const Cat = z.object({ id: z.string(), name: z.string() });
+  export type Cat = z.infer<typeof Cat>;
+}
+
+export namespace Omnicast {
+  export class Cat {
+    static Adopted = Omni("Cat.Adopted", Payload.Cat);
+  }
+  export class Cattery {
+    static Opened = Omni("Cattery.Opened");
+  }
+}
+```
+
+Then declare the bridge at module scope with a **wire class** &mdash; the omnicast actions permitted to travel, which doubles as an allow-list for what remote peers may dispatch into your Boundary:
+
+```ts
+export class Wire {
+  static Adopted = Omnicast.Cat.Adopted;
+  static Opened = Omnicast.Cattery.Opened;
+}
+
+export const sse = Sse({ url: "http://localhost:8080", actions: Wire });
+```
+
+Mount the bridge once inside the `<Boundary>` and dispatch through the handle:
+
+```ts
+export function useActions() {
+  const context = app.useContext<Model, typeof Actions>();
+  const actions = context.useActions({ cats: [] });
+
+  sse.useBridge();
+
+  actions.useAction(Actions.OpenNew, async () => {
+    await sse.dispatch(Omnicast.Cattery.Opened);
+  });
+
+  actions.useAction(Omnicast.Cattery.Opened, (context) => {
+    context.actions.produce(({ model }) => void (model.cats = []));
+    context.actions.resource.nuke();
+  });
+
+  return actions;
+}
+```
+
+`sse.dispatch(action, payload)` has the same call signature as `actions.dispatch`, typed against the wire class, and performs both legs in one call: the action fires locally through the normal dispatch pipeline, and the `{ name, payload }` envelope is published to the server for every **other** client &mdash; the sender is excluded server-side, so nothing double-fires. Receiving bridges validate the payload against the action's schema, then re-dispatch the action into their own Boundary; subscribers `useAction` it as usual and cannot tell local from remote.
+
+Connections hold a mutable set of tags (`sse.tag.add("vip")` / `sse.tag.remove("vip")`), and `sse.tagged(["vip"]).dispatch(...)` narrows the wire leg to clients holding **all** of the supplied tags &mdash; extras permitted. Without tags, sends are public.
+
+See the [SSE recipe](./recipes/sse.md) for the server protocol, reconnect semantics, tag reconciliation, and testing guidance.
 
 ## Global data
 

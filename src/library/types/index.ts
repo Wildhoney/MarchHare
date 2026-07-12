@@ -242,6 +242,12 @@ export class Brand {
   static readonly Broadcast = Symbol("march-hare.brand/Broadcast");
   /** Brand key for MulticastPayload type */
   static readonly Multicast = Symbol("march-hare.brand/Multicast");
+  /**
+   * Brand key for OmnicastPayload type. Carries the action's runtime
+   * schema (or `null` for payloadless events) so the SSE bridge can
+   * validate incoming envelopes before dispatching them.
+   */
+  static readonly Omnicast = Symbol("march-hare.brand/Omnicast");
   /** Access the underlying symbol from an action */
   static readonly Action = Symbol("march-hare.brand/Action");
   /** Identifies channeled actions (result of calling Action(channel)) */
@@ -888,6 +894,30 @@ export type MulticastPayload<
   Name extends string = string,
 > = HandlerPayload<P, C, Name> & {
   readonly [Brand.Multicast]: true;
+};
+
+/**
+ * Minimal runtime validator contract satisfied by Zod schemas (and any
+ * library exposing a Zod-style `parse`): given an untrusted value, either
+ * return the typed value or throw. Used by `Omnicast` actions to validate
+ * payloads arriving over the wire before they are dispatched locally.
+ */
+export type Schema<T> = {
+  parse(value: unknown): T;
+};
+
+/**
+ * Branded type for omnicast action objects created with `Omnicast()`.
+ * An omnicast action is a broadcast action that is additionally permitted
+ * to travel between clients over an SSE bridge; the brand carries the
+ * runtime schema used to validate payloads received from the wire, or
+ * `null` for payloadless events.
+ */
+export type OmnicastPayload<
+  P = unknown,
+  Name extends string = string,
+> = BroadcastPayload<P, never, Name> & {
+  readonly [Brand.Omnicast]: null | Schema<P>;
 };
 
 /**

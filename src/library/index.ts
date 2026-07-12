@@ -14,6 +14,9 @@ export { Reason, Aborted } from "./error/index.ts";
 export { annotate } from "./annotate/index.ts";
 export { Operation, Op, State, isBox } from "immertation";
 
+export { Sse } from "./sse/index.ts";
+export { Omnicast } from "./omnicast/index.ts";
+
 export * as utils from "./utils/index.ts";
 
 export * as shared from "./shared/index.ts";
@@ -28,6 +31,14 @@ export type {
   Handlers,
   ReactivePayload,
   ReactiveBinding,
+  OmnicastPayload,
+  Schema,
 } from "./types/index.ts";
+export type {
+  SseConfig,
+  SseConnected,
+  SseEnvelope,
+  SseHandle,
+} from "./sse/types.ts";
 export type { Envless } from "./boundary/components/env/types.ts";
 export type { Tap, Taps } from "./boundary/components/tap/types.ts";

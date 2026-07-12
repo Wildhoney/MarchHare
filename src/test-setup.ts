@@ -14,6 +14,23 @@ if (typeof (<Partial<TemporalGlobal>>globalThis).Temporal === "undefined") {
   );
 }
 
+// jsdom does not implement `EventSource`. The SSE bridge only needs the
+// constructor surface when components mount during tests — no events are
+// ever emitted, so connections stay silent and the client id stays null.
+class EventSourceStub {
+  addEventListener(): void {}
+  close(): void {}
+}
+type EventSourceGlobal = { EventSource: typeof globalThis.EventSource };
+if (
+  typeof (<Partial<EventSourceGlobal>>globalThis).EventSource === "undefined"
+) {
+  // eslint-disable-next-line fp/no-mutation
+  (<EventSourceGlobal>globalThis).EventSource = <typeof globalThis.EventSource>(
+    (<unknown>EventSourceStub)
+  );
+}
+
 // Cleanup DOM after each test
 afterEach(() => {
   cleanup();

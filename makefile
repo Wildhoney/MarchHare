@@ -22,7 +22,7 @@ build:
 	npm run build
 
 fslint:
-	npx fslint --files=dist/**/*.js --limit-kb=30
+	npx fslint --files=dist/**/*.js --limit-kb=32
 
 checks:
 	make fmt

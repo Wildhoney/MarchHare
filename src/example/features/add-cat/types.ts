@@ -1,5 +1,5 @@
 import { Action, Distribution } from "march-hare";
-import { Broadcast } from "@example/shared/types/index.ts";
+import { Broadcast, Omnicast } from "@example/shared/types/index.ts";
 import type { Cat } from "@example/shared/resources/cat/types.ts";
 
 export type Model = {
@@ -9,6 +9,7 @@ export type Model = {
 export class Actions {
   static Click = Action("AddCat.Click");
   static Broadcast = Broadcast;
+  static Omnicast = Omnicast;
 }
 
 export class Multicast {

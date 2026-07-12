@@ -4,6 +4,7 @@ import { Actions, type Model } from "./types.ts";
 import { scope } from "./utils.ts";
 import { type Payload } from "@example/shared/types/index.ts";
 import * as resource from "@example/shared/resources/index.ts";
+import { sse } from "@example/shared/sse/index.ts";
 import { name } from "@example/shared/utils/name/index.ts";
 import { filter } from "@example/shared/utils/filter/index.ts";
 
@@ -24,15 +25,21 @@ export function useActions() {
     const [image] = await context.actions.resource(resource.cat.image());
     if (G.isNullable(image)) return;
 
-    context.actions.produce(({ model }) => void (model.image = image));
-
-    const cat: Payload.Cat = {
-      id: image.id,
-      name: name(),
-      avatar: image.url,
-      filter: filter(),
+    const adoption: Payload.Adoption = {
+      image,
+      cat: {
+        id: image.id,
+        name: name(),
+        avatar: image.url,
+        filter: filter(),
+      },
     };
-    await context.actions.dispatch(Actions.Broadcast.Cat.Added, cat);
+    await sse.dispatch(Actions.Omnicast.Cat.Adopted, adoption);
+  });
+
+  actions.useAction(Actions.Omnicast.Cat.Adopted, async (context, adoption) => {
+    context.actions.produce(({ model }) => void (model.image = adoption.image));
+    await context.actions.dispatch(Actions.Broadcast.Cat.Added, adoption.cat);
   });
 
   return actions;

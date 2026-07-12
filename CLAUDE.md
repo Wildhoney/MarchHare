@@ -21,6 +21,8 @@ import {
   Op,
   State,
   shared,
+  Sse,
+  Omnicast,
 } from "march-hare";
 import type {
   Box,
@@ -636,6 +638,8 @@ docs: update the README file
 - `src/library/context/index.ts` - useContext (consumed via `app.useContext`)
 - `src/library/with/index.ts` - With.Update / With.Invert helpers
 - `src/library/coalesce/index.ts` - withAbort helper for the default-coalesce path
+- `src/library/sse/index.ts` - Sse factory: bridge omnicast actions across clients via an Akela-compatible SSE server
+- `src/library/omnicast/index.ts` - Omnicast factory: broadcast-like actions permitted on the wire, payload typed and runtime-validated by a Zod-style schema
 - `src/library/action/index.ts` - Action factory function
 - `src/library/types/index.ts` - All TypeScript types and interfaces
 - `src/library/utils/index.ts` - sleep, pk utilities
@@ -671,6 +675,7 @@ docs: update the README file
   - `real-time-applications.md` - SSE/WebSocket patterns
   - `referential-equality.md` - Avoiding stale closures
   - `session-tokens.md` - Session tokens in the Env; HttpOnly cookies vs. Bearer in Env; refresh-on-401 via ky `afterResponse` hook
+  - `sse.md` - `Sse` bridge + `Omnicast(name, schema?)` actions: extend chosen events to every connected client over Server-Sent Events (Akela protocol); Zod-style schema validates incoming envelopes and rejects invalid payloads; wire class allow-list, `sse.dispatch` local + remote legs with sender exclusion, `sse.tag` / `sse.tagged` for ALL-tags targeting
   - `stateful-props.md` - Box<T> type for stateful props
   - `storage.md` - Cache class for cross-reload persistence; adapters for localStorage / MMKV / chrome.storage
   - `tap.md` - `<Boundary tap={...}>` observer fired on every handler dispatch and its terminal (`success` / `error`); analytics, audit log, Sentry breadcrumbs
