@@ -104,14 +104,16 @@ export function Sse({
       client: () => client.current,
       tag: {
         async add(...tags: readonly [string, ...string[]]) {
-          const fresh = tags.filter(
+          const fresh = [...new Set(tags)].filter(
             (tag) => !(desired.current?.has(tag) ?? false),
           );
           fresh.forEach((tag) => desired.current?.add(tag));
           await Promise.all(fresh.map((tag) => mutate("PUT", tag)));
         },
         async remove(...tags: readonly [string, ...string[]]) {
-          const held = tags.filter((tag) => desired.current?.has(tag) ?? false);
+          const held = [...new Set(tags)].filter(
+            (tag) => desired.current?.has(tag) ?? false,
+          );
           held.forEach((tag) => desired.current?.delete(tag));
           await Promise.all(held.map((tag) => mutate("DELETE", tag)));
         },

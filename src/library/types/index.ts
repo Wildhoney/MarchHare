@@ -973,9 +973,16 @@ export type OmnicastPayload<
   P = unknown,
   C extends Filter = never,
   Name extends string = string,
-> = BroadcastPayload<P, C, Name> & {
-  readonly [Brand.Omnicast]: null | Schema<P>;
-};
+> = ([C] extends [never]
+  ? unknown
+  : {
+      (channel: C): ChanneledAction<P, C, Name> & {
+        readonly [Brand.Omnicast]: null | Schema<P>;
+      };
+    }) &
+  BroadcastPayload<P, C, Name> & {
+    readonly [Brand.Omnicast]: null | Schema<P>;
+  };
 
 /**
  * Extracts the payload type `P` from a `HandlerPayload<P>` or `ChanneledAction<P, C>`.
