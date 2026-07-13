@@ -12,6 +12,7 @@ import {
 } from "../../../types/index.ts";
 import { Reason } from "../../../error/index.ts";
 import type { Fault } from "../../../error/types.ts";
+import type { Taps } from "../tap/types.ts";
 
 const member = z.object({ member: z.string() });
 
@@ -107,14 +108,16 @@ function Harness(): null {
 function renderHarness(config?: {
   tags?: readonly string[];
   omit?: boolean;
+  tap?: (event: Taps) => void;
 }): FakeEventSource | undefined {
   render(
     config?.omit === true ? (
-      <Boundary>
+      <Boundary tap={config.tap}>
         <Harness />
       </Boundary>
     ) : (
       <Boundary
+        tap={config?.tap}
         sse={{ url: "http://sse.test", actions: Omnicast, tags: config?.tags }}
       >
         <Harness />
@@ -357,6 +360,66 @@ describe("omnicast over SSE", () => {
       client: "client-1",
     });
     expect(renamed).toHaveBeenCalledWith("Ada");
+  });
+
+  it("taps the local leg of an omnicast dispatch", async () => {
+    const events: Taps[] = [];
+    const source = renderHarness({ tap: (event) => void events.push(event) });
+    if (!source) throw new Error("no connection opened");
+    connect(source);
+
+    await act(async () => {
+      await handle?.dispatch(Actions.Omnicast.Room.Joined, Audience.Public(), {
+        member: "Adam",
+      });
+    });
+
+    const joined = events.filter((event) => event.action.name === "Room.Joined");
+    expect(joined.map((event) => event.stage)).toEqual(["start", "end"]);
+    expect(joined[1].stage === "end" && joined[1].result).toBe("success");
+  });
+
+  it("taps handler invocations triggered by incoming envelopes", async () => {
+    const events: Taps[] = [];
+    const source = renderHarness({ tap: (event) => void events.push(event) });
+    if (!source) throw new Error("no connection opened");
+    connect(source);
+
+    act(() => {
+      source.emit("message", {
+        name: "Room.Joined",
+        payload: { member: "Maria" },
+      });
+    });
+
+    await waitFor(() => expect(received).toHaveBeenCalledWith("Maria"));
+    const joined = events.filter((event) => event.action.name === "Room.Joined");
+    expect(joined.map((event) => event.stage)).toEqual(["start", "end"]);
+    expect(joined[1].stage === "end" && joined[1].result).toBe("success");
+  });
+
+  it("taps rejected envelopes as an error pair with Reason.Rejected", async () => {
+    const events: Taps[] = [];
+    const source = renderHarness({ tap: (event) => void events.push(event) });
+    if (!source) throw new Error("no connection opened");
+    connect(source);
+
+    act(() => {
+      source.emit("message", {
+        name: "Room.Joined",
+        payload: { member: 5 },
+      });
+    });
+
+    await waitFor(() => expect(faulted).toHaveBeenCalledOnce());
+    const joined = events.filter((event) => event.action.name === "Room.Joined");
+    expect(joined.map((event) => event.stage)).toEqual(["start", "end"]);
+    const terminal = joined[1];
+    if (terminal.stage !== "end" || terminal.result !== "error")
+      throw new Error("expected an error terminal");
+    expect(terminal.details.reason).toBe(Reason.Rejected);
+    expect(terminal.details.error.name).toBe("RejectError");
+    expect(received).not.toHaveBeenCalled();
   });
 
   it("degrades omnicast dispatches to plain broadcasts without an sse config", async () => {

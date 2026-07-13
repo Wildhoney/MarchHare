@@ -2,8 +2,9 @@ import * as React from "react";
 import { G } from "@mobily/ts-belt";
 import { useBroadcast } from "../broadcast/index.tsx";
 import { useTasks } from "../tasks/utils.ts";
+import { useTap } from "../tap/utils.ts";
 import { emitAsync } from "../../../actions/utils.ts";
-import { getActionSymbol, validate } from "../../../action/utils.ts";
+import { getActionSymbol, getName, validate } from "../../../action/utils.ts";
 import { getError, getReason } from "../../../error/utils.ts";
 import { FaultSymbol } from "../../../types/index.ts";
 import type {
@@ -57,6 +58,7 @@ export function Sse({
 }): React.ReactElement {
   const broadcast = useBroadcast();
   const tasks = useTasks();
+  const tap = useTap();
   const client = React.useRef<null | string>(null);
   const desired = React.useRef<null | Set<string>>(null);
   desired.current ??= new Set(config?.tags ?? []);
@@ -167,6 +169,26 @@ export function Sse({
             envelope.channel,
           );
         } catch (caught) {
+          const identity = { name: getName(action), payload: envelope.payload };
+          const task = {
+            controller: new AbortController(),
+            action: getActionSymbol(action),
+            payload: envelope.payload,
+          };
+          const startedAt = performance.now();
+          tap({ stage: "start", action: identity, details: { task } });
+          tap({
+            stage: "end",
+            result: "error",
+            action: identity,
+            details: {
+              task,
+              elapsed: performance.now() - startedAt,
+              mutations: { model: null, env: null },
+              error: getError(caught),
+              reason: getReason(caught),
+            },
+          });
           broadcast.fire(FaultSymbol, {
             reason: getReason(caught),
             error: getError(caught),
@@ -185,7 +207,7 @@ export function Sse({
       source.close();
       client.current = null;
     };
-  }, [config, handle, broadcast, tasks]);
+  }, [config, handle, broadcast, tasks, tap]);
 
   return <SseContext.Provider value={handle}>{children}</SseContext.Provider>;
 }

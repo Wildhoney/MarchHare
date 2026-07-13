@@ -77,6 +77,8 @@ actions.useAction(Lifecycle.Fault, (context, fault) => {
 });
 ```
 
+Omnicast is fully visible to `App({ tap })` observers too: subscriber handlers triggered by the local leg and by incoming envelopes tap exactly like any other handler invocation, and a rejected envelope emits a `start` &rarr; `end:error` pair carrying `Reason.Rejected` &mdash; so audit logs and Sentry breadcrumbs record misbehaving peers even though no handler ever ran.
+
 Outgoing dispatches are deliberately **not** parsed at runtime &mdash; the payload type is inferred from the very same schema, so the compiler already guarantees the sender's side. Runtime validation is reserved for the one place types cannot reach: remote input arriving over the wire.
 
 ## Sharing the action classes: `AppActions`
