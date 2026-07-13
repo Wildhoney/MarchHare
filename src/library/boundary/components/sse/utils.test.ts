@@ -3,7 +3,7 @@ import { z } from "zod";
 import { Action } from "../../../action/index.ts";
 import { isOmnicastAction, schemaOf } from "../../../action/utils.ts";
 import { Distribution } from "../../../types/index.ts";
-import { address, lookup, parse, reconcile } from "./utils.ts";
+import { address, eligible, lookup, parse, reconcile } from "./utils.ts";
 
 const cat = z.object({ id: z.string(), name: z.string() });
 
@@ -93,6 +93,24 @@ describe("address()", () => {
     expect(address("http://localhost:8080", new Set(["vip", "beta"]))).toBe(
       "http://localhost:8080/sse?tags=vip%2Cbeta",
     );
+  });
+});
+
+describe("eligible()", () => {
+  it("delivers public envelopes regardless of held tags", () => {
+    expect(eligible(undefined, new Set())).toBe(true);
+    expect(eligible([], new Set(["vip"]))).toBe(true);
+  });
+
+  it("delivers when the client still holds every required tag", () => {
+    expect(eligible(["vip"], new Set(["vip", "beta"]))).toBe(true);
+    expect(eligible(["vip", "beta"], new Set(["vip", "beta"]))).toBe(true);
+  });
+
+  it("rejects when a required tag was shed while the event was in flight", () => {
+    expect(eligible(["vip"], new Set(["beta"]))).toBe(false);
+    expect(eligible(["vip", "beta"], new Set(["vip"]))).toBe(false);
+    expect(eligible(["vip"], new Set())).toBe(false);
   });
 });
 

@@ -58,7 +58,6 @@ import {
   isMulticastAction,
   isOmnicastAction,
   getName,
-  validate,
 } from "../action/index.ts";
 import { useSse } from "../boundary/components/sse/index.tsx";
 
@@ -266,22 +265,15 @@ export function useActions<
             }
 
             if (omnicast && G.isNotNullable(sse)) {
-              try {
-                const parsed = validate(action, payload);
-                return Promise.all([
-                  emitAsync(broadcast, base, parsed, channel),
-                  sse.publish(
-                    {
-                      name: getName(action),
-                      payload: parsed,
-                      channel: <Filter | undefined>channel,
-                    },
-                    audience?.tags ?? undefined,
-                  ),
-                ]).then(() => undefined);
-              } catch (error) {
-                return Promise.reject(error);
-              }
+              return Promise.all([
+                emitAsync(broadcast, base, payload, channel),
+                sse.publish({
+                  name: getName(action),
+                  payload,
+                  channel: <Filter | undefined>channel,
+                  tags: audience?.tags ?? undefined,
+                }),
+              ]).then(() => undefined);
             }
 
             const emitter = isBroadcastAction(action) ? broadcast : unicast;
@@ -707,22 +699,15 @@ export function useActions<
         }
 
         if (omnicast && G.isNotNullable(sse)) {
-          try {
-            const parsed = validate(action, payload);
-            return Promise.all([
-              emitAsync(broadcast, base, parsed, channel),
-              sse.publish(
-                {
-                  name: getName(action),
-                  payload: parsed,
-                  channel: <Filter | undefined>channel,
-                },
-                audience?.tags ?? undefined,
-              ),
-            ]).then(() => undefined);
-          } catch (error) {
-            return Promise.reject(error);
-          }
+          return Promise.all([
+            emitAsync(broadcast, base, payload, channel),
+            sse.publish({
+              name: getName(action),
+              payload,
+              channel: <Filter | undefined>channel,
+              tags: audience?.tags ?? undefined,
+            }),
+          ]).then(() => undefined);
         }
 
         const emitter = isBroadcastAction(action) ? broadcast : unicast;

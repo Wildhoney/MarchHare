@@ -40,6 +40,14 @@ export type SseEnvelope = {
    * primitives.
    */
   channel?: Filter;
+  /**
+   * The `Audience.Private(tags)` requirement, embedded automatically on
+   * dispatch. The server routes on it at send time, and every receiver
+   * re-validates it against its **current** tag set on arrival &mdash;
+   * closing the race where a client sheds a tag while a matching event
+   * is already in flight. Absent for `Audience.Public()` dispatches.
+   */
+  tags?: readonly string[];
 };
 
 /**
@@ -61,9 +69,9 @@ export type SseHandle = {
   /**
    * Publishes an envelope to every other connected client, attributed
    * with this connection's client id so the server excludes the sender.
-   * With `tags`, delivery narrows to clients holding all of them.
+   * The envelope's own `tags` drive the server-side audience routing.
    */
-  publish(envelope: SseEnvelope, tags?: readonly string[]): Promise<void>;
+  publish(envelope: SseEnvelope): Promise<void>;
   /** The server-issued client id, or `null` before the first `connected`. */
   client(): null | string;
   /** Adds, removes, inspects, or clears tags on this connection. */

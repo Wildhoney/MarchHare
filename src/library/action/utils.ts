@@ -124,11 +124,14 @@ export function schemaOf(action: AnyAction): null | Schema<unknown> {
 }
 
 /**
- * Parses an omnicast payload against the action's schema, wrapping any
- * validation failure in a {@link Rejected} error (with the validator's
- * error preserved on `cause`) so faults report `Reason.Rejected` through
- * `Lifecycle.Error` and `Lifecycle.Fault`. Payloadless actions pass
- * through untouched.
+ * Parses an omnicast payload arriving over the wire against the action's
+ * schema, wrapping any validation failure in a {@link Rejected} error
+ * (with the validator's error preserved on `cause`) so faults report
+ * `Reason.Rejected` through the global `Lifecycle.Fault`. Outgoing
+ * dispatches are deliberately not parsed &mdash; the payload type is
+ * inferred from the same schema, so the compiler already guarantees the
+ * sender's side; runtime validation is reserved for the trust boundary.
+ * Payloadless actions pass through untouched.
  *
  * @param action The omnicast action whose schema applies.
  * @param payload The untrusted payload to validate.

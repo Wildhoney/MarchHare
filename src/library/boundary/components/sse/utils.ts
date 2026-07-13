@@ -59,6 +59,23 @@ export function address(url: string, tags: ReadonlySet<string>): string {
 }
 
 /**
+ * Decides whether an arriving envelope is still deliverable to this
+ * client: the envelope's audience tags (embedded at dispatch time) must
+ * **all** be held by the client's current tag set. The server applied the
+ * same rule at send time, but the client's tags may have changed while
+ * the event was in flight &mdash; a downgrade racing an in-flight `vip`
+ * event &mdash; so the receiving side re-validates against its live set
+ * and quietly drops envelopes it no longer qualifies for.
+ */
+export function eligible(
+  required: undefined | readonly string[],
+  held: ReadonlySet<string>,
+): boolean {
+  if (G.isNullable(required) || required.length === 0) return true;
+  return required.every((tag) => held.has(tag));
+}
+
+/**
  * Parses an SSE `data` field, absorbing malformed JSON from a misbehaving
  * server into a logged `null` instead of an uncaught listener error.
  */

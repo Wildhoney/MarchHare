@@ -12,7 +12,7 @@ import type {
   SseEnvelope,
   SseHandle,
 } from "./types.ts";
-import { address, lookup, parse, reconcile } from "./utils.ts";
+import { address, eligible, lookup, parse, reconcile } from "./utils.ts";
 
 export type {
   SseConfig,
@@ -86,9 +86,10 @@ export function Sse({
     align.current = mutate;
 
     return {
-      async publish(envelope: SseEnvelope, tags?: readonly string[]) {
+      async publish(envelope: SseEnvelope) {
         const body: Record<string, unknown> = { data: envelope };
-        if (G.isNotNullable(tags) && tags.length > 0) body.tags = tags;
+        if (G.isNotNullable(envelope.tags) && envelope.tags.length > 0)
+          body.tags = envelope.tags;
         if (G.isNotNullable(client.current)) body.client = client.current;
         const response = await fetch(`${endpoint.url}/send`, {
           method: "POST",
@@ -153,6 +154,7 @@ export function Sse({
       if (G.isNull(envelope)) return;
       const action = lookup(config.actions, envelope.name);
       if (G.isNull(action)) return;
+      if (!eligible(envelope.tags, desired.current ?? new Set())) return;
       const deliver = (): Promise<void> => {
         try {
           const payload = validate(action, envelope.payload);

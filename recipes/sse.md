@@ -77,7 +77,7 @@ actions.useAction(Lifecycle.Fault, (context, fault) => {
 });
 ```
 
-Outgoing dispatches are parsed too, failing fast on the sender before anything reaches the wire: the dispatch rejects with the same `Rejected` error, surfacing through the dispatching handler's `Lifecycle.Error()` and the global `Lifecycle.Fault` with `Reason.Rejected`.
+Outgoing dispatches are deliberately **not** parsed at runtime &mdash; the payload type is inferred from the very same schema, so the compiler already guarantees the sender's side. Runtime validation is reserved for the one place types cannot reach: remote input arriving over the wire.
 
 ## Sharing the action classes: `AppActions`
 
@@ -150,7 +150,7 @@ actions.useAction(Actions.Omnicast.Cat.Adopted, async (context, adoption) => {
 1. **Local** &mdash; the action dispatches into the Boundary immediately, exactly like a broadcast, including value caching for late-mounting subscribers.
 2. **Remote** &mdash; the envelope `{ name, payload, channel? }` is published to the server, attributed with the connection's client id. The server delivers it to every other client and **excludes the sender**, so the local leg is the only delivery on the dispatching client &mdash; no double-fire.
 
-The returned promise resolves when the local handlers have completed and the server has accepted the publish; a failed publish (or an outgoing payload failing its schema) rejects and surfaces through the normal fault pipeline of the dispatching handler.
+The returned promise resolves when the local handlers have completed and the server has accepted the publish; a failed publish rejects and surfaces through the normal fault pipeline of the dispatching handler.
 
 Because payloads are broadcast verbatim, generate any derived values **once** on the dispatching client and carry them in the payload. In the example above the cat's `name()` and `filter()` are rolled before dispatch &mdash; if each client generated its own, every tab would show a different cat.
 
@@ -183,6 +183,12 @@ actions.useAction(Actions.SignedOut, async (context) => {
 ```
 
 `tag.add` / `tag.remove` / `tag.clear` change which `Audience.Private(...)` dispatches this client receives. `add` and `remove` are variadic and take at least one tag; both are idempotent &mdash; only tags that actually change the set reach the server, so adding an already-held tag or removing an absent one is a no-op. `tag.has("vip", "beta")` reads the set synchronously and is true only when the connection holds **all** of the supplied tags &mdash; the same all-of semantics `Audience.Private` uses for delivery. Mutations are remembered on the connection and re-applied after every reconnect, because a reconnecting `EventSource` reverts the server to the query-string tags. When the App has no `sse` endpoint configured the mutators resolve as no-ops and `has` returns `false`, keeping components portable.
+
+### Tag races: matched on dispatch, re-checked on arrival
+
+Server-side audience filtering happens when the event is **sent**, so a tag mutation can race an event already in flight: the `Downgraded` handler above removes `"vip"`, but a `vip`-targeted event published a moment earlier is still on the wire and the server has already forwarded it. To close this race, every `Audience.Private` dispatch automatically embeds its required tags in the envelope, and the receiving client **re-validates them against its current tag set on arrival** &mdash; matched on dispatch is not enough; an envelope whose tags no longer all hold is quietly dropped before it reaches any subscriber. The local tag set updates synchronously inside `tag.remove`/`tag.clear` (ahead of the server round-trip), so the gate closes the instant the handler runs.
+
+The opposite race &mdash; a `tag.add` the server has not applied yet while a now-matching event is sent &mdash; cannot be repaired client-side, because the server never delivers the event at all. That is inherent to SSE as a live notification layer: seed critical tags via `sse.tags` at connect time, and keep Resources as the source of truth for anything that must not be missed.
 
 ## Channeled omnicast
 
