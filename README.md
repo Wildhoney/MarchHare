@@ -116,6 +116,17 @@ export default function Profile(): React.ReactElement {
 
 This shape &ndash; `useActions` hook, `[model, actions]` destructure in the component &ndash; is the canonical pattern throughout this README.
 
+Every action declares how far its dispatches travel &mdash; the second argument of `Action`:
+
+| Distribution  | Declared with                                | Who receives a dispatch                                                                                                                                                                |
+| ------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Unicast**   | `Action("Name")` _(default)_                 | Only the component that dispatched it &mdash; private, component-local state changes.                                                                                                    |
+| **Broadcast** | `Action("Name", Distribution.Broadcast)`     | Every subscribed component inside the `<Boundary>`; the latest value is cached, so late-mounting subscribers replay it. See [Broadcast actions](#broadcast-actions).                     |
+| **Multicast** | `Action("Name", Distribution.Multicast)`     | Every subscriber inside the matching `<scope.Boundary>` subtree, and nothing outside it. See [Multicast actions](#multicast-actions).                                                    |
+| **Omnicast**  | `Action("Name", Distribution.Omnicast(schema?))` | Everything a broadcast reaches, **plus** every other connected client &mdash; tabs, browsers, devices &mdash; over SSE, with a required `Audience`. See [Server-sent events](#server-sent-events). |
+
+Channels compose with any of them &mdash; declare a channel shape as the action's second generic and call the action at the dispatch/subscribe sites to narrow delivery to matching subscribers. See [Channeled actions](#channeled-actions). Lifecycle events (`Lifecycle.Mount()`, `Lifecycle.Fault`, …) are not distributions but per-component hooks into the same pipeline.
+
 ## Async resources
 
 When the handler needs to do more than assign the payload &ndash; an API call, for example &ndash; expand `useAction` to a full function. Remote data goes through `app.Resource` rather than a bare `fetch`: declare the resource at module scope, fetch via `context.actions.resource(...)`:
