@@ -188,7 +188,23 @@ actions.useAction(Actions.SignedOut, async (context) => {
 
 Server-side audience filtering happens when the event is **sent**, so a tag mutation can race an event already in flight: the `Downgraded` handler above removes `"vip"`, but a `vip`-targeted event published a moment earlier is still on the wire and the server has already forwarded it. To close this race, every `Audience.Private` dispatch automatically embeds its required tags in the envelope, and the receiving client **re-validates them against its current tag set on arrival** &mdash; matched on dispatch is not enough; an envelope whose tags no longer all hold is quietly dropped before it reaches any subscriber. The local tag set updates synchronously inside `tag.remove`/`tag.clear` (ahead of the server round-trip), so the gate closes the instant the handler runs.
 
-The opposite race &mdash; a `tag.add` the server has not applied yet while a now-matching event is sent &mdash; cannot be repaired client-side, because the server never delivers the event at all. That is inherent to SSE as a live notification layer: seed critical tags via `sse.tags` at connect time, and keep Resources as the source of truth for anything that must not be missed.
+The opposite race &mdash; a `tag.add` the server has not applied yet while a now-matching event is sent &mdash; is avoidable whenever your flow controls the ordering, because the tag mutators are **awaitable**: `tag.add`, `tag.remove`, and `tag.clear` resolve only once the server has accepted the mutation into the same ordered stream that carries events. Await the mutation before the dispatch that invites tag-targeted traffic, and the subscription is guaranteed to be registered ahead of any replies:
+
+```ts
+actions.useAction(Actions.JoinRoom, async (context, room) => {
+  await context.actions.tag.add(`room-${room.id}`);
+
+  await context.actions.dispatch(
+    Actions.Omnicast.Room.Joined,
+    Audience.Private([`room-${room.id}`]),
+    { member: context.env.session.name },
+  );
+});
+```
+
+Because the `tag.add` settled before `Room.Joined` was published, any member reacting to the announcement with a `Private(["room-${room.id}"])` dispatch of their own is causally behind the tag registration &mdash; their welcome cannot slip past this client's subscription. Skip the `await` and the announcement (and its replies) may race the tag onto the server and be filtered away.
+
+What remains unavoidable is an event dispatched **concurrently** by another client, with no causal ordering against your mutation &mdash; the server never delivers it, so there is nothing for the client to repair. That is inherent to SSE as a live notification layer: seed critical tags via `sse.tags` at connect time (mutations made before the connection is established are recorded locally and applied during the connect-time reconciliation rather than awaited against the server), and keep Resources as the source of truth for anything that must not be missed.
 
 ## Channeled omnicast
 

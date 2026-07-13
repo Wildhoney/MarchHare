@@ -1131,9 +1131,12 @@ export type HandlerContext<
      * Mutates the SSE connection's tag set, changing which
      * `Audience.Private(tags)` dispatches this client receives. `add` and
      * `remove` are variadic and idempotent &mdash; only tags that actually
-     * change the set reach the server. Mutations are remembered and
-     * re-applied after reconnects. When the App has no `sse` endpoint
-     * configured, all three resolve as no-ops.
+     * change the set reach the server. The returned promises resolve once
+     * the server has acknowledged the mutation, so awaiting a mutator
+     * before a dependent dispatch guarantees the subscription is
+     * registered ahead of any tag-targeted replies. Mutations are
+     * remembered and re-applied after reconnects. When the App has no
+     * `sse` endpoint configured, the mutators resolve as no-ops.
      */
     tag: {
       add(...tags: readonly [string, ...string[]]): Promise<void>;
