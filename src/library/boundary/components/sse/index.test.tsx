@@ -374,7 +374,9 @@ describe("omnicast over SSE", () => {
       });
     });
 
-    const joined = events.filter((event) => event.action.name === "Room.Joined");
+    const joined = events.filter(
+      (event) => event.action.name === "Room.Joined",
+    );
     expect(joined.map((event) => event.stage)).toEqual(["start", "end"]);
     expect(joined[1].stage === "end" && joined[1].result).toBe("success");
   });
@@ -393,7 +395,9 @@ describe("omnicast over SSE", () => {
     });
 
     await waitFor(() => expect(received).toHaveBeenCalledWith("Maria"));
-    const joined = events.filter((event) => event.action.name === "Room.Joined");
+    const joined = events.filter(
+      (event) => event.action.name === "Room.Joined",
+    );
     expect(joined.map((event) => event.stage)).toEqual(["start", "end"]);
     expect(joined[1].stage === "end" && joined[1].result).toBe("success");
   });
@@ -412,7 +416,9 @@ describe("omnicast over SSE", () => {
     });
 
     await waitFor(() => expect(faulted).toHaveBeenCalledOnce());
-    const joined = events.filter((event) => event.action.name === "Room.Joined");
+    const joined = events.filter(
+      (event) => event.action.name === "Room.Joined",
+    );
     expect(joined.map((event) => event.stage)).toEqual(["start", "end"]);
     const terminal = joined[1];
     if (terminal.stage !== "end" || terminal.result !== "error")
