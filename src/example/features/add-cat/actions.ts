@@ -4,7 +4,6 @@ import { Actions, type Model } from "./types.ts";
 import { scope } from "./utils.ts";
 import { type Payload } from "@example/shared/types/index.ts";
 import * as resource from "@example/shared/resources/index.ts";
-import { sse } from "@example/shared/sse/index.ts";
 import { name } from "@example/shared/utils/name/index.ts";
 import { filter } from "@example/shared/utils/filter/index.ts";
 
@@ -34,7 +33,7 @@ export function useActions() {
         filter: filter(),
       },
     };
-    await sse.dispatch(Actions.Omnicast.Cat.Adopted, adoption);
+    await context.actions.dispatch(Actions.Omnicast.Cat.Adopted, adoption);
   });
 
   actions.useAction(Actions.Omnicast.Cat.Adopted, async (context, adoption) => {

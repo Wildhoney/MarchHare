@@ -1,32 +1,61 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { Action } from "../action/index.ts";
-import { Omnicast } from "../omnicast/index.ts";
-import { Distribution } from "../types/index.ts";
+import { Action } from "../../../action/index.ts";
+import { isOmnicastAction, schemaOf } from "../../../action/utils.ts";
+import { Distribution } from "../../../types/index.ts";
 import { address, lookup, parse, reconcile } from "./utils.ts";
 
 const cat = z.object({ id: z.string(), name: z.string() });
 
+class Omnicast {
+  static Cat = class {
+    static Adopted = Action("Cat.Adopted", Distribution.Omnicast(cat));
+  };
+  static Cattery = class {
+    static Opened = Action("Cattery.Opened", Distribution.Omnicast());
+  };
+}
+
 class Wire {
-  static Adopted = Omnicast("Cat.Adopted", cat);
-  static Opened = Omnicast("Cattery.Opened");
+  static Adopted = Action("Cat.Adopted", Distribution.Omnicast(cat));
   static Added = Action<string>("Cat.Added", Distribution.Broadcast);
   static Local = Action<number>("Cat.Local");
 }
 
-describe("lookup()", () => {
-  it("finds an omnicast action by its envelope name", () => {
-    expect(lookup(Wire, "Cat.Adopted")).toBe(Wire.Adopted);
-    expect(lookup(Wire, "Cattery.Opened")).toBe(Wire.Opened);
+describe("Distribution.Omnicast()", () => {
+  it("creates a broadcast-compatible omnicast action", () => {
+    expect(isOmnicastAction(Wire.Adopted)).toBe(true);
+    expect(schemaOf(Wire.Adopted)).toBe(cat);
   });
 
-  it("ignores plain broadcast and unicast members of the wire class", () => {
+  it("carries a null schema for payloadless events", () => {
+    expect(schemaOf(Omnicast.Cattery.Opened)).toBeNull();
+  });
+
+  it("does not brand plain broadcast or unicast actions", () => {
+    expect(isOmnicastAction(Wire.Added)).toBe(false);
+    expect(isOmnicastAction(Wire.Local)).toBe(false);
+    expect(schemaOf(Wire.Added)).toBeNull();
+  });
+});
+
+describe("lookup()", () => {
+  it("finds an omnicast action on a flat wire class", () => {
+    expect(lookup(Wire, "Cat.Adopted")).toBe(Wire.Adopted);
+  });
+
+  it("walks nested namespaces of omnicast actions", () => {
+    expect(lookup(Omnicast, "Cat.Adopted")).toBe(Omnicast.Cat.Adopted);
+    expect(lookup(Omnicast, "Cattery.Opened")).toBe(Omnicast.Cattery.Opened);
+  });
+
+  it("ignores plain broadcast and unicast members", () => {
     expect(lookup(Wire, "Cat.Added")).toBeNull();
     expect(lookup(Wire, "Cat.Local")).toBeNull();
   });
 
-  it("returns null for names outside the wire class", () => {
-    expect(lookup(Wire, "Cat.Removed")).toBeNull();
+  it("returns null for names outside the configured actions", () => {
+    expect(lookup(Omnicast, "Cat.Removed")).toBeNull();
   });
 });
 

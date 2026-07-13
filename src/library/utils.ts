@@ -11,6 +11,8 @@ export const describe = {
   broadcast: (name = "") => `march-hare.action/broadcast/${name}`,
   /** Multicast action description. `describe.multicast("Update")` &rarr; `"march-hare.action/multicast/Update"` */
   multicast: (name = "") => `march-hare.action/multicast/${name}`,
+  /** Omnicast action description. `describe.omnicast("Adopted")` &rarr; `"march-hare.action/omnicast/Adopted"` */
+  omnicast: (name = "") => `march-hare.action/omnicast/${name}`,
   /** Channeled action description. `describe.channel("user")` &rarr; `"march-hare.channel/user"` */
   channel: (name = "") => `march-hare.channel/${name}`,
   /** Cache entry description. `describe.cache("users")` &rarr; `"march-hare.cache/users"` */

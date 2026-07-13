@@ -815,12 +815,12 @@ See the [multicast recipe](./recipes/multicast-actions.md) for more details. Whe
 
 ## Server-sent events
 
-A broadcast action stops at the edge of its `<Boundary>`. An **omnicast** action goes one ring further out: it behaves exactly like a broadcast locally, but the `Sse` bridge carries it to every connected client &mdash; other tabs, browsers, and devices &mdash; through a Server-Sent Events server (the reference implementation is [Akela](https://github.com/Wildhoney/Akela), a Rust hub that fans out through Redis pub/sub so any number of server instances behave as one).
+A broadcast action stops at the edge of its `<Boundary>`. An **omnicast** action goes one ring further out: it behaves exactly like a broadcast locally, and it is additionally carried to every connected client &mdash; other tabs, browsers, and devices &mdash; through a Server-Sent Events server (the reference implementation is [Akela](https://github.com/Wildhoney/Akela), a Rust hub that fans out through Redis pub/sub so any number of server instances behave as one). There is no transport API to learn: declare the distribution, configure the App, and dispatch as normal.
 
-Declare omnicast actions with `Omnicast(name, schema?)`, inferring the payload type from a Zod-style schema. The schema is not decorative: server-sent events are remote input, so every envelope arriving over the wire is validated with `schema.parse` and **rejected when invalid** &mdash; a misbehaving peer cannot push malformed payloads into your handlers.
+Declare omnicast actions with `Distribution.Omnicast(schema?)`, inferring the payload type from a Zod-style schema. The schema is not decorative: server-sent events are remote input, so every envelope arriving over the wire is validated with `schema.parse` and **rejected when invalid** &mdash; a misbehaving peer cannot push malformed payloads into your handlers.
 
 ```ts
-import { Omnicast as Omni, Sse } from "march-hare";
+import { Action, Distribution } from "march-hare";
 import { z } from "zod";
 
 export namespace Payload {
@@ -830,39 +830,44 @@ export namespace Payload {
 
 export namespace Omnicast {
   export class Cat {
-    static Adopted = Omni("Cat.Adopted", Payload.Cat);
+    static Adopted = Action("Cat.Adopted", Distribution.Omnicast(Payload.Cat));
   }
   export class Cattery {
-    static Opened = Omni("Cattery.Opened");
+    static Opened = Action("Cattery.Opened", Distribution.Omnicast());
   }
 }
+
+export class AppActions {
+  static Broadcast = Broadcast;
+  static Omnicast = Omnicast;
+}
 ```
 
-Then declare the bridge at module scope with a **wire class** &mdash; the omnicast actions permitted to travel, which doubles as an allow-list for what remote peers may dispatch into your Boundary:
+Point the App at the endpoint; the Boundary owns the connection lifecycle automatically &mdash; connect on mount, disconnect on unmount, reconnect via `EventSource` with tag re-application. `sse.actions` is the allow-list of what remote peers may dispatch into your Boundary:
 
 ```ts
-export class Wire {
-  static Adopted = Omnicast.Cat.Adopted;
-  static Opened = Omnicast.Cattery.Opened;
+export const app = App<Env.Cat>({
+  env: { apiBase: "https://api.thecatapi.com/v1" },
+  sse: { url: "http://localhost:8080", actions: Omnicast },
+});
+```
+
+Component `Actions` classes extend `AppActions`, and dispatching works through the one function you already use &mdash; the omnicast brand routes the extra wire leg:
+
+```ts
+export class Actions extends AppActions {
+  static OpenNew = Action("Cattery.OpenNew");
 }
 
-export const sse = Sse({ url: "http://localhost:8080", actions: Wire });
-```
-
-Mount the bridge once inside the `<Boundary>` and dispatch through the handle:
-
-```ts
 export function useActions() {
   const context = app.useContext<Model, typeof Actions>();
   const actions = context.useActions({ cats: [] });
 
-  sse.useBridge();
-
-  actions.useAction(Actions.OpenNew, async () => {
-    await sse.dispatch(Omnicast.Cattery.Opened);
+  actions.useAction(Actions.OpenNew, async (context) => {
+    await context.actions.dispatch(Actions.Omnicast.Cattery.Opened);
   });
 
-  actions.useAction(Omnicast.Cattery.Opened, (context) => {
+  actions.useAction(Actions.Omnicast.Cattery.Opened, (context) => {
     context.actions.produce(({ model }) => void (model.cats = []));
     context.actions.resource.nuke();
   });
@@ -871,11 +876,11 @@ export function useActions() {
 }
 ```
 
-`sse.dispatch(action, payload)` has the same call signature as `actions.dispatch`, typed against the wire class, and performs both legs in one call: the action fires locally through the normal dispatch pipeline, and the `{ name, payload }` envelope is published to the server for every **other** client &mdash; the sender is excluded server-side, so nothing double-fires. Receiving bridges validate the payload against the action's schema, then re-dispatch the action into their own Boundary; subscribers `useAction` it as usual and cannot tell local from remote.
+Dispatching an omnicast action performs both legs in one call: the action fires locally through the normal dispatch pipeline (including value caching for late subscribers), and the `{ name, payload }` envelope is published to the server for every **other** client &mdash; the sender is excluded server-side, so nothing double-fires. Receiving Boundaries validate the payload against the action's schema, then dispatch it locally; subscribers `useAction` it as usual and cannot tell local from remote. Without an `sse` config, omnicast actions degrade gracefully to plain broadcasts.
 
-Connections hold a mutable set of tags (`sse.tag.add("vip")` / `sse.tag.remove("vip")`), and `sse.tagged(["vip"]).dispatch(...)` narrows the wire leg to clients holding **all** of the supplied tags &mdash; extras permitted. Without tags, sends are public.
+Connections hold a mutable set of tags (seeded from `sse.tags`), and passing `{ tags: ["vip"] }` as the third argument of `dispatch` narrows the wire leg to clients holding **all** of the supplied tags &mdash; extras permitted. Without tags, sends are public.
 
-See the [SSE recipe](./recipes/sse.md) for the server protocol, reconnect semantics, tag reconciliation, and testing guidance.
+See the [SSE recipe](./recipes/sse.md) for the server protocol, reconnect semantics, the `AppActions` pattern, and testing guidance.
 
 ## Global data
 

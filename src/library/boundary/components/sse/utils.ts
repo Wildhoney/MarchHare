@@ -1,20 +1,32 @@
-import { getName } from "../action/index.ts";
-import { isOmnicastAction } from "../omnicast/index.ts";
-import type { Actions, OmnicastPayload } from "../types/index.ts";
+import { G } from "@mobily/ts-belt";
+import { getName, isOmnicastAction } from "../../../action/utils.ts";
+import type { Actions, OmnicastPayload } from "../../../types/index.ts";
+
+const depthLimit = 4;
 
 /**
- * Finds the omnicast action on the wire class whose name matches an
- * incoming envelope. Non-omnicast members and unknown names resolve to
- * `null`, so the wire class acts as an allow-list for what a remote peer
- * may dispatch into the local Boundary.
+ * Finds the omnicast action whose name matches an incoming envelope,
+ * walking nested classes and namespaces (e.g. `Omnicast.Cat.Adopted`) up
+ * to a small fixed depth. Non-omnicast members and unknown names resolve
+ * to `null`, so the configured actions act as an allow-list for what a
+ * remote peer may dispatch into the local Boundary.
  */
 export function lookup(
   actions: Actions,
   name: string,
+  depth = 0,
 ): null | OmnicastPayload<unknown> {
+  if (depth > depthLimit) return null;
   for (const candidate of Object.values(actions)) {
-    if (!isOmnicastAction(candidate)) continue;
-    if (getName(candidate) === name) return candidate;
+    if (isOmnicastAction(<OmnicastPayload<unknown>>candidate)) {
+      if (getName(<OmnicastPayload<unknown>>candidate) === name)
+        return <OmnicastPayload<unknown>>candidate;
+      continue;
+    }
+    if (G.isObject(candidate) || G.isFunction(candidate)) {
+      const nested = lookup(<Actions>candidate, name, depth + 1);
+      if (G.isNotNullable(nested)) return nested;
+    }
   }
   return null;
 }
@@ -22,9 +34,9 @@ export function lookup(
 /**
  * Splits the desired tag set against the tags the server currently holds
  * for the connection, yielding the mutations required to align the server.
- * Used after every `connected` event so tag mutations survive the automatic
- * `EventSource` reconnect, which reverts the server to the query-string
- * tags.
+ * Used after every `connected` event so tag mutations survive the
+ * automatic `EventSource` reconnect, which reverts the server to the
+ * query-string tags.
  */
 export function reconcile(
   desired: ReadonlySet<string>,

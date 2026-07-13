@@ -4,6 +4,7 @@ import { Tasks } from "./components/tasks/index.tsx";
 import { Env } from "./components/env/index.tsx";
 import type { Env as EnvType } from "./components/env/types.ts";
 import { SharingProvider } from "./components/sharing/index.tsx";
+import { Sse } from "./components/sse/index.tsx";
 import { Tappable } from "./components/tap/index.tsx";
 import { Context as ConsumerContext } from "./components/consumer/utils.ts";
 import type { ConsumerContext as ConsumerStore } from "./components/consumer/types.ts";
@@ -27,7 +28,7 @@ import type { Props } from "./types.ts";
  * </Boundary>
  * ```
  */
-export function Boundary({ env, tap, children }: Props): React.ReactNode {
+export function Boundary({ env, tap, sse, children }: Props): React.ReactNode {
   const consumer = React.useMemo<ConsumerStore>(() => new Map(), []);
   return (
     <Broadcaster>
@@ -35,7 +36,9 @@ export function Boundary({ env, tap, children }: Props): React.ReactNode {
         <Env initial={env ?? ({} as EnvType)}>
           <Tasks>
             <Tappable tap={tap}>
-              <SharingProvider>{children}</SharingProvider>
+              <SharingProvider>
+                <Sse config={sse}>{children}</Sse>
+              </SharingProvider>
             </Tappable>
           </Tasks>
         </Env>

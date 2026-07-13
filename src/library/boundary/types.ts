@@ -1,5 +1,6 @@
 import type * as React from "react";
 import type { Env } from "./components/env/types.ts";
+import type { SseConfig } from "./components/sse/types.ts";
 import type { Tap } from "./components/tap/types.ts";
 
 /**
@@ -46,6 +47,15 @@ export type Props = {
    * channels are independent. See `recipes/tap.md`.
    */
   tap?: Tap;
+  /**
+   * SSE endpoint configuration for omnicast actions. When supplied, the
+   * Boundary owns the connection lifecycle automatically &mdash; it
+   * connects on mount, disconnects on unmount, and rides `EventSource`'s
+   * reconnection &mdash; and every omnicast action dispatched inside the
+   * Boundary is additionally published to the wire. Omit it and omnicast
+   * actions degrade gracefully to plain broadcasts.
+   */
+  sse?: SseConfig;
   /**
    * Subtree that should receive the boundary's broadcast, env, tasks,
    * and tap providers. Every March Hare hook called inside this

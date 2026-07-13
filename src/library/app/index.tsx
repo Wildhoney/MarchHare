@@ -6,6 +6,7 @@ import type { Env } from "../boundary/components/env/types.ts";
 import { Resource as BaseResource } from "../resource/index.ts";
 import type { LocalResourceHandle, ResourceHandle } from "../resource/types.ts";
 import type { Cache } from "../cache/index.ts";
+import type { SseConfig } from "../boundary/components/sse/types.ts";
 import type { Actions, Model, Props } from "../types/index.ts";
 import { createScope } from "../scope/utils.tsx";
 import type { AppHandle, AppContextHandle, AppFetcher } from "./types.ts";
@@ -92,6 +93,7 @@ export function App<E extends object = Env>(config?: {
   env?: E;
   tap?: Tap;
   cache?: Cache;
+  sse?: SseConfig;
 }): AppHandle<E> {
   const envHolder: { current: Env | undefined } = { current: undefined };
 
@@ -101,7 +103,11 @@ export function App<E extends object = Env>(config?: {
     children: React.ReactNode;
   }): React.ReactElement {
     return (
-      <BaseBoundary env={config?.env as Env} tap={config?.tap}>
+      <BaseBoundary
+        env={config?.env as Env}
+        tap={config?.tap}
+        sse={config?.sse}
+      >
         <SyncEnvHolder holder={envHolder} />
         {children}
       </BaseBoundary>

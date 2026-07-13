@@ -2,6 +2,8 @@ import {
   HandlerPayload,
   BroadcastPayload,
   MulticastPayload,
+  OmnicastPayload,
+  OmnicastDistribution,
   Distribution,
   ChanneledAction,
   Brand,
@@ -14,9 +16,11 @@ export {
   getLifecycleType,
   isBroadcastAction,
   isMulticastAction,
+  isOmnicastAction,
   getName,
   isChanneledAction,
   isReactiveBinding,
+  schemaOf,
 } from "./utils.ts";
 
 /**
@@ -58,6 +62,17 @@ type ActionFactory = {
     name: K | undefined,
     distribution: Distribution.Multicast,
   ): MulticastPayload<P, C, K>;
+
+  /**
+   * Creates an omnicast action from a `Distribution.Omnicast(schema?)`
+   * marker. The payload type is inferred from the marker's schema rather
+   * than an explicit generic, keeping the compile-time type and the
+   * runtime validator in lockstep.
+   */
+  <T, K extends string = string>(
+    name: K | undefined,
+    distribution: OmnicastDistribution<T>,
+  ): OmnicastPayload<T, K>;
   <P = never, C extends Filter = never, K extends string = string>(
     name: K | undefined,
     distribution: Distribution.Unicast,
@@ -114,14 +129,23 @@ export const Action = <ActionFactory>(<unknown>(<
   C extends Filter = never,
 >(
   name: string = "",
-  distribution: Distribution = Distribution.Unicast,
+  distribution: Distribution | OmnicastDistribution<P> = Distribution.Unicast,
 ): HandlerPayload<P, C> | BroadcastPayload<P, C> | MulticastPayload<P, C> => {
+  const omnicast =
+    typeof distribution === "object" && Brand.Omnicast in distribution
+      ? distribution
+      : null;
+  const broadcast =
+    omnicast !== null || distribution === Distribution.Broadcast;
+
   const symbol =
-    distribution === Distribution.Broadcast
-      ? Symbol(describe.broadcast(name))
-      : distribution === Distribution.Multicast
-        ? Symbol(describe.multicast(name))
-        : Symbol(describe.action(name));
+    omnicast !== null
+      ? Symbol(describe.omnicast(name))
+      : distribution === Distribution.Broadcast
+        ? Symbol(describe.broadcast(name))
+        : distribution === Distribution.Multicast
+          ? Symbol(describe.multicast(name))
+          : Symbol(describe.action(name));
 
   const action = function (channel: C): ChanneledAction<P, C> {
     const channeled: ChanneledAction<P, C> = {
@@ -131,7 +155,7 @@ export const Action = <ActionFactory>(<unknown>(<
       [Brand.Name]: name,
       channel,
     };
-    if (distribution === Distribution.Broadcast) {
+    if (broadcast) {
       // eslint-disable-next-line fp/no-mutating-methods
       Object.defineProperty(channeled, Brand.Broadcast, {
         value: true,
@@ -153,10 +177,17 @@ export const Action = <ActionFactory>(<unknown>(<
   });
   // eslint-disable-next-line fp/no-mutating-methods
   Object.defineProperty(action, Brand.Name, { value: name, enumerable: false });
-  if (distribution === Distribution.Broadcast) {
+  if (broadcast) {
     // eslint-disable-next-line fp/no-mutating-methods
     Object.defineProperty(action, Brand.Broadcast, {
       value: true,
+      enumerable: false,
+    });
+  }
+  if (omnicast !== null) {
+    // eslint-disable-next-line fp/no-mutating-methods
+    Object.defineProperty(action, Brand.Omnicast, {
+      value: omnicast[Brand.Omnicast],
       enumerable: false,
     });
   }

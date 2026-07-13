@@ -5,7 +5,9 @@ import {
   BrandedBroadcast,
   BrandedMulticast,
   AnyAction,
+  OmnicastPayload,
   ReactiveBinding,
+  Schema,
 } from "../types/index.ts";
 import type { ActionId } from "../boundary/components/tasks/types.ts";
 import { describe } from "../utils.ts";
@@ -44,10 +46,17 @@ export function getActionSymbol(action: AnyAction): ActionId {
  * @returns True if the action is a broadcast action, false otherwise.
  */
 export function isBroadcastAction(action: AnyAction): boolean {
-  if (G.isString(action)) return action.startsWith(describe.broadcast());
+  if (G.isString(action))
+    return (
+      action.startsWith(describe.broadcast()) ||
+      action.startsWith(describe.omnicast())
+    );
 
   if (isSymbol(action))
-    return action.description?.startsWith(describe.broadcast()) ?? false;
+    return (
+      (action.description?.startsWith(describe.broadcast()) ?? false) ||
+      (action.description?.startsWith(describe.omnicast()) ?? false)
+    );
 
   if (G.isObject(action) || G.isFunction(action)) {
     if (
@@ -60,12 +69,57 @@ export function isBroadcastAction(action: AnyAction): boolean {
     if (Brand.Action in action) {
       const actionSymbol = (<BrandedAction>action)[Brand.Action];
       return (
-        actionSymbol.description?.startsWith(describe.broadcast()) ?? false
+        (actionSymbol.description?.startsWith(describe.broadcast()) ?? false) ||
+        (actionSymbol.description?.startsWith(describe.omnicast()) ?? false)
       );
     }
   }
 
   return false;
+}
+
+/**
+ * Checks whether an action is an omnicast action &mdash; a broadcast
+ * action declared with `Distribution.Omnicast(schema?)` that additionally
+ * travels between clients when the App is configured with an `sse`
+ * endpoint.
+ *
+ * @param action The action to check.
+ * @returns True if the action is an omnicast action, false otherwise.
+ */
+export function isOmnicastAction(action: AnyAction): boolean {
+  if (G.isString(action)) return action.startsWith(describe.omnicast());
+
+  if (isSymbol(action))
+    return action.description?.startsWith(describe.omnicast()) ?? false;
+
+  if (G.isObject(action) || G.isFunction(action)) {
+    if (Brand.Omnicast in action) return true;
+
+    if (Brand.Action in action) {
+      const actionSymbol = (<BrandedAction>action)[Brand.Action];
+      return actionSymbol.description?.startsWith(describe.omnicast()) ?? false;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Reads the runtime schema off an omnicast action; `null` when the action
+ * was declared without a payload or is not an omnicast action at all.
+ *
+ * @param action The action to read the schema from.
+ * @returns The Zod-style schema supplied at declaration time, or `null`.
+ */
+export function schemaOf(action: AnyAction): null | Schema<unknown> {
+  if (
+    (G.isObject(action) || G.isFunction(action)) &&
+    Brand.Omnicast in action
+  ) {
+    return (<OmnicastPayload<unknown>>action)[Brand.Omnicast];
+  }
+  return null;
 }
 
 /**

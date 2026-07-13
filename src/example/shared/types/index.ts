@@ -1,4 +1,4 @@
-import { Action, Distribution, Omnicast as Omni } from "march-hare";
+import { Action, Distribution } from "march-hare";
 import { z } from "zod";
 import { filters } from "@example/shared/utils/filter/index.ts";
 
@@ -39,10 +39,18 @@ export namespace Broadcast {
 
 export namespace Omnicast {
   export class Cat {
-    static Adopted = Omni("Cat.Adopted", Payload.Adoption);
+    static Adopted = Action(
+      "Cat.Adopted",
+      Distribution.Omnicast(Payload.Adoption),
+    );
   }
 
   export class Cattery {
-    static Opened = Omni("Cattery.Opened");
+    static Opened = Action("Cattery.Opened", Distribution.Omnicast());
   }
+}
+
+export class AppActions {
+  static Broadcast = Broadcast;
+  static Omnicast = Omnicast;
 }

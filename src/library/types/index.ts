@@ -616,6 +616,45 @@ export enum Distribution {
 }
 
 /**
+ * Marker produced by `Distribution.Omnicast(schema?)` and consumed by the
+ * `Action` factory. Carries the runtime schema (or `null` for payloadless
+ * events) that omnicast dispatches validate against &mdash; the payload
+ * type `T` is inferred from the schema at the declaration site.
+ */
+export type OmnicastDistribution<T = never> = {
+  readonly [Brand.Omnicast]: null | Schema<T>;
+};
+
+export namespace Distribution {
+  /**
+   * Declares an action as omnicast &mdash; broadcast within its own
+   * `<Boundary>`, and additionally carried to every other connected client
+   * when the App is configured with an `sse` endpoint. The payload type is
+   * inferred from the supplied Zod-style schema (any object exposing a
+   * `parse(value)` method), so the compile-time type and the runtime
+   * validator can never drift apart. Envelopes arriving over the wire are
+   * validated with `parse` and rejected when invalid; omit the schema for
+   * payloadless events.
+   *
+   * @example
+   * ```ts
+   * export class Cat {
+   *   static Adopted = Action("Cat.Adopted", Distribution.Omnicast(Payload.Adoption));
+   * }
+   *
+   * export class Cattery {
+   *   static Opened = Action("Cattery.Opened", Distribution.Omnicast());
+   * }
+   * ```
+   */
+  export function Omnicast(): OmnicastDistribution<never>;
+  export function Omnicast<T>(schema: Schema<T>): OmnicastDistribution<T>;
+  export function Omnicast<T>(schema?: Schema<T>): OmnicastDistribution<T> {
+    return { [Brand.Omnicast]: schema ?? null };
+  }
+}
+
+/**
  * Lifecycle phase of a component using useActions.
  * Tracks whether the component is in the process of mounting, fully mounted,
  * unmounting, or completely unmounted.
@@ -907,11 +946,12 @@ export type Schema<T> = {
 };
 
 /**
- * Branded type for omnicast action objects created with `Omnicast()`.
- * An omnicast action is a broadcast action that is additionally permitted
- * to travel between clients over an SSE bridge; the brand carries the
- * runtime schema used to validate payloads received from the wire, or
- * `null` for payloadless events.
+ * Branded type for omnicast action objects created with `Action(name,
+ * Distribution.Omnicast(schema?))`. An omnicast action is a broadcast
+ * action that additionally travels between clients when the App is
+ * configured with an `sse` endpoint; the brand carries the runtime schema
+ * used to validate payloads received from the wire, or `null` for
+ * payloadless events.
  */
 export type OmnicastPayload<
   P = unknown,
@@ -1054,10 +1094,15 @@ export type HandlerContext<
     >(
       ƒ: F & AssertSync<F>,
     ): void;
-    dispatch(action: NoPayloadActions<Dispatchable<AC>>): Promise<void>;
+    dispatch(
+      action: NoPayloadActions<Dispatchable<AC>>,
+      payload?: undefined,
+      options?: DispatchOptions,
+    ): Promise<void>;
     dispatch<A extends WithPayloadActions<Dispatchable<AC>>>(
       action: A,
       payload: Payload<A>,
+      options?: DispatchOptions,
     ): Promise<void>;
     annotate<T>(value: T, operation?: Operation): T;
     readonly inspect: Readonly<Inspect<M>>;
@@ -1290,10 +1335,15 @@ export type UseActions<
      * their scope from the action declaration, so no extra options are
      * required at the call site.
      */
-    dispatch(action: NoPayloadActions<Dispatchable<AC>>): Promise<void>;
+    dispatch(
+      action: NoPayloadActions<Dispatchable<AC>>,
+      payload?: undefined,
+      options?: DispatchOptions,
+    ): Promise<void>;
     dispatch<A extends WithPayloadActions<Dispatchable<AC>>>(
       action: A,
       payload: Payload<A>,
+      options?: DispatchOptions,
     ): Promise<void>;
     inspect: Inspect<M>;
     /**
@@ -1335,10 +1385,15 @@ export type UseActions<
    * already have `actions` in scope can write `actions.dispatch(...)`
    * without indexing into `actions[1]`.
    */
-  dispatch(action: NoPayloadActions<Dispatchable<AC>>): Promise<void>;
+  dispatch(
+    action: NoPayloadActions<Dispatchable<AC>>,
+    payload?: undefined,
+    options?: DispatchOptions,
+  ): Promise<void>;
   dispatch<A extends WithPayloadActions<Dispatchable<AC>>>(
     action: A,
     payload: Payload<A>,
+    options?: DispatchOptions,
   ): Promise<void>;
 
   /**
@@ -1409,11 +1464,26 @@ export type UseActions<
  * before the paired `useActions` has run via {@link Context}.
  */
 export type Dispatch<AC extends Actions | void> = {
-  (action: NoPayloadActions<Dispatchable<AC>>): Promise<void>;
+  (
+    action: NoPayloadActions<Dispatchable<AC>>,
+    payload?: undefined,
+    options?: DispatchOptions,
+  ): Promise<void>;
   <A extends WithPayloadActions<Dispatchable<AC>>>(
     action: A,
     payload: Payload<A>,
+    options?: DispatchOptions,
   ): Promise<void>;
+};
+
+/**
+ * Options accepted as the third argument of `dispatch`. Only meaningful
+ * for omnicast actions: `tags` narrows the wire delivery to clients
+ * holding **all** of the supplied tags (extras permitted) &mdash; the
+ * local Boundary always receives the dispatch regardless.
+ */
+export type DispatchOptions = {
+  tags?: readonly string[];
 };
 
 /**

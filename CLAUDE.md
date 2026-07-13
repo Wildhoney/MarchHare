@@ -21,8 +21,6 @@ import {
   Op,
   State,
   shared,
-  Sse,
-  Omnicast,
 } from "march-hare";
 import type {
   Box,
@@ -94,7 +92,15 @@ static UserUpdated = Action<User>("UserUpdated", Distribution.Broadcast);
 
 // Multicast - components inside the matching withScope boundary receive it
 static Update = Action<number>("Update", Distribution.Multicast);
+
+// Omnicast - broadcast locally AND carried to every other connected client
+// over SSE when the App is configured with `sse`; payload type inferred from
+// the Zod-style schema, which validates incoming envelopes at runtime
+static Adopted = Action("Cat.Adopted", Distribution.Omnicast(Payload.Adoption));
+static Opened = Action("Cattery.Opened", Distribution.Omnicast());
 ```
+
+Omnicast setup: `App({ sse: { url, actions: Omnicast, tags? } })` &mdash; the Boundary auto-manages the connection (connect/disconnect/reconnect); `sse.actions` is the incoming allow-list. Dispatch through the normal `context.actions.dispatch(action, payload, { tags? })` &mdash; the omnicast brand routes the wire leg, the server excludes the sender, and receivers validate with the schema before dispatching locally. Group `Broadcast`/`Omnicast` on a shared `AppActions` class and declare component actions with `export class Actions extends AppActions`. See [recipes/sse.md](./recipes/sse.md).
 
 ### Channeled Actions
 
@@ -638,8 +644,7 @@ docs: update the README file
 - `src/library/context/index.ts` - useContext (consumed via `app.useContext`)
 - `src/library/with/index.ts` - With.Update / With.Invert helpers
 - `src/library/coalesce/index.ts` - withAbort helper for the default-coalesce path
-- `src/library/sse/index.ts` - Sse factory: bridge omnicast actions across clients via an Akela-compatible SSE server
-- `src/library/omnicast/index.ts` - Omnicast factory: broadcast-like actions permitted on the wire, payload typed and runtime-validated by a Zod-style schema
+- `src/library/boundary/components/sse/` - per-Boundary SSE connection for omnicast actions (auto connect/disconnect/reconnect, sender exclusion, incoming schema validation)
 - `src/library/action/index.ts` - Action factory function
 - `src/library/types/index.ts` - All TypeScript types and interfaces
 - `src/library/utils/index.ts` - sleep, pk utilities
@@ -675,7 +680,7 @@ docs: update the README file
   - `real-time-applications.md` - SSE/WebSocket patterns
   - `referential-equality.md` - Avoiding stale closures
   - `session-tokens.md` - Session tokens in the Env; HttpOnly cookies vs. Bearer in Env; refresh-on-401 via ky `afterResponse` hook
-  - `sse.md` - `Sse` bridge + `Omnicast(name, schema?)` actions: extend chosen events to every connected client over Server-Sent Events (Akela protocol); Zod-style schema validates incoming envelopes and rejects invalid payloads; wire class allow-list, `sse.dispatch` local + remote legs with sender exclusion, `sse.tag` / `sse.tagged` for ALL-tags targeting
+  - `sse.md` - Omnicast actions over SSE: `Distribution.Omnicast(schema?)` + `App({ sse })`; the Boundary auto-manages the connection, one `dispatch` does local + wire legs with sender exclusion, Zod-style schemas validate incoming envelopes and reject invalid payloads, `{ tags }` dispatch option for ALL-tags targeting, `AppActions` base-class pattern
   - `stateful-props.md` - Box<T> type for stateful props
   - `storage.md` - Cache class for cross-reload persistence; adapters for localStorage / MMKV / chrome.storage
   - `tap.md` - `<Boundary tap={...}>` observer fired on every handler dispatch and its terminal (`success` / `error`); analytics, audit log, Sentry breadcrumbs

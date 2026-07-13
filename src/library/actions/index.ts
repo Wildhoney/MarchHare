@@ -30,6 +30,7 @@ import {
   ChanneledAction,
   ActionOrChanneled,
   AnyAction,
+  DispatchOptions,
   FaultSymbol,
   EnvSymbol,
 } from "../types/index.ts";
@@ -55,8 +56,11 @@ import { unset } from "../utils/utils.ts";
 import {
   isBroadcastAction,
   isMulticastAction,
+  isOmnicastAction,
   getName,
+  schemaOf,
 } from "../action/index.ts";
+import { useSse } from "../boundary/components/sse/index.tsx";
 import { State, Operation, Process, Inspect } from "immertation";
 import { useTasks } from "../boundary/components/tasks/utils.ts";
 import { Partition } from "../boundary/components/consumer/index.tsx";
@@ -130,6 +134,7 @@ export function useActions<
 
   const broadcast = useBroadcast();
   const scope = useScope();
+  const sse = useSse();
   const tasks = useTasks();
   const env = useEnv();
   const slot = useEnvRef();
@@ -227,6 +232,7 @@ export function useActions<
           dispatch(
             action: ActionOrChanneled,
             payload?: HandlerPayload,
+            options?: DispatchOptions,
           ): Promise<void> {
             if (controller.signal.aborted) return Promise.resolve();
             const base = getActionSymbol(action);
@@ -239,6 +245,18 @@ export function useActions<
               if (scoped)
                 return emitAsync(scoped.emitter, base, payload, channel);
               return Promise.resolve();
+            }
+
+            if (isOmnicastAction(action) && G.isNotNullable(sse)) {
+              const schema = schemaOf(action);
+              const parsed = G.isNull(schema) ? payload : schema.parse(payload);
+              return Promise.all([
+                emitAsync(broadcast, base, parsed, channel),
+                sse.publish(
+                  { name: getName(action), payload: parsed },
+                  options?.tags,
+                ),
+              ]).then(() => undefined);
             }
 
             const emitter = isBroadcastAction(action) ? broadcast : unicast;
@@ -648,6 +666,7 @@ export function useActions<
       dispatch(
         action: ActionOrChanneled,
         payload?: HandlerPayload,
+        options?: DispatchOptions,
       ): Promise<void> {
         const base = getActionSymbol(action);
         const channel = isChanneledAction(action) ? action.channel : undefined;
@@ -656,6 +675,18 @@ export function useActions<
           const scoped = getScope(scope);
           if (scoped) return emitAsync(scoped.emitter, base, payload, channel);
           return Promise.resolve();
+        }
+
+        if (isOmnicastAction(action) && G.isNotNullable(sse)) {
+          const schema = schemaOf(action);
+          const parsed = G.isNull(schema) ? payload : schema.parse(payload);
+          return Promise.all([
+            emitAsync(broadcast, base, parsed, channel),
+            sse.publish(
+              { name: getName(action), payload: parsed },
+              options?.tags,
+            ),
+          ]).then(() => undefined);
         }
 
         const emitter = isBroadcastAction(action) ? broadcast : unicast;
