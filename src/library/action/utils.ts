@@ -10,6 +10,7 @@ import {
   Schema,
 } from "../types/index.ts";
 import type { ActionId } from "../boundary/components/tasks/types.ts";
+import { Rejected } from "../error/index.ts";
 import { describe } from "../utils.ts";
 import { G } from "@mobily/ts-belt";
 
@@ -120,6 +121,30 @@ export function schemaOf(action: AnyAction): null | Schema<unknown> {
     return (<OmnicastPayload<unknown>>action)[Brand.Omnicast];
   }
   return null;
+}
+
+/**
+ * Parses an omnicast payload against the action's schema, wrapping any
+ * validation failure in a {@link Rejected} error (with the validator's
+ * error preserved on `cause`) so faults report `Reason.Rejected` through
+ * `Lifecycle.Error` and `Lifecycle.Fault`. Payloadless actions pass
+ * through untouched.
+ *
+ * @param action The omnicast action whose schema applies.
+ * @param payload The untrusted payload to validate.
+ * @returns The parsed payload.
+ */
+export function validate(action: AnyAction, payload: unknown): unknown {
+  const schema = schemaOf(action);
+  if (G.isNull(schema)) return payload;
+  try {
+    return schema.parse(payload);
+  } catch (error) {
+    throw new Rejected(
+      `march-hare: the payload for omnicast "${getName(action)}" failed schema validation.`,
+      { cause: error },
+    );
+  }
 }
 
 /**

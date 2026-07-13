@@ -21,6 +21,7 @@ export {
   isChanneledAction,
   isReactiveBinding,
   schemaOf,
+  validate,
 } from "./utils.ts";
 
 /**
@@ -67,12 +68,13 @@ type ActionFactory = {
    * Creates an omnicast action from a `Distribution.Omnicast(schema?)`
    * marker. The payload type is inferred from the marker's schema rather
    * than an explicit generic, keeping the compile-time type and the
-   * runtime validator in lockstep.
+   * runtime validator in lockstep. The channel type flows from the marker
+   * when declared via `Distribution.Omnicast<T, C>(schema)`.
    */
-  <T, K extends string = string>(
+  <T, C extends Filter, K extends string = string>(
     name: K | undefined,
-    distribution: OmnicastDistribution<T>,
-  ): OmnicastPayload<T, K>;
+    distribution: OmnicastDistribution<T, C>,
+  ): OmnicastPayload<T, C, K>;
   <P = never, C extends Filter = never, K extends string = string>(
     name: K | undefined,
     distribution: Distribution.Unicast,
@@ -159,6 +161,13 @@ export const Action = <ActionFactory>(<unknown>(<
       // eslint-disable-next-line fp/no-mutating-methods
       Object.defineProperty(channeled, Brand.Broadcast, {
         value: true,
+        enumerable: false,
+      });
+    }
+    if (omnicast !== null) {
+      // eslint-disable-next-line fp/no-mutating-methods
+      Object.defineProperty(channeled, Brand.Omnicast, {
+        value: omnicast[Brand.Omnicast],
         enumerable: false,
       });
     }

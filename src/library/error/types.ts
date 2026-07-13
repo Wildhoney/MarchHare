@@ -9,6 +9,10 @@ export enum Reason {
   Aborted,
   /** A generic error thrown in the user's action handler. */
   Errored,
+  /** An omnicast payload was rejected by its action's schema &mdash;
+   *  either an outgoing dispatch failing fast on the sender, or an
+   *  envelope arriving over the wire that did not validate. */
+  Rejected,
 }
 
 /**

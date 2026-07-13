@@ -1,4 +1,4 @@
-import type { Actions } from "../../../types/index.ts";
+import type { Actions, Filter } from "../../../types/index.ts";
 
 /**
  * Configuration for the per-Boundary SSE connection, supplied via
@@ -33,6 +33,13 @@ export type SseConfig = {
 export type SseEnvelope = {
   name: string;
   payload?: unknown;
+  /**
+   * Channel from a channeled omnicast dispatch, carried verbatim so the
+   * receiving side applies the same subscriber-filter matching as a local
+   * channeled dispatch. Channel values must be JSON-serialisable
+   * primitives.
+   */
+  channel?: Filter;
 };
 
 /**
@@ -59,9 +66,11 @@ export type SseHandle = {
   publish(envelope: SseEnvelope, tags?: readonly string[]): Promise<void>;
   /** The server-issued client id, or `null` before the first `connected`. */
   client(): null | string;
-  /** Adds or removes a tag on this connection. */
+  /** Adds, removes, inspects, or clears tags on this connection. */
   tag: {
-    add(tag: string): Promise<void>;
-    remove(tag: string): Promise<void>;
+    add(...tags: readonly [string, ...string[]]): Promise<void>;
+    remove(...tags: readonly [string, ...string[]]): Promise<void>;
+    has(...tags: readonly [string, ...string[]]): boolean;
+    clear(): Promise<void>;
   };
 };

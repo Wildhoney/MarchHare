@@ -852,7 +852,7 @@ export const app = App<Env.Cat>({
 });
 ```
 
-Component `Actions` classes extend `AppActions`, and dispatching works through the one function you already use &mdash; the omnicast brand routes the extra wire leg:
+Component `Actions` classes extend `AppActions`, and dispatching works through the one function you already use &mdash; the omnicast brand routes the extra wire leg. Because an omnicast event leaves the machine, the types demand an explicit **audience** as the second argument (before the payload, when there is one): `Audience.Public()` for every connected client, or `Audience.Private(["vip"])` for clients holding **all** of the supplied tags. There is no public-by-default.
 
 ```ts
 export class Actions extends AppActions {
@@ -864,7 +864,10 @@ export function useActions() {
   const actions = context.useActions({ cats: [] });
 
   actions.useAction(Actions.OpenNew, async (context) => {
-    await context.actions.dispatch(Actions.Omnicast.Cattery.Opened);
+    await context.actions.dispatch(
+      Actions.Omnicast.Cattery.Opened,
+      Audience.Public(),
+    );
   });
 
   actions.useAction(Actions.Omnicast.Cattery.Opened, (context) => {
@@ -876,11 +879,11 @@ export function useActions() {
 }
 ```
 
-Dispatching an omnicast action performs both legs in one call: the action fires locally through the normal dispatch pipeline (including value caching for late subscribers), and the `{ name, payload }` envelope is published to the server for every **other** client &mdash; the sender is excluded server-side, so nothing double-fires. Receiving Boundaries validate the payload against the action's schema, then dispatch it locally; subscribers `useAction` it as usual and cannot tell local from remote. Without an `sse` config, omnicast actions degrade gracefully to plain broadcasts.
+Dispatching an omnicast action performs both legs in one call: the action fires locally through the normal dispatch pipeline (including value caching for late subscribers), and the `{ name, payload, channel? }` envelope is published to the server for every **other** client in the audience &mdash; the sender is excluded server-side, so nothing double-fires. Receiving Boundaries validate the payload against the action's schema before dispatching it locally; an envelope that fails validation raises `Reason.Rejected` through `Lifecycle.Fault` instead of reaching subscribers, and an outgoing payload failing its schema rejects the dispatch with the same `Rejected` error through the handler's fault pipeline. Channeled omnicast actions work like channeled broadcasts &mdash; the channel rides the envelope and subscriber matching happens on each client. Without an `sse` config, omnicast actions degrade gracefully to plain broadcasts.
 
-Connections hold a mutable set of tags (seeded from `sse.tags`), and passing `{ tags: ["vip"] }` as the third argument of `dispatch` narrows the wire leg to clients holding **all** of the supplied tags &mdash; extras permitted. Without tags, sends are public.
+Connections hold a mutable set of tags, seeded from `sse.tags` and mutated from any handler via `context.actions.tag.add/remove/clear` &mdash; changing which `Audience.Private(...)` dispatches the client receives, with mutations re-applied automatically after reconnects.
 
-See the [SSE recipe](./recipes/sse.md) for the server protocol, reconnect semantics, the `AppActions` pattern, and testing guidance.
+See the [SSE recipe](./recipes/sse.md) for the server protocol, audiences, channels, reconnect semantics, the `AppActions` pattern, and testing guidance.
 
 ## Global data
 

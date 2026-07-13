@@ -1,3 +1,4 @@
+import { Audience } from "march-hare";
 import { G } from "@mobily/ts-belt";
 import { message } from "antd";
 import { Actions, type Model } from "./types.ts";
@@ -33,7 +34,11 @@ export function useActions() {
         filter: filter(),
       },
     };
-    await context.actions.dispatch(Actions.Omnicast.Cat.Adopted, adoption);
+    await context.actions.dispatch(
+      Actions.Omnicast.Cat.Adopted,
+      Audience.Public(),
+      adoption,
+    );
   });
 
   actions.useAction(Actions.Omnicast.Cat.Adopted, async (context, adoption) => {

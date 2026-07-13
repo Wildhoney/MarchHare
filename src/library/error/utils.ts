@@ -7,8 +7,11 @@ import { Reason } from "./types.ts";
  * @returns The appropriate Reason enum value.
  */
 export function getReason(error: unknown): Reason {
-  const isAborted = error instanceof Error && error.name === "AbortError";
-  return isAborted ? Reason.Aborted : Reason.Errored;
+  if (error instanceof Error && error.name === "AbortError")
+    return Reason.Aborted;
+  if (error instanceof Error && error.name === "RejectError")
+    return Reason.Rejected;
+  return Reason.Errored;
 }
 
 /**

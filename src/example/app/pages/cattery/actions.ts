@@ -1,3 +1,4 @@
+import { Audience } from "march-hare";
 import { app } from "../../utils.ts";
 import { Actions, type Model } from "./types.ts";
 
@@ -10,7 +11,10 @@ export function useActions() {
   });
 
   actions.useAction(Actions.OpenNew, async (context) => {
-    await context.actions.dispatch(Actions.Omnicast.Cattery.Opened);
+    await context.actions.dispatch(
+      Actions.Omnicast.Cattery.Opened,
+      Audience.Public(),
+    );
   });
 
   actions.useAction(Actions.Omnicast.Cattery.Opened, (context) => {

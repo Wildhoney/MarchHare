@@ -1,8 +1,11 @@
 import * as React from "react";
 import { G } from "@mobily/ts-belt";
 import { useBroadcast } from "../broadcast/index.tsx";
+import { useTasks } from "../tasks/utils.ts";
 import { emitAsync } from "../../../actions/utils.ts";
-import { getActionSymbol, schemaOf } from "../../../action/utils.ts";
+import { getActionSymbol, validate } from "../../../action/utils.ts";
+import { getError, getReason } from "../../../error/utils.ts";
+import { FaultSymbol } from "../../../types/index.ts";
 import type {
   SseConfig,
   SseConnected,
@@ -53,9 +56,13 @@ export function Sse({
   children: React.ReactNode;
 }): React.ReactElement {
   const broadcast = useBroadcast();
+  const tasks = useTasks();
   const client = React.useRef<null | string>(null);
   const desired = React.useRef<null | Set<string>>(null);
   desired.current ??= new Set(config?.tags ?? []);
+  const align = React.useRef<
+    null | ((method: "PUT" | "DELETE", tag: string) => Promise<void>)
+  >(null);
 
   const handle = React.useMemo<null | SseHandle>(() => {
     if (G.isUndefined(config)) return null;
@@ -76,6 +83,8 @@ export function Sse({
         );
     }
 
+    align.current = mutate;
+
     return {
       async publish(envelope: SseEnvelope, tags?: readonly string[]) {
         const body: Record<string, unknown> = { data: envelope };
@@ -93,13 +102,25 @@ export function Sse({
       },
       client: () => client.current,
       tag: {
-        async add(tag: string) {
-          desired.current?.add(tag);
-          await mutate("PUT", tag);
+        async add(...tags: readonly [string, ...string[]]) {
+          const fresh = tags.filter(
+            (tag) => !(desired.current?.has(tag) ?? false),
+          );
+          fresh.forEach((tag) => desired.current?.add(tag));
+          await Promise.all(fresh.map((tag) => mutate("PUT", tag)));
         },
-        async remove(tag: string) {
-          desired.current?.delete(tag);
-          await mutate("DELETE", tag);
+        async remove(...tags: readonly [string, ...string[]]) {
+          const held = tags.filter((tag) => desired.current?.has(tag) ?? false);
+          held.forEach((tag) => desired.current?.delete(tag));
+          await Promise.all(held.map((tag) => mutate("DELETE", tag)));
+        },
+        has(...tags: readonly [string, ...string[]]) {
+          return tags.every((tag) => desired.current?.has(tag) ?? false);
+        },
+        async clear() {
+          const held = [...(desired.current ?? [])];
+          desired.current?.clear();
+          await Promise.all(held.map((tag) => mutate("DELETE", tag)));
         },
       },
     };
@@ -116,9 +137,15 @@ export function Sse({
       client.current = connected.client;
       const { add, remove } = reconcile(tags, connected.tags);
       void Promise.all([
-        ...add.map((tag) => handle.tag.add(tag)),
-        ...remove.map((tag) => handle.tag.remove(tag)),
-      ]);
+        ...add.map((tag) => align.current?.("PUT", tag)),
+        ...remove.map((tag) => align.current?.("DELETE", tag)),
+      ]).catch((error) => {
+        // eslint-disable-next-line no-console
+        console.warn(
+          "march-hare: failed to re-apply tags after an SSE reconnect.",
+          error,
+        );
+      });
     });
 
     source.addEventListener("message", (event: MessageEvent<string>) => {
@@ -126,26 +153,35 @@ export function Sse({
       if (G.isNull(envelope)) return;
       const action = lookup(config.actions, envelope.name);
       if (G.isNull(action)) return;
-      const schema = schemaOf(action);
-      try {
-        const payload = G.isNull(schema)
-          ? envelope.payload
-          : schema.parse(envelope.payload);
-        void emitAsync(broadcast, getActionSymbol(action), payload, undefined);
-      } catch (error) {
-        // eslint-disable-next-line no-console
-        console.warn(
-          `march-hare: rejected omnicast "${envelope.name}" — the payload failed schema validation.`,
-          error,
-        );
-      }
+      const deliver = (): Promise<void> => {
+        try {
+          const payload = validate(action, envelope.payload);
+          return emitAsync(
+            broadcast,
+            getActionSymbol(action),
+            payload,
+            envelope.channel,
+          );
+        } catch (caught) {
+          broadcast.fire(FaultSymbol, {
+            reason: getReason(caught),
+            error: getError(caught),
+            action: envelope.name,
+            handled: false,
+            tasks,
+            retry: deliver,
+          });
+          return Promise.resolve();
+        }
+      };
+      void deliver();
     });
 
     return () => {
       source.close();
       client.current = null;
     };
-  }, [config, handle, broadcast]);
+  }, [config, handle, broadcast, tasks]);
 
   return <SseContext.Provider value={handle}>{children}</SseContext.Provider>;
 }

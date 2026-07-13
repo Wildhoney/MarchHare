@@ -20,3 +20,26 @@ export class Aborted extends Error {
     super(message);
   }
 }
+
+/**
+ * Error raised when an omnicast payload fails its action's schema
+ * validation &mdash; on the dispatching side before anything reaches the
+ * wire, or on the receiving side when a peer's envelope does not parse.
+ * Faults carrying this error report `Reason.Rejected`, and the underlying
+ * validator error (e.g. the `ZodError`) is preserved on `cause`.
+ *
+ * @example
+ * ```ts
+ * actions.useAction(Actions.Error, (context, fault) => {
+ *   if (fault.reason === Reason.Rejected) {
+ *     console.error(fault.error.cause);
+ *   }
+ * });
+ * ```
+ */
+export class Rejected extends Error {
+  override name = "RejectError";
+  constructor(message = "Rejected", options?: { cause?: unknown }) {
+    super(message, options);
+  }
+}

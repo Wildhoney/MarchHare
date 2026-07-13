@@ -621,8 +621,9 @@ export enum Distribution {
  * events) that omnicast dispatches validate against &mdash; the payload
  * type `T` is inferred from the schema at the declaration site.
  */
-export type OmnicastDistribution<T = never> = {
+export type OmnicastDistribution<T = never, C extends Filter = never> = {
   readonly [Brand.Omnicast]: null | Schema<T>;
+  readonly [Brand.Channel]?: C;
 };
 
 export namespace Distribution {
@@ -633,13 +634,24 @@ export namespace Distribution {
    * inferred from the supplied Zod-style schema (any object exposing a
    * `parse(value)` method), so the compile-time type and the runtime
    * validator can never drift apart. Envelopes arriving over the wire are
-   * validated with `parse` and rejected when invalid; omit the schema for
+   * validated with `parse` and rejected when invalid (`Reason.Rejected`
+   * through `Lifecycle.Error` / `Lifecycle.Fault`); omit the schema for
    * payloadless events.
+   *
+   * For channeled omnicast actions, supply both generics explicitly &mdash;
+   * the payload type alias and the channel shape. Channel values must be
+   * JSON-serialisable primitives (`string`, `number`, `boolean`) as they
+   * travel inside the wire envelope.
    *
    * @example
    * ```ts
    * export class Cat {
    *   static Adopted = Action("Cat.Adopted", Distribution.Omnicast(Payload.Adoption));
+   *
+   *   static Renamed = Action(
+   *     "Cat.Renamed",
+   *     Distribution.Omnicast<Payload.Cat, { Id: string }>(Payload.Cat),
+   *   );
    * }
    *
    * export class Cattery {
@@ -648,8 +660,12 @@ export namespace Distribution {
    * ```
    */
   export function Omnicast(): OmnicastDistribution<never>;
-  export function Omnicast<T>(schema: Schema<T>): OmnicastDistribution<T>;
-  export function Omnicast<T>(schema?: Schema<T>): OmnicastDistribution<T> {
+  export function Omnicast<T, C extends Filter = never>(
+    schema: Schema<T>,
+  ): OmnicastDistribution<T, C>;
+  export function Omnicast<T, C extends Filter = never>(
+    schema?: Schema<T>,
+  ): OmnicastDistribution<T, C> {
     return { [Brand.Omnicast]: schema ?? null };
   }
 }
@@ -955,8 +971,9 @@ export type Schema<T> = {
  */
 export type OmnicastPayload<
   P = unknown,
+  C extends Filter = never,
   Name extends string = string,
-> = BroadcastPayload<P, never, Name> & {
+> = BroadcastPayload<P, C, Name> & {
   readonly [Brand.Omnicast]: null | Schema<P>;
 };
 
@@ -1095,15 +1112,36 @@ export type HandlerContext<
       ƒ: F & AssertSync<F>,
     ): void;
     dispatch(
-      action: NoPayloadActions<Dispatchable<AC>>,
-      payload?: undefined,
-      options?: DispatchOptions,
+      action: NoPayloadActions<WithoutOmnicast<Dispatchable<AC>>>,
     ): Promise<void>;
-    dispatch<A extends WithPayloadActions<Dispatchable<AC>>>(
+    dispatch<A extends WithPayloadActions<WithoutOmnicast<Dispatchable<AC>>>>(
       action: A,
       payload: Payload<A>,
-      options?: DispatchOptions,
     ): Promise<void>;
+    dispatch(
+      action: NoPayloadActions<OmnicastOnly<Dispatchable<AC>>>,
+      audience: Audience,
+    ): Promise<void>;
+    dispatch<A extends WithPayloadActions<OmnicastOnly<Dispatchable<AC>>>>(
+      action: A,
+      audience: Audience,
+      payload: Payload<A>,
+    ): Promise<void>;
+    /**
+     * Mutates the SSE connection's tag set, changing which
+     * `Audience.Private(tags)` dispatches this client receives. `add` and
+     * `remove` are variadic and idempotent &mdash; only tags that actually
+     * change the set reach the server. Mutations are remembered and
+     * re-applied after reconnects. When the App has no `sse` endpoint
+     * configured, all three resolve as no-ops.
+     */
+    tag: {
+      add(...tags: readonly [string, ...string[]]): Promise<void>;
+      remove(...tags: readonly [string, ...string[]]): Promise<void>;
+      /** True when the connection holds **all** of the supplied tags. */
+      has(...tags: readonly [string, ...string[]]): boolean;
+      clear(): Promise<void>;
+    };
     annotate<T>(value: T, operation?: Operation): T;
     readonly inspect: Readonly<Inspect<M>>;
     resource: ResourceDispatcher;
@@ -1205,11 +1243,17 @@ export type LeafActions<AC> = AC extends void
  * of their `ChanneledAction<P, C>` results.
  */
 export type ChanneledOf<A> =
-  A extends HandlerPayload<infer P, infer C>
+  A extends OmnicastPayload<infer P, infer C>
     ? [C] extends [never]
       ? never
-      : ChanneledAction<P, C>
-    : never;
+      : ChanneledAction<P, C> & {
+          readonly [Brand.Omnicast]: null | Schema<P>;
+        }
+    : A extends HandlerPayload<infer P, infer C>
+      ? [C] extends [never]
+        ? never
+        : ChanneledAction<P, C>
+      : never;
 
 /**
  * Everything `dispatch` accepts for a given `AC`: leaf actions on the class
@@ -1260,6 +1304,71 @@ export type WithPayloadActions<U> = Exclude<
   U,
   { readonly [Brand.Payload]: never }
 >;
+
+/**
+ * Subset of a union of actions carrying the omnicast brand. Omnicast
+ * dispatches require an explicit {@link Audience} argument, so `dispatch`
+ * splits its overloads on this boundary.
+ */
+export type OmnicastOnly<U> = Extract<
+  U,
+  { readonly [Brand.Omnicast]: null | Schema<unknown> }
+>;
+
+/** Subset of a union of actions without the omnicast brand. */
+export type WithoutOmnicast<U> = Exclude<
+  U,
+  { readonly [Brand.Omnicast]: null | Schema<unknown> }
+>;
+
+/**
+ * Explicit delivery audience for an omnicast dispatch. Omnicast actions
+ * leave the machine, so the audience is a **required** second argument of
+ * `dispatch` (before the payload, when there is one) &mdash; there is no
+ * public-by-default. Construct one with `Audience.Public()` or
+ * `Audience.Private(tags)`.
+ */
+export type Audience = {
+  readonly tags: null | readonly string[];
+};
+
+export const Audience = {
+  /**
+   * Declares an omnicast dispatch as deliverable to **every** connected
+   * client. Deliberately explicit &mdash; broadcasting to the world should
+   * read as a decision at the call site, not a default.
+   *
+   * @example
+   * ```ts
+   * await context.actions.dispatch(
+   *   Actions.Omnicast.Cat.Adopted,
+   *   Audience.Public(),
+   *   adoption,
+   * );
+   * ```
+   */
+  Public(): Audience {
+    return { tags: null };
+  },
+  /**
+   * Restricts an omnicast dispatch to clients holding **all** of the
+   * given tags (holding extras is fine). At least one tag is required
+   * &mdash; an empty list would silently behave as `Audience.Public()`,
+   * so the parameter type demands a non-empty tuple.
+   *
+   * @example
+   * ```ts
+   * await context.actions.dispatch(
+   *   Actions.Omnicast.Cat.Adopted,
+   *   Audience.Private(["vip"]),
+   *   adoption,
+   * );
+   * ```
+   */
+  Private(tags: readonly [string, ...string[]]): Audience {
+    return { tags };
+  },
+};
 
 /**
  * Recursive mapped type for action handlers that mirrors the action class hierarchy.
@@ -1336,14 +1445,20 @@ export type UseActions<
      * required at the call site.
      */
     dispatch(
-      action: NoPayloadActions<Dispatchable<AC>>,
-      payload?: undefined,
-      options?: DispatchOptions,
+      action: NoPayloadActions<WithoutOmnicast<Dispatchable<AC>>>,
     ): Promise<void>;
-    dispatch<A extends WithPayloadActions<Dispatchable<AC>>>(
+    dispatch<A extends WithPayloadActions<WithoutOmnicast<Dispatchable<AC>>>>(
       action: A,
       payload: Payload<A>,
-      options?: DispatchOptions,
+    ): Promise<void>;
+    dispatch(
+      action: NoPayloadActions<OmnicastOnly<Dispatchable<AC>>>,
+      audience: Audience,
+    ): Promise<void>;
+    dispatch<A extends WithPayloadActions<OmnicastOnly<Dispatchable<AC>>>>(
+      action: A,
+      audience: Audience,
+      payload: Payload<A>,
     ): Promise<void>;
     inspect: Inspect<M>;
     /**
@@ -1386,14 +1501,20 @@ export type UseActions<
    * without indexing into `actions[1]`.
    */
   dispatch(
-    action: NoPayloadActions<Dispatchable<AC>>,
-    payload?: undefined,
-    options?: DispatchOptions,
+    action: NoPayloadActions<WithoutOmnicast<Dispatchable<AC>>>,
   ): Promise<void>;
-  dispatch<A extends WithPayloadActions<Dispatchable<AC>>>(
+  dispatch<A extends WithPayloadActions<WithoutOmnicast<Dispatchable<AC>>>>(
     action: A,
     payload: Payload<A>,
-    options?: DispatchOptions,
+  ): Promise<void>;
+  dispatch(
+    action: NoPayloadActions<OmnicastOnly<Dispatchable<AC>>>,
+    audience: Audience,
+  ): Promise<void>;
+  dispatch<A extends WithPayloadActions<OmnicastOnly<Dispatchable<AC>>>>(
+    action: A,
+    audience: Audience,
+    payload: Payload<A>,
   ): Promise<void>;
 
   /**
@@ -1464,26 +1585,20 @@ export type UseActions<
  * before the paired `useActions` has run via {@link Context}.
  */
 export type Dispatch<AC extends Actions | void> = {
-  (
-    action: NoPayloadActions<Dispatchable<AC>>,
-    payload?: undefined,
-    options?: DispatchOptions,
-  ): Promise<void>;
-  <A extends WithPayloadActions<Dispatchable<AC>>>(
+  (action: NoPayloadActions<WithoutOmnicast<Dispatchable<AC>>>): Promise<void>;
+  <A extends WithPayloadActions<WithoutOmnicast<Dispatchable<AC>>>>(
     action: A,
     payload: Payload<A>,
-    options?: DispatchOptions,
   ): Promise<void>;
-};
-
-/**
- * Options accepted as the third argument of `dispatch`. Only meaningful
- * for omnicast actions: `tags` narrows the wire delivery to clients
- * holding **all** of the supplied tags (extras permitted) &mdash; the
- * local Boundary always receives the dispatch regardless.
- */
-export type DispatchOptions = {
-  tags?: readonly string[];
+  (
+    action: NoPayloadActions<OmnicastOnly<Dispatchable<AC>>>,
+    audience: Audience,
+  ): Promise<void>;
+  <A extends WithPayloadActions<OmnicastOnly<Dispatchable<AC>>>>(
+    action: A,
+    audience: Audience,
+    payload: Payload<A>,
+  ): Promise<void>;
 };
 
 /**

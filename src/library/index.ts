@@ -2,14 +2,14 @@ export { App } from "./app/index.tsx";
 export type { AppHandle } from "./app/index.tsx";
 
 export { Action } from "./action/index.ts";
-export { Distribution, Lifecycle } from "./types/index.ts";
+export { Audience, Distribution, Lifecycle } from "./types/index.ts";
 export { With } from "./with/index.ts";
 
 export { Boundary } from "./boundary/index.tsx";
 
 export { Cache } from "./cache/index.ts";
 
-export { Reason, Aborted } from "./error/index.ts";
+export { Reason, Aborted, Rejected } from "./error/index.ts";
 
 export { annotate } from "./annotate/index.ts";
 export { Operation, Op, State, isBox } from "immertation";
@@ -28,7 +28,6 @@ export type {
   Handlers,
   ReactivePayload,
   ReactiveBinding,
-  DispatchOptions,
   OmnicastDistribution,
   OmnicastPayload,
   Schema,

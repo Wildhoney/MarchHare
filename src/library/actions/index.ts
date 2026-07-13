@@ -30,7 +30,7 @@ import {
   ChanneledAction,
   ActionOrChanneled,
   AnyAction,
-  DispatchOptions,
+  Audience,
   FaultSymbol,
   EnvSymbol,
 } from "../types/index.ts";
@@ -58,9 +58,22 @@ import {
   isMulticastAction,
   isOmnicastAction,
   getName,
-  schemaOf,
+  validate,
 } from "../action/index.ts";
 import { useSse } from "../boundary/components/sse/index.tsx";
+
+/**
+ * Stand-in for `context.actions.tag` when the App has no `sse` endpoint
+ * configured: tag mutations are connection-level concerns, so without a
+ * connection they resolve as no-ops and components stay portable between
+ * connected and unconnected Apps.
+ */
+const idleTag = {
+  add: () => Promise.resolve(),
+  remove: () => Promise.resolve(),
+  has: () => false,
+  clear: () => Promise.resolve(),
+};
 import { State, Operation, Process, Inspect } from "immertation";
 import { useTasks } from "../boundary/components/tasks/utils.ts";
 import { Partition } from "../boundary/components/consumer/index.tsx";
@@ -231,13 +244,18 @@ export function useActions<
           },
           dispatch(
             action: ActionOrChanneled,
-            payload?: HandlerPayload,
-            options?: DispatchOptions,
+            second?: HandlerPayload | Audience,
+            third?: HandlerPayload,
           ): Promise<void> {
             if (controller.signal.aborted) return Promise.resolve();
             const base = getActionSymbol(action);
             const channel = isChanneledAction(action)
               ? action.channel
+              : undefined;
+            const omnicast = isOmnicastAction(action);
+            const payload = omnicast ? third : <HandlerPayload>second;
+            const audience = omnicast
+              ? <Audience | undefined>second
               : undefined;
 
             if (isMulticastAction(action)) {
@@ -247,21 +265,29 @@ export function useActions<
               return Promise.resolve();
             }
 
-            if (isOmnicastAction(action) && G.isNotNullable(sse)) {
-              const schema = schemaOf(action);
-              const parsed = G.isNull(schema) ? payload : schema.parse(payload);
-              return Promise.all([
-                emitAsync(broadcast, base, parsed, channel),
-                sse.publish(
-                  { name: getName(action), payload: parsed },
-                  options?.tags,
-                ),
-              ]).then(() => undefined);
+            if (omnicast && G.isNotNullable(sse)) {
+              try {
+                const parsed = validate(action, payload);
+                return Promise.all([
+                  emitAsync(broadcast, base, parsed, channel),
+                  sse.publish(
+                    {
+                      name: getName(action),
+                      payload: parsed,
+                      channel: <Filter | undefined>channel,
+                    },
+                    audience?.tags ?? undefined,
+                  ),
+                ]).then(() => undefined);
+              } catch (error) {
+                return Promise.reject(error);
+              }
             }
 
             const emitter = isBroadcastAction(action) ? broadcast : unicast;
             return emitAsync(emitter, base, payload, channel);
           },
+          tag: G.isNotNullable(sse) ? sse.tag : idleTag,
           annotate<T>(value: T, operation: Operation = Operation.Update): T {
             return state.current.annotate(operation, value);
           },
@@ -665,11 +691,14 @@ export function useActions<
     () => ({
       dispatch(
         action: ActionOrChanneled,
-        payload?: HandlerPayload,
-        options?: DispatchOptions,
+        second?: HandlerPayload | Audience,
+        third?: HandlerPayload,
       ): Promise<void> {
         const base = getActionSymbol(action);
         const channel = isChanneledAction(action) ? action.channel : undefined;
+        const omnicast = isOmnicastAction(action);
+        const payload = omnicast ? third : <HandlerPayload>second;
+        const audience = omnicast ? <Audience | undefined>second : undefined;
 
         if (isMulticastAction(action)) {
           const scoped = getScope(scope);
@@ -677,16 +706,23 @@ export function useActions<
           return Promise.resolve();
         }
 
-        if (isOmnicastAction(action) && G.isNotNullable(sse)) {
-          const schema = schemaOf(action);
-          const parsed = G.isNull(schema) ? payload : schema.parse(payload);
-          return Promise.all([
-            emitAsync(broadcast, base, parsed, channel),
-            sse.publish(
-              { name: getName(action), payload: parsed },
-              options?.tags,
-            ),
-          ]).then(() => undefined);
+        if (omnicast && G.isNotNullable(sse)) {
+          try {
+            const parsed = validate(action, payload);
+            return Promise.all([
+              emitAsync(broadcast, base, parsed, channel),
+              sse.publish(
+                {
+                  name: getName(action),
+                  payload: parsed,
+                  channel: <Filter | undefined>channel,
+                },
+                audience?.tags ?? undefined,
+              ),
+            ]).then(() => undefined);
+          } catch (error) {
+            return Promise.reject(error);
+          }
         }
 
         const emitter = isBroadcastAction(action) ? broadcast : unicast;
