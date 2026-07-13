@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.19.2](https://github.com/Wildhoney/MarchHare/compare/v0.19.1...v0.19.2) (2026-07-13)
+
+
+### Features
+
+* **lifecycle:** add Lifecycle.Reactive for binding external reactive values ([9e2c959](https://github.com/Wildhoney/MarchHare/commit/9e2c959db7dac6619f0634f328293f2ddd6c0bb9))
+* **lifecycle:** fire Update and Reactive on mount during the Mounting phase ([bfecc6e](https://github.com/Wildhoney/MarchHare/commit/bfecc6ec6ba0337253ab8967b5d8ab9c6cb926c9))
+* **omnicast:** fold sse into app config as a first-class distribution ([024f6d4](https://github.com/Wildhoney/MarchHare/commit/024f6d48341436e1ad2192850786c3d6bc08d0b2))
+* **omnicast:** re-validate audience tags on arrival to close in-flight races ([6f2b293](https://github.com/Wildhoney/MarchHare/commit/6f2b293a0b88122956105b7ea875c846752fae9f))
+* **omnicast:** required audiences, schema faults, connection tags, channels ([2460ab1](https://github.com/Wildhoney/MarchHare/commit/2460ab1cf321af096f276209c7d84b94cf4cfe97))
+* **omnicast:** tap rejected envelopes so observers record misbehaving peers ([ab60e93](https://github.com/Wildhoney/MarchHare/commit/ab60e93c01b120907b8d2eb69b54a35a0b6dd65c))
+* **sse:** omnicast actions over an akela sse bridge with schema validation ([90cfb25](https://github.com/Wildhoney/MarchHare/commit/90cfb253f2ecb2e0a887a815f3cef8e08795bf45))
+* **tasks:** add context.task.supersede() to abort in-flight siblings ([420604f](https://github.com/Wildhoney/MarchHare/commit/420604f16e10e51bf8f9873ef6fcc5032daf926d))
+
 ## [0.19.1](https://github.com/Wildhoney/MarchHare/compare/v0.19.0...v0.19.1) (2026-07-09)
 
 ### Features
