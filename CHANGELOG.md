@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.19.3](https://github.com/Wildhoney/MarchHare/compare/v0.19.2...v0.19.3) (2026-10-23)
+
+
+### Bug Fixes
+
+* bump axios and brace-expansion to patch security advisories ([ac5d81a](https://github.com/Wildhoney/MarchHare/commit/ac5d81ad819afa19676f1e7e76787790eec556ac))
+* **deps:** patch js-yaml, nanoid, brace-expansion, fast-uri, postcss, undici, react-router security advisories ([80af2c0](https://github.com/Wildhoney/MarchHare/commit/80af2c0bded8285e827d7f0ec5e0cecee03245aa))
+* resolve open Dependabot security alerts ([59c5d2f](https://github.com/Wildhoney/MarchHare/commit/59c5d2f0b2f4ba86e18e6a0e40bdeab2afddf2a6))
+
 ## [0.19.2](https://github.com/Wildhoney/MarchHare/compare/v0.19.1...v0.19.2) (2026-07-13)
 
 ### Features
