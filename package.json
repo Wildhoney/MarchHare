@@ -49,7 +49,9 @@
     "vitest": "^4.1.11",
     "@vitest/mocker": "^4.1.11",
     "joi": "^18.2.5",
-    "baseline-browser-mapping": "^2.11.0"
+    "baseline-browser-mapping": "^2.11.0",
+    "handlebars": "^4.7.10",
+    "follow-redirects": "^1.16.1"
   },
   "files": [
     "dist",
